@@ -136,10 +136,10 @@ target("SwitchU")
     end
 
     add_defines("SWITCHU_HOMEBREW")
-    add_defines('SWITCHU_VERSION="1.0.0"')
+    add_defines('SWITCHU_VERSION="1.0.1"')
     set_values("switch.name",    "SwitchU")
     set_values("switch.author",  "PoloNX")
-    set_values("switch.version", "1.0.0")
+    set_values("switch.version", "1.0.1")
     set_values("switch.romfs",   "romfs")
     set_values("switch.tid",     "0100000000001000")
     set_values("switch.json",    "SwitchU.json")
@@ -178,7 +178,7 @@ target("switchu-daemon")
 
     set_values("switch.name",    "switchu-daemon")
     set_values("switch.author",  "PoloNX")
-    set_values("switch.version", "1.0.0")
+    set_values("switch.version", "1.0.1")
     -- Daemon has no GPU, no romfs, no SD assets.
     set_values("switch.tid",     "0100000000001000")
     set_values("switch.json",    "projects/daemon/daemon.json")
@@ -219,7 +219,7 @@ target("switchu-menu")
     add_syslinks("nx")
 
     add_defines("SWITCHU_MENU")
-    add_defines('SWITCHU_VERSION="1.0.0"')
+    add_defines('SWITCHU_VERSION="1.0.1"')
 
     if is_mode("release") then
         add_cxflags("-O3", "-flto=auto", "-ffast-math", {force = true})
@@ -228,7 +228,7 @@ target("switchu-menu")
 
     set_values("switch.name",    "switchu-menu")
     set_values("switch.author",  "PoloNX")
-    set_values("switch.version", "1.0.0")
+    set_values("switch.version", "1.0.1")
     set_values("switch.romfs",   "romfs")
     set_values("switch.tid",     "010000000000100B")
     set_values("switch.json",    "projects/menu/menu.json")
