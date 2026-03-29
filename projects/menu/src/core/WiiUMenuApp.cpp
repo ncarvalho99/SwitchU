@@ -141,7 +141,7 @@ void WiiUMenuApp::loadResources() {
     m_fontNormal.load(app().gpu(), app().renderer(), fontPath, 24);
     m_fontSmall.load(app().gpu(), app().renderer(), fontPath, 18);
 
-    m_appLoader.load(app().gpu(), app().renderer(), m_model, m_iconTextures);
+    m_appLoader.load(m_model, m_iconStreamer);
 }
 
 std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
@@ -149,8 +149,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     icon->setTag("glossy_icon");
     icon->setTitle(entry.title);
     icon->setTitleId(entry.titleId);
-    if (entry.iconTexIndex >= 0 && entry.iconTexIndex < (int)m_iconTextures.size())
-        icon->setTexture(&m_iconTextures[entry.iconTexIndex]);
+    // Texture is set by IconStreamer::onPageChanged() — not here.
     icon->setCornerRadius(m_theme.iconCornerRadius);
     icon->setIsGameCard(entry.isGameCard());
     icon->setNotLaunchable(!entry.isLaunchable());
@@ -320,11 +319,21 @@ void WiiUMenuApp::buildGrid() {
 
     wireFocusCallback();
     m_grid->onPageSwitched([this]() {
+        // Stream icon textures for the new page.
+        m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                     app().gpu(), app().renderer(),
+                                     m_grid->allIcons());
         auto* target = m_grid->focusManager().current();
         if (target)
             focusManager().setFocus(target);
         updateCursor();
     });
+
+    // Load textures for the initial page (page 0).
+    m_iconStreamer.onPageChanged(0, m_grid->iconsPerPage(),
+                                 app().gpu(), app().renderer(),
+                                 m_grid->allIcons());
+
     m_grid->startAppearAnimation();
 
     SidebarManager::Actions sidebarActions;
@@ -583,6 +592,13 @@ void WiiUMenuApp::createSettings() {
         m_config.uiLanguageOverride = tag;
         if (m_settings) m_settings->setUiLanguageOverride(tag);
         applyUiLanguage();
+        // The font caches hold Texture objects whose GPU memory is still
+        // referenced by in-flight command buffers.  Wait for the GPU to
+        // finish before destroying them, otherwise we get use-after-free
+        // artifacts (glitch screen / crash).
+        app().gpu().waitIdle();
+        m_fontNormal.clearCache();
+        m_fontSmall.clearCache();
         m_settingsNeedRefresh = true;
     });
     m_settings->onSoundPresetChange([this](const std::string& preset) {
@@ -932,14 +948,14 @@ void WiiUMenuApp::finalizeRefresh() {
     app().gpu().waitIdle();
     m_grid->clearChildren();
     m_model.clear();
-    m_iconTextures.clear();
+    m_iconStreamer.clear();
     app().renderer().resetTextureSlots();
     m_fontNormal.clearCache();
     m_fontSmall.clearCache();
     app().gpu().resetImagePool();
     m_userSelect->loadUsers(app().gpu(), app().renderer());
 
-    m_appLoader.finalize(app().gpu(), app().renderer(), m_model, m_iconTextures);
+    m_appLoader.finalize(m_model, m_iconStreamer);
     DebugLog::log("[refresh] found %d apps", m_model.count());
 
     std::vector<std::shared_ptr<GlossyIcon>> icons;
@@ -953,10 +969,20 @@ void WiiUMenuApp::finalizeRefresh() {
     if (m_refreshPrevPage > 0) m_grid->setPage(m_refreshPrevPage);
     wireFocusCallback();
     m_grid->onPageSwitched([this]() {
+        m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                     app().gpu(), app().renderer(),
+                                     m_grid->allIcons());
         auto* target = m_grid->focusManager().current();
         if (target) focusManager().setFocus(target);
         updateCursor();
     });
+
+    // Load textures for the restored page.
+    int page = m_refreshPrevPage > 0 ? m_refreshPrevPage : 0;
+    m_iconStreamer.onPageChanged(page, m_grid->iconsPerPage(),
+                                 app().gpu(), app().renderer(),
+                                 m_grid->allIcons());
+
     m_grid->startAppearAnimation();
     if (auto* firstIcon = m_grid->focusManager().current())
         focusManager().setFocus(firstIcon);

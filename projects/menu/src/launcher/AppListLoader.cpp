@@ -1,12 +1,9 @@
 #include "AppListLoader.hpp"
 #include "core/DebugLog.hpp"
-#include <nxui/third_party/stb/stb_image.h>
 #include <switch.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <atomic>
-#include <thread>
 #include <vector>
 #include <algorithm>
 #ifndef SWITCHU_HOMEBREW
@@ -16,95 +13,18 @@
 
 namespace {
 
-constexpr int kIconUploadSize   = 256;
-constexpr int kMaxIconTextures  = 60;
-
-void decodeIcons(std::vector<PendingApp>& apps) {
-    DebugLog::log("[loader] decoding %d icons on worker threads...", (int)apps.size());
-    std::atomic<int> nextJob{0};
-    auto workerFn = [&]() {
-        for (;;) {
-            int idx = nextJob.fetch_add(1, std::memory_order_relaxed);
-            if (idx >= (int)apps.size()) break;
-            auto& a = apps[idx];
-            if (a.iconData.empty()) continue;
-            int ch;
-            uint8_t* full = stbi_load_from_memory(
-                a.iconData.data(), (int)a.iconData.size(),
-                &a.w, &a.h, &ch, 4);
-            a.iconData.clear(); a.iconData.shrink_to_fit();
-            if (!full) continue;
-            if (a.w > kIconUploadSize || a.h > kIconUploadSize) {
-                int dstW = kIconUploadSize, dstH = kIconUploadSize;
-                uint8_t* scaled = (uint8_t*)std::malloc((size_t)dstW * dstH * 4);
-                if (scaled) {
-                    float scaleX = (float)a.w / dstW;
-                    float scaleY = (float)a.h / dstH;
-                    for (int y = 0; y < dstH; ++y) {
-                        float srcYf = (y + 0.5f) * scaleY - 0.5f;
-                        int y0 = (int)srcYf; if (y0 < 0) y0 = 0;
-                        int y1 = y0 + 1; if (y1 >= a.h) y1 = a.h - 1;
-                        float fy = srcYf - y0;
-                        for (int x = 0; x < dstW; ++x) {
-                            float srcXf = (x + 0.5f) * scaleX - 0.5f;
-                            int x0 = (int)srcXf; if (x0 < 0) x0 = 0;
-                            int x1 = x0 + 1; if (x1 >= a.w) x1 = a.w - 1;
-                            float fx = srcXf - x0;
-                            const uint8_t* p00 = full + ((size_t)y0 * a.w + x0) * 4;
-                            const uint8_t* p10 = full + ((size_t)y0 * a.w + x1) * 4;
-                            const uint8_t* p01 = full + ((size_t)y1 * a.w + x0) * 4;
-                            const uint8_t* p11 = full + ((size_t)y1 * a.w + x1) * 4;
-                            uint8_t* dst = scaled + ((size_t)y * dstW + x) * 4;
-                            for (int c = 0; c < 4; ++c) {
-                                dst[c] = (uint8_t)(
-                                    p00[c] * (1 - fx) * (1 - fy) +
-                                    p10[c] * fx       * (1 - fy) +
-                                    p01[c] * (1 - fx) * fy       +
-                                    p11[c] * fx       * fy       + 0.5f);
-                            }
-                        }
-                    }
-                    stbi_image_free(full);
-                    a.rgba = scaled; a.w = dstW; a.h = dstH; a.scaledWithMalloc = true;
-                } else {
-                    a.rgba = full;
-                }
-            } else {
-                a.rgba = full;
-            }
-        }
-    };
-    constexpr int NUM_WORKERS = 3;
-    std::thread workers[NUM_WORKERS];
-    for (int t = 0; t < NUM_WORKERS; ++t) workers[t] = std::thread(workerFn);
-    for (int t = 0; t < NUM_WORKERS; ++t) workers[t].join();
-    DebugLog::log("[loader] decode done");
-}
-
-void uploadAndRegister(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-                       std::vector<PendingApp>& apps,
-                       GridModel& model,
-                       std::vector<nxui::Texture>& outTex) {
-    outTex.reserve(std::min((int)apps.size(), kMaxIconTextures));
-    for (auto& p : apps) {
-        int texIdx = -1;
-        if (p.rgba) {
-            if ((int)outTex.size() < kMaxIconTextures) {
-                nxui::Texture tex;
-                if (tex.loadFromPixelsPooled(gpu, ren, p.rgba, p.w, p.h)) {
-                    texIdx = (int)outTex.size();
-                    outTex.push_back(std::move(tex));
-                }
-            }
-            if (p.scaledWithMalloc) std::free(p.rgba);
-            else stbi_image_free(p.rgba);
-            p.rgba = nullptr;
-        }
+void registerEntries(std::vector<PendingApp>& apps,
+                     GridModel& model,
+                     IconStreamer& streamer) {
+    streamer.init((int)apps.size());
+    for (int i = 0; i < (int)apps.size(); ++i) {
+        auto& p = apps[i];
+        streamer.setIconData(i, std::move(p.iconData));
         AppEntry entry;
         entry.id           = std::move(p.id);
         entry.title        = std::move(p.title);
         entry.titleId      = p.titleId;
-        entry.iconTexIndex = texIdx;
+        entry.iconTexIndex = -1;  // unused — IconStreamer handles textures
         entry.viewFlags    = p.viewFlags;
         model.addEntry(std::move(entry));
     }
@@ -113,7 +33,7 @@ void uploadAndRegister(nxui::GpuDevice& gpu, nxui::Renderer& ren,
 }
 
 
-void AppListLoader::fetchAndDecode() {
+void AppListLoader::fetchApps() {
     char tidBuf[17];
     m_pending.clear();
 
@@ -227,16 +147,13 @@ void AppListLoader::fetchAndDecode() {
         m_pending.push_back(std::move(a));
     }
     nxtcFlushCacheFile();
-
-    decodeIcons(m_pending);
 #endif
 }
 
 
-void AppListLoader::load(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-                         GridModel& model, std::vector<nxui::Texture>& outTextures) {
-    fetchAndDecode();
-    uploadAndRegister(gpu, ren, m_pending, model, outTextures);
+void AppListLoader::load(GridModel& model, IconStreamer& streamer) {
+    fetchApps();
+    registerEntries(m_pending, model, streamer);
     m_pending.clear();
     m_pending.shrink_to_fit();
 }
@@ -247,7 +164,7 @@ void AppListLoader::startAsync(nxui::ThreadPool& pool) {
         m_future.get();
 
     m_future = pool.submit([this]() {
-        fetchAndDecode();
+        fetchApps();
     });
 }
 
@@ -256,12 +173,11 @@ bool AppListLoader::isReady() const {
            m_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
 
-void AppListLoader::finalize(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-                              GridModel& model, std::vector<nxui::Texture>& outTextures) {
+void AppListLoader::finalize(GridModel& model, IconStreamer& streamer) {
     if (m_future.valid())
         m_future.get();
 
-    uploadAndRegister(gpu, ren, m_pending, model, outTextures);
+    registerEntries(m_pending, model, streamer);
     m_pending.clear();
     m_pending.shrink_to_fit();
 }

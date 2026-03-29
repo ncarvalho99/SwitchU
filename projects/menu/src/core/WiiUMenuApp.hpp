@@ -24,6 +24,7 @@
 #include "sidebar/SidebarManager.hpp"
 #include "launcher/AppletLauncher.hpp"
 #include "launcher/AppListLoader.hpp"
+#include "launcher/IconStreamer.hpp"
 #include "core/SystemMessages.hpp"
 #include <nxui/widgets/Background.hpp>
 #include <nxui/widgets/Box.hpp>
@@ -87,7 +88,6 @@ private:
 
     nxui::Font  m_fontNormal;
     nxui::Font  m_fontSmall;
-    std::vector<nxui::Texture> m_iconTextures;
 
     GridModel    m_model;
     nxui::Theme  m_theme;
@@ -126,6 +126,7 @@ private:
     SidebarManager  m_sidebar;
     AppletLauncher  m_launcher;
     AppListLoader   m_appLoader;
+    IconStreamer    m_iconStreamer;
     SystemMessages  m_sysMsg;
 
     bool m_showDebugOverlay  = false;

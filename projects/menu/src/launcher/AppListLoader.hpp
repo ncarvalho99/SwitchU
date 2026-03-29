@@ -1,5 +1,6 @@
 #pragma once
 #include "core/GridModel.hpp"
+#include "launcher/IconStreamer.hpp"
 #include <nxui/core/Texture.hpp>
 #include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
@@ -15,25 +16,21 @@ struct PendingApp {
     uint64_t            titleId = 0;
     uint32_t            viewFlags = 0;
     std::vector<uint8_t> iconData;
-    uint8_t*            rgba = nullptr;
-    int                 w = 0, h = 0;
-    bool                scaledWithMalloc = false;
 };
 
 class AppListLoader {
 public:
-    void load(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-              GridModel& model, std::vector<nxui::Texture>& outTextures);
+    // Streaming path: fetch apps and hand compressed icon data to the streamer.
+    void load(GridModel& model, IconStreamer& streamer);
 
     void startAsync(nxui::ThreadPool& pool);
 
     bool isReady() const;
 
-    void finalize(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-                  GridModel& model, std::vector<nxui::Texture>& outTextures);
+    void finalize(GridModel& model, IconStreamer& streamer);
 
 private:
-    void fetchAndDecode();
+    void fetchApps();
 
     std::future<void>       m_future;
     std::vector<PendingApp> m_pending;
