@@ -120,6 +120,7 @@ target("SwitchU")
     add_files("projects/menu/src/launcher/*.cpp")
     add_files("projects/menu/src/bluetooth/*.cpp")
 
+    add_includedirs("projects/common/include", {public = false})
     add_includedirs("projects/menu/src", {public = false})
 
     add_cxxflags("-fno-rtti", "-fexceptions", {force = true})
