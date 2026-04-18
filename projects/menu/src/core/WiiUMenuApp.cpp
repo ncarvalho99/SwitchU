@@ -141,6 +141,9 @@ void WiiUMenuApp::loadResources() {
     m_fontNormal.load(app().gpu(), app().renderer(), fontPath, 24);
     m_fontSmall.load(app().gpu(), app().renderer(), fontPath, 18);
 
+    std::string gameCardPath = std::string(SD_ASSETS) + "/icons/gamecard.png";
+    m_gameCardTex.loadFromFile(app().gpu(), app().renderer(), gameCardPath);
+
     m_appLoader.load(m_model, m_iconStreamer);
 }
 
@@ -152,6 +155,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     // Texture is set by IconStreamer::onPageChanged() — not here.
     icon->setCornerRadius(m_theme.iconCornerRadius);
     icon->setIsGameCard(entry.isGameCard());
+    icon->setGameCardTexture(&m_gameCardTex);
     icon->setNotLaunchable(!entry.isLaunchable());
 
 #ifndef SWITCHU_HOMEBREW
@@ -709,22 +713,30 @@ void WiiUMenuApp::createSettings() {
                                        std::vector<SettingsScreen::DialogButtonDef> buttons) {
         if (!m_dialog) return;
         std::vector<OverlayDialog::ButtonDef> dlgButtons;
+        bool preserveReturnFocus = (m_dialog && m_dialog->isActive() && focusManager().current() == m_dialog.get() && m_dialogReturnFocus != nullptr);
         for (size_t i = 0; i < buttons.size(); ++i) {
             auto cb = buttons[i].onPress;
             bool isLast = (i == buttons.size() - 1);
-            if (isLast) {
-                // Cancel button — normal close behavior (plays ModalHide)
-                dlgButtons.push_back({buttons[i].label, [cb]() { if (cb) cb(); }, true});
-            } else {
-                // Action button — play positive confirmation sound
+            if (buttons.size() == 1) {
                 dlgButtons.push_back({buttons[i].label, [this, cb]() {
                     m_audio.playSfx(Sfx::ConfirmPositive);
                     m_dialog->hide();
                     if (cb) cb();
-                }, false});
+                }, true});
+            } else if (isLast) {
+                // Cancel button — normal close behavior (plays ModalHide)
+                dlgButtons.push_back({buttons[i].label, [cb]() { if (cb) cb(); }, true});
+            } else {
+                // Action button — play positive confirmation sound and close the dialog.
+                dlgButtons.push_back({buttons[i].label, [this, cb]() {
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_dialog->hide();
+                    if (cb) cb();
+                }, true});
             }
         }
-        m_dialogReturnFocus = focusManager().current();
+        if (!preserveReturnFocus)
+            m_dialogReturnFocus = focusManager().current();
         m_dialog->show(title, msg, std::move(dlgButtons));
         focusManager().setFocus(m_dialog.get());
     });
