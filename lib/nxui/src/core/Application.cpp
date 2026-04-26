@@ -53,7 +53,28 @@ void Application::dispatchInput() {
 
     auto& fm = m_activity->focusManager();
 
-    // ── D-pad / left-stick navigation (debounced) ────────────
+    // Keep focus constrained to the currently active input root.
+    // Without this, stale focus from another UI layer (e.g. home grid while
+    // settings/dialog is active) can still receive A/button dispatches.
+    auto isUnderRoot = [root](Widget* w) {
+        for (Widget* it = w; it != nullptr; it = it->parent()) {
+            if (it == root) return true;
+        }
+        return false;
+    };
+    Widget* curFocus = fm.current();
+    if (!curFocus || !isUnderRoot(curFocus)) {
+        if (root->isFocusable()) {
+            fm.setFocus(root);
+        } else {
+            std::vector<Widget*> focusables;
+            root->collectFocusable(focusables);
+            if (!focusables.empty())
+                fm.setFocus(focusables[0]);
+        }
+    }
+
+    // Debounced D-pad and left-stick navigation.
     // For each direction: if the focused widget has an action for that
     // D-pad/stick button, fire it (consumed). Otherwise navigate spatially.
     bool anyDpad =
@@ -87,7 +108,7 @@ void Application::dispatchInput() {
         tryDir(Button::DDown,  Button::LStickD, FocusDirection::DOWN);
     }
 
-    // ── Non-D-pad action dispatch (with parent-chain bubbling) ───
+    // Dispatch non-D-pad actions with parent bubbling.
     // Exclude D-pad buttons so they aren't fired a second time.
     constexpr uint64_t kDpadMask =
         static_cast<uint64_t>(Button::DLeft)   | static_cast<uint64_t>(Button::DRight)  |
@@ -95,19 +116,27 @@ void Application::dispatchInput() {
         static_cast<uint64_t>(Button::LStickL) | static_cast<uint64_t>(Button::LStickR) |
         static_cast<uint64_t>(Button::LStickU) | static_cast<uint64_t>(Button::LStickD);
 
-    uint64_t consumed = fm.dispatchActions(m_input, kDpadMask);
+    constexpr uint64_t kA = static_cast<uint64_t>(Button::A);
+    bool pointerConsumesA = m_input.pointerConsumesButton(Button::A);
+    uint64_t actionExcludeMask = kDpadMask;
+    if (pointerConsumesA)
+        actionExcludeMask |= kA;
 
-    // ── A-button auto-activate ──────────────────────────────
+    uint64_t consumed = fm.dispatchActions(m_input, actionExcludeMask);
+
+    // Auto-activate with A.
     // If the focused widget didn't register an explicit addAction(A, ...),
     // fall through to the legacy activate() / setOnActivate() mechanism.
-    constexpr uint64_t kA = static_cast<uint64_t>(Button::A);
-    if (!(consumed & kA) && m_input.isDown(Button::A)) {
+    if (!pointerConsumesA && !(consumed & kA) && m_input.isDown(Button::A)) {
         if (auto* w = fm.current())
             w->activate();
     }
 
-    // ── Touch-based focus navigation ────────────────────────
-    fm.handleTouch(m_input, root);
+    // Touch-based focus navigation.
+    // Some screens own richer touch handling locally (drag/scroll/menus) and
+    // should not also receive the generic focus-manager tap model.
+    if (root->frameworkTouchEnabled())
+        fm.handleTouch(m_input, root);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -150,6 +179,8 @@ void Application::shutdown() {
     // Clear all pending animations before destroying the activity so that
     // tween callbacks don't fire on already-destroyed widgets.
     AnimationManager::instance().clear();
+
+    m_input.shutdown();
 
     if (m_activity) {
         m_activity->onDestroy();

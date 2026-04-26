@@ -17,7 +17,7 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, SettingsScreen& screen) {
     if ((int)t.items.size() > kStaticCount)
         t.items.erase(t.items.begin() + kStaticCount, t.items.end());
 
-    // ── Connected Device section ──
+    // Connected device section
     {
         SettingItem sec;
         sec.label = i18n.tr("settings.bluetooth.connected_device", "Connected Device");
@@ -58,7 +58,7 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, SettingsScreen& screen) {
         t.items.push_back(std::move(it));
     }
 
-    // ── Paired Devices section ──
+    // Paired devices section
     {
         SettingItem sec;
         sec.label = i18n.tr("settings.bluetooth.paired_devices", "Paired Devices");
@@ -98,7 +98,7 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, SettingsScreen& screen) {
         }
     }
 
-    // ── Discover Devices section ──
+    // Discover devices section
     {
         SettingItem sec;
         sec.label = i18n.tr("settings.bluetooth.discover_devices", "Discover Devices");
@@ -157,7 +157,7 @@ SettingsScreen::Tab settings::tabs::BluetoothTab::build(SettingsScreen& screen) 
     Tab t;
     t.name = i18n.tr("settings.tabs.bluetooth", "Bluetooth");
 
-    // ── General section (static) ──
+    // General section
     {
         SettingItem sec;
         sec.label = i18n.tr("settings.bluetooth.general", "General");
