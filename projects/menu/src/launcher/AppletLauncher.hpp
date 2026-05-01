@@ -41,11 +41,7 @@ public:
 #endif
 
 private:
-#ifndef SWITCHU_HOMEBREW
-#ifndef SWITCHU_MENU
-    AppletApplication m_currentApp = {};
-    void launchLibraryApplet(AppletId id, const char* name);
-#endif
+#ifdef SWITCHU_MENU
     std::atomic<bool>     m_appRunning{false};
     std::atomic<bool>     m_appHasForeground{false};
     std::atomic<uint64_t> m_suspendedTitleId{0};

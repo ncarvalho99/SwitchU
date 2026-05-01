@@ -6,7 +6,7 @@
 
 namespace bluetooth {
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
 
 namespace {
 
@@ -243,7 +243,7 @@ void StopDiscovery() {
 
 bool IsDiscovering() { return g_discovering; }
 
-#else // SWITCHU_HOMEBREW stubs
+#else
 
 void Initialize() {}
 void Finalize() {}

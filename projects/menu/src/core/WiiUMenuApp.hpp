@@ -104,7 +104,7 @@ private:
     void unbindEditActions();
     bool isEditableIcon(nxui::Widget* w) const;
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     void refreshAppList();
     void finalizeRefresh();
     void handleSystemAction(SysAction a);

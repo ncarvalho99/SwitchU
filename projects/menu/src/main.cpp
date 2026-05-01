@@ -2,18 +2,29 @@
 #include "core/WiiUMenuApp.hpp"
 #include "core/DebugLog.hpp"
 #include <nxui/Application.hpp>
+#ifdef SWITCHU_MENU
 #include <nxui/core/Renderer.hpp>
 #include <switchu/smi_protocol.hpp>
 #include <switchu/file_log.hpp>
 #include <nxtc.h>
+#endif
 #include <switch.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#ifdef SWITCHU_MENU
 #include <cstring>
+#endif
 #include <memory>
 
 extern "C" {
+#ifdef SWITCHU_HOMEBREW
+    u32 __nx_applet_type = AppletType_Application;
+
+    size_t __nx_heap_size = 0xD000000;
+#else
     u32 __nx_applet_type = AppletType_LibraryApplet;
 
     size_t __nx_heap_size = 0xFA00000;
@@ -24,8 +35,32 @@ extern "C" {
 
     void __nx_win_init(void);
     void __nx_win_exit(void);
+#endif
 }
 
+#ifdef SWITCHU_HOMEBREW
+extern "C" void userAppInit(void) {
+    timeInitialize();
+    plInitialize(PlServiceType_System);
+    setInitialize();
+    setsysInitialize();
+    accountInitialize(AccountServiceType_Application);
+    psmInitialize();
+    lblInitialize();
+    romfsInit();
+}
+
+extern "C" void userAppExit(void) {
+    lblExit();
+    psmExit();
+    accountExit();
+    setsysExit();
+    setExit();
+    plExit();
+    timeExit();
+    romfsExit();
+}
+#else
 extern "C" void __appInit(void) {
     Result rc;
 
@@ -138,10 +173,16 @@ static switchu::smi::SystemStatus readSystemStatus() {
     }
     return status;
 }
+#endif
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
 
+    std::srand(static_cast<unsigned>(std::time(nullptr)));
+
+#ifdef SWITCHU_HOMEBREW
+    DebugLog::log("[main] applet config...");
+#else
     DebugLog::log("[menu] main() entry");
 
     if (!nxtcInitialize())
@@ -158,18 +199,24 @@ int main(int argc, char* argv[]) {
         nxui::Renderer::setShaderBasePath(sdPath);
         DebugLog::log("[menu] shader path: %s", sdPath.c_str());
     }
+#endif
 
-    DebugLog::log("[menu] SDL_Init...");
+    DebugLog::log("[main] SDL_Init...");
     if (SDL_Init(SDL_INIT_AUDIO) < 0)
-        DebugLog::log("[menu] SDL_Init FAILED: %s", SDL_GetError());
+        DebugLog::log("[main] SDL_Init FAILED: %s", SDL_GetError());
 
-    DebugLog::log("[menu] TTF_Init...");
+    DebugLog::log("[main] TTF_Init...");
     if (TTF_Init() < 0)
-        DebugLog::log("[menu] TTF_Init FAILED: %s", TTF_GetError());
+        DebugLog::log("[main] TTF_Init FAILED: %s", TTF_GetError());
 
-    DebugLog::log("[menu] creating app...");
+    DebugLog::log("[main] creating app...");
     {
         nxui::Application app;
+#ifdef SWITCHU_HOMEBREW
+        app.setActivity(std::make_unique<WiiUMenuApp>());
+        if (app.initialize())
+            app.run();
+#else
         auto activity = std::make_unique<WiiUMenuApp>();
         activity->setStartupStatus(sysStatus.suspended_app_id, sysStatus.app_running);
         app.setActivity(std::move(activity));
@@ -182,11 +229,14 @@ int main(int argc, char* argv[]) {
         }
         DebugLog::log("[menu] app.shutdown...");
         app.shutdown();
+#endif
     }
 
     TTF_Quit();
     SDL_Quit();
+#ifdef SWITCHU_MENU
     nxtcExit();
     DebugLog::log("[menu] exit");
+#endif
     return 0;
 }

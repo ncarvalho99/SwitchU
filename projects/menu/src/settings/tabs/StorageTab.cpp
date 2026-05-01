@@ -1,7 +1,7 @@
 #include "TabBuilders.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
 #include <nxtc.h>
 #endif
 #include <algorithm>
@@ -152,7 +152,7 @@ struct AppControlInfo {
 AppControlInfo queryApplicationControlInfo(uint64_t titleId) {
     AppControlInfo info;
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     NxTitleCacheApplicationMetadata* meta = nxtcGetApplicationMetadataEntryById(titleId);
     if (meta) {
         if (meta->name && meta->name[0] != '\0')

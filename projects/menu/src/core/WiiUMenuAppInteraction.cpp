@@ -298,7 +298,7 @@ void WiiUMenuApp::wireFocusCallback() {
                 m_titlePill->setVisible(false);
                 return;
             }
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
             if (m_launcher.isAppSuspended(icon->titleId()))
                 m_titlePill->setText(std::string("\xe2\x96\xb6  ") + icon->title());
             else
@@ -402,7 +402,7 @@ void WiiUMenuApp::wireGlobalActions() {
     });
 #endif
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     root.addAction(static_cast<uint64_t>(nxui::Button::X), [this]() {
         if (m_editMode) return;
         if (m_launcher.suspendedTitleId() == 0) return;
@@ -536,7 +536,7 @@ void WiiUMenuApp::handleTouch() {
     }
 }
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
 void WiiUMenuApp::handleSystemAction(SysAction a) {
     switch (a) {
         case SysAction::HomeButton:

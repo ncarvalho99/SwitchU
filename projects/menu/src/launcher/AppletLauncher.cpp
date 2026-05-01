@@ -10,30 +10,17 @@ void AppletLauncher::init(Callbacks cbs) {
     m_cb = std::move(cbs);
 }
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
 bool AppletLauncher::isAppRunning() const  { return m_appRunning; }
 bool AppletLauncher::isAppSuspended(uint64_t titleId) const {
-#ifdef SWITCHU_MENU
     return m_suspendedTitleId != 0 && m_suspendedTitleId == titleId;
-#else
-    return m_appRunning && !m_appHasForeground && m_suspendedTitleId == titleId;
-#endif
 }
 uint64_t AppletLauncher::suspendedTitleId() const { return m_suspendedTitleId; }
 
-void AppletLauncher::setAppRunning(bool v)         { m_appRunning = v; }
-void AppletLauncher::setAppHasForeground(bool v)   { m_appHasForeground = v; }
+void AppletLauncher::setAppRunning(bool v)          { m_appRunning = v; }
+void AppletLauncher::setAppHasForeground(bool v)    { m_appHasForeground = v; }
 void AppletLauncher::setSuspendedTitleId(uint64_t v){ m_suspendedTitleId = v; }
-#else
-bool AppletLauncher::isAppRunning() const            { return false; }
-bool AppletLauncher::isAppSuspended(uint64_t) const  { return false; }
-uint64_t AppletLauncher::suspendedTitleId() const    { return 0; }
-void AppletLauncher::setAppRunning(bool)             {}
-void AppletLauncher::setAppHasForeground(bool)       {}
-void AppletLauncher::setSuspendedTitleId(uint64_t)   {}
-#endif
 
-#ifdef SWITCHU_MENU
 void AppletLauncher::setStartupStatus(uint64_t suspendedTitleId, bool appRunning) {
     m_suspendedTitleId = suspendedTitleId;
     m_appRunning       = appRunning;
@@ -41,19 +28,6 @@ void AppletLauncher::setStartupStatus(uint64_t suspendedTitleId, bool appRunning
     DebugLog::log("[launcher] startup status: suspended=0x%016lX running=%d",
                   suspendedTitleId, appRunning);
 }
-#endif
-#ifdef SWITCHU_HOMEBREW
-
-void AppletLauncher::launchAlbum()             {}
-void AppletLauncher::launchMiiEditor()         {}
-void AppletLauncher::launchControllerPairing() {}
-void AppletLauncher::launchNetConnect()        {}
-void AppletLauncher::enterSleep()              {}
-void AppletLauncher::launchApplication(uint64_t, AccountUid) {}
-void AppletLauncher::resumeApplication()       {}
-void AppletLauncher::terminateApplication()    {}
-void AppletLauncher::checkRunningApplication() {}
-#elif defined(SWITCHU_MENU)
 
 void AppletLauncher::launchAlbum() {
     DebugLog::log("[launcher] requesting Album launch via daemon");
@@ -137,5 +111,24 @@ void AppletLauncher::terminateApplication() {
 
 void AppletLauncher::checkRunningApplication() {
 }
+
+#else
+
+bool AppletLauncher::isAppRunning() const            { return false; }
+bool AppletLauncher::isAppSuspended(uint64_t) const  { return false; }
+uint64_t AppletLauncher::suspendedTitleId() const    { return 0; }
+void AppletLauncher::setAppRunning(bool)             {}
+void AppletLauncher::setAppHasForeground(bool)       {}
+void AppletLauncher::setSuspendedTitleId(uint64_t)   {}
+
+void AppletLauncher::launchAlbum()             {}
+void AppletLauncher::launchMiiEditor()         {}
+void AppletLauncher::launchControllerPairing() {}
+void AppletLauncher::launchNetConnect()        {}
+void AppletLauncher::enterSleep()              {}
+void AppletLauncher::launchApplication(uint64_t, AccountUid) {}
+void AppletLauncher::resumeApplication()       {}
+void AppletLauncher::terminateApplication()    {}
+void AppletLauncher::checkRunningApplication() {}
 
 #endif

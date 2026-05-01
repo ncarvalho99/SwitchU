@@ -5,9 +5,6 @@
 #include "DebugLog.hpp"
 #include "bluetooth/BluetoothManager.hpp"
 #include <switch.h>
-#if !defined(SWITCHU_HOMEBREW) && !defined(SWITCHU_MENU)
-#include <nxtc.h>
-#endif
 #ifdef SWITCHU_MENU
 #include "smi_commands.hpp"
 #endif
@@ -141,7 +138,7 @@ bool WiiUMenuApp::onCreate() {
     }
 #endif
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     m_sysMsg.setCallback([this](SysAction a) { handleSystemAction(a); });
     DebugLog::log("[init] async notifications via AppletStorage only");
     switchu::menu::smi_cmd::menuReady();
@@ -165,7 +162,7 @@ void WiiUMenuApp::onDestroy() {
 
     bluetooth::Finalize();
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     switchu::menu::smi_cmd::menuClosing();
     switchu::menu::smi_cmd::drainAllResponses();
 #endif
@@ -357,7 +354,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     icon->setGameCardTexture(&m_gameCardTex);
     icon->setNotLaunchable(!entry.isLaunchable());
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     if (m_launcher.suspendedTitleId() != 0 &&
         entry.titleId == m_launcher.suspendedTitleId())
         icon->setSuspended(true);
@@ -552,7 +549,7 @@ void WiiUMenuApp::buildGrid() {
     m_grid->startAppearAnimation();
 
     SidebarManager::Actions sidebarActions;
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
     sidebarActions.onAlbum       = [this]() { m_launcher.launchAlbum(); };
     sidebarActions.onMiiEditor   = [this]() { m_launcher.launchMiiEditor(); };
     sidebarActions.onControllers = [this]() { m_launcher.launchControllerPairing(); };
@@ -582,7 +579,7 @@ void WiiUMenuApp::buildGrid() {
             {
                 {"Cancel", [this]() {  }, true},
                 {"Sleep", [this]() {
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
                     m_audio.playSfx(Sfx::ConfirmPositive);
                     m_launcher.enterSleep();
 #else
@@ -758,7 +755,7 @@ std::vector<std::string> WiiUMenuApp::scanAvailablePresets() {
     return presets;
 }
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
 void WiiUMenuApp::refreshAppList() {
     DebugLog::log("[refresh] starting async app list fetch");
 
@@ -881,7 +878,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         DebugLog::log("[suspend] resuming GPU on main thread");
         if (m_launchAnim && m_launchAnim->isPlaying()) m_launchAnim->stop();
 
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
         if (m_wakeReason == 0) {
             m_launcher.setAppRunning(true);
             m_launcher.setAppHasForeground(false);
@@ -945,7 +942,6 @@ void WiiUMenuApp::onUpdate(float dt) {
         return;
     }
 
-#ifndef SWITCHU_HOMEBREW
 #ifdef SWITCHU_MENU
     {
         AppletStorage notifySt;
@@ -1002,8 +998,6 @@ void WiiUMenuApp::onUpdate(float dt) {
             }
         }
     }
-#endif
-
     m_sysMsg.pump();
     if (m_refreshCooldownFrames > 0)
         --m_refreshCooldownFrames;

@@ -6,7 +6,7 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
-#ifndef SWITCHU_HOMEBREW
+#ifdef SWITCHU_MENU
 #include <nxtc.h>
 #include <switchu/ns_ext.hpp>
 #endif
