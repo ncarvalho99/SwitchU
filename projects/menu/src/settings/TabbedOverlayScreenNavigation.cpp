@@ -1,29 +1,25 @@
-#include "SettingsScreen.hpp"
+#include "TabbedOverlayScreen.hpp"
 #include "core/DebugLog.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-void SettingsScreen::setupActions() {
+void TabbedOverlayScreen::setupActions() {
     clearActions();
     addAction(static_cast<uint64_t>(nxui::Button::B), [this]() { onPressB(); });
     addAction(static_cast<uint64_t>(nxui::Button::A), [this]() { onPressA(); });
+    addAction(static_cast<uint64_t>(nxui::Button::X), [this]() { onPressX(); });
     addDirectionAction(nxui::FocusDirection::UP,    [this]() { onNavUp(); });
     addDirectionAction(nxui::FocusDirection::DOWN,  [this]() { onNavDown(); });
     addDirectionAction(nxui::FocusDirection::LEFT,  [this]() { onNavLeft(); });
     addDirectionAction(nxui::FocusDirection::RIGHT, [this]() { onNavRight(); });
 }
 
-void SettingsScreen::onPressB() {
+void TabbedOverlayScreen::onPressB() {
     if (!m_active || m_animating) return;
-    DebugLog::log("[settings] B (focus=%d dd=%d cp=%d)", (int)m_focusArea, m_dropdownOpen ? 1 : 0, m_colorPickerOpen ? 1 : 0);
+    if (usesCustomContentLayout() && handleCustomPressB()) return;
+    DebugLog::log("[settings] B (focus=%d dd=%d)", (int)m_focusArea, m_dropdownOpen ? 1 : 0);
 
-    if (m_colorPickerOpen) {
-        m_colorPickerOpen = false;
-        m_colorPickerRawIdx = -1;
-        m_colorPickerAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
-        return;
-    }
     if (m_dropdownOpen) {
         m_dropdownOpen = false;
         m_dropdownRawIdx = -1;
@@ -38,8 +34,9 @@ void SettingsScreen::onPressB() {
     hide();
 }
 
-void SettingsScreen::onPressA() {
+void TabbedOverlayScreen::onPressA() {
     if (!m_active || m_animating) return;
+    if (usesCustomContentLayout() && handleCustomPressA()) return;
     DebugLog::log("[settings] A (focus=%d tab=%d ci=%d dd=%d)",
                   (int)m_focusArea, m_tabIndex, m_contentIdx, m_dropdownOpen ? 1 : 0);
 
@@ -55,13 +52,6 @@ void SettingsScreen::onPressA() {
     auto& items = m_tabs[m_tabIndex].items;
     int rawIdx = rawIndexFromFocusable(m_contentIdx);
     auto& item = items[rawIdx];
-
-    if (m_colorPickerOpen) {
-        m_colorPickerOpen = false;
-        m_colorPickerRawIdx = -1;
-        m_colorPickerAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
-        return;
-    }
 
     if (m_dropdownOpen) {
         if (m_dropdownRawIdx >= 0 && m_dropdownRawIdx < (int)items.size()
@@ -91,17 +81,19 @@ void SettingsScreen::onPressA() {
     } else if (item.type == ItemType::Action) {
         if (item.onChange) item.onChange(item);
         if (m_activateSfxCb) m_activateSfxCb();
-    } else if (item.type == ItemType::ColorPicker) {
-        m_colorPickerOpen = true;
-        m_colorPickerRawIdx = rawIdx;
-        m_colorPickerSlider = 0;
-        m_colorPickerAnim.set(1.f, 0.18f, nxui::Easing::outCubic);
-        if (m_activateSfxCb) m_activateSfxCb();
     }
 }
 
-void SettingsScreen::onNavUp() {
+void TabbedOverlayScreen::onPressX() {
+    if (!m_active || m_animating)
+        return;
+    if (usesCustomContentLayout() && handleCustomPressX())
+        return;
+}
+
+void TabbedOverlayScreen::onNavUp() {
     if (!m_active || m_animating) return;
+    if (usesCustomContentLayout() && handleCustomNavUp()) return;
     DebugLog::log("[settings] Up (focus=%d tab=%d ci=%d)",
                   (int)m_focusArea, m_tabIndex, m_contentIdx);
 
@@ -119,18 +111,7 @@ void SettingsScreen::onNavUp() {
             m_dropdownOpen = false;
             m_dropdownRawIdx = -1;
             m_dropdownAnim.setImmediate(0.f);
-            m_colorPickerOpen = false;
-            m_colorPickerRawIdx = -1;
-            m_colorPickerAnim.setImmediate(0.f);
             rebuildContentItems();
-            if (m_navSfxCb) m_navSfxCb();
-        }
-        return;
-    }
-
-    if (m_colorPickerOpen) {
-        if (m_colorPickerSlider > 0) {
-            --m_colorPickerSlider;
             if (m_navSfxCb) m_navSfxCb();
         }
         return;
@@ -154,8 +135,9 @@ void SettingsScreen::onNavUp() {
     }
 }
 
-void SettingsScreen::onNavDown() {
+void TabbedOverlayScreen::onNavDown() {
     if (!m_active || m_animating) return;
+    if (usesCustomContentLayout() && handleCustomNavDown()) return;
     DebugLog::log("[settings] Down (focus=%d tab=%d ci=%d)",
                   (int)m_focusArea, m_tabIndex, m_contentIdx);
 
@@ -173,18 +155,7 @@ void SettingsScreen::onNavDown() {
             m_dropdownOpen = false;
             m_dropdownRawIdx = -1;
             m_dropdownAnim.setImmediate(0.f);
-            m_colorPickerOpen = false;
-            m_colorPickerRawIdx = -1;
-            m_colorPickerAnim.setImmediate(0.f);
             rebuildContentItems();
-            if (m_navSfxCb) m_navSfxCb();
-        }
-        return;
-    }
-
-    if (m_colorPickerOpen) {
-        if (m_colorPickerSlider < 2) {
-            ++m_colorPickerSlider;
             if (m_navSfxCb) m_navSfxCb();
         }
         return;
@@ -208,22 +179,10 @@ void SettingsScreen::onNavDown() {
     }
 }
 
-void SettingsScreen::onNavLeft() {
+void TabbedOverlayScreen::onNavLeft() {
     if (!m_active || m_animating) return;
+    if (usesCustomContentLayout() && handleCustomNavLeft()) return;
     DebugLog::log("[settings] Left (focus=%d)", (int)m_focusArea);
-
-    if (m_colorPickerOpen) {
-        auto& items = m_tabs[m_tabIndex].items;
-        if (m_colorPickerRawIdx >= 0 && m_colorPickerRawIdx < (int)items.size()) {
-            auto& item = items[m_colorPickerRawIdx];
-            float* vals[3] = { &item.colorH, &item.colorS, &item.colorL };
-            float step = (m_colorPickerSlider == 0) ? (1.f / 36.f) : 0.05f;
-            *vals[m_colorPickerSlider] = std::clamp(*vals[m_colorPickerSlider] - step, 0.f, 1.f);
-            if (item.onChange) item.onChange(item);
-            if (m_sliderSfxCb) m_sliderSfxCb(false);
-        }
-        return;
-    }
 
     if (m_dropdownOpen) {
         m_dropdownOpen = false;
@@ -248,22 +207,10 @@ void SettingsScreen::onNavLeft() {
     }
 }
 
-void SettingsScreen::onNavRight() {
+void TabbedOverlayScreen::onNavRight() {
     if (!m_active || m_animating) return;
+    if (usesCustomContentLayout() && handleCustomNavRight()) return;
     DebugLog::log("[settings] Right (focus=%d)", (int)m_focusArea);
-
-    if (m_colorPickerOpen) {
-        auto& items = m_tabs[m_tabIndex].items;
-        if (m_colorPickerRawIdx >= 0 && m_colorPickerRawIdx < (int)items.size()) {
-            auto& item = items[m_colorPickerRawIdx];
-            float* vals[3] = { &item.colorH, &item.colorS, &item.colorL };
-            float step = (m_colorPickerSlider == 0) ? (1.f / 36.f) : 0.05f;
-            *vals[m_colorPickerSlider] = std::clamp(*vals[m_colorPickerSlider] + step, 0.f, 1.f);
-            if (item.onChange) item.onChange(item);
-            if (m_sliderSfxCb) m_sliderSfxCb(true);
-        }
-        return;
-    }
 
     if (m_dropdownOpen) {
         m_dropdownOpen = false;
@@ -301,7 +248,7 @@ void SettingsScreen::onNavRight() {
     }
 }
 
-void SettingsScreen::scrollToFocused() {
+void TabbedOverlayScreen::scrollToFocused() {
     if (m_tabIndex < 0 || m_tabIndex >= (int)m_tabs.size()) return;
     auto& items = m_tabs[m_tabIndex].items;
     nxui::Rect cr = contentRect();
@@ -321,12 +268,15 @@ void SettingsScreen::scrollToFocused() {
         m_scrollTarget = itemY + kRowHeight - cr.height;
 }
 
-void SettingsScreen::handleTouch(nxui::Input& input) {
+void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
     if (!m_active || m_animating) return;
 
     nxui::Rect panel = panelRect();
     nxui::Rect tr = tabsRect(panel);
     nxui::Rect cr = contentRect(panel);
+    if (usesCustomContentLayout() && handleCustomTouch(input, panel, tr, cr))
+        return;
+
     constexpr float kCardInsetX = 18.f;
     constexpr float kCardInsetY = 8.f;
     constexpr float kCardInnerInsetX = 14.f;
@@ -493,77 +443,6 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
         return nxui::Rect{ctrlX, dy, ctrlW, listH};
     };
 
-    auto colorPickerRect = [&cr]() {
-        constexpr float popW = 320.f;
-        constexpr float popH = 230.f;
-        return nxui::Rect{
-            cr.x + (cr.width - popW) * 0.5f,
-            cr.y + (cr.height - popH) * 0.5f,
-            popW,
-            popH
-        };
-    };
-
-    auto colorPickerTrackRect = [&colorPickerRect](int sliderIndex) {
-        constexpr float pad = 16.f;
-        constexpr float sliderH = 18.f;
-        constexpr float sliderGap = 10.f;
-        constexpr float labelW = 80.f;
-        constexpr float swatchH = 42.f;
-
-        nxui::Rect pop = colorPickerRect();
-        float contentX = pop.x + pad;
-        float contentW = pop.width - pad * 2.f;
-        float sliderX = contentX + labelW;
-        float sliderW = contentW - labelW - 40.f;
-        float rowY = pop.y + pad + swatchH + pad + sliderIndex * (sliderH + sliderGap);
-        return nxui::Rect{sliderX, rowY + (sliderH - 12.f) * 0.5f, sliderW, 12.f};
-    };
-
-    auto applyColorPickerDrag = [this, &colorPickerTrackRect](float tx, float ty) {
-        if (!m_colorPickerOpen || m_colorPickerRawIdx < 0 || m_tabIndex < 0 || m_tabIndex >= (int)m_tabs.size())
-            return false;
-
-        auto& item = m_tabs[m_tabIndex].items[m_colorPickerRawIdx];
-        if (item.type != ItemType::ColorPicker)
-            return false;
-
-        int hitSlider = -1;
-        for (int i = 0; i < 3; ++i) {
-            if (colorPickerTrackRect(i).expanded(10.f).contains(tx, ty)) {
-                hitSlider = i;
-                break;
-            }
-        }
-        if (hitSlider < 0 && !m_touchDraggingColor)
-            return false;
-        if (hitSlider < 0)
-            hitSlider = std::clamp(m_colorPickerSlider, 0, 2);
-
-        nxui::Rect track = colorPickerTrackRect(hitSlider);
-        if (track.width <= 0.f)
-            return false;
-
-        float newValue = (tx - track.x) / std::max(1.f, track.width);
-        if (hitSlider == 0)
-            newValue = std::round(std::clamp(newValue, 0.f, 1.f) * 36.f) / 36.f;
-        else
-            newValue = std::round(std::clamp(newValue, 0.f, 1.f) * 20.f) / 20.f;
-
-        float* values[3] = { &item.colorH, &item.colorS, &item.colorL };
-        if (std::abs(newValue - *values[hitSlider]) < 0.0001f) {
-            m_colorPickerSlider = hitSlider;
-            return true;
-        }
-
-        bool increasing = newValue > *values[hitSlider];
-        *values[hitSlider] = newValue;
-        m_colorPickerSlider = hitSlider;
-        if (item.onChange) item.onChange(item);
-        if (m_sliderSfxCb) m_sliderSfxCb(increasing);
-        return true;
-    };
-
     constexpr float kTapThreshold = 20.f;
     constexpr float kDragThreshold = 12.f;
 
@@ -582,7 +461,6 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
         m_touchStartScroll = m_scrollTarget;
         m_touchScrolling = false;
         m_touchDraggingSlider = false;
-        m_touchDraggingColor = false;
 
         if (m_dropdownOpen && m_dropdownRawIdx >= 0 && m_tabIndex >= 0 && m_tabIndex < (int)m_tabs.size()) {
             auto& items = m_tabs[m_tabIndex].items;
@@ -605,14 +483,6 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
                     return;
                 }
             }
-        }
-
-        if (m_colorPickerOpen) {
-            m_touchTarget = TouchTarget::ColorPicker;
-            m_touchOnSelected = colorPickerRect().contains(tx, ty);
-            if (m_touchOnSelected)
-                m_touchDraggingColor = applyColorPickerDrag(tx, ty);
-            return;
         }
 
         if (tr.contains(tx, ty)) {
@@ -670,9 +540,6 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
                 m_touchScrolling = true;
                 m_scrollTarget = clampScrollTarget(m_touchStartScroll - (input.touchY() - m_touchStartY));
             }
-        } else if (m_touchTarget == TouchTarget::ColorPicker && m_touchOnSelected) {
-            if (m_touchDraggingColor || dx > 4.f || dy > 4.f)
-                m_touchDraggingColor = applyColorPickerDrag(input.touchX(), input.touchY()) || m_touchDraggingColor;
         }
     }
 
@@ -685,13 +552,12 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
             m_touchDirectControl = false;
             m_touchScrolling = false;
             m_touchDraggingSlider = false;
-            m_touchDraggingColor = false;
             return;
         }
 
         float dx = std::abs(input.touchDeltaX());
         float dy = std::abs(input.touchDeltaY());
-        bool dragged = m_touchScrolling || m_touchDraggingSlider || m_touchDraggingColor
+        bool dragged = m_touchScrolling || m_touchDraggingSlider
             || dx >= kTapThreshold || dy >= kTapThreshold;
 
         if (!dragged) {
@@ -721,9 +587,6 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
                             m_dropdownOpen = false;
                             m_dropdownRawIdx = -1;
                             m_dropdownAnim.setImmediate(0.f);
-                            m_colorPickerOpen = false;
-                            m_colorPickerRawIdx = -1;
-                            m_colorPickerAnim.setImmediate(0.f);
                             rebuildContentItems();
                         }
                         if (m_navSfxCb) m_navSfxCb();
@@ -779,23 +642,11 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
                 }
                 break;
 
-            case TouchTarget::ColorPicker:
-                if (!m_touchOnSelected) {
-                    m_colorPickerOpen = false;
-                    m_colorPickerRawIdx = -1;
-                    m_colorPickerAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
-                }
-                break;
-
             case TouchTarget::None:
                 if (m_dropdownOpen) {
                     m_dropdownOpen = false;
                     m_dropdownRawIdx = -1;
                     m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
-                } else if (m_colorPickerOpen) {
-                    m_colorPickerOpen = false;
-                    m_colorPickerRawIdx = -1;
-                    m_colorPickerAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
                 } else if (!panel.contains(input.touchX(), input.touchY())) {
                     hide();
                 }
@@ -809,11 +660,10 @@ void SettingsScreen::handleTouch(nxui::Input& input) {
         m_touchDirectControl = false;
         m_touchScrolling = false;
         m_touchDraggingSlider = false;
-        m_touchDraggingColor = false;
     }
 }
 
-void SettingsScreen::onContentUpdate(float dt) {
+void TabbedOverlayScreen::onContentUpdate(float dt) {
     if (m_deferredRefresh) {
         m_deferredRefresh = false;
         refreshTranslations();
@@ -844,10 +694,11 @@ void SettingsScreen::onContentUpdate(float dt) {
         if (tab.onUpdate) tab.onUpdate(tab, *this);
     }
 
+    updateCustomContent(dt);
+
     m_focusCursor.update(dt);
     m_tabReveal.update(std::min(dt, 0.03f));
     m_dropdownAnim.update(dt);
-    m_colorPickerAnim.update(dt);
     m_trackToastAnim.update(dt);
     m_contentSlideAnim.update(std::min(dt, 0.03f));
     m_tabAccentW.update(std::min(dt, 0.03f));

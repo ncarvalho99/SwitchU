@@ -69,8 +69,9 @@ public:
     bool loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
                               const uint8_t* rgba, int w, int h);
 
-    // Load from image file (PNG/JPG via stb_image)
-    bool loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path);
+    // Load from image file (PNG/JPG via stb_image).
+    // maxSide <= 0 keeps the source resolution.
+    bool loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide = 128);
 
     // Load from in-memory image data (JPEG/PNG via stb_image)
     bool loadFromMemory(GpuDevice& gpu, Renderer& ren,

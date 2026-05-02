@@ -19,6 +19,7 @@
 #include "widgets/AppletButton.hpp"
 #include "widgets/PageIndicator.hpp"
 #include "settings/SettingsScreen.hpp"
+#include "themeshop/ThemeShopScreen.hpp"
 #include "core/Config.hpp"
 #include "core/ThemePreset.hpp"
 #include "sidebar/SidebarManager.hpp"
@@ -31,6 +32,7 @@
 #endif
 #include <nxui/widgets/Background.hpp>
 #include <nxui/widgets/Box.hpp>
+#include <cstdint>
 #include <memory>
 #include <vector>
 #include <mutex>
@@ -76,10 +78,13 @@ private:
     GridLayoutMetrics computeGridLayoutMetrics() const;
     void buildGrid();
     void applyTheme();
+    void applyThemeResources(const ThemePreset& preset);
     void applyUiLanguage();
     void rebuildThemeFromColors();
+    ThemePreset buildEffectiveThemePreset();
+    std::string resolveThemeAssetPath(const ThemePreset& preset, const std::string& rawPath) const;
     ThemePreset* findPresetPtr(const std::string& name);
-    void deleteActivePreset();
+    void deletePreset(const std::string& presetId);
     void updateCursor();
     void handleTouch();
     std::shared_ptr<GlossyIcon> makeIcon(const AppEntry& entry);
@@ -87,6 +92,13 @@ private:
     void wireGlobalActions();
     bool isCurrentFocusableWidget(nxui::Widget* w) const;
     void createSettings();
+    void createThemeShop();
+    void reloadThemePresets();
+    void refreshThemeShopState();
+    std::vector<ThemeShopScreen::ThemeShopEntry> buildThemeShopEntries();
+    void startThemePackageTransfer(const ThemeCatalogClient::Entry& entry, bool installMode);
+    void syncThemePackageTransfer();
+    void activateThemePreset(ThemePreset* preset, bool applyBundledSound);
     void loadSoundPreset(const std::string& preset);
     void changeSoundPreset(const std::string& preset);
     std::vector<std::string> scanAvailablePresets();
@@ -120,8 +132,9 @@ private:
     ThemeColorSet            m_activeColors;
     nxui::ThemeMode          m_activeMode = nxui::ThemeMode::Dark;
     std::vector<ThemePreset> m_allPresets;
+    ThemePreset              m_effectivePreset;
 
-    std::shared_ptr<nxui::Background> m_background;
+    std::shared_ptr<WaraWaraBackground> m_background;
     std::shared_ptr<IconGrid>          m_grid;
     std::shared_ptr<SelectionCursor>   m_cursor;
     std::shared_ptr<SelectionCursor>   m_pointerCursor;
@@ -133,6 +146,7 @@ private:
     std::shared_ptr<UserSelectScreen>  m_userSelect;
     std::shared_ptr<OverlayDialog>     m_dialog;
     std::shared_ptr<SettingsScreen>    m_settings;
+    std::shared_ptr<ThemeShopScreen>   m_themeShop;
 
     nxui::Texture m_gameCardTex;
 
@@ -148,6 +162,15 @@ private:
     bool                 m_audioStarted = false;
     std::vector<std::string> m_availablePresets;
     bool                 m_presetChangePending = false;
+
+    struct ThemePackageTransferShared {
+        std::mutex mutex;
+        ThemeTransferState state;
+        std::string themeId;
+        bool installMode = false;
+        std::string destinationPath;
+        std::uint64_t revision = 0;
+    };
 
     nxui::ThreadPool m_threadPool{2};
     SidebarManager  m_sidebar;
@@ -194,6 +217,10 @@ private:
     bool m_dialogWasActive            = false;
     bool m_suppressNextNavigateSfx    = false;
     bool m_pendingNetConnect          = false;
+    std::future<void> m_themePackageTransferFuture;
+    std::shared_ptr<ThemePackageTransferShared> m_themePackageTransfer;
+    std::uint64_t m_themePackageTransferUiRevision = 0;
+    std::uint64_t m_themePackageTransferHandledRevision = 0;
 
     float m_returnFadeTimer = 0.f;
     static constexpr float kReturnFadeInDur = 0.45f;

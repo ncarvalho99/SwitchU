@@ -1,11 +1,130 @@
 #include "WiiUMenuApp.hpp"
+#include "themeshop/ThemePackageInstaller.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 
 #include <nxui/core/I18n.hpp>
 
 #include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <cstdio>
 #include <utility>
+
+namespace {
+
+bool removeDirectoryRecursive(const std::string& path) {
+    DIR* dir = opendir(path.c_str());
+    if (!dir) {
+        return std::remove(path.c_str()) == 0;
+    }
+
+    struct dirent* entry = nullptr;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string name = entry->d_name;
+        if (name == "." || name == "..")
+            continue;
+
+        std::string child = path + "/" + name;
+        struct stat st {};
+        if (stat(child.c_str(), &st) != 0)
+            continue;
+
+        if (S_ISDIR(st.st_mode)) {
+            removeDirectoryRecursive(child);
+        } else {
+            std::remove(child.c_str());
+        }
+    }
+
+    closedir(dir);
+    return rmdir(path.c_str()) == 0;
+}
+
+bool pathExists(const std::string& path) {
+    if (path.empty())
+        return false;
+
+    struct stat st {};
+    return stat(path.c_str(), &st) == 0;
+}
+
+std::string joinPath(const std::string& base, const std::string& name) {
+    if (base.empty())
+        return name;
+    if (name.empty())
+        return base;
+    if (base.back() == '/')
+        return base + name;
+    return base + "/" + name;
+}
+
+bool isAbsoluteThemePath(const std::string& path) {
+    return (!path.empty() && path.front() == '/') || (path.find(":/") != std::string::npos);
+}
+
+WaraWaraBackground::Layout toBackgroundLayout(ThemeBackgroundLayout layout) {
+    switch (layout) {
+        case ThemeBackgroundLayout::Grid:
+            return WaraWaraBackground::Layout::Grid;
+        case ThemeBackgroundLayout::Floating:
+        default:
+            return WaraWaraBackground::Layout::Floating;
+    }
+}
+
+WaraWaraBackground::ShapeSet toBackgroundShapeSet(ThemeBackgroundShapeSet shapeSet) {
+    switch (shapeSet) {
+        case ThemeBackgroundShapeSet::Circle:
+            return WaraWaraBackground::ShapeSet::Circle;
+        case ThemeBackgroundShapeSet::Triangle:
+            return WaraWaraBackground::ShapeSet::Triangle;
+        case ThemeBackgroundShapeSet::Square:
+            return WaraWaraBackground::ShapeSet::Square;
+        case ThemeBackgroundShapeSet::Diamond:
+            return WaraWaraBackground::ShapeSet::Diamond;
+        case ThemeBackgroundShapeSet::Hexagon:
+            return WaraWaraBackground::ShapeSet::Hexagon;
+        case ThemeBackgroundShapeSet::Mixed:
+        default:
+            return WaraWaraBackground::ShapeSet::Mixed;
+    }
+}
+
+WaraWaraBackground::Symmetry toBackgroundSymmetry(ThemeBackgroundSymmetry symmetry) {
+    switch (symmetry) {
+        case ThemeBackgroundSymmetry::MirrorX:
+            return WaraWaraBackground::Symmetry::MirrorHorizontal;
+        case ThemeBackgroundSymmetry::MirrorY:
+            return WaraWaraBackground::Symmetry::MirrorVertical;
+        case ThemeBackgroundSymmetry::Quad:
+            return WaraWaraBackground::Symmetry::Quad;
+        case ThemeBackgroundSymmetry::None:
+        default:
+            return WaraWaraBackground::Symmetry::None;
+    }
+}
+
+const char* sourceLabel(ThemePresetSource source) {
+    switch (source) {
+        case ThemePresetSource::BuiltIn:
+            return "Built-in";
+        case ThemePresetSource::UserPreset:
+            return "Custom";
+        case ThemePresetSource::InstalledPackage:
+            return "Community";
+    }
+
+    return "Unknown";
+}
+
+std::string defaultThemeRef() {
+    return "builtin:Default Dark";
+}
+
+} // namespace
 
 void WiiUMenuApp::createSettings() {
     if (m_settings) return;
@@ -17,36 +136,10 @@ void WiiUMenuApp::createSettings() {
     m_settings->setFont(&m_fontNormal);
     m_settings->setSmallFont(&m_fontSmall);
     m_settings->setTheme(&m_theme);
-    m_settings->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
     m_settings->setWireframeState(m_showWireframe);
     m_settings->setGridLayoutState(m_config.gridColumns, m_config.gridRows);
     m_settings->setUiLanguageOverride(m_config.uiLanguageOverride);
-    m_settings->setSoundPresetState(m_config.soundPreset, m_availablePresets);
 
-    {
-        std::vector<std::string> presetNames;
-        for (auto& p : m_allPresets) presetNames.push_back(p.name);
-        m_settings->setThemePresetState(m_activePresetName, presetNames, m_activeColors,
-                                        m_activeMode == nxui::ThemeMode::Dark);
-    }
-    m_settings->warmup();
-
-    m_settings->onMusicEnabledChange([this](bool enabled) {
-        if (enabled) m_audio.play(); else m_audio.stop();
-        m_config.musicEnabled = enabled;
-    });
-    m_settings->onMusicVolumeChange([this](float v) {
-        m_audio.setVolume(v);
-        m_config.musicVolume = v;
-    });
-    m_settings->onSfxVolumeChange([this](float v) {
-        m_audio.setSfxVolume(v);
-        m_config.sfxVolume = v;
-    });
-    m_settings->onNextTrack([this]() {
-        m_audio.nextTrack();
-        m_audio.playSfx(Sfx::ConfirmPositive);
-    });
     m_settings->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
     m_settings->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
     m_settings->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
@@ -84,105 +177,6 @@ void WiiUMenuApp::createSettings() {
         m_fontNormal.clearCache();
         m_fontSmall.clearCache();
         m_settingsNeedRefresh = true;
-    });
-    m_settings->onSoundPresetChange([this](const std::string& preset) {
-        changeSoundPreset(preset);
-        m_config.soundPreset = preset;
-    });
-    m_settings->onThemePresetChange([this](const std::string& name) {
-        ThemePreset* preset = findPresetPtr(name);
-        if (!preset) return;
-        m_activePresetName = name;
-        m_activeColors = preset->colors;
-        m_activeMode = preset->mode;
-        m_config.themePreset = name;
-        m_config.themeMode = "";
-        m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
-        m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
-        m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
-        m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
-        rebuildThemeFromColors();
-        m_settings->updateThemeSliders(m_activeColors);
-        m_audio.playSfx(Sfx::ThemeToggle);
-    });
-    m_settings->onThemeColorChange([this](const std::string& key, float value) {
-        if      (key == "accent_h")  { m_activeColors.accentH = value; m_config.accentH = value; }
-        else if (key == "accent_s")  { m_activeColors.accentS = value; m_config.accentS = value; }
-        else if (key == "accent_l")  { m_activeColors.accentL = value; m_config.accentL = value; }
-        else if (key == "bg_h")      { m_activeColors.bgH     = value; m_config.bgH = value; }
-        else if (key == "bg_s")      { m_activeColors.bgS     = value; m_config.bgS = value; }
-        else if (key == "bg_l")      { m_activeColors.bgL     = value; m_config.bgL = value; }
-        else if (key == "bg_acc_h")  { m_activeColors.bgAccH  = value; m_config.bgAccH = value; }
-        else if (key == "bg_acc_s")  { m_activeColors.bgAccS  = value; m_config.bgAccS = value; }
-        else if (key == "bg_acc_l")  { m_activeColors.bgAccL  = value; m_config.bgAccL = value; }
-        else if (key == "shape_h")   { m_activeColors.shapeH  = value; m_config.shapeH = value; }
-        else if (key == "shape_s")   { m_activeColors.shapeS  = value; m_config.shapeS = value; }
-        else if (key == "shape_l")   { m_activeColors.shapeL  = value; m_config.shapeL = value; }
-        rebuildThemeFromColors();
-    });
-    m_settings->onThemeReset([this]() {
-        ThemePreset* preset = findPresetPtr(m_activePresetName);
-        if (!preset) return;
-        m_activeColors = preset->colors;
-        m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
-        m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
-        m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
-        m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
-        rebuildThemeFromColors();
-        m_settings->updateThemeSliders(m_activeColors);
-        m_audio.playSfx(Sfx::ThemeToggle);
-    });
-    m_settings->onThemeSave([this]() {
-        auto userPresets = ThemePreset::loadUserPresets();
-        int num = (int)userPresets.size() + 1;
-        std::string name = "Custom " + std::to_string(num);
-        while (findPresetPtr(name)) {
-            ++num;
-            name = "Custom " + std::to_string(num);
-        }
-
-        ThemePreset* base = findPresetPtr(m_activePresetName);
-        ThemePreset newPreset;
-        newPreset.name    = name;
-        newPreset.mode    = base ? base->mode : nxui::ThemeMode::Dark;
-        newPreset.colors  = m_activeColors;
-        newPreset.builtIn = false;
-
-        userPresets.push_back(newPreset);
-        ThemePreset::saveUserPresets(userPresets);
-
-        m_allPresets.push_back(newPreset);
-        m_activePresetName = name;
-        m_config.themePreset = name;
-        m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
-        m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
-        m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
-        m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
-
-        std::vector<std::string> names;
-        for (auto& p : m_allPresets) names.push_back(p.name);
-        m_settings->updateThemePresetList(names, m_activePresetName);
-        m_audio.playSfx(Sfx::ConfirmPositive);
-    });
-    m_settings->onThemeManage([this]() {
-        auto& i18n = nxui::I18n::instance();
-        ThemePreset* preset = findPresetPtr(m_activePresetName);
-        if (!preset || preset->builtIn) {
-            m_dialogReturnFocus = focusManager().current();
-            m_dialog->show(
-                i18n.tr("settings.theme.delete_preset", "Delete Preset"),
-                i18n.tr("settings.theme.builtin_readonly", "Built-in presets cannot be modified."),
-                {{ i18n.tr("button.ok", "OK"), {}, true }});
-            focusManager().setFocus(m_dialog.get());
-            return;
-        }
-        deleteActivePreset();
-    });
-    m_settings->onThemeModeChange([this](bool dark) {
-        m_activeMode = dark ? nxui::ThemeMode::Dark : nxui::ThemeMode::Light;
-        m_config.themeMode = dark ? "dark" : "light";
-        rebuildThemeFromColors();
-        m_audio.playSfx(Sfx::ThemeToggle);
     });
     m_settings->onNetConnect([this]() {
         m_pendingNetConnect = true;
@@ -230,12 +224,472 @@ void WiiUMenuApp::createSettings() {
     });
 }
 
+void WiiUMenuApp::createThemeShop() {
+    if (m_themeShop) return;
+
+    auto showThemeShopInfo = [this](const std::string& title, const std::string& message) {
+        if (!m_dialog) return;
+        m_dialogReturnFocus = focusManager().current();
+        m_dialog->show(title, message, {{"OK", {}, true}});
+        focusManager().setFocus(m_dialog.get());
+    };
+    auto queueThemeTransfer = [this, showThemeShopInfo](const std::string& themeId, bool applyAfterInstall) {
+        if (!m_themeShop)
+            return;
+
+        const auto* entry = m_themeShop->findCommunityThemeEntry(themeId);
+        if (!entry) {
+            showThemeShopInfo("Theme Shop", "The selected community theme is no longer available in the catalog.");
+            return;
+        }
+
+        ThemeCatalogClient::Entry entryCopy = *entry;
+        ThemePackageInstaller::Mode mode = applyAfterInstall
+            ? ThemePackageInstaller::Mode::InstallAndApply
+            : ThemePackageInstaller::Mode::InstallOnly;
+        std::string destination = ThemePackageInstaller::destinationRootFor(entryCopy.id, mode);
+
+        auto startTransfer = [this, entryCopy, applyAfterInstall]() {
+            startThemePackageTransfer(entryCopy, applyAfterInstall);
+        };
+
+        struct stat st {};
+        if (stat(destination.c_str(), &st) != 0) {
+            startTransfer();
+            return;
+        }
+
+        auto& i18n = nxui::I18n::instance();
+        if (!m_dialog) {
+            startTransfer();
+            return;
+        }
+
+        m_dialogReturnFocus = focusManager().current();
+        m_dialog->show(
+            applyAfterInstall
+                ? i18n.tr("themeshop.community.overwrite_apply_title", "Replace And Apply Theme")
+                : i18n.tr("themeshop.community.overwrite_install_title", "Replace Installed Theme"),
+            applyAfterInstall
+                ? i18n.tr("themeshop.community.overwrite_apply_message",
+                          "A package with this theme ID is already installed. Replace it with the GitHub version, then apply it?")
+                : i18n.tr("themeshop.community.overwrite_install_message",
+                          "A package with this theme ID is already installed. Replace it with the version from GitHub?"),
+            {
+                {i18n.tr("button.cancel", "Cancel"), {}, true},
+                {i18n.tr("button.replace", "Replace"), [startTransfer]() { startTransfer(); }, true}
+            },
+            1,
+            {});
+        focusManager().setFocus(m_dialog.get());
+    };
+    auto clearCompletedThemeTransferState = [this]() {
+        if (!m_themePackageTransfer)
+            return;
+
+        bool isRunning = false;
+        {
+            std::lock_guard<std::mutex> lk(m_themePackageTransfer->mutex);
+            isRunning = m_themePackageTransfer->state.isRunning();
+        }
+
+        if (isRunning)
+            return;
+
+        m_themePackageTransfer.reset();
+        m_themePackageTransferUiRevision = 0;
+        m_themePackageTransferHandledRevision = 0;
+        if (m_themeShop) {
+            ThemeTransferState cleared;
+            m_themeShop->setPackageTransferState(cleared, {}, false);
+        }
+    };
+
+    m_themeShop = std::make_shared<ThemeShopScreen>();
+    if (m_overlayLayer) {
+        m_overlayLayer->addChild(m_themeShop);
+    }
+    m_themeShop->setFont(&m_fontNormal);
+    m_themeShop->setSmallFont(&m_fontSmall);
+    m_themeShop->setTheme(&m_theme);
+    m_themeShop->setThreadPool(&m_threadPool);
+    m_themeShop->setRenderContext(&app().gpu(), &app().renderer());
+    m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
+    refreshThemeShopState();
+
+    m_themeShop->onMusicEnabledChange([this](bool enabled) {
+        if (enabled) m_audio.play(); else m_audio.stop();
+        m_config.musicEnabled = enabled;
+    });
+    m_themeShop->onMusicVolumeChange([this](float v) {
+        m_audio.setVolume(v);
+        m_config.musicVolume = v;
+    });
+    m_themeShop->onSfxVolumeChange([this](float v) {
+        m_audio.setSfxVolume(v);
+        m_config.sfxVolume = v;
+    });
+    m_themeShop->onNextTrack([this]() {
+        m_audio.nextTrack();
+        m_audio.playSfx(Sfx::ConfirmPositive);
+    });
+    m_themeShop->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+    m_themeShop->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+    m_themeShop->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+    m_themeShop->onToggleSfx([this](bool on) {
+        m_audio.playSfx(on ? Sfx::ThemeToggle : Sfx::ToggleOff);
+    });
+    m_themeShop->onSliderSfx([this](bool up) {
+        m_audio.playSfx(up ? Sfx::SliderUp : Sfx::SliderDown);
+    });
+    m_themeShop->onNetConnectRequest([this]() {
+        m_pendingNetConnect = true;
+    });
+    m_themeShop->onThemeShopApply([this](const std::string& presetId) {
+        ThemePreset* preset = findPresetPtr(presetId);
+        if (!preset) return;
+        activateThemePreset(preset, true);
+    });
+    m_themeShop->onThemeShopDelete([this](const std::string& presetId) {
+        auto& i18n = nxui::I18n::instance();
+        ThemePreset* preset = findPresetPtr(presetId);
+        if (!preset || preset->source == ThemePresetSource::BuiltIn) {
+            if (!m_dialog) return;
+            m_dialogReturnFocus = focusManager().current();
+            m_dialog->show(
+                i18n.tr("themeshop.installed.remove", "Remove Theme"),
+                i18n.tr("settings.theme.builtin_readonly", "Built-in presets cannot be modified."),
+                {{ i18n.tr("button.ok", "OK"), {}, true }});
+            focusManager().setFocus(m_dialog.get());
+            return;
+        }
+
+        deletePreset(presetId);
+    });
+    m_themeShop->onThemeShopDownload([queueThemeTransfer](const std::string& themeId) {
+        queueThemeTransfer(themeId, false);
+    });
+    m_themeShop->onThemeShopDownloadInstall([queueThemeTransfer](const std::string& themeId) {
+        queueThemeTransfer(themeId, true);
+    });
+    m_themeShop->onDialogRequest([this](const std::string& title,
+                                        const std::string& msg,
+                                        std::vector<ThemeShopScreen::DialogButtonDef> buttons) {
+        if (!m_dialog) return;
+        std::vector<OverlayDialog::ButtonDef> dlgButtons;
+        bool preserveReturnFocus = (m_dialog && m_dialog->isActive() && focusManager().current() == m_dialog.get() && m_dialogReturnFocus != nullptr);
+        for (size_t i = 0; i < buttons.size(); ++i) {
+            auto cb = buttons[i].onPress;
+            bool isLast = (i == buttons.size() - 1);
+            if (buttons.size() == 1) {
+                dlgButtons.push_back({buttons[i].label, [this, cb]() {
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_dialog->hide();
+                    if (cb) cb();
+                }, true});
+            } else if (isLast) {
+                dlgButtons.push_back({buttons[i].label, [cb]() { if (cb) cb(); }, true});
+            } else {
+                dlgButtons.push_back({buttons[i].label, [this, cb]() {
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_dialog->hide();
+                    if (cb) cb();
+                }, true});
+            }
+        }
+        if (!preserveReturnFocus)
+            m_dialogReturnFocus = focusManager().current();
+        m_dialog->show(title, msg, std::move(dlgButtons));
+        focusManager().setFocus(m_dialog.get());
+    });
+    m_themeShop->onClosed([this, clearCompletedThemeTransferState]() {
+        m_threadPool.submit([cfg = m_config]() {
+            cfg.save();
+        });
+        DebugLog::log("[config] save queued");
+        clearCompletedThemeTransferState();
+        if (isCurrentFocusableWidget(m_sidebar.themeShopButton())) {
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(m_sidebar.themeShopButton());
+        }
+    });
+}
+
+void WiiUMenuApp::reloadThemePresets() {
+    m_allPresets = ThemePreset::builtInPresets();
+    auto userPresets = ThemePreset::loadUserPresets();
+    auto installedPackages = ThemePreset::loadInstalledPackages();
+    m_allPresets.insert(m_allPresets.end(), userPresets.begin(), userPresets.end());
+    m_allPresets.insert(m_allPresets.end(), installedPackages.begin(), installedPackages.end());
+}
+
+void WiiUMenuApp::startThemePackageTransfer(const ThemeCatalogClient::Entry& entry, bool installMode) {
+    syncThemePackageTransfer();
+
+    if (m_themePackageTransferFuture.valid()
+        && m_themePackageTransferFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        if (m_themeShop)
+            m_themeShop->requestToast("A theme transfer is already running.", 2.5f);
+        return;
+    }
+
+    auto shared = std::make_shared<ThemePackageTransferShared>();
+    shared->themeId = entry.id;
+    shared->installMode = installMode;
+    shared->destinationPath = ThemePackageInstaller::destinationRootFor(
+        entry.id,
+        installMode ? ThemePackageInstaller::Mode::InstallAndApply
+                    : ThemePackageInstaller::Mode::InstallOnly);
+    shared->state.begin(installMode ? "Preparing download + apply..." : "Preparing download + install...");
+    shared->revision = 1;
+
+    m_themePackageTransfer = shared;
+    m_themePackageTransferUiRevision = 0;
+    m_themePackageTransferHandledRevision = 0;
+
+    if (m_themeShop)
+        m_themeShop->setPackageTransferState(shared->state, shared->themeId, shared->installMode);
+
+    const std::string catalogUrl = m_themeShop
+        ? m_themeShop->communityCatalogUrl()
+        : ThemeCatalogClient::kDefaultCatalogUrl;
+    ThemePackageInstaller::Mode mode = installMode
+        ? ThemePackageInstaller::Mode::InstallAndApply
+        : ThemePackageInstaller::Mode::InstallOnly;
+
+    DebugLog::log("[themeshop] package transfer start: id=%s apply=%d",
+                  entry.id.c_str(),
+                  installMode ? 1 : 0);
+
+    m_themePackageTransferFuture = m_threadPool.submit([shared, catalogUrl, entry, mode]() {
+        try {
+            auto result = ThemePackageInstaller::run(
+                catalogUrl,
+                entry,
+                mode,
+                [shared](std::string label, float progress) {
+                    std::lock_guard<std::mutex> lk(shared->mutex);
+                    shared->state.update(std::move(label), progress);
+                    ++shared->revision;
+                });
+
+            std::lock_guard<std::mutex> lk(shared->mutex);
+            shared->destinationPath = result.destinationPath;
+            shared->state.succeed(result.message);
+            ++shared->revision;
+            DebugLog::log("[themeshop] package transfer success: %s", result.themeId.c_str());
+        } catch (const std::exception& ex) {
+            std::lock_guard<std::mutex> lk(shared->mutex);
+            shared->state.fail(ex.what());
+            ++shared->revision;
+            DebugLog::log("[themeshop] package transfer failed: %s", ex.what());
+        } catch (...) {
+            std::lock_guard<std::mutex> lk(shared->mutex);
+            shared->state.fail("Unknown transfer error");
+            ++shared->revision;
+            DebugLog::log("[themeshop] package transfer failed: unknown error");
+        }
+    });
+}
+
+void WiiUMenuApp::syncThemePackageTransfer() {
+    auto shared = m_themePackageTransfer;
+    if (!shared)
+        return;
+
+    bool futureReady = false;
+    if (m_themePackageTransferFuture.valid()
+        && m_themePackageTransferFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        m_themePackageTransferFuture.get();
+        futureReady = true;
+    }
+
+    ThemeTransferState state;
+    std::string themeId;
+    bool installMode = false;
+    std::uint64_t revision = 0;
+    {
+        std::lock_guard<std::mutex> lk(shared->mutex);
+        state = shared->state;
+        themeId = shared->themeId;
+        installMode = shared->installMode;
+        revision = shared->revision;
+    }
+
+    if (revision != m_themePackageTransferUiRevision) {
+        if (m_themeShop)
+            m_themeShop->setPackageTransferState(state, themeId, installMode);
+        m_themePackageTransferUiRevision = revision;
+    }
+
+    if (!futureReady || revision == m_themePackageTransferHandledRevision)
+        return;
+
+    if (state.isReady()) {
+        reloadThemePresets();
+
+        std::string successMessage;
+        if (installMode) {
+            ThemePreset* preset = findPresetPtr("package:" + themeId);
+            if (preset) {
+                activateThemePreset(preset, true);
+                successMessage = "Theme installed and applied.";
+            } else {
+                refreshThemeShopState();
+                successMessage = "Theme installed, but it could not be applied automatically.";
+            }
+        } else {
+            refreshThemeShopState();
+            successMessage = "Theme installed.";
+        }
+
+        state.succeed(successMessage);
+        if (m_themeShop)
+            m_themeShop->setPackageTransferState(state, themeId, installMode);
+    }
+
+    if (m_themeShop && !state.label().empty())
+        m_themeShop->requestToast(state.label(), state.hasFailed() ? 3.5f : 2.8f);
+
+    m_themePackageTransferHandledRevision = revision;
+}
+
+std::vector<ThemeShopScreen::ThemeShopEntry> WiiUMenuApp::buildThemeShopEntries() {
+    std::vector<ThemeShopScreen::ThemeShopEntry> entries;
+    entries.reserve(m_allPresets.size());
+
+    ThemePreset* activePreset = findPresetPtr(m_activePresetName);
+    std::string activeId = activePreset ? (activePreset->id.empty() ? activePreset->name : activePreset->id)
+                                        : m_activePresetName;
+
+    for (const auto& preset : m_allPresets) {
+        ThemeShopScreen::ThemeShopEntry entry;
+        entry.id = preset.id.empty() ? preset.name : preset.id;
+        entry.name = preset.name;
+        entry.version = preset.version;
+        entry.source = sourceLabel(preset.source);
+        entry.soundPreset = preset.soundPreset.rfind("package:", 0) == 0 ? "Bundled" : preset.soundPreset;
+        entry.active = (entry.id == activeId);
+        entry.removable = (preset.source != ThemePresetSource::BuiltIn);
+        entries.push_back(std::move(entry));
+    }
+
+    return entries;
+}
+
+void WiiUMenuApp::refreshThemeShopState() {
+    if (!m_themeShop) return;
+
+    ThemePreset* activePreset = findPresetPtr(m_activePresetName);
+    std::string activeId = activePreset ? (activePreset->id.empty() ? activePreset->name : activePreset->id)
+                                        : m_activePresetName;
+
+    m_themeShop->setTheme(&m_theme);
+    m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
+    m_themeShop->setThemeShopState(buildThemeShopEntries(), activeId);
+    m_themeShop->rebuildCurrentTab();
+}
+
+void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSound) {
+    if (!preset) return;
+
+    m_activePresetName = preset->id.empty() ? preset->name : preset->id;
+    m_activeColors = preset->colors;
+    m_activeMode = preset->mode;
+    m_config.themePreset = m_activePresetName;
+    m_config.themeMode = "";
+    m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
+    m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
+    m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
+    m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
+    rebuildThemeFromColors();
+
+    if (applyBundledSound && !preset->soundPreset.empty()) {
+        changeSoundPreset(preset->soundPreset);
+        m_config.soundPreset = preset->soundPreset;
+    }
+
+    refreshThemeShopState();
+    m_audio.playSfx(Sfx::ThemeToggle);
+}
+
 void WiiUMenuApp::applyUiLanguage() {
     auto& i18n = nxui::I18n::instance();
     if (m_config.uiLanguageOverride == "auto" || m_config.uiLanguageOverride.empty())
         i18n.setLanguageAuto();
     else
         i18n.setLanguage(m_config.uiLanguageOverride);
+}
+
+std::string WiiUMenuApp::resolveThemeAssetPath(const ThemePreset& preset, const std::string& rawPath) const {
+    if (rawPath.empty())
+        return {};
+    if (isAbsoluteThemePath(rawPath))
+        return rawPath;
+    if (preset.source == ThemePresetSource::InstalledPackage && !preset.installPath.empty())
+        return joinPath(preset.installPath, rawPath);
+    return joinPath(SD_ASSETS, rawPath);
+}
+
+ThemePreset WiiUMenuApp::buildEffectiveThemePreset() {
+    ThemePreset effective;
+    if (ThemePreset* preset = findPresetPtr(m_activePresetName))
+        effective = *preset;
+
+    effective.mode = m_activeMode;
+    effective.colors = m_activeColors;
+    return effective;
+}
+
+void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
+    auto& gpu = app().gpu();
+    auto& ren = app().renderer();
+
+    const std::string fallbackFontPath = std::string(SD_ASSETS) + "/fonts/DejaVuSans.ttf";
+    const std::string regularFontPath = resolveThemeAssetPath(preset, preset.fonts.regularPath);
+    const std::string smallFontPath = resolveThemeAssetPath(
+        preset,
+        !preset.fonts.smallPath.empty() ? preset.fonts.smallPath : preset.fonts.regularPath);
+
+    if (regularFontPath.empty() || !pathExists(regularFontPath) || !m_fontNormal.load(gpu, ren, regularFontPath, 24))
+        m_fontNormal.load(gpu, ren, fallbackFontPath, 24);
+    if (smallFontPath.empty() || !pathExists(smallFontPath) || !m_fontSmall.load(gpu, ren, smallFontPath, 18))
+        m_fontSmall.load(gpu, ren, fallbackFontPath, 18);
+
+    const std::string defaultGameCardPath = std::string(SD_ASSETS) + "/icons/gamecard.png";
+    const std::string themeIconsBase = resolveThemeAssetPath(preset, preset.icons.basePath);
+    const std::string gameCardPath = !themeIconsBase.empty() ? joinPath(themeIconsBase, "gamecard.png") : std::string();
+    if (gameCardPath.empty() || !pathExists(gameCardPath) || !m_gameCardTex.loadFromFile(gpu, ren, gameCardPath))
+        m_gameCardTex.loadFromFile(gpu, ren, defaultGameCardPath);
+
+    if (m_background) {
+        WaraWaraBackground::Config backgroundConfig;
+        backgroundConfig.layout = toBackgroundLayout(preset.background.layout);
+        backgroundConfig.shapeSet = toBackgroundShapeSet(preset.background.shapeSet);
+        backgroundConfig.symmetry = toBackgroundSymmetry(preset.background.symmetry);
+        backgroundConfig.shapeCount = preset.background.shapeCount;
+        backgroundConfig.gridColumns = preset.background.gridColumns;
+        backgroundConfig.gridRows = preset.background.gridRows;
+        backgroundConfig.spacingX = preset.background.spacingX;
+        backgroundConfig.spacingY = preset.background.spacingY;
+        backgroundConfig.sizeMin = preset.background.sizeMin;
+        backgroundConfig.sizeMax = preset.background.sizeMax;
+        backgroundConfig.speedMin = preset.background.speedMin;
+        backgroundConfig.speedMax = preset.background.speedMax;
+        backgroundConfig.wobble = preset.background.wobble;
+        backgroundConfig.opacity = preset.background.opacity;
+        backgroundConfig.rotationSpeed = preset.background.rotationSpeed;
+        backgroundConfig.imageOpacity = preset.background.imageOpacity;
+        backgroundConfig.imageCover = preset.background.imageCover;
+        m_background->setConfig(backgroundConfig);
+
+        const std::string imagePath = resolveThemeAssetPath(preset, preset.background.imagePath);
+        if (imagePath.empty() || !pathExists(imagePath) || !m_background->loadImage(gpu, ren, imagePath))
+            m_background->clearImage();
+    }
+
+    if (m_settings)
+        m_settingsNeedRefresh = true;
 }
 
 void WiiUMenuApp::applyTheme() {
@@ -306,57 +760,83 @@ void WiiUMenuApp::applyTheme() {
 
     if (m_settings)
         m_settings->setTheme(&m_theme);
+    if (m_themeShop)
+        m_themeShop->setTheme(&m_theme);
 
     m_sidebar.applyTheme(m_theme);
 }
 
 void WiiUMenuApp::rebuildThemeFromColors() {
-    ThemePreset effective;
-    effective.mode   = m_activeMode;
-    effective.colors = m_activeColors;
-    m_theme = effective.toTheme();
+    m_effectivePreset = buildEffectiveThemePreset();
+    m_theme = m_effectivePreset.toTheme();
+    applyThemeResources(m_effectivePreset);
+    m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS,
+                           resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath));
     applyTheme();
 }
 
 ThemePreset* WiiUMenuApp::findPresetPtr(const std::string& name) {
     for (auto& p : m_allPresets)
-        if (p.name == name) return &p;
+        if (p.id == name || p.name == name) return &p;
     return nullptr;
 }
 
-void WiiUMenuApp::deleteActivePreset() {
-    std::string nameToDelete = m_activePresetName;
+void WiiUMenuApp::deletePreset(const std::string& presetId) {
+    ThemePreset* preset = findPresetPtr(presetId);
+    if (!preset) return;
+
+    ThemePreset* activePreset = findPresetPtr(m_activePresetName);
+    std::string activeId = activePreset ? (activePreset->id.empty() ? activePreset->name : activePreset->id)
+                                        : m_activePresetName;
+    std::string idToDelete = preset->id.empty() ? preset->name : preset->id;
+    std::string nameToDelete = preset->name;
+    std::string installPath = preset->installPath;
+    std::string soundPreset = preset->soundPreset;
+    ThemePresetSource source = preset->source;
+    bool deletingActive = (activeId == idToDelete);
 
     m_allPresets.erase(
         std::remove_if(m_allPresets.begin(), m_allPresets.end(),
-            [&](const ThemePreset& p) { return p.name == nameToDelete; }),
+            [&](const ThemePreset& p) { return p.id == idToDelete || p.name == nameToDelete; }),
         m_allPresets.end());
 
     auto userPresets = ThemePreset::loadUserPresets();
     userPresets.erase(
         std::remove_if(userPresets.begin(), userPresets.end(),
-            [&](const ThemePreset& p) { return p.name == nameToDelete; }),
+            [&](const ThemePreset& p) { return p.id == idToDelete || p.name == nameToDelete; }),
         userPresets.end());
     ThemePreset::saveUserPresets(userPresets);
 
-    m_activePresetName = "Default Dark";
-    m_config.themePreset = "Default Dark";
-    m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
-    m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
-    m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
-    m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
-
-    ThemePreset* fallback = findPresetPtr("Default Dark");
-    if (fallback) {
-        m_activeColors = fallback->colors;
-        m_activeMode = fallback->mode;
-        m_config.themeMode = "";
+    if (source == ThemePresetSource::InstalledPackage && !installPath.empty()) {
+        removeDirectoryRecursive(installPath);
     }
-    rebuildThemeFromColors();
 
-    std::vector<std::string> names;
-    for (auto& p : m_allPresets) names.push_back(p.name);
-    m_settings->updateThemePresetList(names, m_activePresetName);
-    m_settings->updateThemeSliders(m_activeColors);
+    if (!soundPreset.empty() && m_config.soundPreset == soundPreset) {
+        m_config.soundPreset = "wiiu";
+        changeSoundPreset(m_config.soundPreset);
+    }
+
+    if (deletingActive) {
+        m_activePresetName = defaultThemeRef();
+        m_config.themePreset = defaultThemeRef();
+        m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
+        m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
+        m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
+        m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
+
+        ThemePreset* fallback = findPresetPtr(defaultThemeRef());
+        if (!fallback)
+            fallback = findPresetPtr("Default Dark");
+        if (fallback) {
+            m_activePresetName = fallback->id.empty() ? fallback->name : fallback->id;
+            m_config.themePreset = m_activePresetName;
+            m_activeColors = fallback->colors;
+            m_activeMode = fallback->mode;
+            m_config.themeMode = "";
+        }
+        rebuildThemeFromColors();
+    }
+
+    refreshThemeShopState();
     m_audio.playSfx(Sfx::ConfirmPositive);
 }

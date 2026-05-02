@@ -10,7 +10,7 @@ local version_define = string.format('SWITCHU_VERSION="%s"', version)
 
 set_version(version)
 
-add_requires("libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp", "nlohmann_json", "fmt", {configs = {toolchains = "devkita64"}})
+add_requires("libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp", "nlohmann_json", "fmt", "libcurl", "curlpp", {configs = {toolchains = "devkita64"}})
 if get_config("backend") ~= "sdl2" then
     add_requires("deko3d", {configs = {toolchains = "devkita64"}})
     if is_mode("debug") then
@@ -65,7 +65,7 @@ target("nxui")
 
     add_packages("libsdl", "libsdl_ttf", "libwebp")
 
-    add_cxxflags("-fno-rtti", "-fexceptions", {force = true})
+    add_cxxflags("-frtti", "-fexceptions", {force = true})
     if get_config("backend") == "deko3d" then
         add_packages("deko3d")
     end
@@ -103,14 +103,14 @@ target("SwitchU")
     add_includedirs("projects/common/include", {public = false})
     add_includedirs("projects/menu/src", {public = false})
     add_files("projects/menu/src/**.cpp")
-    add_packages("nlohmann_json", "fmt", "libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp")
+    add_packages("nlohmann_json", "fmt", "libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp", "libcurl", "curlpp")
 
     if is_mode("debug") and get_config("backend") ~= "sdl2" then
         add_packages("imgui")
         add_defines("SWITCHU_DEBUG_UI")
     end
 
-    add_cxxflags("-fno-rtti", "-fexceptions", {force = true})
+    add_cxxflags("-frtti", "-fexceptions", {force = true})
     if get_config("backend") == "deko3d" then
         add_packages("deko3d")
     end

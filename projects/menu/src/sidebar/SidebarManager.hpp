@@ -25,6 +25,10 @@ public:
     void build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
                const std::string& assetsBase, const Actions& actions);
 
+    void reloadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                      const std::string& assetsBase,
+                      const std::string& customIconsBase = std::string());
+
     void update(float dt, nxui::Widget* focusedWidget);
 
     void applyTheme(const nxui::Theme& theme);
@@ -36,8 +40,12 @@ public:
 
     AppletButton*  albumButton()    const { return m_albumButton; }
     nxui::Widget*  settingsButton() const { return m_settingsButton; }
+    nxui::Widget*  themeShopButton() const { return m_themeShopButton; }
 
 private:
+    void loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                    const std::string& assetsBase,
+                    const std::string& customIconsBase);
     void tryLoadAnimation(nxui::GpuDevice& gpu, nxui::Renderer& ren,
                           const std::string& webpPath, AppletButton* button,
                           nxui::Texture* staticIcon);
@@ -47,6 +55,7 @@ private:
     std::vector<std::shared_ptr<AppletButton>> m_rightButtons;
     AppletButton*  m_albumButton    = nullptr;
     nxui::Widget*  m_settingsButton = nullptr;
+    nxui::Widget*  m_themeShopButton = nullptr;
 
     struct AnimEntry {
         SidebarAnimation anim;

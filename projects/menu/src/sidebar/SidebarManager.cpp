@@ -1,22 +1,31 @@
 #include "SidebarManager.hpp"
 #include "core/DebugLog.hpp"
 #include <nxui/core/I18n.hpp>
+#include <sys/stat.h>
+
+namespace {
+
+constexpr int kSidebarIconCount = 6;
+
+bool pathExists(const std::string& path) {
+    struct stat st {};
+    return stat(path.c_str(), &st) == 0;
+}
+
+std::string joinPath(const std::string& base, const std::string& name) {
+    if (base.empty())
+        return name;
+    if (base.back() == '/')
+        return base + name;
+    return base + "/" + name;
+}
+
+} // namespace
 
 
 void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
                            const std::string& assetsBase,
                            const Actions& actions) {
-    std::string iconsBase = assetsBase + "/icons";
-
-    static const char* iconFiles[] = {
-        "album.png", "mii_editor.png", "controller.png", "power.png", "miiverse.png", "settings.png",
-    };
-    m_icons.clear();
-    m_icons.resize(6);
-    for (int i = 0; i < 6; ++i) {
-        bool loaded = m_icons[i].loadFromFile(gpu, ren, iconsBase + "/" + iconFiles[i]);
-    }
-
     constexpr float btnSize = 70.f;
     constexpr float gap     = 16.f;
     constexpr float marginX = 14.f;
@@ -29,8 +38,11 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     m_leftButtons.clear();
     m_rightButtons.clear();
     m_settingsButton = nullptr;
+    m_themeShopButton = nullptr;
     m_albumButton    = nullptr;
     m_anims.clear();
+    m_icons.clear();
+    m_icons.resize(kSidebarIconCount);
 
     auto makeBtn = [](nxui::Texture* tex, const std::string& labelKey,
                       const std::string& fallback, std::function<void()> action) {
@@ -68,20 +80,55 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         sleep->setRect({rightX, startY + 1.f * (btnSize + gap), btnSize, btnSize});
         m_rightButtons.push_back(std::move(sleep));
 
-        auto miiverse = makeBtn(&m_icons[4], "sidebar.miiverse", "Miiverse", actions.onMiiverse);
-        miiverse->setRect({rightX, startY + 2.f * (btnSize + gap), btnSize, btnSize});
-        m_rightButtons.push_back(std::move(miiverse));
+        auto themeShop = makeBtn(&m_icons[4], "sidebar.theme_shop", "Theme Shop", actions.onMiiverse);
+        m_themeShopButton = themeShop.get();
+        themeShop->setRect({rightX, startY + 2.f * (btnSize + gap), btnSize, btnSize});
+        m_rightButtons.push_back(std::move(themeShop));
     }
+
+    loadAssets(gpu, ren, assetsBase, {});
+}
+
+void SidebarManager::reloadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                                  const std::string& assetsBase,
+                                  const std::string& customIconsBase) {
+    if (m_leftButtons.empty() || m_rightButtons.empty())
+        return;
+
+    loadAssets(gpu, ren, assetsBase, customIconsBase);
+}
+
+void SidebarManager::loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                                const std::string& assetsBase,
+                                const std::string& customIconsBase) {
+    std::string defaultIconsBase = joinPath(assetsBase, "icons");
+    auto resolveAsset = [&](const char* fileName) {
+        if (!customIconsBase.empty()) {
+            std::string customPath = joinPath(customIconsBase, fileName);
+            if (pathExists(customPath))
+                return customPath;
+        }
+        return joinPath(defaultIconsBase, fileName);
+    };
+
+    static const char* iconFiles[] = {
+        "album.png", "mii_editor.png", "controller.png", "power.png", "themes.png", "settings.png",
+    };
+    if ((int)m_icons.size() != kSidebarIconCount)
+        m_icons.resize(kSidebarIconCount);
+    for (int i = 0; i < kSidebarIconCount; ++i)
+        m_icons[i].loadFromFile(gpu, ren, resolveAsset(iconFiles[i]));
 
     static const struct { int iconIdx; const char* webpFile; bool useFirstFrame; } animDefs[] = {
         { 0, "album.webp",      false },
         { 1, "mii_editor.webp", false },
         { 2, "controller.webp", true  },
         { 3, "power.webp",      false },
-        { 4, "miiverse.webp",   false },
+        { 4, "themes.webp",     false },
         { 5, "settings.webp",   false },
     };
 
+    m_anims.clear();
     for (const auto& def : animDefs) {
         AppletButton* btn = nullptr;
         if (def.iconIdx == 0) btn = m_leftButtons[0].get();
@@ -90,11 +137,12 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         else if (def.iconIdx == 3) btn = m_rightButtons[1].get();
         else if (def.iconIdx == 4) btn = m_rightButtons[2].get();
         else if (def.iconIdx == 5) btn = m_leftButtons[2].get();
-        if (btn) {
-            nxui::Texture* staticTex = def.useFirstFrame ? nullptr : &m_icons[def.iconIdx];
-            tryLoadAnimation(gpu, ren, iconsBase + "/" + def.webpFile, btn, staticTex);
+        if (!btn)
+            continue;
 
-        }
+        nxui::Texture* staticTex = def.useFirstFrame ? nullptr : &m_icons[def.iconIdx];
+        tryLoadAnimation(gpu, ren, resolveAsset(def.webpFile), btn, staticTex);
+        btn->setIcon(staticTex ? staticTex : nullptr);
     }
 }
 

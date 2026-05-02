@@ -120,17 +120,15 @@ bool Texture::loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
     return true;
 }
 
-bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path) {
+bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide) {
     int w, h, ch;
     uint8_t* data = stbi_load(path.c_str(), &w, &h, &ch, 4);
     if (!data) {
         std::printf("[Texture] stbi_load FAILED: %s\n", path.c_str());
         return false;
     }
-    // Downscale to max 128×128 to avoid blowing up GPU memory with large icons.
-    constexpr int kMaxLoadSide = 128;
-    if (w > kMaxLoadSide || h > kMaxLoadSide) {
-        float scale = std::min((float)kMaxLoadSide / w, (float)kMaxLoadSide / h);
+    if (maxSide > 0 && (w > maxSide || h > maxSide)) {
+        float scale = std::min((float)maxSide / w, (float)maxSide / h);
         int dw = std::max(1, (int)(w * scale));
         int dh = std::max(1, (int)(h * scale));
         uint8_t* scaled = (uint8_t*)std::malloc((size_t)dw * dh * 4);

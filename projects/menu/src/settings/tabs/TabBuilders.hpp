@@ -39,16 +39,6 @@ public:
     static SettingsScreen::Tab build(SettingsScreen& screen);
 };
 
-class MusicTab {
-public:
-    static SettingsScreen::Tab build(SettingsScreen& screen);
-};
-
-class ThemeTab {
-public:
-    static SettingsScreen::Tab build(SettingsScreen& screen);
-};
-
 class StorageTab {
 public:
     static SettingsScreen::Tab build(SettingsScreen& screen);

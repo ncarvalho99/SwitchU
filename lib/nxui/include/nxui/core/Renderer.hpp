@@ -165,7 +165,7 @@ private:
                      const Color& cTop, const Color& cBot);
 
 #ifdef NXUI_BACKEND_DEKO3D
-    void loadShaders();
+    bool loadShaders();
     void setupSampler();
     void updateProjection();
     void bindRenderTarget(int offscreenIdx);

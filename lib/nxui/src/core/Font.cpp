@@ -14,15 +14,21 @@ Font::~Font() {
 bool Font::load(GpuDevice& gpu, Renderer& ren,
                 const std::string& path, int ptSize)
 {
-    m_gpu = &gpu;
-    m_ren = &ren;
-    m_ptSize = ptSize;
-
-    m_font = TTF_OpenFont(path.c_str(), ptSize);
-    if (!m_font) {
+    TTF_Font* newFont = TTF_OpenFont(path.c_str(), ptSize);
+    if (!newFont) {
         std::fprintf(stderr, "[Font] TTF_OpenFont failed: %s\n", TTF_GetError());
         return false;
     }
+
+    if (m_font)
+        TTF_CloseFont(m_font);
+
+    m_font = newFont;
+    m_gpu = &gpu;
+    m_ren = &ren;
+    m_ptSize = ptSize;
+    ++m_revision;
+    clearCache();
     return true;
 }
 

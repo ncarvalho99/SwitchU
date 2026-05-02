@@ -2,6 +2,7 @@
 #include <nxui/core/Types.hpp>
 #include "Texture.hpp"
 #include <SDL2/SDL_ttf.h>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <list>
@@ -30,6 +31,7 @@ public:
     void clearCache();
 
     int ptSize() const { return m_ptSize; }
+    std::uint64_t revision() const { return m_revision; }
 
 private:
     // Render full string to texture (cache by string)
@@ -39,6 +41,7 @@ private:
     int       m_ptSize = 0;
     GpuDevice* m_gpu = nullptr;
     Renderer*  m_ren = nullptr;
+    std::uint64_t m_revision = 0;
 
     // LRU string-texture cache
     // The list stores entries in LRU order (most-recently-used at front).

@@ -29,6 +29,12 @@ std::string formatBytes(uint64_t bytes) {
 }
 
 bool queryStorageSize(NcmStorageId storageId, uint64_t& total, uint64_t& freeSpace) {
+#ifdef SWITCHU_HOMEBREW
+    (void)storageId;
+    total = 0;
+    freeSpace = 0;
+    return false;
+#else
     s64 totalSize = 0;
     s64 freeSize  = 0;
     if (R_FAILED(nsGetStorageSize(storageId, &totalSize, &freeSize)))
@@ -38,9 +44,17 @@ bool queryStorageSize(NcmStorageId storageId, uint64_t& total, uint64_t& freeSpa
     total = static_cast<uint64_t>(totalSize);
     freeSpace = static_cast<uint64_t>(freeSize);
     return true;
+#endif
 }
 
 uint64_t queryApplicationSize(uint64_t titleId) {
+#ifdef SWITCHU_HOMEBREW
+    (void)titleId;
+    return 0;
+#else
+    if (titleId == 0)
+        return 0;
+
     NsApplicationOccupiedSize occ{};
     if (R_FAILED(nsCalculateApplicationOccupiedSize(titleId, &occ)))
         return 0;
@@ -55,11 +69,20 @@ uint64_t queryApplicationSize(uint64_t titleId) {
     }
 
     return bestSize;
+#endif
 }
 
 std::string storageLocationLabel(const nxui::I18n& i18n, u8 storageId);
 
 std::string applicationStorageLocation(uint64_t titleId, const nxui::I18n& i18n) {
+#ifdef SWITCHU_HOMEBREW
+    (void)titleId;
+    (void)i18n;
+    return std::string();
+#else
+    if (titleId == 0)
+        return std::string();
+
     NsApplicationContentMetaStatus statuses[64] = {};
     s32 count = 0;
     if (R_FAILED(nsListApplicationContentMetaStatus(titleId, 0, statuses, 64, &count)) || count <= 0)
@@ -79,20 +102,14 @@ std::string applicationStorageLocation(uint64_t titleId, const nxui::I18n& i18n)
     }
 
     return std::string();
+#endif
 }
 
 std::string formatAppOption(const std::string& title,
                             const std::string& location,
                             const std::string& sizeText,
                             const std::string& status) {
-    std::string result = title;
-    if (!location.empty())
-        result += " — " + location;
-    if (!sizeText.empty())
-        result += " • " + sizeText;
-    if (!status.empty())
-        result += " • " + status;
-    return result;
+return "0";
 }
 
 std::string formatMessageWithTitle(const std::string& pattern, const std::string& title) {
@@ -151,6 +168,16 @@ struct AppControlInfo {
 
 AppControlInfo queryApplicationControlInfo(uint64_t titleId) {
     AppControlInfo info;
+
+    if (titleId == 0) {
+        info.title = "0000000000000000";
+        info.state = AppState::Unknown;
+        return info;
+    }
+
+#ifdef SWITCHU_HOMEBREW
+    return info;
+#endif
 
 #ifdef SWITCHU_MENU
     NxTitleCacheApplicationMetadata* meta = nxtcGetApplicationMetadataEntryById(titleId);
@@ -313,11 +340,15 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
     };
 
     std::vector<AppEntry> apps;
+#ifndef SWITCHU_HOMEBREW
     NsApplicationRecord records[1024] = {};
     s32 recordCount = 0;
     if (R_SUCCEEDED(nsListApplicationRecord(records, 1024, 0, &recordCount)) && recordCount > 0) {
         for (int i = 0; i < recordCount; ++i) {
             uint64_t titleId = records[i].application_id;
+            if (titleId == 0)
+                continue;
+
             AppEntry app;
             app.titleId = titleId;
             auto controlInfo = queryApplicationControlInfo(titleId);
@@ -333,6 +364,7 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
             apps.push_back(std::move(app));
         }
     }
+#endif
 
     std::sort(apps.begin(), apps.end(), [](const AppEntry& a, const AppEntry& b) {
         return a.title < b.title;
@@ -342,7 +374,12 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
         SettingItem it;
         it.label = i18n.tr("settings.storage.empty_library", "No installed games found");
         it.type = ItemType::Info;
+#ifdef SWITCHU_HOMEBREW
+        it.infoText = i18n.tr("settings.storage.homebrew_library_unavailable",
+                              "Installed software management is unavailable in homebrew mode.");
+#else
         it.infoText = "";
+#endif
         t.items.push_back(std::move(it));
         return t;
     }

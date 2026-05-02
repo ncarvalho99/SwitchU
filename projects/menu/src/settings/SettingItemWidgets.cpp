@@ -1,6 +1,7 @@
 #include "SettingItemWidgets.hpp"
 #include "widgets/ActionButtonStyle.hpp"
 
+#include <nxui/core/Renderer.hpp>
 #include <nxui/widgets/Label.hpp>
 #include <nxui/widgets/GlassBox.hpp>
 #include <algorithm>
@@ -9,6 +10,65 @@
 namespace settings::widgets {
 
 namespace {
+
+class LoadingSpinnerWidget final : public nxui::Box {
+public:
+    explicit LoadingSpinnerWidget(const SettingWidgetContext& ctx)
+        : nxui::Box(nxui::Axis::ROW)
+        , m_ctx(ctx) {
+    }
+
+protected:
+    void onUpdate(float dt) override {
+        m_angle += dt * 5.4f;
+        constexpr float kTwoPi = 6.28318530718f;
+        if (m_angle >= kTwoPi)
+            m_angle = std::fmod(m_angle, kTwoPi);
+    }
+
+    void onRender(nxui::Renderer& ren) override {
+        if (!isVisible() || opacity() <= 0.01f)
+            return;
+
+        const nxui::Theme* theme = (m_ctx.theme && *m_ctx.theme) ? *m_ctx.theme : nullptr;
+        nxui::Color accent = theme ? theme->cursorNormal : nxui::Color::white();
+        nxui::Color trail = theme ? theme->textSecondary : nxui::Color(0.8f, 0.8f, 0.8f, 1.f);
+
+        nxui::Rect r = rect();
+        nxui::Vec2 center = {r.x + r.width * 0.5f, r.y + r.height * 0.5f};
+        float outerRadius = std::max(6.f, std::min(r.width, r.height) * 0.5f - 1.5f);
+        float innerRadius = outerRadius * 0.42f;
+        constexpr int kSpokes = 10;
+        constexpr float kStep = 6.28318530718f / (float)kSpokes;
+
+        for (int i = 0; i < kSpokes; ++i) {
+            float angle = m_angle + kStep * (float)i;
+            float weight = 1.f - ((float)i / (float)kSpokes);
+            nxui::Color spoke(
+                trail.r + (accent.r - trail.r) * weight,
+                trail.g + (accent.g - trail.g) * weight,
+                trail.b + (accent.b - trail.b) * weight,
+                (0.16f + 0.72f * weight) * opacity());
+
+            nxui::Vec2 inner = {
+                center.x + std::cos(angle) * innerRadius,
+                center.y + std::sin(angle) * innerRadius,
+            };
+            nxui::Vec2 outer = {
+                center.x + std::cos(angle) * outerRadius,
+                center.y + std::sin(angle) * outerRadius,
+            };
+
+            ren.drawLine(inner, outer, spoke, 2.2f - 0.9f * ((float)i / (float)kSpokes));
+        }
+
+        ren.drawCircle(center, std::max(1.8f, innerRadius * 0.16f), accent.withAlpha(0.30f * opacity()), 18);
+    }
+
+private:
+    SettingWidgetContext m_ctx;
+    float m_angle = 0.f;
+};
 
 class SettingRowBase : public nxui::Box {
 public:
@@ -44,7 +104,6 @@ public:
 protected:
     void onUpdate(float dt) override {
         (void)dt;
-        prepareLayout();
     }
 
     void onRender(nxui::Renderer& ren) override {
@@ -74,24 +133,58 @@ protected:
         nxui::Font* font = (m_ctx.font && *m_ctx.font) ? *m_ctx.font : nullptr;
         nxui::Font* smallFont = (m_ctx.smallFont && *m_ctx.smallFont) ? *m_ctx.smallFont : nullptr;
         const nxui::Theme* theme = (m_ctx.theme && *m_ctx.theme) ? *m_ctx.theme : nullptr;
-
-        if (font) m_label->setFont(font);
-        if (smallFont) m_desc->setFont(smallFont);
-
-        m_label->setText(m_item.label);
-        m_desc->setText(m_item.description);
-        bool showDesc = !m_item.description.empty() && m_item.type != SettingsScreen::ItemType::Section;
-        m_desc->setVisible(showDesc);
-
         const bool isSection = (m_item.type == SettingsScreen::ItemType::Section);
-        if (theme) {
-            m_label->setTextColor(isSection ? theme->textSecondary : theme->textPrimary);
-            m_desc->setTextColor(theme->textSecondary);
-        }
-        m_label->setScale(isSection ? 0.76f : 0.86f);
+        const bool showDesc = !m_item.description.empty() && !isSection;
+        const float labelScale = isSection ? 0.76f : 0.86f;
 
-        m_label->sizeToFit();
-        m_desc->sizeToFit();
+        bool sizeDirty = false;
+
+        if (font != m_cachedFont) {
+            m_cachedFont = font;
+            if (font)
+                m_label->setFont(font);
+            sizeDirty = true;
+        }
+        if (smallFont != m_cachedSmallFont) {
+            m_cachedSmallFont = smallFont;
+            if (smallFont)
+                m_desc->setFont(smallFont);
+            sizeDirty = true;
+        }
+
+        if (m_cachedLabelText != m_item.label) {
+            m_cachedLabelText = m_item.label;
+            m_label->setText(m_cachedLabelText);
+            sizeDirty = true;
+        }
+        if (m_cachedDescText != m_item.description) {
+            m_cachedDescText = m_item.description;
+            m_desc->setText(m_cachedDescText);
+            sizeDirty = true;
+        }
+        if (m_cachedShowDesc != showDesc) {
+            m_cachedShowDesc = showDesc;
+            m_desc->setVisible(showDesc);
+        }
+        if (std::abs(m_cachedLabelScale - labelScale) > 0.001f) {
+            m_cachedLabelScale = labelScale;
+            m_label->setScale(labelScale);
+            sizeDirty = true;
+        }
+
+        if (theme != m_cachedTheme || isSection != m_cachedIsSection) {
+            m_cachedTheme = theme;
+            m_cachedIsSection = isSection;
+            if (theme) {
+                m_label->setTextColor(isSection ? theme->textSecondary : theme->textPrimary);
+                m_desc->setTextColor(theme->textSecondary);
+            }
+        }
+
+        if (sizeDirty) {
+            m_label->sizeToFit();
+            m_desc->sizeToFit();
+        }
 
         m_left->setJustifyContent(nxui::JustifyContent::CENTER);
     }
@@ -103,6 +196,16 @@ protected:
     std::shared_ptr<nxui::Box> m_right;
     std::shared_ptr<nxui::Label> m_label;
     std::shared_ptr<nxui::Label> m_desc;
+
+private:
+    nxui::Font* m_cachedFont = nullptr;
+    nxui::Font* m_cachedSmallFont = nullptr;
+    const nxui::Theme* m_cachedTheme = nullptr;
+    std::string m_cachedLabelText;
+    std::string m_cachedDescText;
+    float m_cachedLabelScale = -1.f;
+    bool m_cachedShowDesc = false;
+    bool m_cachedIsSection = false;
 };
 
 class SectionRowWidget final : public SettingRowBase {
@@ -266,6 +369,9 @@ class ProgressRowWidget final : public SettingRowBase {
 public:
     ProgressRowWidget(SettingsScreen::SettingItem& item, const SettingWidgetContext& ctx)
         : SettingRowBase(item, ctx) {
+        m_spinner = std::make_shared<LoadingSpinnerWidget>(ctx);
+        m_spinner->setSize(26.f, 26.f);
+
         m_track = std::make_shared<nxui::GlassBox>(nxui::Axis::ROW);
         m_track->setAlignItems(nxui::AlignItems::CENTER);
         m_track->setJustifyContent(nxui::JustifyContent::FLEX_START);
@@ -285,6 +391,7 @@ public:
         m_pct->setVAlign(nxui::Label::VAlign::Center);
         m_pct->setMarginLeft(10.f);
 
+        m_right->addChild(m_spinner);
         m_right->addChild(m_track);
         m_right->addChild(m_pct);
     }
@@ -292,6 +399,17 @@ protected:
     void syncRight() override {
         nxui::Font* smallFont = (m_ctx.smallFont && *m_ctx.smallFont) ? *m_ctx.smallFont : nullptr;
         const nxui::Theme* theme = (m_ctx.theme && *m_ctx.theme) ? *m_ctx.theme : nullptr;
+
+        bool indeterminate = m_item.floatVal < 0.f;
+        m_spinner->setVisible(indeterminate);
+        m_track->setVisible(!indeterminate);
+        m_pct->setVisible(!indeterminate);
+
+        if (indeterminate) {
+            m_spinner->setSize(26.f, 26.f);
+            m_right->setSize(std::max(44.f, rect().width * 0.12f), rect().height);
+            return;
+        }
 
         float t = std::clamp(m_item.floatVal, 0.f, 1.f);
         float rightW = std::max(170.f, rect().width * 0.42f);
@@ -317,6 +435,7 @@ protected:
     }
 
 private:
+    std::shared_ptr<LoadingSpinnerWidget> m_spinner;
     std::shared_ptr<nxui::GlassBox> m_track;
     std::shared_ptr<nxui::GlassBox> m_fill;
     std::shared_ptr<nxui::Label> m_pct;
@@ -419,49 +538,6 @@ private:
     std::shared_ptr<nxui::Label> m_btnLabel;
 };
 
-class ColorPickerRowWidget final : public SettingRowBase {
-public:
-    ColorPickerRowWidget(SettingsScreen::SettingItem& item, const SettingWidgetContext& ctx)
-        : SettingRowBase(item, ctx) {
-        m_swatch = std::make_shared<nxui::GlassBox>();
-        m_swatch->setCornerRadius(8.f);
-        m_swatch->setBorderWidth(1.5f);
-
-        m_valueLbl = std::make_shared<nxui::Label>("");
-        m_valueLbl->setScale(0.66f);
-        m_valueLbl->setHAlign(nxui::Label::HAlign::Right);
-        m_valueLbl->setVAlign(nxui::Label::VAlign::Center);
-        m_valueLbl->setMarginLeft(8.f);
-
-        m_right->addChild(m_swatch);
-        m_right->addChild(m_valueLbl);
-    }
-protected:
-    void syncRight() override {
-        nxui::Font* smallFont = (m_ctx.smallFont && *m_ctx.smallFont) ? *m_ctx.smallFont : nullptr;
-        const nxui::Theme* theme = (m_ctx.theme && *m_ctx.theme) ? *m_ctx.theme : nullptr;
-
-        nxui::Color col = nxui::Color::fromHSL(m_item.colorH, m_item.colorS, m_item.colorL, 1.f);
-        m_swatch->setBaseColor(col.withAlpha(opacity()));
-        if (theme) {
-            m_swatch->setBorderColor(theme->panelBorder.withAlpha(0.6f * opacity()));
-            m_valueLbl->setTextColor(theme->textSecondary.withAlpha(opacity()));
-        }
-        float swatchW = 36.f;
-        float swatchH = std::max(24.f, rect().height - 20.f);
-        m_swatch->setSize(swatchW, swatchH);
-
-        if (smallFont) m_valueLbl->setFont(smallFont);
-        m_valueLbl->setText("\xE2\x96\xB6");
-        m_valueLbl->setSize(20.f, rect().height);
-
-        m_right->setSize(std::max(80.f, rect().width * 0.20f), rect().height);
-    }
-private:
-    std::shared_ptr<nxui::GlassBox> m_swatch;
-    std::shared_ptr<nxui::Label> m_valueLbl;
-};
-
 }
 
 std::shared_ptr<nxui::Box> createSettingItemWidget(SettingsScreen::SettingItem& item,
@@ -475,7 +551,6 @@ std::shared_ptr<nxui::Box> createSettingItemWidget(SettingsScreen::SettingItem& 
         case IT::Progress:    return std::make_shared<ProgressRowWidget>(item, ctx);
         case IT::Selector:    return std::make_shared<SelectorRowWidget>(item, ctx);
         case IT::Action:      return std::make_shared<ActionRowWidget>(item, ctx);
-        case IT::ColorPicker: return std::make_shared<ColorPickerRowWidget>(item, ctx);
         default:              return std::make_shared<InfoRowWidget>(item, ctx);
     }
 }

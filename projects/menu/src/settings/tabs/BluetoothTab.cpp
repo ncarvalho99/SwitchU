@@ -6,7 +6,7 @@
 
 namespace {
 
-void rebuildDynamicItems(SettingsScreen::Tab& t, SettingsScreen& screen) {
+void rebuildDynamicItems(SettingsScreen::Tab& t, TabbedOverlayScreen& screen) {
     using SettingItem = SettingsScreen::SettingItem;
     using ItemType = SettingsScreen::ItemType;
     auto& i18n = nxui::I18n::instance();
@@ -197,7 +197,7 @@ SettingsScreen::Tab settings::tabs::BluetoothTab::build(SettingsScreen& screen) 
     rebuildDynamicItems(t, screen);
 
     // Poll for BT changes every frame while this tab is active
-    t.onUpdate = [](Tab& self, SettingsScreen& scr) {
+    t.onUpdate = [](Tab& self, TabbedOverlayScreen& scr) {
         bool changed = false;
         if (bluetooth::IsAvailable()) {
             changed |= bluetooth::HasPairedChanges();

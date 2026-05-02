@@ -1,39 +1,158 @@
 #include "WaraWaraBackground.hpp"
-#include <nxui/core/Renderer.hpp>
 #include <cmath>
 #include <cstdlib>
 
+namespace {
+
+float random01() {
+    return (std::rand() % 1000) / 1000.f;
+}
+
+float randomRange(float minValue, float maxValue) {
+    return minValue + (maxValue - minValue) * random01();
+}
+
+float wrapValue(float value, float minValue, float maxValue) {
+    float span = maxValue - minValue;
+    if (span <= 0.f)
+        return minValue;
+    while (value < minValue)
+        value += span;
+    while (value > maxValue)
+        value -= span;
+    return value;
+}
+
+} // namespace
+
 WaraWaraBackground::WaraWaraBackground() { regenerate(30); }
 
+void WaraWaraBackground::setConfig(const Config& config) {
+    m_config = config;
+    m_config.shapeCount = std::max(1, m_config.shapeCount);
+    m_config.gridColumns = std::max(1, m_config.gridColumns);
+    m_config.gridRows = std::max(1, m_config.gridRows);
+    m_config.spacingX = std::max(1.f, m_config.spacingX);
+    m_config.spacingY = std::max(1.f, m_config.spacingY);
+    m_config.sizeMin = std::max(1.f, m_config.sizeMin);
+    m_config.sizeMax = std::max(m_config.sizeMin, m_config.sizeMax);
+    m_config.speedMin = std::max(0.f, m_config.speedMin);
+    m_config.speedMax = std::max(m_config.speedMin, m_config.speedMax);
+    m_config.wobble = std::max(0.f, m_config.wobble);
+    m_config.opacity = std::clamp(m_config.opacity, 0.f, 1.f);
+    m_config.imageOpacity = std::clamp(m_config.imageOpacity, 0.f, 1.f);
+    regenerate(0);
+}
+
+bool WaraWaraBackground::loadImage(nxui::GpuDevice& gpu, nxui::Renderer& ren, const std::string& path) {
+    if (path.empty()) {
+        clearImage();
+        return false;
+    }
+
+    nxui::Texture texture;
+    if (!texture.loadFromFile(gpu, ren, path, 0))
+        return false;
+
+    m_backgroundImage = std::move(texture);
+    return true;
+}
+
+void WaraWaraBackground::clearImage() {
+    m_backgroundImage = nxui::Texture{};
+}
+
+WaraWaraBackground::ShapeType WaraWaraBackground::pickShapeType() const {
+    switch (m_config.shapeSet) {
+        case ShapeSet::Circle:
+            return Circle;
+        case ShapeSet::Triangle:
+            return Triangle;
+        case ShapeSet::Square:
+            return Square;
+        case ShapeSet::Diamond:
+            return Diamond;
+        case ShapeSet::Hexagon:
+            return Hexagon;
+        case ShapeSet::Mixed:
+        default:
+            return static_cast<ShapeType>(std::rand() % ShapeCount);
+    }
+}
+
 void WaraWaraBackground::regenerate(int count) {
-    m_shapes.resize(count);
-    for (auto& s : m_shapes) {
-        s.type       = static_cast<ShapeType>(std::rand() % ShapeCount);
-        s.pos        = {(float)(std::rand() % 1280), (float)(std::rand() % 720)};
-        s.size       = 14.f + (std::rand() % 40);
-        s.speed      = 6.f  + (std::rand() % 22);
-        s.phase      = (std::rand() % 1000) / 1000.f * 6.28f;
-        s.wobble     = 10.f + (std::rand() % 18);
-        s.rotation   = (std::rand() % 1000) / 1000.f * 6.28f;
-        s.rotSpeed   = 0.12f + (std::rand() % 100) / 100.f * 0.5f;
+    float areaX = m_rect.x;
+    float areaY = m_rect.y;
+    float areaW = (m_rect.width > 1.f) ? m_rect.width : 1280.f;
+    float areaH = (m_rect.height > 1.f) ? m_rect.height : 720.f;
+
+    int shapeCount = count > 0 ? count : m_config.shapeCount;
+    if (m_config.layout == Layout::Grid)
+        shapeCount = std::max(1, m_config.gridColumns * m_config.gridRows);
+
+    m_shapes.resize(shapeCount);
+    for (int index = 0; index < shapeCount; ++index) {
+        Shape& s = m_shapes[index];
+        s.type = pickShapeType();
+        if (m_config.layout == Layout::Grid) {
+            int col = index % m_config.gridColumns;
+            int row = index / m_config.gridColumns;
+            float gridW = (m_config.gridColumns - 1) * m_config.spacingX;
+            float gridH = (m_config.gridRows - 1) * m_config.spacingY;
+            float startX = areaX + (areaW - gridW) * 0.5f;
+            float startY = areaY + (areaH - gridH) * 0.5f;
+            s.pos = {startX + col * m_config.spacingX, startY + row * m_config.spacingY};
+        } else {
+            s.pos = {areaX + random01() * areaW, areaY + random01() * areaH};
+        }
+        s.size = randomRange(m_config.sizeMin, m_config.sizeMax);
+        s.speed = randomRange(m_config.speedMin, m_config.speedMax);
+        s.phase = random01() * 6.28f;
+        s.wobble = m_config.layout == Layout::Grid ? 0.f : randomRange(m_config.wobble * 0.4f, m_config.wobble);
+        s.rotation = random01() * 6.28f;
+        s.rotSpeed = randomRange(m_config.rotationSpeed * 0.35f, m_config.rotationSpeed);
         if (std::rand() % 2) s.rotSpeed = -s.rotSpeed;
-        s.glassAlpha = 0.06f + (std::rand() % 100) / 100.f * 0.10f;
-        float h = (std::rand() % 1000) / 1000.f;
-        s.color = nxui::Color::fromHSL(h, 0.20f, 0.50f, s.glassAlpha);
+        s.glassAlpha = randomRange(0.05f, 0.16f) * m_config.opacity;
+        s.color = nxui::Color::white().withAlpha(s.glassAlpha);
     }
 }
 
 void WaraWaraBackground::onUpdate(float dt) {
     m_time += dt;
     for (auto& s : m_shapes) {
-        s.pos.y -= s.speed * dt;
-        s.pos.x += std::sin(m_time * 0.7f + s.phase) * s.wobble * dt;
-        s.rotation += s.rotSpeed * dt;
-        if (s.pos.y + s.size < -20.f) {
-            s.pos.y = 740.f + s.size;
-            s.pos.x = (float)(std::rand() % 1280);
+        if (m_config.layout == Layout::Floating) {
+            float top = m_rect.y - s.size - 20.f;
+            float bottom = m_rect.y + ((m_rect.height > 1.f) ? m_rect.height : 720.f) + s.size + 20.f;
+            float left = m_rect.x;
+            float width = (m_rect.width > 1.f) ? m_rect.width : 1280.f;
+            s.pos.y -= s.speed * dt;
+            s.pos.x += std::sin(m_time * 0.7f + s.phase) * s.wobble * dt;
+            s.pos.x = wrapValue(s.pos.x, left - s.size, left + width + s.size);
+            if (s.pos.y + s.size < top) {
+                s.pos.y = bottom;
+                s.pos.x = left + random01() * width;
+            }
         }
+        s.rotation += s.rotSpeed * dt;
     }
+}
+
+nxui::Rect WaraWaraBackground::backgroundImageRect() const {
+    if (!m_backgroundImage.valid() || m_backgroundImage.width() <= 0 || m_backgroundImage.height() <= 0)
+        return m_rect;
+
+    float areaX = m_rect.x;
+    float areaY = m_rect.y;
+    float areaW = (m_rect.width > 1.f) ? m_rect.width : 1280.f;
+    float areaH = (m_rect.height > 1.f) ? m_rect.height : 720.f;
+    float texW = static_cast<float>(m_backgroundImage.width());
+    float texH = static_cast<float>(m_backgroundImage.height());
+    float sx = areaW / texW;
+    float sy = areaH / texH;
+    float scale = m_config.imageCover ? std::max(sx, sy) : std::min(sx, sy);
+    float drawW = texW * scale;
+    float drawH = texH * scale;
+    return {areaX + (areaW - drawW) * 0.5f, areaY + (areaH - drawH) * 0.5f, drawW, drawH};
 }
 
 void WaraWaraBackground::onRender(nxui::Renderer& ren) {
@@ -52,8 +171,44 @@ void WaraWaraBackground::onRender(nxui::Renderer& ren) {
     ren.flush();
     ren.useShader(nxui::ShaderProgram::Basic);
 
-    for (auto& s : m_shapes)
-        drawGlassShape(ren, s);
+    if (m_backgroundImage.valid() && m_config.imageOpacity > 0.f) {
+        ren.drawTexture(&m_backgroundImage,
+                        backgroundImageRect(),
+                        nxui::Color::white().withAlpha(m_config.imageOpacity * m_opacity));
+    }
+
+    for (const auto& s : m_shapes)
+        drawShapeWithSymmetry(ren, s);
+}
+
+void WaraWaraBackground::drawShapeWithSymmetry(nxui::Renderer& ren, const Shape& s) const {
+    drawGlassShape(ren, s);
+
+    float left = m_rect.x;
+    float top = m_rect.y;
+    float width = (m_rect.width > 1.f) ? m_rect.width : 1280.f;
+    float height = (m_rect.height > 1.f) ? m_rect.height : 720.f;
+
+    auto mirrorHorizontal = [&](const Shape& source) {
+        Shape mirrored = source;
+        mirrored.pos.x = left + width - (source.pos.x - left);
+        return mirrored;
+    };
+
+    auto mirrorVertical = [&](const Shape& source) {
+        Shape mirrored = source;
+        mirrored.pos.y = top + height - (source.pos.y - top);
+        return mirrored;
+    };
+
+    if (m_config.symmetry == Symmetry::MirrorHorizontal || m_config.symmetry == Symmetry::Quad)
+        drawGlassShape(ren, mirrorHorizontal(s));
+
+    if (m_config.symmetry == Symmetry::MirrorVertical || m_config.symmetry == Symmetry::Quad)
+        drawGlassShape(ren, mirrorVertical(s));
+
+    if (m_config.symmetry == Symmetry::Quad)
+        drawGlassShape(ren, mirrorVertical(mirrorHorizontal(s)));
 }
 
 void WaraWaraBackground::drawGlassShape(nxui::Renderer& ren, const Shape& s) const {

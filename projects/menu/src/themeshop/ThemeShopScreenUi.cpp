@@ -1,0 +1,1689 @@
+#include "ThemeShopScreen.hpp"
+
+#include <nxui/core/I18n.hpp>
+#include <nxui/core/Renderer.hpp>
+
+#include <algorithm>
+#include <cstdint>
+#include <cmath>
+#include <functional>
+#include <unordered_map>
+
+namespace {
+
+constexpr int kGridCols = 2;
+constexpr int kVisibleRows = 2;
+constexpr float kContentInsetX = 24.f;
+constexpr float kContentInsetY = 18.f;
+constexpr float kHeaderHeight = 72.f;
+constexpr float kGridGapX = 16.f;
+constexpr float kGridGapY = 20.f;
+constexpr float kFooterHintHeight = 24.f;
+constexpr float kPreviewAspect = 16.f / 9.f;
+constexpr float kSearchButtonWidth = 208.f;
+constexpr float kRefreshButtonWidth = 144.f;
+constexpr float kHeaderButtonGap = 12.f;
+constexpr size_t kTextMeasureCacheLimit = 1024;
+constexpr size_t kEllipsizeCacheLimit = 1024;
+
+std::unordered_map<std::string, nxui::Vec2> g_textMeasureCache;
+std::unordered_map<std::string, std::string> g_ellipsizeCache;
+
+std::string measureCacheKey(nxui::Font* font, const std::string& text) {
+    return std::to_string((std::uintptr_t)font) + "\n"
+         + std::to_string(font ? font->revision() : 0) + "\n"
+         + text;
+}
+
+std::string ellipsizeCacheKey(nxui::Font* font, const std::string& text, float maxWidth, float scale) {
+    return std::to_string((std::uintptr_t)font)
+         + "\n" + std::to_string(font ? font->revision() : 0)
+        + "\n" + std::to_string((int)std::lround(maxWidth * 4.f))
+        + "\n" + std::to_string((int)std::lround(scale * 1000.f))
+        + "\n" + text;
+}
+
+nxui::Vec2 measureTextCached(nxui::Font* font, const std::string& text) {
+    if (!font || text.empty())
+        return font ? font->measure(text) : nxui::Vec2{};
+
+    std::string key = measureCacheKey(font, text);
+    auto it = g_textMeasureCache.find(key);
+    if (it != g_textMeasureCache.end())
+        return it->second;
+
+    nxui::Vec2 size = font->measure(text);
+    if (g_textMeasureCache.size() >= kTextMeasureCacheLimit)
+        g_textMeasureCache.clear();
+    g_textMeasureCache.emplace(std::move(key), size);
+    return size;
+}
+
+struct GridLayout {
+    nxui::Rect header;
+    nxui::Rect searchButton;
+    nxui::Rect refreshButton;
+    nxui::Rect grid;
+    float cardW = 0.f;
+    float cardH = 0.f;
+};
+
+GridLayout makeGridLayout(const nxui::Rect& content) {
+    GridLayout layout;
+    layout.header = {
+        content.x + kContentInsetX,
+        content.y + kContentInsetY,
+        content.width - kContentInsetX * 2.f,
+        kHeaderHeight
+    };
+    layout.searchButton = {
+        layout.header.right() - kSearchButtonWidth,
+        layout.header.y + 10.f,
+        kSearchButtonWidth,
+        42.f
+    };
+    layout.refreshButton = {
+        layout.searchButton.x - kHeaderButtonGap - kRefreshButtonWidth,
+        layout.header.y + 10.f,
+        kRefreshButtonWidth,
+        42.f
+    };
+    layout.grid = {
+        content.x + kContentInsetX,
+        layout.header.bottom() + 12.f,
+        content.width - kContentInsetX * 2.f,
+        content.height - (layout.header.bottom() - content.y) - 12.f - kFooterHintHeight
+    };
+    layout.cardW = (layout.grid.width - kGridGapX * (kGridCols - 1)) / (float)kGridCols;
+    layout.cardH = (layout.grid.height - kGridGapY * (kVisibleRows - 1)) / (float)kVisibleRows;
+    return layout;
+}
+
+nxui::Rect gridCardRect(const GridLayout& layout, int localIndex) {
+    int col = localIndex % kGridCols;
+    int row = localIndex / kGridCols;
+    return {
+        layout.grid.x + col * (layout.cardW + kGridGapX),
+        layout.grid.y + row * (layout.cardH + kGridGapY),
+        layout.cardW,
+        layout.cardH
+    };
+}
+
+nxui::Rect detailDialogRect(const nxui::Rect& content) {
+    return {
+        content.x + 58.f,
+        content.y + 54.f,
+        content.width - 116.f,
+        content.height - 108.f
+    };
+}
+
+std::vector<nxui::Rect> detailButtonRects(const nxui::Rect& dialog, int count) {
+    std::vector<nxui::Rect> rects;
+    if (count <= 0)
+        return rects;
+
+    float gap = 14.f;
+    float width = count == 1 ? 258.f : 246.f;
+    float totalWidth = count * width + (count - 1) * gap;
+    float x = dialog.right() - 30.f - totalWidth;
+    float y = dialog.bottom() - 68.f;
+    rects.reserve((size_t)count);
+    for (int i = 0; i < count; ++i) {
+        rects.push_back({x + i * (width + gap), y, width, 46.f});
+    }
+    return rects;
+}
+
+std::vector<nxui::Rect> headerButtonRects(const GridLayout& layout, bool communityTab) {
+    std::vector<nxui::Rect> rects;
+    if (communityTab)
+        rects.push_back(layout.refreshButton);
+    rects.push_back(layout.searchButton);
+    return rects;
+}
+
+std::string ellipsize(nxui::Font* font, const std::string& text, float maxWidth, float scale) {
+    if (!font || text.empty() || maxWidth <= 0.f)
+        return text;
+
+    std::string cacheKey = ellipsizeCacheKey(font, text, maxWidth, scale);
+    auto cached = g_ellipsizeCache.find(cacheKey);
+    if (cached != g_ellipsizeCache.end())
+        return cached->second;
+
+    if (measureTextCached(font, text).x * scale <= maxWidth)
+        return text;
+
+    std::string out = text;
+    while (!out.empty() && measureTextCached(font, out + "...").x * scale > maxWidth)
+        out.pop_back();
+
+    std::string result = out.empty() ? text : out + "...";
+    if (g_ellipsizeCache.size() >= kEllipsizeCacheLimit)
+        g_ellipsizeCache.clear();
+    g_ellipsizeCache.emplace(std::move(cacheKey), result);
+    return result;
+}
+
+nxui::Rect fitAspectRect(const nxui::Rect& bounds, float aspect) {
+    if (bounds.width <= 0.f || bounds.height <= 0.f || aspect <= 0.f)
+        return bounds;
+
+    float width = std::min(bounds.width, bounds.height * aspect);
+    float height = width / aspect;
+    if (height > bounds.height) {
+        height = bounds.height;
+        width = height * aspect;
+    }
+
+    return {
+        bounds.x + (bounds.width - width) * 0.5f,
+        bounds.y + (bounds.height - height) * 0.5f,
+        width,
+        height
+    };
+}
+
+nxui::Rect detailPreviewRect(const nxui::Rect& dialog) {
+    constexpr float kBodyTopInset = 26.f;
+    constexpr float kBodyBottomInset = 96.f;
+    nxui::Rect bounds = {
+        dialog.x + 22.f,
+        dialog.y + kBodyTopInset,
+        dialog.width * 0.50f,
+        dialog.height - kBodyTopInset - kBodyBottomInset
+    };
+    return fitAspectRect(bounds, kPreviewAspect);
+}
+
+struct DetailPreviewControls {
+    nxui::Rect prev;
+    nxui::Rect counter;
+    nxui::Rect next;
+};
+
+DetailPreviewControls detailPreviewControls(const nxui::Rect& preview) {
+    DetailPreviewControls controls;
+    float gap = 10.f;
+    float rowY = preview.bottom() + 18.f;
+    float rowH = 42.f;
+    float prevW = 118.f;
+    float counterW = 82.f;
+    float nextW = 118.f;
+    float totalW = prevW + counterW + nextW + gap * 2.f;
+    float startX = preview.x + std::max(0.f, (preview.width - totalW) * 0.5f);
+
+    controls.prev = {startX, rowY, prevW, rowH};
+    controls.counter = {controls.prev.right() + gap, rowY, counterW, rowH};
+    controls.next = {controls.counter.right() + gap, rowY, nextW, rowH};
+    return controls;
+}
+
+std::vector<nxui::Rect> detailPreviewControlRects(const DetailPreviewControls& controls,
+                                                 const nxui::Rect& preview,
+                                                 int screenshotCount) {
+    std::vector<nxui::Rect> rects;
+    if (screenshotCount <= 0)
+        return rects;
+    if (screenshotCount > 1)
+        rects.push_back(controls.prev);
+    rects.push_back(preview);
+    if (screenshotCount > 1)
+        rects.push_back(controls.next);
+    return rects;
+}
+
+nxui::Rect lerpRect(const nxui::Rect& from, const nxui::Rect& to, float t) {
+    return {
+        from.x + (to.x - from.x) * t,
+        from.y + (to.y - from.y) * t,
+        from.width + (to.width - from.width) * t,
+        from.height + (to.height - from.height) * t,
+    };
+}
+
+struct FullscreenOverlayLayout {
+    nxui::Rect preview;
+    nxui::Rect prev;
+    nxui::Rect next;
+    nxui::Rect close;
+    nxui::Rect counter;
+};
+
+FullscreenOverlayLayout makeFullscreenOverlayLayout(const nxui::Rect& content) {
+    FullscreenOverlayLayout layout;
+    nxui::Rect inner = content.shrunk(18.f);
+    nxui::Rect previewBounds = {
+        inner.x + 44.f,
+        inner.y + 44.f,
+        inner.width - 88.f,
+        inner.height - 88.f
+    };
+    layout.preview = fitAspectRect(previewBounds, kPreviewAspect);
+    layout.prev = {inner.x + 16.f, layout.preview.y + layout.preview.height * 0.5f - 24.f, 92.f, 48.f};
+    layout.next = {inner.right() - 108.f, layout.preview.y + layout.preview.height * 0.5f - 24.f, 92.f, 48.f};
+    layout.close = {inner.right() - 128.f, inner.y + 18.f, 112.f, 40.f};
+    layout.counter = {inner.x + (inner.width - 84.f) * 0.5f, inner.y + 18.f, 84.f, 40.f};
+    return layout;
+}
+
+nxui::Rect fitTextureRect(const nxui::Rect& bounds, const nxui::Texture* texture) {
+    if (!texture || texture->width() <= 0 || texture->height() <= 0)
+        return bounds;
+
+    float texW = (float)texture->width();
+    float texH = (float)texture->height();
+    float scale = std::min(bounds.width / texW, bounds.height / texH);
+    float width = texW * scale;
+    float height = texH * scale;
+    return {
+        bounds.x + (bounds.width - width) * 0.5f,
+        bounds.y + (bounds.height - height) * 0.5f,
+        width,
+        height
+    };
+}
+
+void drawSpinner(nxui::Renderer& ren, const nxui::Vec2& center, float radius,
+                 float time, const nxui::Color& color, float opacity) {
+    constexpr int kSegments = 12;
+    for (int i = 0; i < kSegments; ++i) {
+        float angle = ((float)i / (float)kSegments) * 6.2831853f + time * 5.0f;
+        float lead = std::fmod((float)i + time * 12.f, (float)kSegments) / (float)kSegments;
+        float alpha = std::clamp(0.12f + lead * 0.88f, 0.f, 1.f) * opacity;
+        nxui::Vec2 from = {center.x + std::cos(angle) * (radius - 7.f), center.y + std::sin(angle) * (radius - 7.f)};
+        nxui::Vec2 to = {center.x + std::cos(angle) * radius, center.y + std::sin(angle) * radius};
+        ren.drawLine(from, to, color.withAlpha(alpha), 3.f);
+    }
+}
+
+void drawChip(nxui::Renderer& ren, nxui::Font* font, const nxui::Rect& rect,
+              const std::string& text, const nxui::Color& fill, const nxui::Color& border,
+              const nxui::Color& textColor, float opacity, float scale = 0.72f) {
+    float borderWidth = rect.height >= 42.f ? 1.8f : (rect.height >= 34.f ? 1.5f : 1.3f);
+    ren.drawRoundedRect(rect, fill.withAlpha(fill.a * opacity), rect.height * 0.5f);
+    ren.drawRoundedRectOutline(rect, border.withAlpha(border.a * opacity), rect.height * 0.5f, borderWidth);
+    if (font) {
+        std::string fitted = ellipsize(font, text, rect.width - 16.f, scale);
+        nxui::Vec2 size = measureTextCached(font, fitted);
+        ren.drawText(fitted,
+                     {rect.x + (rect.width - size.x * scale) * 0.5f,
+                      rect.y + (rect.height - size.y * scale) * 0.5f},
+                     font,
+                     textColor.withAlpha(opacity),
+                     scale);
+    }
+}
+
+void drawPreviewPlaceholder(nxui::Renderer& ren,
+                            nxui::Font* smallFont,
+                            const nxui::Theme* theme,
+                            const nxui::Rect& rect,
+                            const std::string& label,
+                            bool loading,
+                            float time,
+                            float opacity) {
+    ren.drawRoundedRect(rect, theme->panelBase.withAlpha(0.16f * opacity), 14.f);
+    ren.drawRoundedRectOutline(rect, theme->panelBorder.withAlpha(0.18f * opacity), 14.f, 1.f);
+
+    nxui::Rect inner = {rect.x + 4.f, rect.y + 4.f, rect.width - 8.f, rect.height - 8.f};
+    ren.drawRoundedRect(inner, theme->background.withAlpha(0.22f * opacity), 12.f);
+
+    nxui::Vec2 center = {inner.x + inner.width * 0.5f, inner.y + inner.height * 0.5f};
+    if (loading) {
+        drawSpinner(ren, {center.x, center.y - 12.f}, 14.f, time, theme->cursorNormal, opacity);
+    }
+
+    if (smallFont && !label.empty()) {
+        std::string fitted = ellipsize(smallFont, label, inner.width - 20.f, 0.64f);
+        nxui::Vec2 size = measureTextCached(smallFont, fitted);
+        float textY = center.y + (loading ? 12.f : -size.y * 0.32f);
+        ren.drawText(fitted,
+                     {inner.x + (inner.width - size.x * 0.64f) * 0.5f, textY},
+                     smallFont,
+                     theme->textSecondary.withAlpha(0.92f * opacity),
+                     0.64f);
+    }
+}
+
+void drawThemePreview(nxui::Renderer& ren,
+                      nxui::Font* smallFont,
+                      const nxui::Theme* theme,
+                      const nxui::Rect& rect,
+                      const nxui::Texture* texture,
+                      const std::string& placeholderLabel,
+                      bool loading,
+                      float time,
+                      float opacity) {
+    if (!theme)
+        return;
+
+    if (texture && texture->valid()) {
+        ren.drawRoundedRect(rect, theme->panelBase.withAlpha(0.14f * opacity), 14.f);
+        ren.drawRoundedRectOutline(rect, theme->panelBorder.withAlpha(0.18f * opacity), 14.f, 1.f);
+        nxui::Rect inner = {rect.x + 4.f, rect.y + 4.f, rect.width - 8.f, rect.height - 8.f};
+        ren.drawRoundedRect(inner, nxui::Color(0.f, 0.f, 0.f, 0.14f * opacity), 12.f);
+        ren.drawTextureRounded(texture,
+                               fitTextureRect(inner, texture),
+                               12.f,
+                               nxui::Color(1.f, 1.f, 1.f, opacity));
+        return;
+    }
+
+    drawPreviewPlaceholder(ren, smallFont, theme, rect, placeholderLabel, loading, time, opacity);
+}
+
+std::string transferLabel(const ThemeTransferState& state) {
+    if (state.label().empty())
+        return {};
+    if (state.progress01() < 0.f || state.progress01() > 1.f)
+        return state.label();
+
+    int percent = (int)std::lround(state.progress01() * 100.f);
+    return state.label() + " (" + std::to_string(percent) + "%)";
+}
+
+} // namespace
+
+bool ThemeShopScreen::isCommunityTab() const {
+    return m_tabIndex == 1;
+}
+
+int ThemeShopScreen::currentEntryCount() const {
+    return isCommunityTab() ? (int)m_communityEntries.size() : (int)m_themeShopEntries.size();
+}
+
+int ThemeShopScreen::currentSelectedIndex() const {
+    if (isCommunityTab()) {
+        for (int i = 0; i < (int)m_communityEntries.size(); ++i) {
+            if (m_communityEntries[i].id == m_communitySelectedId)
+                return i;
+        }
+        return m_communityEntries.empty() ? -1 : 0;
+    }
+
+    for (int i = 0; i < (int)m_themeShopEntries.size(); ++i) {
+        if (m_themeShopEntries[i].id == m_themeShopSelectedId)
+            return i;
+    }
+    return m_themeShopEntries.empty() ? -1 : 0;
+}
+
+void ThemeShopScreen::setCurrentSelectedIndex(int idx) {
+    int count = currentEntryCount();
+    if (count <= 0)
+        return;
+
+    idx = std::clamp(idx, 0, count - 1);
+    if (isCommunityTab())
+        m_communitySelectedId = m_communityEntries[(size_t)idx].id;
+    else
+        m_themeShopSelectedId = m_themeShopEntries[(size_t)idx].id;
+}
+
+int& ThemeShopScreen::currentScrollRowRef() {
+    return isCommunityTab() ? m_communityScrollRow : m_installedScrollRow;
+}
+
+void ThemeShopScreen::ensureSelectionVisible() {
+    int count = currentEntryCount();
+    if (count <= 0) {
+        currentScrollRowRef() = 0;
+        return;
+    }
+
+    int selected = std::max(0, currentSelectedIndex());
+    int selectedRow = selected / kGridCols;
+    int totalRows = (count + kGridCols - 1) / kGridCols;
+    int maxScroll = std::max(0, totalRows - kVisibleRows);
+    int& scrollRow = currentScrollRowRef();
+    scrollRow = std::clamp(scrollRow, 0, maxScroll);
+    if (selectedRow < scrollRow)
+        scrollRow = selectedRow;
+    if (selectedRow >= scrollRow + kVisibleRows)
+        scrollRow = selectedRow - (kVisibleRows - 1);
+}
+
+void ThemeShopScreen::openDetail() {
+    if (currentEntryCount() <= 0)
+        return;
+    m_detailOpen = true;
+    m_detailFullscreen = false;
+    m_detailFullscreenAnim.setImmediate(0.f);
+    m_contentFocusArea = ContentFocusArea::Grid;
+    m_detailButtonIndex = 0;
+    m_detailScreenshotIndex = 0;
+    m_detailPreviewButtonIndex = 0;
+    m_detailFocusArea = (isCommunityTab() && detailScreenshotCount() > 0)
+        ? DetailFocusArea::Preview
+        : DetailFocusArea::Buttons;
+    m_focusArea = FocusArea::Content;
+
+    if (isCommunityTab())
+        primeCommunityPreview(currentDetailCommunityPreviewPath());
+}
+
+void ThemeShopScreen::closeDetail() {
+    m_detailOpen = false;
+    m_detailFullscreen = false;
+    m_detailFullscreenAnim.setImmediate(0.f);
+    m_detailFocusArea = DetailFocusArea::Buttons;
+    m_detailButtonIndex = 0;
+    m_detailPreviewButtonIndex = 0;
+    m_detailScreenshotIndex = 0;
+    if (!m_packageTransferState.isRunning()) {
+        m_packageTransferState.reset();
+        m_packageTransferThemeId.clear();
+        m_packageTransferInstallMode = false;
+    }
+}
+
+int ThemeShopScreen::detailButtonCount() const {
+    if (isCommunityTab())
+        return selectedCommunityThemeEntry() ? 2 : 0;
+
+    const auto* entry = selectedThemeShopEntry();
+    if (!entry)
+        return 0;
+    return entry->removable ? 2 : 1;
+}
+
+void ThemeShopScreen::activateDetailButton(int buttonIndex) {
+    auto& i18n = nxui::I18n::instance();
+
+    if (isCommunityTab()) {
+        const auto* entry = selectedCommunityThemeEntry();
+        if (!entry)
+            return;
+
+        if (m_packageTransferState.isRunning()) {
+            requestToast(i18n.tr("themeshop.community.transfer_busy",
+                                 "Another theme transfer is already running."),
+                         2.5f);
+            return;
+        }
+
+        std::string themeId = entry->id;
+        if (buttonIndex == 0) {
+            if (m_themeShopDownloadCb) {
+                m_themeShopDownloadCb(themeId);
+            } else {
+                requestToast(i18n.tr("themeshop.community.install_pending", "Install flow is not wired yet."), 2.5f);
+            }
+        } else if (buttonIndex == 1) {
+            if (m_themeShopDownloadInstallCb) {
+                m_themeShopDownloadInstallCb(themeId);
+            } else {
+                requestToast(i18n.tr("themeshop.community.download_apply_pending", "Download + apply flow is not wired yet."), 2.5f);
+            }
+        }
+        return;
+    }
+
+    const auto* entry = selectedThemeShopEntry();
+    if (!entry)
+        return;
+
+    std::string themeId = entry->id;
+    bool removable = entry->removable;
+    closeDetail();
+    if (buttonIndex == 0) {
+        if (m_themeShopApplyCb)
+            m_themeShopApplyCb(themeId);
+    } else if (buttonIndex == 1 && removable) {
+        if (m_themeShopDeleteCb)
+            m_themeShopDeleteCb(themeId);
+    }
+}
+
+void ThemeShopScreen::updateCustomContent(float dt) {
+    m_detailFullscreenAnim.update(std::min(dt, 0.03f));
+
+    if (!m_showing) {
+        closeDetail();
+        clearCommunityPreviewCache();
+        return;
+    }
+
+    if (isCommunityTab())
+        syncFinishedCommunityPreviewLoads();
+    else
+        clearCommunityPreviewCache();
+
+    int headerButtonCount = isCommunityTab() ? 2 : 1;
+    m_headerButtonIndex = std::clamp(m_headerButtonIndex, 0, std::max(0, headerButtonCount - 1));
+
+    if (m_lastCustomTabIndex != m_tabIndex) {
+        m_lastCustomTabIndex = m_tabIndex;
+        m_contentFocusArea = ContentFocusArea::Grid;
+        closeDetail();
+    }
+
+    if (currentEntryCount() <= 0) {
+        if (m_focusArea == FocusArea::Content)
+            m_focusArea = FocusArea::Tabs;
+        currentScrollRowRef() = 0;
+        closeDetail();
+        if (isCommunityTab())
+            clearCommunityPreviewCache();
+        return;
+    }
+
+    ensureSelectionVisible();
+
+    if (isCommunityTab()) {
+        clampDetailScreenshotIndex();
+        int previewButtonCount = detailScreenshotCount() > 0 ? 1 : 0;
+        if (previewButtonCount <= 0) {
+            m_detailPreviewButtonIndex = 0;
+            if (m_detailFocusArea == DetailFocusArea::Preview)
+                m_detailFocusArea = DetailFocusArea::Buttons;
+        } else {
+            m_detailPreviewButtonIndex = 0;
+        }
+        primeVisibleCommunityPreviews();
+    }
+}
+
+bool ThemeShopScreen::handleCustomPressA() {
+    if (m_focusArea == FocusArea::Tabs) {
+        if (currentEntryCount() > 0) {
+            m_focusArea = FocusArea::Content;
+            m_contentFocusArea = ContentFocusArea::Grid;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+
+        if ((isCommunityTab() ? 2 : 1) > 0) {
+            m_focusArea = FocusArea::Content;
+            m_contentFocusArea = ContentFocusArea::Header;
+            m_headerButtonIndex = isCommunityTab() ? 0 : 0;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+        return false;
+    }
+
+    if (!m_detailOpen && m_contentFocusArea == ContentFocusArea::Header) {
+        if (isCommunityTab() && m_headerButtonIndex == 0) {
+            refreshCommunityCatalog();
+        } else {
+            promptSearchQuery();
+        }
+        if (m_activateSfxCb) m_activateSfxCb();
+        return true;
+    }
+
+    if (m_detailOpen) {
+        if (m_detailFullscreen) {
+            m_detailFullscreen = false;
+            m_detailFullscreenAnim.set(0.f, 0.16f, nxui::Easing::outQuad);
+            if (m_activateSfxCb) m_activateSfxCb();
+            return true;
+        }
+
+        if (isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview && detailScreenshotCount() > 0) {
+            m_detailFullscreen = true;
+            m_detailFullscreenAnim.set(1.f, 0.18f, nxui::Easing::outCubic);
+            if (m_activateSfxCb) m_activateSfxCb();
+            return true;
+        }
+
+        activateDetailButton(m_detailButtonIndex);
+        if (m_activateSfxCb) m_activateSfxCb();
+        return true;
+    }
+
+    if (currentEntryCount() > 0) {
+        openDetail();
+        if (m_activateSfxCb) m_activateSfxCb();
+        return true;
+    }
+
+    return false;
+}
+
+bool ThemeShopScreen::handleCustomPressB() {
+    if (m_detailFullscreen) {
+        m_detailFullscreen = false;
+        m_detailFullscreenAnim.set(0.f, 0.16f, nxui::Easing::outQuad);
+        if (m_closeSfxCb) m_closeSfxCb();
+        return true;
+    }
+
+    if (m_detailOpen) {
+        closeDetail();
+        if (m_closeSfxCb) m_closeSfxCb();
+        return true;
+    }
+
+    if (m_focusArea == FocusArea::Content) {
+        m_focusArea = FocusArea::Tabs;
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    return false;
+}
+
+bool ThemeShopScreen::handleCustomPressX() {
+    bool handled = promptSearchQuery();
+    if (handled && m_activateSfxCb)
+        m_activateSfxCb();
+    return handled;
+}
+
+bool ThemeShopScreen::handleCustomNavUp() {
+    if (m_detailFullscreen)
+        return true;
+    if (m_detailOpen) {
+        if (isCommunityTab() && m_detailFocusArea == DetailFocusArea::Buttons && detailScreenshotCount() > 0) {
+            m_detailFocusArea = DetailFocusArea::Preview;
+            if (m_navSfxCb) m_navSfxCb();
+        }
+        return true;
+    }
+    if (m_focusArea != FocusArea::Content)
+        return false;
+
+    if (m_contentFocusArea == ContentFocusArea::Header) {
+        m_focusArea = FocusArea::Tabs;
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    int count = currentEntryCount();
+    if (count <= 0)
+        return true;
+
+    int selected = std::max(0, currentSelectedIndex());
+    if (selected - kGridCols >= 0) {
+        setCurrentSelectedIndex(selected - kGridCols);
+        ensureSelectionVisible();
+    } else {
+        m_contentFocusArea = ContentFocusArea::Header;
+        m_headerButtonIndex = isCommunityTab() ? std::clamp(selected % kGridCols, 0, 1) : 0;
+    }
+    if (m_navSfxCb) m_navSfxCb();
+    return true;
+}
+
+bool ThemeShopScreen::handleCustomNavDown() {
+    if (m_detailFullscreen)
+        return true;
+    if (m_detailOpen) {
+        if (isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview && detailButtonCount() > 0) {
+            m_detailFocusArea = DetailFocusArea::Buttons;
+            if (m_navSfxCb) m_navSfxCb();
+        }
+        return true;
+    }
+    if (m_focusArea != FocusArea::Content)
+        return false;
+
+    if (m_contentFocusArea == ContentFocusArea::Header) {
+        if (currentEntryCount() > 0)
+            m_contentFocusArea = ContentFocusArea::Grid;
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    int count = currentEntryCount();
+    if (count <= 0)
+        return true;
+
+    int selected = std::max(0, currentSelectedIndex());
+    if (selected + kGridCols < count) {
+        setCurrentSelectedIndex(selected + kGridCols);
+        ensureSelectionVisible();
+        if (m_navSfxCb) m_navSfxCb();
+    }
+    return true;
+}
+
+bool ThemeShopScreen::handleCustomNavLeft() {
+    if (m_detailFullscreen) {
+        int before = m_detailScreenshotIndex;
+        stepDetailScreenshot(-1);
+        if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    if (m_detailOpen) {
+        if (isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview) {
+            int before = m_detailScreenshotIndex;
+            stepDetailScreenshot(-1);
+            if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+
+        if (m_detailButtonIndex > 0) {
+            --m_detailButtonIndex;
+            if (m_navSfxCb) m_navSfxCb();
+        }
+        return true;
+    }
+
+    if (m_focusArea != FocusArea::Content)
+        return false;
+
+    if (m_contentFocusArea == ContentFocusArea::Header) {
+        if (m_headerButtonIndex > 0) {
+            --m_headerButtonIndex;
+        } else {
+            m_focusArea = FocusArea::Tabs;
+        }
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    int count = currentEntryCount();
+    if (count <= 0)
+        return true;
+
+    int selected = std::max(0, currentSelectedIndex());
+    if (selected % kGridCols > 0) {
+        setCurrentSelectedIndex(selected - 1);
+    } else {
+        m_focusArea = FocusArea::Tabs;
+    }
+    if (m_navSfxCb) m_navSfxCb();
+    return true;
+}
+
+bool ThemeShopScreen::handleCustomNavRight() {
+    if (m_detailFullscreen) {
+        int before = m_detailScreenshotIndex;
+        stepDetailScreenshot(1);
+        if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    if (m_detailOpen) {
+        if (isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview) {
+            int before = m_detailScreenshotIndex;
+            stepDetailScreenshot(1);
+            if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+
+        if (m_detailButtonIndex + 1 < detailButtonCount()) {
+            ++m_detailButtonIndex;
+            if (m_navSfxCb) m_navSfxCb();
+        }
+        return true;
+    }
+
+    if (m_focusArea == FocusArea::Tabs) {
+        if (currentEntryCount() > 0) {
+            m_focusArea = FocusArea::Content;
+            m_contentFocusArea = ContentFocusArea::Grid;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+        if ((isCommunityTab() ? 2 : 1) > 0) {
+            m_focusArea = FocusArea::Content;
+            m_contentFocusArea = ContentFocusArea::Header;
+            m_headerButtonIndex = 0;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+        return false;
+    }
+
+    if (m_contentFocusArea == ContentFocusArea::Header) {
+        int headerButtonCount = isCommunityTab() ? 2 : 1;
+        if (m_headerButtonIndex + 1 < headerButtonCount) {
+            ++m_headerButtonIndex;
+        } else if (currentEntryCount() > 0) {
+            m_contentFocusArea = ContentFocusArea::Grid;
+        }
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    int count = currentEntryCount();
+    if (count <= 0)
+        return true;
+
+    int selected = std::max(0, currentSelectedIndex());
+    if (selected + 1 < count && selected % kGridCols < kGridCols - 1) {
+        setCurrentSelectedIndex(selected + 1);
+        if (m_navSfxCb) m_navSfxCb();
+    }
+    return true;
+}
+
+int ThemeShopScreen::hitTestGridCard(const nxui::Rect& content, float x, float y) const {
+    GridLayout layout = makeGridLayout(content);
+    int count = currentEntryCount();
+    if (count <= 0 || !layout.grid.contains(x, y))
+        return -1;
+
+    int scrollRow = isCommunityTab() ? m_communityScrollRow : m_installedScrollRow;
+    int start = scrollRow * kGridCols;
+    int end = std::min(count, start + kGridCols * kVisibleRows);
+    for (int i = start; i < end; ++i) {
+        int local = i - start;
+        if (gridCardRect(layout, local).contains(x, y))
+            return i;
+    }
+
+    return -1;
+}
+
+bool ThemeShopScreen::handleCustomTouch(nxui::Input& input, const nxui::Rect&, const nxui::Rect& tabs, const nxui::Rect& content) {
+    auto searchHit = [&](float x, float y) {
+        return makeGridLayout(content).searchButton.contains(x, y);
+    };
+    auto refreshHit = [&](float x, float y) {
+        return isCommunityTab() && makeGridLayout(content).refreshButton.contains(x, y);
+    };
+    auto detailPreviewHitIndex = [&](float x, float y) {
+        if (!isCommunityTab() || !m_detailOpen)
+            return -1;
+
+        DetailPreviewControls controls = detailPreviewControls(detailPreviewRect(detailDialogRect(content)));
+        nxui::Rect previewRect = detailPreviewRect(detailDialogRect(content));
+        auto rects = detailPreviewControlRects(controls, previewRect, detailScreenshotCount());
+        for (int i = 0; i < (int)rects.size(); ++i) {
+            if (rects[(size_t)i].contains(x, y))
+                return i;
+        }
+        return -1;
+    };
+    auto fullscreenHitIndex = [&](float x, float y) {
+        FullscreenOverlayLayout overlay = makeFullscreenOverlayLayout(content);
+        if (detailScreenshotCount() > 1 && overlay.prev.contains(x, y))
+            return 0;
+        if (detailScreenshotCount() > 1 && overlay.next.contains(x, y))
+            return 1;
+        if (overlay.close.contains(x, y) || overlay.preview.contains(x, y) || content.contains(x, y))
+            return 2;
+        return -1;
+    };
+
+    if (input.touchDown()) {
+        float x = input.touchX();
+        float y = input.touchY();
+        m_themeTouchTarget = ThemeTouchTarget::None;
+        m_themeTouchIndex = -1;
+        m_themeTouchStartX = x;
+        m_themeTouchStartY = y;
+
+        if (tabs.contains(x, y))
+            return false;
+        if (!content.contains(x, y) && !m_detailOpen)
+            return false;
+
+        if (m_detailOpen) {
+            if (m_detailFullscreen) {
+                m_themeTouchTarget = ThemeTouchTarget::FullscreenPreview;
+                m_themeTouchIndex = fullscreenHitIndex(x, y);
+                return true;
+            }
+
+            nxui::Rect dialog = detailDialogRect(content);
+            if (!dialog.contains(x, y)) {
+                m_themeTouchTarget = ThemeTouchTarget::DetailBackdrop;
+                return true;
+            }
+
+            int previewHit = detailPreviewHitIndex(x, y);
+            if (previewHit >= 0) {
+                m_themeTouchTarget = ThemeTouchTarget::DetailPreviewControl;
+                m_themeTouchIndex = previewHit;
+                return true;
+            }
+
+            auto buttons = detailButtonRects(dialog, detailButtonCount());
+            for (int i = 0; i < (int)buttons.size(); ++i) {
+                if (buttons[(size_t)i].contains(x, y)) {
+                    m_themeTouchTarget = ThemeTouchTarget::DetailButton;
+                    m_themeTouchIndex = i;
+                    return true;
+                }
+            }
+
+            return true;
+        }
+
+        if (searchHit(x, y)) {
+            m_themeTouchTarget = ThemeTouchTarget::Search;
+            return true;
+        }
+
+        if (refreshHit(x, y)) {
+            m_themeTouchTarget = ThemeTouchTarget::Refresh;
+            return true;
+        }
+
+        int hit = hitTestGridCard(content, x, y);
+        if (hit >= 0) {
+            m_themeTouchTarget = ThemeTouchTarget::GridCard;
+            m_themeTouchIndex = hit;
+            return true;
+        }
+
+        return content.contains(x, y);
+    }
+
+    if (input.isTouching() && m_themeTouchTarget != ThemeTouchTarget::None) {
+        float dx = std::abs(input.touchX() - m_themeTouchStartX);
+        float dy = std::abs(input.touchY() - m_themeTouchStartY);
+        if (dx > 18.f || dy > 18.f) {
+            m_themeTouchTarget = ThemeTouchTarget::None;
+            m_themeTouchIndex = -1;
+        }
+        return true;
+    }
+
+    if (input.touchUp()) {
+        float x = input.touchX();
+        float y = input.touchY();
+        ThemeTouchTarget target = m_themeTouchTarget;
+        int hitIndex = m_themeTouchIndex;
+        m_themeTouchTarget = ThemeTouchTarget::None;
+        m_themeTouchIndex = -1;
+
+        if (target == ThemeTouchTarget::None)
+            return content.contains(x, y);
+
+        switch (target) {
+            case ThemeTouchTarget::Search:
+                if (searchHit(x, y)) {
+                    promptSearchQuery();
+                    if (m_activateSfxCb) m_activateSfxCb();
+                }
+                return true;
+            case ThemeTouchTarget::Refresh:
+                if (refreshHit(x, y)) {
+                    refreshCommunityCatalog();
+                    if (m_activateSfxCb) m_activateSfxCb();
+                }
+                return true;
+            case ThemeTouchTarget::GridCard:
+                if (hitTestGridCard(content, x, y) == hitIndex) {
+                    setCurrentSelectedIndex(hitIndex);
+                    m_focusArea = FocusArea::Content;
+                    openDetail();
+                    if (m_activateSfxCb) m_activateSfxCb();
+                }
+                return true;
+            case ThemeTouchTarget::DetailPreviewControl:
+                if (hitIndex == detailPreviewHitIndex(x, y)) {
+                    if (hitIndex == 0) {
+                        if (detailScreenshotCount() > 1) {
+                            int before = m_detailScreenshotIndex;
+                            stepDetailScreenshot(-1);
+                            if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+                        }
+                    } else if ((hitIndex == 1 && detailScreenshotCount() > 1)
+                            || (hitIndex == 0 && detailScreenshotCount() == 1)) {
+                        m_detailFocusArea = DetailFocusArea::Preview;
+                        m_detailFullscreen = true;
+                        m_detailFullscreenAnim.set(1.f, 0.18f, nxui::Easing::outCubic);
+                        if (m_activateSfxCb) m_activateSfxCb();
+                    } else if (hitIndex == 2 && detailScreenshotCount() > 1) {
+                        int before = m_detailScreenshotIndex;
+                        stepDetailScreenshot(1);
+                        if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+                    }
+                }
+                return true;
+            case ThemeTouchTarget::DetailButton: {
+                nxui::Rect dialog = detailDialogRect(content);
+                auto buttons = detailButtonRects(dialog, detailButtonCount());
+                if (hitIndex >= 0 && hitIndex < (int)buttons.size() && buttons[(size_t)hitIndex].contains(x, y)) {
+                    m_detailButtonIndex = hitIndex;
+                    activateDetailButton(hitIndex);
+                    if (m_activateSfxCb) m_activateSfxCb();
+                }
+                return true;
+            }
+            case ThemeTouchTarget::FullscreenPreview:
+                if (hitIndex == fullscreenHitIndex(x, y)) {
+                    if (hitIndex == 0) {
+                        int before = m_detailScreenshotIndex;
+                        stepDetailScreenshot(-1);
+                        if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+                    } else if (hitIndex == 1) {
+                        int before = m_detailScreenshotIndex;
+                        stepDetailScreenshot(1);
+                        if (before != m_detailScreenshotIndex && m_navSfxCb) m_navSfxCb();
+                    } else if (hitIndex == 2) {
+                        m_detailFullscreen = false;
+                        m_detailFullscreenAnim.set(0.f, 0.16f, nxui::Easing::outQuad);
+                        if (m_closeSfxCb) m_closeSfxCb();
+                    }
+                }
+                return true;
+            case ThemeTouchTarget::DetailBackdrop:
+                if (!detailDialogRect(content).contains(x, y)) {
+                    closeDetail();
+                    if (m_closeSfxCb) m_closeSfxCb();
+                }
+                return true;
+            case ThemeTouchTarget::None:
+                return false;
+        }
+    }
+
+    return false;
+}
+
+void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, const nxui::Rect& content, float opacity) {
+    auto& i18n = nxui::I18n::instance();
+    GridLayout layout = makeGridLayout(content);
+    float slideT = std::clamp(m_contentSlideAnim.value(), 0.f, 1.f);
+    float slideOffset = (1.f - slideT) * 24.f * (float)m_tabSwitchDir;
+    float contentOpacity = opacity * slideT;
+    int count = currentEntryCount();
+
+    layout.header.x += slideOffset;
+    layout.refreshButton.x += slideOffset;
+    layout.grid.x += slideOffset;
+
+    std::string title = isCommunityTab()
+        ? i18n.tr("themeshop.community.title", "Browse Community Themes")
+        : i18n.tr("themeshop.installed.title", "Installed Theme Library");
+    std::string subtitle = isCommunityTab()
+        ? i18n.tr("themeshop.community.subtitle", "A visual catalog, not a settings selector.")
+        : i18n.tr("themeshop.installed.subtitle", "Your local themes in a gallery layout.");
+
+    ren.drawText(title, {layout.header.x, layout.header.y + 2.f}, m_font,
+                 m_theme->textPrimary.withAlpha(contentOpacity), 0.92f);
+    ren.drawText(subtitle, {layout.header.x, layout.header.y + 34.f}, m_smallFont,
+                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity), 0.72f);
+
+    std::string searchLabel = m_searchQuery.empty()
+        ? i18n.tr("themeshop.search.button", "Search")
+        : m_searchQuery;
+    bool searchSelected = !m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header
+        && (!isCommunityTab() || m_headerButtonIndex == 1);
+    drawChip(ren,
+             m_smallFont,
+             layout.searchButton,
+             searchLabel,
+             searchSelected
+                 ? m_theme->cursorNormal.withAlpha(0.20f)
+                 : (m_searchQuery.empty() ? m_theme->panelBase.withAlpha(0.12f) : m_theme->cursorNormal.withAlpha(0.18f)),
+             searchSelected
+                 ? m_theme->cursorNormal.withAlpha(0.56f)
+                 : (m_searchQuery.empty() ? m_theme->panelBorder.withAlpha(0.26f) : m_theme->cursorNormal.withAlpha(0.44f)),
+             m_theme->textPrimary,
+             contentOpacity,
+             0.70f);
+
+    std::string counterText;
+    if (count > 0) {
+        int selected = std::max(0, currentSelectedIndex()) + 1;
+        counterText = std::to_string(selected) + " / " + std::to_string(count);
+    } else if (isCommunityTab() && m_communityTransferState.isRunning()) {
+        counterText = i18n.tr("themeshop.community.counter_loading", "Loading");
+    } else {
+        counterText = "0 / 0";
+    }
+    nxui::Vec2 countSize = measureTextCached(m_font, counterText);
+    float countRight = (isCommunityTab() ? layout.refreshButton.x : layout.searchButton.x) - 18.f;
+    ren.drawText(counterText,
+                 {countRight - countSize.x * 0.84f, layout.header.y + 4.f},
+                 m_font,
+                 m_theme->textPrimary.withAlpha(contentOpacity),
+                 0.84f);
+
+    if (!m_packageTransferState.label().empty()) {
+        nxui::Color statusFill = m_theme->panelBase.withAlpha(0.18f);
+        nxui::Color statusBorder = m_theme->panelBorder.withAlpha(0.28f);
+        if (m_packageTransferState.isRunning()) {
+            statusFill = m_theme->cursorNormal.withAlpha(0.16f);
+            statusBorder = m_theme->cursorNormal.withAlpha(0.42f);
+        } else if (m_packageTransferState.isReady()) {
+            statusFill = nxui::Color(0.18f, 0.50f, 0.28f, 0.18f);
+            statusBorder = nxui::Color(0.34f, 0.92f, 0.52f, 0.42f);
+        } else if (m_packageTransferState.hasFailed()) {
+            statusFill = nxui::Color(0.52f, 0.18f, 0.16f, 0.20f);
+            statusBorder = nxui::Color(0.98f, 0.34f, 0.30f, 0.42f);
+        }
+
+        nxui::Rect statusChip = {
+            layout.header.x,
+            layout.header.bottom() - 6.f,
+            std::min(layout.grid.width * 0.64f, 430.f),
+            28.f
+        };
+        drawChip(ren,
+                 m_smallFont,
+                 statusChip,
+                 transferLabel(m_packageTransferState),
+                 statusFill,
+                 statusBorder,
+                 m_theme->textPrimary,
+                 contentOpacity,
+                 0.62f);
+        if (m_packageTransferState.isRunning()) {
+            drawSpinner(ren,
+                        {statusChip.x + 16.f, statusChip.y + statusChip.height * 0.5f},
+                        7.f,
+                        m_uiTime,
+                        m_theme->cursorNormal,
+                        contentOpacity);
+        }
+    }
+
+    if (isCommunityTab()) {
+        std::string refreshLabel = m_communityTransferState.isRunning()
+            ? i18n.tr("themeshop.community.refreshing", "Refreshing")
+            : i18n.tr("themeshop.community.refresh", "Refresh");
+        bool refreshSelected = !m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header
+            && m_headerButtonIndex == 0;
+        drawChip(ren,
+                 m_smallFont,
+                 layout.refreshButton,
+                 refreshLabel,
+                 refreshSelected ? m_theme->cursorNormal.withAlpha(0.20f) : m_theme->cursorNormal.withAlpha(0.14f),
+                 refreshSelected ? m_theme->cursorNormal.withAlpha(0.56f) : m_theme->cursorNormal.withAlpha(0.44f),
+                 m_theme->textPrimary,
+                 contentOpacity,
+                 0.70f);
+        if (m_communityTransferState.isRunning()) {
+            drawSpinner(ren,
+                        {layout.refreshButton.x + 18.f, layout.refreshButton.y + layout.refreshButton.height * 0.5f},
+                        8.f,
+                        m_uiTime,
+                        m_theme->cursorNormal,
+                        contentOpacity);
+        }
+    }
+
+    if (isCommunityTab() && !m_communityTransferState.label().empty() && m_packageTransferState.label().empty()) {
+        ren.drawText(m_communityTransferState.label(),
+                     {layout.header.x, layout.header.bottom() - 6.f},
+                     m_smallFont,
+                     m_theme->textSecondary.withAlpha(0.78f * contentOpacity),
+                     0.64f);
+    }
+
+    if (isCommunityTab() && m_communityTransferState.isRunning() && count == 0) {
+        nxui::Vec2 center = {layout.grid.x + layout.grid.width * 0.5f, layout.grid.y + layout.grid.height * 0.42f};
+        drawSpinner(ren, center, 22.f, m_uiTime, m_theme->cursorNormal, contentOpacity);
+        std::string loadingLabel = i18n.tr("themeshop.community.loading", "Loading theme catalog...");
+        nxui::Vec2 size = measureTextCached(m_font, loadingLabel);
+        ren.drawText(loadingLabel,
+                     {center.x - size.x * 0.40f, center.y + 28.f},
+                     m_font,
+                     m_theme->textPrimary.withAlpha(contentOpacity),
+                     0.80f);
+        return;
+    }
+
+    if (count == 0) {
+        nxui::Rect emptyBox = {
+            layout.grid.x + layout.grid.width * 0.14f,
+            layout.grid.y + layout.grid.height * 0.22f,
+            layout.grid.width * 0.72f,
+            170.f
+        };
+        ren.drawRoundedRect(emptyBox, m_theme->panelBase.withAlpha(0.16f * contentOpacity), 20.f);
+        ren.drawRoundedRectOutline(emptyBox, m_theme->panelBorder.withAlpha(0.24f * contentOpacity), 20.f, 1.2f);
+        bool searchActive = !m_searchQuery.empty();
+        std::string emptyTitle = searchActive
+            ? i18n.tr("themeshop.search.no_results", "No themes match this search.")
+            : (isCommunityTab()
+                ? i18n.tr("themeshop.community.catalog_empty", "No published themes are listed in the catalog.")
+                : i18n.tr("themeshop.installed.empty", "No installed themes found."));
+        std::string emptySubtitle = searchActive
+            ? i18n.tr("themeshop.search.no_results_hint", "Press X or use Search to change or clear the filter.")
+            : (isCommunityTab() && m_communityTransferState.hasFailed()
+                ? i18n.tr("themeshop.community.catalog_failed", "The catalog could not be fetched. Use Refresh to try again.")
+                : i18n.tr("themeshop.community.empty_hint", "Add themes to the repository and they will appear here."));
+
+        nxui::Vec2 titleSize = measureTextCached(m_font, emptyTitle);
+        ren.drawText(emptyTitle,
+                     {emptyBox.x + (emptyBox.width - titleSize.x * 0.82f) * 0.5f, emptyBox.y + 42.f},
+                     m_font,
+                     m_theme->textPrimary.withAlpha(contentOpacity),
+                     0.82f);
+        nxui::Vec2 subSize = measureTextCached(m_smallFont, emptySubtitle);
+        ren.drawText(emptySubtitle,
+                     {emptyBox.x + (emptyBox.width - subSize.x * 0.68f) * 0.5f, emptyBox.y + 92.f},
+                     m_smallFont,
+                     m_theme->textSecondary.withAlpha(0.90f * contentOpacity),
+                     0.68f);
+        if (!m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header) {
+            auto headerButtons = headerButtonRects(layout, isCommunityTab());
+            if (!headerButtons.empty()) {
+                int headerIndex = std::clamp(m_headerButtonIndex, 0, (int)headerButtons.size() - 1);
+                m_focusCursor.moveTo(headerButtons[(size_t)headerIndex].expanded(2.f), 20.f, 0.08f);
+            }
+        }
+        return;
+    }
+
+    int scrollRow = currentScrollRowRef();
+    int start = scrollRow * kGridCols;
+    int end = std::min(count, start + kGridCols * kVisibleRows);
+    int selected = std::max(0, currentSelectedIndex());
+    float reveal = std::clamp(m_tabReveal.value(), 0.f, 1.f);
+
+    for (int globalIndex = start; globalIndex < end; ++globalIndex) {
+        int localIndex = globalIndex - start;
+        nxui::Rect card = gridCardRect(layout, localIndex);
+        float delay = std::min(0.42f, localIndex * 0.03f);
+        float localReveal = std::clamp((reveal - delay) / 0.30f, 0.f, 1.f);
+        float rowOpacity = contentOpacity * localReveal;
+        float rise = (1.f - localReveal) * 14.f;
+        card.y += rise;
+
+        bool cardSelected = (globalIndex == selected);
+        std::string titleText;
+        std::string subtitleText;
+        std::string versionText;
+        const nxui::Texture* previewTexture = nullptr;
+        PreviewPhase previewPhase = PreviewPhase::Failed;
+        bool previewRequested = false;
+        bool activeTheme = false;
+
+        if (isCommunityTab()) {
+            const auto& entry = m_communityEntries[(size_t)globalIndex];
+            titleText = entry.name;
+            subtitleText = entry.author.empty() ? i18n.tr("themeshop.community.author_unknown", "Unknown") : entry.author;
+            versionText = entry.version;
+            previewTexture = communityPreviewTexture(entry);
+            previewPhase = communityPreviewPhase(entry);
+            previewRequested = !entry.cover.empty();
+        } else {
+            const auto& entry = m_themeShopEntries[(size_t)globalIndex];
+            titleText = entry.name;
+            subtitleText = entry.source;
+            versionText = entry.version;
+            activeTheme = entry.active;
+        }
+
+        nxui::Color cardFill = m_theme->panelBase.withAlpha((cardSelected ? 0.18f : 0.14f) * rowOpacity);
+        nxui::Color cardBorder = m_theme->panelBorder.withAlpha((cardSelected ? 0.34f : 0.24f) * rowOpacity);
+        ren.drawRoundedRect(card, cardFill, 22.f);
+        ren.drawRoundedRectOutline(card, cardBorder, 22.f, 1.0f);
+
+        nxui::Rect previewBounds = {card.x + 10.f, card.y + 10.f, card.width - 20.f, card.height - 64.f};
+        nxui::Rect preview = fitAspectRect(previewBounds, kPreviewAspect);
+        bool previewLoading = previewPhase == PreviewPhase::Loading || previewPhase == PreviewPhase::Downloaded;
+        std::string previewLabel = previewRequested
+            ? (previewLoading
+                ? i18n.tr("themeshop.preview.loading", "Loading screenshot...")
+                : i18n.tr("themeshop.preview.unavailable", "Screenshot unavailable"))
+            : i18n.tr("themeshop.preview.missing", "No screenshot");
+        drawThemePreview(ren,
+                         m_smallFont,
+                         m_theme,
+                         preview,
+                         previewTexture,
+                         previewLabel,
+                         previewLoading,
+                         m_uiTime,
+                         rowOpacity);
+
+        if (!versionText.empty()) {
+            float chipWidth = std::max(70.f, std::min(96.f, 30.f + measureTextCached(m_smallFont, versionText).x * 0.58f));
+            nxui::Rect versionChip = {preview.right() - chipWidth - 10.f, preview.y + 10.f, chipWidth, 24.f};
+            drawChip(ren,
+                     m_smallFont,
+                     versionChip,
+                     versionText,
+                     nxui::Color(0.f, 0.f, 0.f, 0.26f),
+                     nxui::Color(1.f, 1.f, 1.f, 0.16f),
+                     m_theme->textPrimary,
+                     rowOpacity,
+                     0.58f);
+        }
+
+        if (activeTheme) {
+            const std::string activeLabel = i18n.tr("themeshop.installed.status_active", "Active");
+            float chipWidth = std::max(76.f, std::min(104.f, 30.f + measureTextCached(m_smallFont, activeLabel).x * 0.60f));
+            nxui::Rect activeChip = {preview.x + 10.f, preview.y + 10.f, chipWidth, 24.f};
+            drawChip(ren,
+                     m_smallFont,
+                     activeChip,
+                     activeLabel,
+                     nxui::Color(0.10f, 0.34f, 0.14f, 0.34f),
+                     nxui::Color(0.34f, 0.92f, 0.52f, 0.50f),
+                     m_theme->textPrimary,
+                     rowOpacity,
+                     0.58f);
+        }
+
+        std::string titleFitted = ellipsize(m_font, titleText, card.width - 18.f, 0.78f);
+        ren.drawText(titleFitted,
+                     {card.x + 10.f, preview.bottom() + 10.f},
+                     m_font,
+                     m_theme->textPrimary.withAlpha(rowOpacity),
+                     0.78f);
+        std::string subtitleFitted = ellipsize(m_smallFont, subtitleText, card.width - 18.f, 0.68f);
+        ren.drawText(subtitleFitted,
+                     {card.x + 10.f, card.bottom() - 26.f},
+                     m_smallFont,
+                     m_theme->textSecondary.withAlpha(0.92f * rowOpacity),
+                     0.68f);
+
+        if (!m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Grid && cardSelected) {
+            m_focusCursor.moveTo(card.expanded(2.f), 22.f, 0.08f);
+        }
+    }
+
+    if (!m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header) {
+        auto headerButtons = headerButtonRects(layout, isCommunityTab());
+        if (!headerButtons.empty()) {
+            int headerIndex = std::clamp(m_headerButtonIndex, 0, (int)headerButtons.size() - 1);
+            m_focusCursor.moveTo(headerButtons[(size_t)headerIndex].expanded(2.f), 20.f, 0.08f);
+        }
+    }
+
+    int firstVisible = start + 1;
+    int lastVisible = end;
+    std::string footer = std::to_string(firstVisible) + "-" + std::to_string(lastVisible) + " / " + std::to_string(count);
+    nxui::Vec2 footerSize = measureTextCached(m_smallFont, footer);
+    ren.drawText(footer,
+                 {layout.grid.right() - footerSize.x * 0.68f, layout.grid.bottom() + 6.f},
+                 m_smallFont,
+                 m_theme->textSecondary.withAlpha(0.84f * contentOpacity),
+                 0.68f);
+
+    if (!m_detailOpen)
+        return;
+
+    ren.drawRoundedRect(content, nxui::Color(0.f, 0.f, 0.f, 0.24f * contentOpacity), 26.f);
+    nxui::Rect dialog = detailDialogRect(content);
+    ren.drawRoundedRect(dialog, m_theme->panelBase.withAlpha(0.96f * contentOpacity), 24.f);
+    ren.drawRoundedRectOutline(dialog, m_theme->cursorNormal.withAlpha(0.36f * contentOpacity), 24.f, 1.4f);
+
+    nxui::Rect preview = detailPreviewRect(dialog);
+    std::string detailTitle;
+    std::string detailSubtitle;
+    std::string detailInfoA;
+    std::string detailInfoB;
+    std::string detailInfoC;
+    const nxui::Texture* detailPreviewTexture = nullptr;
+    PreviewPhase detailPreviewPhase = PreviewPhase::Failed;
+    bool detailPreviewRequested = false;
+    int detailScreenshotTotal = 0;
+    DetailPreviewControls previewControls = detailPreviewControls(preview);
+
+    if (isCommunityTab()) {
+        const auto* entry = selectedCommunityThemeEntry();
+        if (!entry)
+            return;
+        detailTitle = entry->name;
+        detailSubtitle = entry->author.empty() ? i18n.tr("themeshop.community.author_unknown", "Unknown") : entry->author;
+        detailInfoA = i18n.tr("themeshop.community.version", "Version") + std::string(": ")
+            + (entry->version.empty() ? i18n.tr("themeshop.community.version_unknown", "Unknown") : entry->version);
+        detailInfoB = i18n.tr("themeshop.community.manifest", "Manifest") + std::string(": ")
+            + (entry->manifest.empty() ? i18n.tr("themeshop.community.manifest_missing", "Not provided") : entry->manifest);
+        detailScreenshotTotal = std::max(0, (int)entry->screenshots.size());
+        std::string detailPreviewPath = currentDetailCommunityPreviewPath();
+        detailPreviewTexture = communityPreviewTexture(detailPreviewPath);
+        detailPreviewPhase = communityPreviewPhase(detailPreviewPath);
+        detailPreviewRequested = !detailPreviewPath.empty();
+        if (!detailPreviewRequested) {
+            detailInfoC = i18n.tr("themeshop.community.cover_missing", "No screenshot has been declared for this theme yet.");
+        } else if (detailPreviewTexture) {
+            detailInfoC = detailScreenshotTotal > 1
+                ? i18n.tr("themeshop.community.cover_present", "Use Left/Right to browse screenshots and A for fullscreen.")
+                : i18n.tr("themeshop.community.cover_single", "Press A to open this screenshot in fullscreen.");
+        } else if (detailPreviewPhase == PreviewPhase::Loading || detailPreviewPhase == PreviewPhase::Downloaded) {
+            detailInfoC = i18n.tr("themeshop.community.cover_loading", "Loading theme screenshot...");
+        } else {
+            detailInfoC = i18n.tr("themeshop.community.cover_unavailable", "The screenshot could not be loaded. Placeholder shown instead.");
+        }
+    } else {
+        const auto* entry = selectedThemeShopEntry();
+        if (!entry)
+            return;
+        detailTitle = entry->name;
+        detailSubtitle = entry->source;
+        detailInfoA = i18n.tr("themeshop.installed.status", "Status") + std::string(": ")
+            + (entry->active ? i18n.tr("themeshop.installed.status_active", "Active") : i18n.tr("themeshop.installed.status_available", "Available"));
+        detailInfoB = i18n.tr("themeshop.installed.sound", "Bundled Sound Pack") + std::string(": ")
+            + (entry->soundPreset.empty() ? i18n.tr("themeshop.installed.sound_none", "None") : entry->soundPreset);
+        detailInfoC = entry->removable
+            ? i18n.tr("themeshop.installed.remove_hint", "This theme can be removed from the console.")
+            : i18n.tr("themeshop.installed.builtin_hint", "This is part of the built-in theme set.");
+    }
+
+    bool detailPreviewLoading = detailPreviewPhase == PreviewPhase::Loading || detailPreviewPhase == PreviewPhase::Downloaded;
+    std::string detailPreviewLabel = detailPreviewRequested
+        ? (detailPreviewLoading
+            ? i18n.tr("themeshop.preview.loading", "Loading screenshot...")
+            : i18n.tr("themeshop.preview.unavailable", "Screenshot unavailable"))
+        : i18n.tr("themeshop.preview.missing", "No screenshot");
+    drawThemePreview(ren,
+                     m_smallFont,
+                     m_theme,
+                     preview,
+                     detailPreviewTexture,
+                     detailPreviewLabel,
+                     detailPreviewLoading,
+                     m_uiTime,
+                     contentOpacity);
+
+    if (isCommunityTab() && detailPreviewRequested) {
+        auto previewButtons = detailPreviewControlRects(previewControls, preview, detailScreenshotTotal);
+        if (detailScreenshotTotal > 1) {
+            bool canGoPrev = m_detailScreenshotIndex > 0;
+            bool canGoNext = m_detailScreenshotIndex + 1 < detailScreenshotTotal;
+            drawChip(ren,
+                     m_smallFont,
+                     previewControls.prev,
+                     i18n.tr("themeshop.preview.prev", "Prev"),
+                     canGoPrev
+                         ? m_theme->panelBase.withAlpha(0.22f)
+                         : m_theme->panelBase.withAlpha(0.10f),
+                     canGoPrev
+                         ? m_theme->panelBorder.withAlpha(0.32f)
+                         : m_theme->panelBorder.withAlpha(0.14f),
+                     canGoPrev ? m_theme->textPrimary : m_theme->textSecondary,
+                     contentOpacity,
+                     0.70f);
+            drawChip(ren,
+                     m_smallFont,
+                     previewControls.next,
+                     i18n.tr("themeshop.preview.next", "Next"),
+                     canGoNext
+                         ? m_theme->panelBase.withAlpha(0.22f)
+                         : m_theme->panelBase.withAlpha(0.10f),
+                     canGoNext
+                         ? m_theme->panelBorder.withAlpha(0.32f)
+                         : m_theme->panelBorder.withAlpha(0.14f),
+                     canGoNext ? m_theme->textPrimary : m_theme->textSecondary,
+                     contentOpacity,
+                     0.70f);
+            drawChip(ren,
+                     m_smallFont,
+                     previewControls.counter,
+                     std::to_string(m_detailScreenshotIndex + 1) + " / " + std::to_string(detailScreenshotTotal),
+                     nxui::Color(0.f, 0.f, 0.f, 0.22f),
+                     m_theme->panelBorder.withAlpha(0.20f),
+                     m_theme->textPrimary,
+                     contentOpacity,
+                     0.60f);
+        }
+
+        if (m_detailFocusArea == DetailFocusArea::Preview && !previewButtons.empty()) {
+            m_focusCursor.moveTo(preview.expanded(4.f), 20.f, 0.08f);
+        }
+    }
+
+    float infoBlockHeight = (isCommunityTab() && !m_packageTransferState.label().empty()) ? 236.f : 194.f;
+    nxui::Rect infoBounds = {
+        preview.right() + 24.f,
+        dialog.y + 26.f,
+        dialog.right() - preview.right() - 46.f,
+        dialog.height - 122.f
+    };
+    nxui::Rect info = {
+        infoBounds.x,
+        infoBounds.y + std::max(0.f, (infoBounds.height - infoBlockHeight) * 0.5f),
+        infoBounds.width,
+        infoBlockHeight
+    };
+    ren.drawText(ellipsize(m_font, detailTitle, info.width, 1.02f),
+                 {info.x, info.y + 2.f},
+                 m_font,
+                 m_theme->textPrimary.withAlpha(contentOpacity),
+                 1.02f);
+    ren.drawText(ellipsize(m_smallFont, detailSubtitle, info.width, 0.76f),
+                 {info.x, info.y + 38.f},
+                 m_smallFont,
+                 m_theme->textSecondary.withAlpha(0.90f * contentOpacity),
+                 0.76f);
+
+    ren.drawText(detailInfoA,
+                 {info.x, info.y + 92.f},
+                 m_smallFont,
+                 m_theme->textPrimary.withAlpha(contentOpacity),
+                 0.72f);
+    ren.drawText(ellipsize(m_smallFont, detailInfoB, info.width, 0.68f),
+                 {info.x, info.y + 130.f},
+                 m_smallFont,
+                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity),
+                 0.68f);
+    ren.drawText(ellipsize(m_smallFont, detailInfoC, info.width, 0.68f),
+                 {info.x, info.y + 166.f},
+                 m_smallFont,
+                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity),
+                 0.68f);
+
+    if (isCommunityTab() && !m_packageTransferState.label().empty()) {
+        nxui::Color statusColor = m_theme->textSecondary;
+        if (m_packageTransferState.isRunning())
+            statusColor = m_theme->textPrimary;
+        else if (m_packageTransferState.isReady())
+            statusColor = nxui::Color(0.62f, 0.96f, 0.72f, 1.f);
+        else if (m_packageTransferState.hasFailed())
+            statusColor = nxui::Color(1.f, 0.56f, 0.52f, 1.f);
+
+        ren.drawText(ellipsize(m_smallFont, transferLabel(m_packageTransferState), info.width - 24.f, 0.68f),
+                     {info.x + 24.f, info.y + 206.f},
+                     m_smallFont,
+                     statusColor.withAlpha(contentOpacity),
+                     0.68f);
+        if (m_packageTransferState.isRunning()) {
+            drawSpinner(ren,
+                        {info.x + 10.f, info.y + 214.f},
+                        7.f,
+                        m_uiTime,
+                        m_theme->cursorNormal,
+                        contentOpacity);
+        }
+    }
+
+    float fullscreenT = std::clamp(m_detailFullscreenAnim.value(), 0.f, 1.f);
+    bool fullscreenVisible = m_detailFullscreen || fullscreenT > 0.01f;
+    if (fullscreenVisible) {
+        FullscreenOverlayLayout fullscreen = makeFullscreenOverlayLayout(content);
+        nxui::Rect animatedPreview = lerpRect(preview, fullscreen.preview, fullscreenT);
+        ren.drawRoundedRect(content, nxui::Color(0.f, 0.f, 0.f, 0.58f * contentOpacity * fullscreenT), 26.f);
+        drawThemePreview(ren,
+                         m_smallFont,
+                         m_theme,
+                         animatedPreview,
+                         detailPreviewTexture,
+                         detailPreviewLabel,
+                         detailPreviewLoading,
+                         m_uiTime,
+                         contentOpacity);
+
+        drawChip(ren,
+                 m_smallFont,
+                 fullscreen.close,
+                 i18n.tr("button.close", "Close"),
+                 nxui::Color(0.f, 0.f, 0.f, 0.54f),
+                 nxui::Color(1.f, 1.f, 1.f, 0.30f),
+                 m_theme->textPrimary,
+                 contentOpacity * fullscreenT,
+                 0.76f);
+
+        if (detailScreenshotTotal > 1) {
+            drawChip(ren,
+                     m_smallFont,
+                     fullscreen.prev,
+                     i18n.tr("themeshop.preview.prev", "Prev"),
+                     nxui::Color(0.f, 0.f, 0.f, 0.54f),
+                     nxui::Color(1.f, 1.f, 1.f, 0.28f),
+                     m_theme->textPrimary,
+                     contentOpacity * fullscreenT,
+                     0.76f);
+            drawChip(ren,
+                     m_smallFont,
+                     fullscreen.next,
+                     i18n.tr("themeshop.preview.next", "Next"),
+                     nxui::Color(0.f, 0.f, 0.f, 0.54f),
+                     nxui::Color(1.f, 1.f, 1.f, 0.28f),
+                     m_theme->textPrimary,
+                     contentOpacity * fullscreenT,
+                     0.76f);
+            drawChip(ren,
+                     m_smallFont,
+                     fullscreen.counter,
+                     std::to_string(m_detailScreenshotIndex + 1) + " / " + std::to_string(detailScreenshotTotal),
+                     nxui::Color(0.f, 0.f, 0.f, 0.50f),
+                     nxui::Color(1.f, 1.f, 1.f, 0.24f),
+                     m_theme->textPrimary,
+                     contentOpacity * fullscreenT,
+                     0.62f);
+        }
+
+        m_focusCursor.moveTo(fullscreen.close.expanded(2.f), 20.f, 0.08f);
+        return;
+    }
+
+    std::vector<std::string> buttonLabels;
+    if (isCommunityTab()) {
+        buttonLabels.push_back(i18n.tr("themeshop.community.install", "Install"));
+        buttonLabels.push_back(i18n.tr("themeshop.community.download_apply", "Download + Apply"));
+    } else {
+        buttonLabels.push_back(i18n.tr("themeshop.installed.apply", "Apply Theme"));
+        const auto* entry = selectedThemeShopEntry();
+        if (entry && entry->removable)
+            buttonLabels.push_back(i18n.tr("themeshop.installed.remove", "Remove Theme"));
+    }
+
+    auto buttons = detailButtonRects(dialog, (int)buttonLabels.size());
+    bool disableCommunityButtons = isCommunityTab() && m_packageTransferState.isRunning();
+    for (int i = 0; i < (int)buttons.size(); ++i) {
+        bool selectedButton = !disableCommunityButtons && (i == m_detailButtonIndex);
+        nxui::Color fill = selectedButton
+            ? m_theme->cursorNormal.withAlpha(0.24f)
+            : m_theme->panelBase.withAlpha(0.20f);
+        nxui::Color border = selectedButton
+            ? m_theme->cursorNormal.withAlpha(0.60f)
+            : m_theme->panelBorder.withAlpha(0.26f);
+        nxui::Color textColor = m_theme->textPrimary;
+        if (disableCommunityButtons) {
+            fill = m_theme->panelBase.withAlpha(0.10f);
+            border = m_theme->panelBorder.withAlpha(0.16f);
+            textColor = m_theme->textSecondary.withAlpha(0.78f);
+        }
+        if (!isCommunityTab() && i == 1) {
+            fill = selectedButton ? nxui::Color(0.70f, 0.18f, 0.18f, 0.26f) : nxui::Color(0.40f, 0.14f, 0.14f, 0.22f);
+            border = selectedButton ? nxui::Color(1.f, 0.34f, 0.34f, 0.70f) : nxui::Color(1.f, 0.30f, 0.30f, 0.28f);
+        }
+        drawChip(ren,
+                 m_smallFont,
+                 buttons[(size_t)i],
+                 buttonLabels[(size_t)i],
+                 fill,
+                 border,
+                 textColor,
+                 contentOpacity,
+                 0.76f);
+    }
+
+    if (!(isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview && detailPreviewRequested)
+        && !buttons.empty() && !disableCommunityButtons) {
+        m_focusCursor.moveTo(buttons[(size_t)std::clamp(m_detailButtonIndex, 0, (int)buttons.size() - 1)].expanded(2.f),
+                             20.f,
+                             0.08f);
+    }
+}

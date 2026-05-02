@@ -30,7 +30,10 @@ void Renderer::resetLiquidGlassSettings() {
 
 bool Renderer::initialize() {
     std::printf("[Renderer] Loading shaders...\n");
-    loadShaders();
+    if (!loadShaders()) {
+        std::printf("[Renderer] Shader initialization FAILED\n");
+        return false;
+    }
     std::printf("[Renderer] Setting up sampler...\n");
     setupSampler();
 
@@ -66,51 +69,86 @@ bool Renderer::initialize() {
     return true;
 }
 
-void Renderer::loadShaders() {
-    auto loadDksh = [&](dk::Shader& out, const char* path) {
-        std::printf("[Renderer] Loading shader: %s\n", path);
-        FILE* f = std::fopen(path, "rb");
-        if (!f) {
-            std::printf("[Renderer] FAILED to open shader: %s\n", path);
-            return;
-        }
+bool Renderer::loadShaders() {
+    auto loadDksh = [&](dk::Shader& out, const std::string& path) {
+        auto tryLoad = [&](const std::string& candidatePath) {
+            std::printf("[Renderer] Loading shader: %s\n", candidatePath.c_str());
+            FILE* f = std::fopen(candidatePath.c_str(), "rb");
+            if (!f) {
+                std::printf("[Renderer] FAILED to open shader: %s\n", candidatePath.c_str());
+                return false;
+            }
         std::fseek(f, 0, SEEK_END);
         long sz = std::ftell(f);
         std::fseek(f, 0, SEEK_SET);
 
+            if (sz <= 0) {
+                std::printf("[Renderer] Invalid shader size for %s\n", candidatePath.c_str());
+                std::fclose(f);
+                return false;
+            }
+
         uint32_t off = m_gpu.codePool().alloc(sz, DK_SHADER_CODE_ALIGNMENT);
         if (off == UINT32_MAX) {
-            std::printf("[Renderer] Code pool alloc FAILED for %ld bytes\n", sz);
-            std::fclose(f);
-            return;
+                std::printf("[Renderer] Code pool alloc FAILED for %ld bytes\n", sz);
+                std::fclose(f);
+                return false;
         }
         void* dst = m_gpu.codePool().cpuAddr(off);
-        std::fread(dst, 1, sz, f);
+            size_t readBytes = std::fread(dst, 1, sz, f);
         std::fclose(f);
 
+            if (readBytes != (size_t)sz) {
+                std::printf("[Renderer] Short shader read for %s (%zu/%ld)\n",
+                            candidatePath.c_str(), readBytes, sz);
+                return false;
+            }
+
         dk::ShaderMaker{m_gpu.codePool().block, off}.initialize(out);
+            return true;
+        };
+
+        if (tryLoad(path))
+            return true;
+
+        static constexpr const char* kRomfsShaderBase = "romfs:/shaders/";
+        if (path.rfind(kRomfsShaderBase, 0) == 0)
+            return false;
+
+        std::string fileName = path;
+        std::size_t slash = fileName.find_last_of('/');
+        if (slash != std::string::npos)
+            fileName = fileName.substr(slash + 1);
+
+        std::string fallbackPath = std::string(kRomfsShaderBase) + fileName;
+        std::printf("[Renderer] Retrying shader from fallback path: %s\n", fallbackPath.c_str());
+        return tryLoad(fallbackPath);
     };
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::Basic], (s_shaderBasePath + "basic_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::Basic], (s_shaderBasePath + "basic_fsh.dksh").c_str());
+    bool ok = true;
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::Backdrop], (s_shaderBasePath + "basic_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::Backdrop], (s_shaderBasePath + "backdrop_fsh.dksh").c_str());
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::Basic], s_shaderBasePath + "basic_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::Basic], s_shaderBasePath + "basic_fsh.dksh") && ok;
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::BlurH], (s_shaderBasePath + "blur_pass_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::BlurH], (s_shaderBasePath + "blur_h_fsh.dksh").c_str());
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::Backdrop], s_shaderBasePath + "basic_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::Backdrop], s_shaderBasePath + "backdrop_fsh.dksh") && ok;
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::BlurV], (s_shaderBasePath + "blur_pass_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::BlurV], (s_shaderBasePath + "blur_v_fsh.dksh").c_str());
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::BlurH], s_shaderBasePath + "blur_pass_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::BlurH], s_shaderBasePath + "blur_h_fsh.dksh") && ok;
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::Wave], (s_shaderBasePath + "pass_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::Wave], (s_shaderBasePath + "wave_fsh.dksh").c_str());
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::BlurV], s_shaderBasePath + "blur_pass_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::BlurV], s_shaderBasePath + "blur_v_fsh.dksh") && ok;
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::LiquidGlass], (s_shaderBasePath + "pass_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::LiquidGlass], (s_shaderBasePath + "liquid_glass_fsh.dksh").c_str());
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::Wave], s_shaderBasePath + "pass_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::Wave], s_shaderBasePath + "wave_fsh.dksh") && ok;
 
-    loadDksh(m_vertShaders[(int)ShaderProgram::Gradient], (s_shaderBasePath + "basic_vsh.dksh").c_str());
-    loadDksh(m_fragShaders[(int)ShaderProgram::Gradient], (s_shaderBasePath + "gradient_fsh.dksh").c_str());
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::LiquidGlass], s_shaderBasePath + "pass_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::LiquidGlass], s_shaderBasePath + "liquid_glass_fsh.dksh") && ok;
+
+    ok = loadDksh(m_vertShaders[(int)ShaderProgram::Gradient], s_shaderBasePath + "basic_vsh.dksh") && ok;
+    ok = loadDksh(m_fragShaders[(int)ShaderProgram::Gradient], s_shaderBasePath + "gradient_fsh.dksh") && ok;
+
+    return ok;
 }
 
 void Renderer::setupSampler() {

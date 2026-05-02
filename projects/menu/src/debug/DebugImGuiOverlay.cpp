@@ -1,4 +1,5 @@
 #include "DebugImGuiOverlay.hpp"
+#include "core/DebugLog.hpp"
 #include "settings/SettingsGlassTuning.hpp"
 
 #ifdef SWITCHU_DEBUG_UI
@@ -218,14 +219,59 @@ void DebugImGuiOverlay::drawWindow(nxui::Renderer& ren, nxui::Input& input, bool
     auto& settingsGlass = settings::debug::settingsGlassTuning();
     bool rawBackdrop = ren.liquidGlassDebugRawBackdrop();
 
-    ImGui::SetNextWindowSize(ImVec2(360.0f, 620.0f), ImGuiCond_FirstUseEver);
+    if (m_activePanel == Panel::Logs) {
+        ImGui::SetNextWindowSize(ImVec2(760.0f, 520.0f), ImGuiCond_FirstUseEver);
+    } else {
+        ImGui::SetNextWindowSize(ImVec2(360.0f, 620.0f), ImGuiCond_FirstUseEver);
+    }
     ImGui::SetNextWindowPos(ImVec2(24.0f, 24.0f), ImGuiCond_FirstUseEver);
 
-    if (!ImGui::Begin("Settings", &open,
+    const char* title = m_activePanel == Panel::Logs ? "Debug Logs" : "Blur Settings";
+    if (!ImGui::Begin(title, &open,
                       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
     }
+
+    if (m_activePanel == Panel::Logs) {
+        if (ImGui::Button("Open Blur Menu")) {
+            m_activePanel = Panel::BlurSettings;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close")) {
+            open = false;
+        }
+
+        ImGui::SeparatorText("Runtime Logs");
+        ImGui::TextWrapped("Recent in-memory logs. Full file: %s", DebugLog::LOG_FILE);
+
+        auto lines = DebugLog::lines();
+        if (ImGui::BeginChild("debug_log_lines", ImVec2(720.0f, 400.0f), true,
+                              ImGuiWindowFlags_HorizontalScrollbar)) {
+            if (lines.empty()) {
+                ImGui::TextDisabled("No logs captured yet.");
+            } else {
+                for (const auto& line : lines) {
+                    ImGui::TextWrapped("%s", line.c_str());
+                }
+                ImGui::SetScrollHereY(1.0f);
+            }
+            ImGui::EndChild();
+        }
+
+        ImGui::End();
+        return;
+    }
+
+    if (ImGui::Button("Back to Logs")) {
+        m_activePanel = Panel::Logs;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Close")) {
+        open = false;
+    }
+
+    ImGui::SeparatorText("Blur / Liquid Glass");
 
     if (ImGui::Button("Reset Defaults")) {
         ren.resetLiquidGlassSettings();
@@ -312,7 +358,13 @@ void DebugImGuiOverlay::drawWindow(nxui::Renderer& ren, nxui::Input& input, bool
 void DebugImGuiOverlay::render(nxui::Renderer& ren, nxui::Input& input, bool& open) {
     if (!m_initialized || !open) {
         m_wantsTouchCapture = false;
+        m_wasOpen = false;
         return;
+    }
+
+    if (!m_wasOpen) {
+        m_activePanel = Panel::Logs;
+        m_wasOpen = true;
     }
 
     auto& lg = ren.liquidGlassSettings();
@@ -326,6 +378,7 @@ void DebugImGuiOverlay::render(nxui::Renderer& ren, nxui::Input& input, bool& op
     ImGui::Render();
 
     m_wantsTouchCapture = ImGui::GetIO().WantCaptureMouse;
+    m_wasOpen = open;
 
     ren.flush();
     renderDrawData(ren, ImGui::GetDrawData());

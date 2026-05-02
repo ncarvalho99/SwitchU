@@ -1,5 +1,6 @@
 #include "WiiUMenuApp.hpp"
 #include "widgets/GlossyIcon.hpp"
+#include "themeshop/ThemeHttp.hpp"
 #include <nxui/core/Animation.hpp>
 #include <nxui/core/I18n.hpp>
 #include "DebugLog.hpp"
@@ -78,6 +79,7 @@ void WiiUMenuApp::setStartupStatus(uint64_t suspendedTitleId, bool appRunning) {
 #endif
 
 bool WiiUMenuApp::onCreate() {
+    DebugLog::log("[init] onCreate enter");
     m_config.load();
     loadMenuLayout();
     m_appLoader.setPendingTransform([this](std::vector<PendingApp>& apps) {
@@ -96,6 +98,7 @@ bool WiiUMenuApp::onCreate() {
 
     bluetooth::Initialize();
     DebugLog::log("[init] Bluetooth manager initialized");
+    DebugLog::log("[init] Theme Shop HTTP runtime deferred until first request");
 
     DebugLog::log("[init] Config loaded (theme=%s, musicVol=%.2f, sfxVol=%.2f)",
                   m_config.themePreset.c_str(), m_config.musicVolume, m_config.sfxVolume);
@@ -159,6 +162,8 @@ void WiiUMenuApp::onDestroy() {
 #endif
 
     stopEditGhost();
+
+    themeshop::http::shutdown();
 
     bluetooth::Finalize();
 
@@ -404,6 +409,10 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             float  cr   = raw->cornerRadius();
             nxui::Color  base = m_theme.panelBase;
             nxui::Color  bord = m_theme.panelBorder;
+            if (m_userSelect) {
+                bool usersLoaded = m_userSelect->loadUsers(app().gpu(), app().renderer());
+                DebugLog::log("[UserSelect] lazy load result=%d", usersLoaded ? 1 : 0);
+            }
             m_userSelect->show([this, fr, tex, cr, base, bord, tid](AccountUid uid) {
                 m_audio.playSfx(Sfx::LaunchGame);
                 m_launchAnim->start(fr, tex, cr, base, bord, tid, uid,
@@ -421,16 +430,21 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
 }
 
 void WiiUMenuApp::buildGrid() {
-    m_allPresets = ThemePreset::builtInPresets();
-    auto userPresets = ThemePreset::loadUserPresets();
-    m_allPresets.insert(m_allPresets.end(), userPresets.begin(), userPresets.end());
+    reloadThemePresets();
 
     m_activePresetName = m_config.themePreset;
     ThemePreset* preset = findPresetPtr(m_activePresetName);
     if (!preset) {
+        m_activePresetName = "builtin:Default Dark";
+        preset = findPresetPtr(m_activePresetName);
+    }
+    if (!preset) {
         m_activePresetName = "Default Dark";
         preset = findPresetPtr(m_activePresetName);
     }
+
+    if (preset)
+        m_activePresetName = preset->id.empty() ? preset->name : preset->id;
 
     m_activeColors = preset->colors;
     if (m_config.accentH >= 0.f) m_activeColors.accentH = m_config.accentH;
@@ -453,17 +467,16 @@ void WiiUMenuApp::buildGrid() {
     else
         m_activeMode = preset->mode;
 
-    ThemePreset effective;
-    effective.mode   = m_activeMode;
-    effective.colors = m_activeColors;
-    m_theme = effective.toTheme();
+    m_effectivePreset = buildEffectiveThemePreset();
+    m_theme = m_effectivePreset.toTheme();
+
+    m_background = std::make_shared<WaraWaraBackground>();
+    m_background->setRect({0, 0, 1280, 720});
+    applyThemeResources(m_effectivePreset);
 
     std::vector<std::shared_ptr<GlossyIcon>> icons;
     for (int i = 0; i < m_model.count(); ++i)
         icons.push_back(makeIcon(m_model.at(i)));
-
-    m_background = std::make_shared<WaraWaraBackground>();
-    m_background->setRect({0, 0, 1280, 720});
 
     GridLayoutMetrics gridMetrics = computeGridLayoutMetrics();
 
@@ -517,7 +530,6 @@ void WiiUMenuApp::buildGrid() {
     m_userSelect->setFont(&m_fontNormal);
     m_userSelect->setSmallFont(&m_fontSmall);
     m_userSelect->setAudio(&m_audio);
-    m_userSelect->loadUsers(app().gpu(), app().renderer());
 
     m_dialog = std::make_shared<OverlayDialog>();
     m_dialog->setFont(&m_fontNormal);
@@ -561,10 +573,8 @@ void WiiUMenuApp::buildGrid() {
     sidebarActions.onSettings = [this]() {
         m_audio.playSfx(Sfx::ModalShow);
         if (m_settings) {
-            std::vector<std::string> presetNames;
-            for (auto& p : m_allPresets) presetNames.push_back(p.name);
-            m_settings->setThemePresetState(m_activePresetName, presetNames, m_activeColors,
-                                             m_activeMode == nxui::ThemeMode::Dark);
+            if (m_themeShop && m_themeShop->isActive())
+                m_themeShop->hide();
             m_settings->show();
             focusManager().setFocus(m_settings.get());
         }
@@ -595,19 +605,17 @@ void WiiUMenuApp::buildGrid() {
     };
     sidebarActions.onMiiverse = [this]() {
         m_audio.playSfx(Sfx::ModalShow);
-        if (!m_dialog) return;
-        m_dialogReturnFocus = focusManager().current();
-        m_dialog->show(
-            "Miiverse",
-            "A miiverse recreation is in development, but not ready yet. Stay tuned!",
-            {{"OK", [this]() { }, true}},
-            0,
-            {}
-        );
-        focusManager().setFocus(m_dialog.get());
+        if (!m_themeShop) return;
+        if (m_settings && m_settings->isActive())
+            m_settings->hide();
+        refreshThemeShopState();
+        m_themeShop->show();
+        focusManager().setFocus(m_themeShop.get());
     };
 
     m_sidebar.build(app().gpu(), app().renderer(), SD_ASSETS, sidebarActions);
+    m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS,
+                           resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath));
 
     wireGlobalActions();
     applyTheme();
@@ -663,6 +671,7 @@ void WiiUMenuApp::buildGrid() {
     m_overlayLayer->addChild(m_userSelect);
 
     createSettings();
+    createThemeShop();
 
     m_overlayLayer->addChild(m_dialog);
     m_overlayLayer->addChild(m_launchAnim);
@@ -680,7 +689,31 @@ void WiiUMenuApp::buildGrid() {
 }
 
 void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
-    std::string base = std::string(SD_ASSETS) + "/sounds/" + preset;
+    std::string base;
+    if (preset.rfind("package:", 0) == 0) {
+        for (const auto& themePreset : m_allPresets) {
+            if (themePreset.source != ThemePresetSource::InstalledPackage || themePreset.installPath.empty())
+                continue;
+            if (themePreset.id != preset && themePreset.soundPreset != preset)
+                continue;
+
+            struct stat directSfxSt {};
+            struct stat directMusicSt {};
+            struct stat soundsRootSt {};
+            const std::string directSfx = themePreset.installPath + "/sfx";
+            const std::string directMusic = themePreset.installPath + "/music";
+            const std::string soundsRoot = themePreset.installPath + "/sounds";
+
+            bool hasDirect = (stat(directSfx.c_str(), &directSfxSt) == 0 && S_ISDIR(directSfxSt.st_mode))
+                || (stat(directMusic.c_str(), &directMusicSt) == 0 && S_ISDIR(directMusicSt.st_mode));
+            bool hasWrapped = (stat(soundsRoot.c_str(), &soundsRootSt) == 0 && S_ISDIR(soundsRootSt.st_mode));
+            base = hasDirect ? themePreset.installPath : (hasWrapped ? soundsRoot : themePreset.installPath);
+            break;
+        }
+    }
+
+    if (base.empty())
+        base = std::string(SD_ASSETS) + "/sounds/" + preset;
     DebugLog::log("[audio] Loading preset '%s' from %s", preset.c_str(), base.c_str());
 
     m_audio.loadSfx(Sfx::Navigate,        base + "/sfx/navigation.wav");
@@ -874,6 +907,8 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (m_returnFadeTimer > 0.f)
         m_returnFadeTimer = std::max(0.f, m_returnFadeTimer - dt);
 
+    syncThemePackageTransfer();
+
     if (!app().renderEnabled()) {
         DebugLog::log("[suspend] resuming GPU on main thread");
         if (m_launchAnim && m_launchAnim->isPlaying()) m_launchAnim->stop();
@@ -1026,6 +1061,7 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (!debugTouchBlocked
         && !m_launchAnim->isPlaying()
         && !(m_dialog && m_dialog->isActive())
+        && !(m_themeShop && m_themeShop->isActive())
         && !(m_settings && m_settings->isActive())
         && !(m_userSelect && m_userSelect->isActive()))
     {
@@ -1035,6 +1071,9 @@ void WiiUMenuApp::onUpdate(float dt) {
     bool dialogActiveNow = (m_dialog && m_dialog->isActive());
     if (!debugTouchBlocked && dialogActiveNow)
         m_dialog->handleTouch(app().input());
+
+    if (!debugTouchBlocked && m_themeShop && m_themeShop->isActive())
+        m_themeShop->handleTouch(app().input());
 
     if (!debugTouchBlocked && m_settings && m_settings->isActive())
         m_settings->handleTouch(app().input());

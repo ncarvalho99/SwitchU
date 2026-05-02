@@ -181,6 +181,8 @@ int main(int argc, char* argv[]) {
     std::srand(static_cast<unsigned>(std::time(nullptr)));
 
 #ifdef SWITCHU_HOMEBREW
+    DebugLog::openFileLog();
+    DebugLog::log("[hb] main() entry");
     DebugLog::log("[main] applet config...");
 #else
     DebugLog::log("[menu] main() entry");
@@ -214,8 +216,15 @@ int main(int argc, char* argv[]) {
         nxui::Application app;
 #ifdef SWITCHU_HOMEBREW
         app.setActivity(std::make_unique<WiiUMenuApp>());
-        if (app.initialize())
+        DebugLog::log("[hb] app.initialize...");
+        if (app.initialize()) {
+            DebugLog::log("[hb] app.run...");
             app.run();
+        } else {
+            DebugLog::log("[hb] app.initialize FAILED");
+        }
+        DebugLog::log("[hb] app.shutdown...");
+        app.shutdown();
 #else
         auto activity = std::make_unique<WiiUMenuApp>();
         activity->setStartupStatus(sysStatus.suspended_app_id, sysStatus.app_running);
@@ -234,6 +243,10 @@ int main(int argc, char* argv[]) {
 
     TTF_Quit();
     SDL_Quit();
+#ifdef SWITCHU_HOMEBREW
+    DebugLog::log("[hb] exit");
+    DebugLog::closeFileLog();
+#endif
 #ifdef SWITCHU_MENU
     nxtcExit();
     DebugLog::log("[menu] exit");

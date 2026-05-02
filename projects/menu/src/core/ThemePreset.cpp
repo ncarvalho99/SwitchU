@@ -3,9 +3,480 @@
 #include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
+
+namespace {
+
+template <typename T>
+void readJsonOpt(const nlohmann::json& j, const char* key, T& out) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null())
+        return;
+
+    try {
+        out = it->get<T>();
+    } catch (...) {
+    }
+}
+
+template <typename T>
+bool readJsonAliases(const nlohmann::json& j, std::initializer_list<const char*> keys, T& out) {
+    for (const char* key : keys) {
+        auto it = j.find(key);
+        if (it == j.end() || it->is_null())
+            continue;
+
+        try {
+            out = it->get<T>();
+            return true;
+        } catch (...) {
+        }
+    }
+
+    return false;
+}
+
+std::string makeThemeId(const char* prefix, const std::string& value) {
+    return std::string(prefix) + value;
+}
+
+std::string trimString(std::string value) {
+    auto notSpace = [](unsigned char ch) {
+        return !std::isspace(ch);
+    };
+
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), notSpace));
+    value.erase(std::find_if(value.rbegin(), value.rend(), notSpace).base(), value.end());
+    return value;
+}
+
+std::string lowerString(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return (char)std::tolower(ch);
+    });
+    return value;
+}
+
+bool hasBundledAudio(const std::string& installDir) {
+    static const char* candidates[] = {
+        "/sounds/sfx",
+        "/sounds/music",
+        "/sfx",
+        "/music",
+    };
+
+    for (const char* suffix : candidates) {
+        struct stat st {};
+        std::string path = installDir + suffix;
+        if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+            return true;
+    }
+
+    return false;
+}
+
+std::string normalizePackageId(const std::string& value) {
+    std::string trimmed = trimString(value);
+    if (trimmed.empty())
+        return trimmed;
+    if (trimmed.find(':') != std::string::npos)
+        return trimmed;
+    return makeThemeId("package:", trimmed);
+}
+
+bool parseHslTripletString(std::string value, float& h, float& s, float& l) {
+    value = trimString(value);
+    if (value.empty())
+        return false;
+
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (char ch : value) {
+        if (std::isdigit((unsigned char)ch) || ch == '.' || ch == '-' || ch == '+') {
+            normalized.push_back(ch);
+        } else {
+            normalized.push_back(' ');
+        }
+    }
+
+    std::stringstream ss(normalized);
+    float vals[3] {};
+    if (!(ss >> vals[0] >> vals[1] >> vals[2]))
+        return false;
+
+    h = vals[0];
+    s = vals[1];
+    l = vals[2];
+    return true;
+}
+
+bool parseHslTripletValue(const nlohmann::json& value, float& h, float& s, float& l) {
+    try {
+        if (value.is_object()) {
+            float localH = h;
+            float localS = s;
+            float localL = l;
+            readJsonAliases(value, {"h", "hue"}, localH);
+            readJsonAliases(value, {"s", "sat", "saturation"}, localS);
+            readJsonAliases(value, {"l", "light", "lightness"}, localL);
+            h = localH;
+            s = localS;
+            l = localL;
+            return true;
+        }
+
+        if (value.is_array() && value.size() >= 3) {
+            h = value[0].get<float>();
+            s = value[1].get<float>();
+            l = value[2].get<float>();
+            return true;
+        }
+
+        if (value.is_string()) {
+            return parseHslTripletString(value.get<std::string>(), h, s, l);
+        }
+    } catch (...) {
+    }
+
+    return false;
+}
+
+bool readHslTriplet(const nlohmann::json& j,
+                    std::initializer_list<const char*> keys,
+                    float& h, float& s, float& l) {
+    for (const char* key : keys) {
+        auto it = j.find(key);
+        if (it == j.end() || it->is_null())
+            continue;
+        if (parseHslTripletValue(*it, h, s, l))
+            return true;
+    }
+
+    return false;
+}
+
+const nlohmann::json* findObjectAlias(const nlohmann::json& j,
+                                      std::initializer_list<const char*> keys) {
+    for (const char* key : keys) {
+        auto it = j.find(key);
+        if (it == j.end() || it->is_null() || !it->is_object())
+            continue;
+        return &(*it);
+    }
+
+    return nullptr;
+}
+
+bool parseFloatPairString(std::string value, float& first, float& second) {
+    value = trimString(value);
+    if (value.empty())
+        return false;
+
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (char ch : value) {
+        if (std::isdigit((unsigned char)ch) || ch == '.' || ch == '-' || ch == '+')
+            normalized.push_back(ch);
+        else
+            normalized.push_back(' ');
+    }
+
+    std::stringstream ss(normalized);
+    float vals[2] {};
+    if (!(ss >> vals[0] >> vals[1]))
+        return false;
+
+    first = vals[0];
+    second = vals[1];
+    return true;
+}
+
+bool parseFloatPairValue(const nlohmann::json& value, float& first, float& second) {
+    try {
+        if (value.is_array() && value.size() >= 2) {
+            first = value[0].get<float>();
+            second = value[1].get<float>();
+            return true;
+        }
+
+        if (value.is_object()) {
+            float localFirst = first;
+            float localSecond = second;
+            readJsonAliases(value, {"x", "min", "first", "width"}, localFirst);
+            readJsonAliases(value, {"y", "max", "second", "height"}, localSecond);
+            first = localFirst;
+            second = localSecond;
+            return true;
+        }
+
+        if (value.is_string())
+            return parseFloatPairString(value.get<std::string>(), first, second);
+    } catch (...) {
+    }
+
+    return false;
+}
+
+bool readFloatPair(const nlohmann::json& j,
+                   std::initializer_list<const char*> keys,
+                   float& first, float& second) {
+    for (const char* key : keys) {
+        auto it = j.find(key);
+        if (it == j.end() || it->is_null())
+            continue;
+        if (parseFloatPairValue(*it, first, second))
+            return true;
+    }
+
+    return false;
+}
+
+ThemeBackgroundLayout parseBackgroundLayout(std::string value) {
+    value = lowerString(trimString(value));
+    if (value == "grid" || value == "tiles" || value == "tiled")
+        return ThemeBackgroundLayout::Grid;
+    return ThemeBackgroundLayout::Floating;
+}
+
+ThemeBackgroundShapeSet parseBackgroundShapeSet(std::string value) {
+    value = lowerString(trimString(value));
+    if (value == "circle" || value == "circles")
+        return ThemeBackgroundShapeSet::Circle;
+    if (value == "triangle" || value == "triangles")
+        return ThemeBackgroundShapeSet::Triangle;
+    if (value == "square" || value == "squares")
+        return ThemeBackgroundShapeSet::Square;
+    if (value == "diamond" || value == "diamonds")
+        return ThemeBackgroundShapeSet::Diamond;
+    if (value == "hexagon" || value == "hexagons" || value == "hex")
+        return ThemeBackgroundShapeSet::Hexagon;
+    return ThemeBackgroundShapeSet::Mixed;
+}
+
+ThemeBackgroundSymmetry parseBackgroundSymmetry(std::string value) {
+    value = lowerString(trimString(value));
+    if (value == "mirrorx" || value == "mirror-x" || value == "horizontal" || value == "x")
+        return ThemeBackgroundSymmetry::MirrorX;
+    if (value == "mirrory" || value == "mirror-y" || value == "vertical" || value == "y")
+        return ThemeBackgroundSymmetry::MirrorY;
+    if (value == "quad" || value == "both" || value == "xy" || value == "mirror-xy" || value == "mirrorxy")
+        return ThemeBackgroundSymmetry::Quad;
+    return ThemeBackgroundSymmetry::None;
+}
+
+void readThemeBackgroundFromObject(const nlohmann::json& j, ThemeBackgroundConfig& background) {
+    std::string layoutValue;
+    if (readJsonAliases(j, {"layout", "pattern", "style"}, layoutValue))
+        background.layout = parseBackgroundLayout(layoutValue);
+
+    std::string shapeValue;
+    if (readJsonAliases(j, {"shape", "shapeSet", "shape_set", "shapes"}, shapeValue))
+        background.shapeSet = parseBackgroundShapeSet(shapeValue);
+
+    std::string symmetryValue;
+    if (readJsonAliases(j, {"symmetry", "mirror"}, symmetryValue))
+        background.symmetry = parseBackgroundSymmetry(symmetryValue);
+
+    readJsonAliases(j, {"count", "shapeCount", "shape_count", "shapesCount", "shapes_count"}, background.shapeCount);
+    readJsonAliases(j, {"gridColumns", "grid_columns", "columns"}, background.gridColumns);
+    readJsonAliases(j, {"gridRows", "grid_rows", "rows"}, background.gridRows);
+    readJsonAliases(j, {"imageOpacity", "image_opacity"}, background.imageOpacity);
+    readJsonAliases(j, {"opacity", "shapeOpacity", "shape_opacity"}, background.opacity);
+    readJsonAliases(j, {"wobble", "drift"}, background.wobble);
+    readJsonAliases(j, {"rotationSpeed", "rotation_speed", "spin", "spinSpeed", "spin_speed"}, background.rotationSpeed);
+
+    readFloatPair(j, {"spacing", "gap"}, background.spacingX, background.spacingY);
+    readFloatPair(j, {"size", "sizeRange", "size_range", "shapeSize", "shape_size"}, background.sizeMin, background.sizeMax);
+    readFloatPair(j, {"speed", "speedRange", "speed_range", "motionSpeed", "motion_speed"}, background.speedMin, background.speedMax);
+
+    auto imageIt = j.find("image");
+    if (imageIt != j.end() && !imageIt->is_null()) {
+        try {
+            if (imageIt->is_string()) {
+                background.imagePath = imageIt->get<std::string>();
+            } else if (imageIt->is_object()) {
+                readJsonAliases(*imageIt, {"path", "file", "src"}, background.imagePath);
+                readJsonAliases(*imageIt, {"opacity", "alpha"}, background.imageOpacity);
+                readJsonAliases(*imageIt, {"cover", "fill"}, background.imageCover);
+
+                std::string fit;
+                if (readJsonAliases(*imageIt, {"fit", "mode"}, fit))
+                    background.imageCover = lowerString(trimString(fit)) != "contain";
+            }
+        } catch (...) {
+        }
+    }
+
+    auto gridIt = findObjectAlias(j, {"grid"});
+    if (gridIt) {
+        readJsonAliases(*gridIt, {"columns", "x"}, background.gridColumns);
+        readJsonAliases(*gridIt, {"rows", "y"}, background.gridRows);
+        readFloatPair(*gridIt, {"spacing", "gap"}, background.spacingX, background.spacingY);
+    }
+
+    auto motionIt = findObjectAlias(j, {"motion", "animation"});
+    if (motionIt) {
+        readFloatPair(*motionIt, {"speed", "speedRange", "speed_range"}, background.speedMin, background.speedMax);
+        readJsonAliases(*motionIt, {"wobble", "drift"}, background.wobble);
+        readJsonAliases(*motionIt, {"rotation", "rotationSpeed", "rotation_speed", "spin"}, background.rotationSpeed);
+    }
+
+    background.shapeCount = std::max(1, background.shapeCount);
+    background.gridColumns = std::max(1, background.gridColumns);
+    background.gridRows = std::max(1, background.gridRows);
+    background.spacingX = std::max(1.f, background.spacingX);
+    background.spacingY = std::max(1.f, background.spacingY);
+    background.sizeMin = std::max(1.f, background.sizeMin);
+    background.sizeMax = std::max(background.sizeMin, background.sizeMax);
+    background.speedMin = std::max(0.f, background.speedMin);
+    background.speedMax = std::max(background.speedMin, background.speedMax);
+    background.wobble = std::max(0.f, background.wobble);
+    background.imageOpacity = std::clamp(background.imageOpacity, 0.f, 1.f);
+    background.opacity = std::clamp(background.opacity, 0.f, 1.f);
+}
+
+void readThemeBackground(const nlohmann::json& j, ThemeBackgroundConfig& background) {
+    readThemeBackgroundFromObject(j, background);
+
+    auto backgroundIt = j.find("background");
+    if (backgroundIt != j.end() && backgroundIt->is_object())
+        readThemeBackgroundFromObject(*backgroundIt, background);
+
+    auto themeIt = j.find("theme");
+    if (themeIt != j.end() && themeIt->is_object()) {
+        readThemeBackgroundFromObject(*themeIt, background);
+
+        auto themeBackgroundIt = themeIt->find("background");
+        if (themeBackgroundIt != themeIt->end() && themeBackgroundIt->is_object())
+            readThemeBackgroundFromObject(*themeBackgroundIt, background);
+    }
+}
+
+void readThemeFontConfigFromValue(const nlohmann::json& value, ThemeFontConfig& fonts) {
+    try {
+        if (value.is_string()) {
+            std::string path = value.get<std::string>();
+            fonts.regularPath = path;
+            if (fonts.smallPath.empty())
+                fonts.smallPath = path;
+            return;
+        }
+
+        if (!value.is_object())
+            return;
+
+        std::string sharedPath;
+        if (readJsonAliases(value, {"path", "font", "regular", "normal", "ui"}, sharedPath)) {
+            fonts.regularPath = sharedPath;
+            if (fonts.smallPath.empty())
+                fonts.smallPath = sharedPath;
+        }
+
+        readJsonAliases(value, {"regularPath", "regular_path", "uiPath", "ui_path"}, fonts.regularPath);
+        readJsonAliases(value, {"small", "smallPath", "small_path", "secondary", "caption"}, fonts.smallPath);
+
+        if (fonts.smallPath.empty() && !fonts.regularPath.empty())
+            fonts.smallPath = fonts.regularPath;
+    } catch (...) {
+    }
+}
+
+void readThemeFonts(const nlohmann::json& j, ThemeFontConfig& fonts) {
+    auto fontIt = j.find("font");
+    if (fontIt != j.end() && !fontIt->is_null())
+        readThemeFontConfigFromValue(*fontIt, fonts);
+
+    auto fontsIt = j.find("fonts");
+    if (fontsIt != j.end() && !fontsIt->is_null())
+        readThemeFontConfigFromValue(*fontsIt, fonts);
+
+    auto themeIt = j.find("theme");
+    if (themeIt != j.end() && themeIt->is_object()) {
+        auto themeFontIt = themeIt->find("font");
+        if (themeFontIt != themeIt->end() && !themeFontIt->is_null())
+            readThemeFontConfigFromValue(*themeFontIt, fonts);
+
+        auto themeFontsIt = themeIt->find("fonts");
+        if (themeFontsIt != themeIt->end() && !themeFontsIt->is_null())
+            readThemeFontConfigFromValue(*themeFontsIt, fonts);
+    }
+}
+
+void readThemeIconsFromValue(const nlohmann::json& value, ThemeIconConfig& icons) {
+    try {
+        if (value.is_string()) {
+            icons.basePath = value.get<std::string>();
+            return;
+        }
+
+        if (!value.is_object())
+            return;
+
+        readJsonAliases(value, {"path", "base", "basePath", "base_path", "directory", "dir"}, icons.basePath);
+    } catch (...) {
+    }
+}
+
+void readThemeIcons(const nlohmann::json& j, ThemeIconConfig& icons) {
+    auto iconsIt = j.find("icons");
+    if (iconsIt != j.end() && !iconsIt->is_null())
+        readThemeIconsFromValue(*iconsIt, icons);
+
+    auto themeIt = j.find("theme");
+    if (themeIt != j.end() && themeIt->is_object()) {
+        auto themeIconsIt = themeIt->find("icons");
+        if (themeIconsIt != themeIt->end() && !themeIconsIt->is_null())
+            readThemeIconsFromValue(*themeIconsIt, icons);
+    }
+}
+
+void readThemeColorsFromObject(const nlohmann::json& j, ThemeColorSet& colors) {
+    readJsonAliases(j, {"accentH", "accent_h"}, colors.accentH);
+    readJsonAliases(j, {"accentS", "accent_s"}, colors.accentS);
+    readJsonAliases(j, {"accentL", "accent_l"}, colors.accentL);
+    readJsonAliases(j, {"bgH", "bg_h", "backgroundH", "background_h"}, colors.bgH);
+    readJsonAliases(j, {"bgS", "bg_s", "backgroundS", "background_s"}, colors.bgS);
+    readJsonAliases(j, {"bgL", "bg_l", "backgroundL", "background_l"}, colors.bgL);
+    readJsonAliases(j, {"bgAccH", "bg_acc_h", "backgroundAccentH", "background_accent_h"}, colors.bgAccH);
+    readJsonAliases(j, {"bgAccS", "bg_acc_s", "backgroundAccentS", "background_accent_s"}, colors.bgAccS);
+    readJsonAliases(j, {"bgAccL", "bg_acc_l", "backgroundAccentL", "background_accent_l"}, colors.bgAccL);
+    readJsonAliases(j, {"shapeH", "shape_h", "shapesH", "shapes_h"}, colors.shapeH);
+    readJsonAliases(j, {"shapeS", "shape_s", "shapesS", "shapes_s"}, colors.shapeS);
+    readJsonAliases(j, {"shapeL", "shape_l", "shapesL", "shapes_l"}, colors.shapeL);
+
+    readHslTriplet(j, {"accent", "cursor", "primaryAccent"},
+                   colors.accentH, colors.accentS, colors.accentL);
+    readHslTriplet(j, {"background", "bg"},
+                   colors.bgH, colors.bgS, colors.bgL);
+    readHslTriplet(j, {"backgroundAccent", "bgAccent", "background_accent"},
+                   colors.bgAccH, colors.bgAccS, colors.bgAccL);
+    readHslTriplet(j, {"shapes", "shape", "shapeColor", "floatingShapes"},
+                   colors.shapeH, colors.shapeS, colors.shapeL);
+}
+
+void readThemeColors(const nlohmann::json& j, ThemeColorSet& colors) {
+    readThemeColorsFromObject(j, colors);
+
+    auto colorsIt = j.find("colors");
+    if (colorsIt != j.end() && colorsIt->is_object())
+        readThemeColorsFromObject(*colorsIt, colors);
+
+    auto themeIt = j.find("theme");
+    if (themeIt != j.end() && themeIt->is_object()) {
+        readThemeColorsFromObject(*themeIt, colors);
+
+        auto themeColorsIt = themeIt->find("colors");
+        if (themeColorsIt != themeIt->end() && themeColorsIt->is_object())
+            readThemeColorsFromObject(*themeColorsIt, colors);
+    }
+}
+
+} // namespace
 
 nxui::Theme ThemePreset::toTheme() const {
     nxui::Theme t = (mode == nxui::ThemeMode::Dark)
@@ -37,67 +508,23 @@ static std::vector<ThemePreset> makeBuiltInPresets() {
 
     {
         ThemePreset p;
+        p.id      = makeThemeId("builtin:", "Default Dark");
         p.name    = "Default Dark";
         p.mode    = nxui::ThemeMode::Dark;
         p.colors  = ThemePreset::extractColors(nxui::Theme::dark());
         p.builtIn = true;
+        p.source  = ThemePresetSource::BuiltIn;
         v.push_back(std::move(p));
     }
 
     {
         ThemePreset p;
+        p.id      = makeThemeId("builtin:", "Default Light");
         p.name    = "Default Light";
         p.mode    = nxui::ThemeMode::Light;
         p.colors  = ThemePreset::extractColors(nxui::Theme::light());
         p.builtIn = true;
-        v.push_back(std::move(p));
-    }
-
-    {
-        ThemePreset p;
-        p.name    = "Ocean";
-        p.mode    = nxui::ThemeMode::Dark;
-        p.builtIn = true;
-        p.colors.accentH  = 0.53f;  p.colors.accentS  = 0.80f; p.colors.accentL  = 0.55f;
-        p.colors.bgH      = 0.58f;  p.colors.bgS      = 0.50f; p.colors.bgL      = 0.08f;
-        p.colors.bgAccH   = 0.56f;  p.colors.bgAccS   = 0.55f; p.colors.bgAccL   = 0.14f;
-        p.colors.shapeH   = 0.56f;  p.colors.shapeS   = 0.40f; p.colors.shapeL   = 0.30f;
-        v.push_back(std::move(p));
-    }
-
-    {
-        ThemePreset p;
-        p.name    = "Sakura";
-        p.mode    = nxui::ThemeMode::Light;
-        p.builtIn = true;
-        p.colors.accentH  = 0.94f;  p.colors.accentS  = 0.75f; p.colors.accentL  = 0.70f;
-        p.colors.bgH      = 0.97f;  p.colors.bgS      = 0.30f; p.colors.bgL      = 0.94f;
-        p.colors.bgAccH   = 0.94f;  p.colors.bgAccS   = 0.40f; p.colors.bgAccL   = 0.88f;
-        p.colors.shapeH   = 0.94f;  p.colors.shapeS   = 0.35f; p.colors.shapeL   = 0.70f;
-        v.push_back(std::move(p));
-    }
-
-    {
-        ThemePreset p;
-        p.name    = "Forest";
-        p.mode    = nxui::ThemeMode::Dark;
-        p.builtIn = true;
-        p.colors.accentH  = 0.36f;  p.colors.accentS  = 0.65f; p.colors.accentL  = 0.45f;
-        p.colors.bgH      = 0.39f;  p.colors.bgS      = 0.40f; p.colors.bgL      = 0.06f;
-        p.colors.bgAccH   = 0.36f;  p.colors.bgAccS   = 0.45f; p.colors.bgAccL   = 0.10f;
-        p.colors.shapeH   = 0.33f;  p.colors.shapeS   = 0.35f; p.colors.shapeL   = 0.25f;
-        v.push_back(std::move(p));
-    }
-
-    {
-        ThemePreset p;
-        p.name    = "Sunset";
-        p.mode    = nxui::ThemeMode::Dark;
-        p.builtIn = true;
-        p.colors.accentH  = 0.08f;  p.colors.accentS  = 0.85f; p.colors.accentL  = 0.60f;
-        p.colors.bgH      = 0.03f;  p.colors.bgS      = 0.45f; p.colors.bgL      = 0.08f;
-        p.colors.bgAccH   = 0.06f;  p.colors.bgAccS   = 0.50f; p.colors.bgAccL   = 0.14f;
-        p.colors.shapeH   = 0.04f;  p.colors.shapeS   = 0.40f; p.colors.shapeL   = 0.28f;
+        p.source  = ThemePresetSource::BuiltIn;
         v.push_back(std::move(p));
     }
 
@@ -110,6 +537,7 @@ const std::vector<ThemePreset>& ThemePreset::builtInPresets() {
 }
 
 static constexpr const char* kUserPresetsPath = "sdmc:/config/SwitchU/theme_presets.ini";
+static constexpr const char* kInstalledThemesDir = "sdmc:/config/SwitchU/themes";
 
 std::vector<ThemePreset> ThemePreset::loadUserPresets() {
     std::vector<ThemePreset> result;
@@ -132,7 +560,9 @@ std::vector<ThemePreset> ThemePreset::loadUserPresets() {
 
             current = ThemePreset{};
             current.name = line.substr(1, line.size() - 2);
+            current.id = makeThemeId("user:", current.name);
             current.builtIn = false;
+            current.source = ThemePresetSource::UserPreset;
             hasSection = true;
             continue;
         }
@@ -164,6 +594,94 @@ std::vector<ThemePreset> ThemePreset::loadUserPresets() {
     if (hasSection)
         result.push_back(current);
 
+    return result;
+}
+
+std::vector<ThemePreset> ThemePreset::loadInstalledPackages() {
+    std::vector<ThemePreset> result;
+
+    DIR* dir = opendir(kInstalledThemesDir);
+    if (!dir)
+        return result;
+
+    struct dirent* entry = nullptr;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string dirName = entry->d_name;
+        if (dirName == "." || dirName == "..")
+            continue;
+
+        std::string installDir = std::string(kInstalledThemesDir) + "/" + dirName;
+        struct stat st;
+        if (stat(installDir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode))
+            continue;
+
+        std::string manifestPath = installDir + "/theme.json";
+        std::ifstream f(manifestPath);
+        if (!f.is_open())
+            continue;
+
+        nlohmann::json j;
+        try {
+            f >> j;
+        } catch (...) {
+            continue;
+        }
+
+        ThemePreset preset;
+        preset.name = dirName;
+        preset.id = makeThemeId("package:", dirName);
+        preset.builtIn = false;
+        preset.source = ThemePresetSource::InstalledPackage;
+        preset.installPath = installDir;
+
+        std::string mode = "dark";
+        readJsonAliases(j, {"name", "title", "displayName", "display_name"}, preset.name);
+        readJsonAliases(j, {"version", "themeVersion", "theme_version"}, preset.version);
+        std::string rawId;
+        if (readJsonAliases(j, {"id", "slug", "themeId", "theme_id"}, rawId))
+            preset.id = normalizePackageId(rawId);
+        readJsonAliases(j, {"mode", "themeMode", "theme_mode", "variant"}, mode);
+        readJsonAliases(j, {"soundPreset", "audioPreset", "audio_preset"}, preset.soundPreset);
+
+        auto themeIt = j.find("theme");
+        if (themeIt != j.end() && themeIt->is_object()) {
+            readJsonAliases(*themeIt, {"mode", "themeMode", "theme_mode", "variant"}, mode);
+        }
+
+        auto audioIt = j.find("audio");
+        bool bundledAudio = false;
+        if (audioIt != j.end() && audioIt->is_object()) {
+            readJsonAliases(*audioIt, {"preset", "soundPreset", "sound_preset"}, preset.soundPreset);
+            readJsonAliases(*audioIt, {"bundled", "useBundled", "use_bundled"}, bundledAudio);
+        }
+
+        if (preset.id.empty())
+            preset.id = makeThemeId("package:", dirName);
+        if (preset.name.empty())
+            preset.name = dirName;
+        if (preset.soundPreset == "bundled" || preset.soundPreset == "theme" || preset.soundPreset == "package")
+            preset.soundPreset = preset.id;
+        if ((preset.soundPreset.empty() && hasBundledAudio(installDir)) || bundledAudio)
+            preset.soundPreset = preset.id;
+
+        std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char ch) {
+            return (char)std::tolower(ch);
+        });
+
+        preset.mode = (mode == "light") ? nxui::ThemeMode::Light : nxui::ThemeMode::Dark;
+        preset.colors = ThemePreset::extractColors(
+            preset.mode == nxui::ThemeMode::Light ? nxui::Theme::light() : nxui::Theme::dark());
+        readThemeColors(j, preset.colors);
+        readThemeBackground(j, preset.background);
+        readThemeFonts(j, preset.fonts);
+        readThemeIcons(j, preset.icons);
+        result.push_back(std::move(preset));
+    }
+
+    closedir(dir);
+    std::sort(result.begin(), result.end(), [](const ThemePreset& lhs, const ThemePreset& rhs) {
+        return lhs.name < rhs.name;
+    });
     return result;
 }
 

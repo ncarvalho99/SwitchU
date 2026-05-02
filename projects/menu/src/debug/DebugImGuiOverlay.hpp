@@ -21,6 +21,11 @@ public:
     void render(nxui::Renderer& ren, nxui::Input& input, bool& open);
 
 private:
+    enum class Panel {
+        Logs,
+        BlurSettings,
+    };
+
     struct VertUbo {
         float projection[16];
     };
@@ -35,7 +40,9 @@ private:
     bool m_initialized = false;
     bool m_autoAnimateTime = true;
     bool m_wantsTouchCapture = false;
+    bool m_wasOpen = false;
     float m_deltaTime = 1.0f / 60.0f;
+    Panel m_activePanel = Panel::Logs;
 
     dk::Shader m_vertexShader;
     dk::Shader m_fragmentShader;

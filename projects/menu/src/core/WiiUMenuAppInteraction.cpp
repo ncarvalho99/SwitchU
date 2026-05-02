@@ -270,6 +270,7 @@ void WiiUMenuApp::wireFocusCallback() {
         updateCursor();
 
         if ((m_dialog && m_dialog->isActive()) ||
+            (m_themeShop && m_themeShop->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_userSelect && m_userSelect->isActive()))
             return;
@@ -331,6 +332,7 @@ void WiiUMenuApp::wireFocusCallback() {
 
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
+    if (m_themeShop && m_themeShop.get() == w) return w->isFocusable();
     if (m_settings && m_settings.get() == w) return w->isFocusable();
     for (const auto& btn : m_sidebar.leftButtons())
         if (btn.get() == w) return w->isFocusable();
@@ -346,6 +348,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_suspended) return nullptr;
     if (m_launchAnim && m_launchAnim->isPlaying()) return nullptr;
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
+    if (m_themeShop && m_themeShop->isActive()) return m_themeShop.get();
     if (m_settings && m_settings->isActive()) return m_settings.get();
     if (m_userSelect && m_userSelect->isActive()) return m_userSelect.get();
     return &rootBox();
@@ -370,6 +373,7 @@ void WiiUMenuApp::wireGlobalActions() {
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::Y), [this]() {
         if ((m_dialog && m_dialog->isActive()) ||
+            (m_themeShop && m_themeShop->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_userSelect && m_userSelect->isActive())) {
             return;
@@ -562,7 +566,8 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
 #endif
 
 void WiiUMenuApp::updateCursor() {
-    if ((m_settings && m_settings->isActive()) ||
+    if ((m_themeShop && m_themeShop->isActive()) ||
+        (m_settings && m_settings->isActive()) ||
         (m_dialog && m_dialog->isActive()) ||
         (m_userSelect && m_userSelect->isActive()))
         return;
