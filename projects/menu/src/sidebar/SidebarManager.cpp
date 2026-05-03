@@ -43,6 +43,7 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     m_anims.clear();
     m_icons.clear();
     m_icons.resize(kSidebarIconCount);
+    invalidateAssetsCache();
 
     auto makeBtn = [](nxui::Texture* tex, const std::string& labelKey,
                       const std::string& fallback, std::function<void()> action) {
@@ -95,20 +96,57 @@ void SidebarManager::reloadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     if (m_leftButtons.empty() || m_rightButtons.empty())
         return;
 
+    if (m_assetsLoaded
+        && m_loadedAssetsBase == assetsBase
+        && m_loadedCustomIconsBase == customIconsBase) {
+        DebugLog::log("[sidebar-anim] reload skipped: assets unchanged (custom=%s)",
+                      customIconsBase.empty() ? "<empty>" : customIconsBase.c_str());
+        return;
+    }
+
     loadAssets(gpu, ren, assetsBase, customIconsBase);
+}
+
+void SidebarManager::invalidateAssetsCache() {
+    m_loadedAssetsBase.clear();
+    m_loadedCustomIconsBase.clear();
+    m_assetsLoaded = false;
 }
 
 void SidebarManager::loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
                                 const std::string& assetsBase,
                                 const std::string& customIconsBase) {
+    gpu.waitIdle();
+
     std::string defaultIconsBase = joinPath(assetsBase, "icons");
+    const bool useCustomStaticIcons = !customIconsBase.empty();
+    auto defaultAssetPath = [&](const char* fileName) {
+        return joinPath(defaultIconsBase, fileName);
+    };
     auto resolveAsset = [&](const char* fileName) {
         if (!customIconsBase.empty()) {
             std::string customPath = joinPath(customIconsBase, fileName);
             if (pathExists(customPath))
                 return customPath;
         }
-        return joinPath(defaultIconsBase, fileName);
+        return defaultAssetPath(fileName);
+    };
+    auto loadIconTexture = [&](int iconIdx, const char* fileName) {
+        if (useCustomStaticIcons) {
+            std::string customPath = joinPath(customIconsBase, fileName);
+            if (pathExists(customPath)) {
+                if (m_icons[iconIdx].loadFromFile(gpu, ren, customPath))
+                    return;
+                DebugLog::log("[sidebar-assets] custom icon load failed, falling back: %s",
+                              customPath.c_str());
+            }
+        }
+
+        const std::string fallbackPath = defaultAssetPath(fileName);
+        if (!m_icons[iconIdx].loadFromFile(gpu, ren, fallbackPath)) {
+            DebugLog::log("[sidebar-assets] fallback icon load failed: %s",
+                          fallbackPath.c_str());
+        }
     };
 
     static const char* iconFiles[] = {
@@ -117,7 +155,7 @@ void SidebarManager::loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     if ((int)m_icons.size() != kSidebarIconCount)
         m_icons.resize(kSidebarIconCount);
     for (int i = 0; i < kSidebarIconCount; ++i)
-        m_icons[i].loadFromFile(gpu, ren, resolveAsset(iconFiles[i]));
+        loadIconTexture(i, iconFiles[i]);
 
     static const struct { int iconIdx; const char* webpFile; bool useFirstFrame; } animDefs[] = {
         { 0, "album.webp",      false },
@@ -129,6 +167,11 @@ void SidebarManager::loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     };
 
     m_anims.clear();
+    if (useCustomStaticIcons) {
+        DebugLog::log("[sidebar-anim] custom theme icons use PNG only; skipping WebP animations (%s)",
+                      customIconsBase.c_str());
+    }
+
     for (const auto& def : animDefs) {
         AppletButton* btn = nullptr;
         if (def.iconIdx == 0) btn = m_leftButtons[0].get();
@@ -140,10 +183,20 @@ void SidebarManager::loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         if (!btn)
             continue;
 
-        nxui::Texture* staticTex = def.useFirstFrame ? nullptr : &m_icons[def.iconIdx];
-        tryLoadAnimation(gpu, ren, resolveAsset(def.webpFile), btn, staticTex);
-        btn->setIcon(staticTex ? staticTex : nullptr);
+        nxui::Texture* staticTex = &m_icons[def.iconIdx];
+        if (useCustomStaticIcons) {
+            btn->setIcon(staticTex);
+            continue;
+        }
+
+        nxui::Texture* idleTex = def.useFirstFrame ? nullptr : staticTex;
+        tryLoadAnimation(gpu, ren, resolveAsset(def.webpFile), btn, idleTex);
+        btn->setIcon(idleTex ? idleTex : nullptr);
     }
+
+    m_loadedAssetsBase = assetsBase;
+    m_loadedCustomIconsBase = customIconsBase;
+    m_assetsLoaded = true;
 }
 
 void SidebarManager::tryLoadAnimation(nxui::GpuDevice& gpu, nxui::Renderer& ren,

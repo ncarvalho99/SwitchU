@@ -1,8 +1,13 @@
 #include "WaraWaraBackground.hpp"
+#include "core/DebugLog.hpp"
 #include <cmath>
 #include <cstdlib>
 
 namespace {
+
+constexpr int kBackgroundRenderReserveVertices = 13312;
+constexpr int kWorstCaseShapeVertices = 36;
+constexpr int kGlassShapeLayers = 3;
 
 float random01() {
     return (std::rand() % 1000) / 1000.f;
@@ -21,6 +26,33 @@ float wrapValue(float value, float minValue, float maxValue) {
     while (value > maxValue)
         value -= span;
     return value;
+}
+
+int symmetryMultiplier(WaraWaraBackground::Symmetry symmetry) {
+    switch (symmetry) {
+        case WaraWaraBackground::Symmetry::MirrorHorizontal:
+        case WaraWaraBackground::Symmetry::MirrorVertical:
+            return 2;
+        case WaraWaraBackground::Symmetry::Quad:
+            return 4;
+        case WaraWaraBackground::Symmetry::None:
+        default:
+            return 1;
+    }
+}
+
+int maxSafeBaseShapeCount(const WaraWaraBackground::Config& config) {
+    const int multiplier = std::max(1, symmetryMultiplier(config.symmetry));
+    const int maxBudget = std::max(1, nxui::GpuDevice::MAX_VERTICES - kBackgroundRenderReserveVertices);
+    const int perShapeBudget = std::max(1, kWorstCaseShapeVertices * kGlassShapeLayers * multiplier);
+    return std::max(1, maxBudget / perShapeBudget);
+}
+
+std::uint64_t estimateVertexCount(const WaraWaraBackground::Config& config, int baseShapeCount) {
+    return (std::uint64_t)std::max(0, baseShapeCount)
+        * (std::uint64_t)std::max(1, symmetryMultiplier(config.symmetry))
+        * (std::uint64_t)kWorstCaseShapeVertices
+        * (std::uint64_t)kGlassShapeLayers;
 }
 
 } // namespace
@@ -86,17 +118,34 @@ void WaraWaraBackground::regenerate(int count) {
     float areaW = (m_rect.width > 1.f) ? m_rect.width : 1280.f;
     float areaH = (m_rect.height > 1.f) ? m_rect.height : 720.f;
 
-    int shapeCount = count > 0 ? count : m_config.shapeCount;
+    int requestedShapeCount = count > 0 ? count : m_config.shapeCount;
+    const int requestedGridCells = std::max(1, m_config.gridColumns * m_config.gridRows);
     if (m_config.layout == Layout::Grid)
-        shapeCount = std::max(1, m_config.gridColumns * m_config.gridRows);
+        requestedShapeCount = requestedGridCells;
+
+    const int safeShapeCount = maxSafeBaseShapeCount(m_config);
+    const int shapeCount = std::min(requestedShapeCount, safeShapeCount);
+    if (shapeCount != requestedShapeCount) {
+        DebugLog::log("[background] shape request clamped: layout=%s requested=%d effective=%d symmetry=%d estVerts=%llu safeVerts=%d",
+                      m_config.layout == Layout::Grid ? "grid" : "floating",
+                      requestedShapeCount,
+                      shapeCount,
+                      symmetryMultiplier(m_config.symmetry),
+                      (unsigned long long)estimateVertexCount(m_config, requestedShapeCount),
+                      nxui::GpuDevice::MAX_VERTICES - kBackgroundRenderReserveVertices);
+    }
 
     m_shapes.resize(shapeCount);
     for (int index = 0; index < shapeCount; ++index) {
         Shape& s = m_shapes[index];
         s.type = pickShapeType();
         if (m_config.layout == Layout::Grid) {
-            int col = index % m_config.gridColumns;
-            int row = index / m_config.gridColumns;
+            const int cellIndex = std::min(requestedGridCells - 1,
+                                           (shapeCount >= requestedGridCells)
+                                               ? index
+                                               : (int)(((long long)index * requestedGridCells) / shapeCount));
+            int col = cellIndex % m_config.gridColumns;
+            int row = cellIndex / m_config.gridColumns;
             float gridW = (m_config.gridColumns - 1) * m_config.spacingX;
             float gridH = (m_config.gridRows - 1) * m_config.spacingY;
             float startX = areaX + (areaW - gridW) * 0.5f;
@@ -179,6 +228,8 @@ void WaraWaraBackground::onRender(nxui::Renderer& ren) {
 
     for (const auto& s : m_shapes)
         drawShapeWithSymmetry(ren, s);
+
+    ren.flush();
 }
 
 void WaraWaraBackground::drawShapeWithSymmetry(nxui::Renderer& ren, const Shape& s) const {

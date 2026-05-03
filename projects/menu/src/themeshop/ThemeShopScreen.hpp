@@ -55,6 +55,10 @@ public:
     void setThreadPool(nxui::ThreadPool* pool);
     void setRenderContext(nxui::GpuDevice* gpu, nxui::Renderer* renderer);
     void refreshCommunityCatalog();
+    void requestRenderDiagnostics(int frames = 6) {
+        if (frames > m_renderDebugFrames)
+            m_renderDebugFrames = frames;
+    }
 
     void setThemeShopState(const std::vector<ThemeShopEntry>& entries,
                            const std::string& activeId);
@@ -207,4 +211,5 @@ private:
     int m_themeTouchIndex = -1;
     float m_themeTouchStartX = 0.f;
     float m_themeTouchStartY = 0.f;
+    int m_renderDebugFrames = 0;
 };

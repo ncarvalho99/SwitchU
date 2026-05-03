@@ -65,6 +65,19 @@ bool isAbsoluteThemePath(const std::string& path) {
     return (!path.empty() && path.front() == '/') || (path.find(":/") != std::string::npos);
 }
 
+const char* safeLogPath(const std::string& path) {
+    return path.empty() ? "<empty>" : path.c_str();
+}
+
+const char* themeSourceName(ThemePresetSource source) {
+    switch (source) {
+        case ThemePresetSource::BuiltIn: return "builtin";
+        case ThemePresetSource::UserPreset: return "user";
+        case ThemePresetSource::InstalledPackage: return "package";
+        default: return "unknown";
+    }
+}
+
 WaraWaraBackground::Layout toBackgroundLayout(ThemeBackgroundLayout layout) {
     switch (layout) {
         case ThemeBackgroundLayout::Grid:
@@ -346,8 +359,13 @@ void WiiUMenuApp::createThemeShop() {
         m_pendingNetConnect = true;
     });
     m_themeShop->onThemeShopApply([this](const std::string& presetId) {
+        DebugLog::log("[theme-apply] request from Theme Shop: preset=%s", presetId.c_str());
         ThemePreset* preset = findPresetPtr(presetId);
-        if (!preset) return;
+        if (!preset) {
+            DebugLog::log("[theme-apply] preset not found: %s", presetId.c_str());
+            return;
+        }
+
         activateThemePreset(preset, true);
     });
     m_themeShop->onThemeShopDelete([this](const std::string& presetId) {
@@ -508,12 +526,14 @@ void WiiUMenuApp::syncThemePackageTransfer() {
     std::string themeId;
     bool installMode = false;
     std::uint64_t revision = 0;
+    std::string destinationPath;
     {
         std::lock_guard<std::mutex> lk(shared->mutex);
         state = shared->state;
         themeId = shared->themeId;
         installMode = shared->installMode;
         revision = shared->revision;
+        destinationPath = shared->destinationPath;
     }
 
     if (revision != m_themePackageTransferUiRevision) {
@@ -526,19 +546,33 @@ void WiiUMenuApp::syncThemePackageTransfer() {
         return;
 
     if (state.isReady()) {
+        DebugLog::log("[theme-apply] transfer ready: id=%s installMode=%d destination=%s",
+                      themeId.c_str(),
+                      installMode ? 1 : 0,
+                      safeLogPath(destinationPath));
+
         reloadThemePresets();
+        DebugLog::log("[theme-apply] presets reloaded after transfer: count=%zu", m_allPresets.size());
 
         std::string successMessage;
         if (installMode) {
             ThemePreset* preset = findPresetPtr("package:" + themeId);
             if (preset) {
+                m_forceThemeResourceReload = !preset->fonts.regularPath.empty()
+                    || !preset->fonts.smallPath.empty()
+                    || !preset->background.imagePath.empty();
+                if (!preset->icons.basePath.empty())
+                    m_sidebar.invalidateAssetsCache();
+                DebugLog::log("[theme-apply] auto-applying installed package: id=%s", themeId.c_str());
                 activateThemePreset(preset, true);
                 successMessage = "Theme installed and applied.";
             } else {
+                DebugLog::log("[theme-apply] auto-apply failed, preset missing after install: id=%s", themeId.c_str());
                 refreshThemeShopState();
                 successMessage = "Theme installed, but it could not be applied automatically.";
             }
         } else {
+            DebugLog::log("[theme-apply] install-only transfer complete: id=%s", themeId.c_str());
             refreshThemeShopState();
             successMessage = "Theme installed.";
         }
@@ -568,7 +602,12 @@ std::vector<ThemeShopScreen::ThemeShopEntry> WiiUMenuApp::buildThemeShopEntries(
         entry.name = preset.name;
         entry.version = preset.version;
         entry.source = sourceLabel(preset.source);
-        entry.soundPreset = preset.soundPreset.rfind("package:", 0) == 0 ? "Bundled" : preset.soundPreset;
+        if (preset.soundPreset.rfind("package:", 0) == 0)
+            entry.soundPreset = "Bundled";
+        else if (preset.soundPreset == "wiiu")
+            entry.soundPreset = "Wii U";
+        else
+            entry.soundPreset = preset.soundPreset;
         entry.active = (entry.id == activeId);
         entry.removable = (preset.source != ThemePresetSource::BuiltIn);
         entries.push_back(std::move(entry));
@@ -593,6 +632,15 @@ void WiiUMenuApp::refreshThemeShopState() {
 void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSound) {
     if (!preset) return;
 
+    const std::string presetRef = preset->id.empty() ? preset->name : preset->id;
+    DebugLog::log("[theme-apply] begin preset=%s name=%s source=%s installPath=%s applyBundledSound=%d soundPreset=%s",
+                  presetRef.c_str(),
+                  preset->name.c_str(),
+                  themeSourceName(preset->source),
+                  safeLogPath(preset->installPath),
+                  applyBundledSound ? 1 : 0,
+                  safeLogPath(preset->soundPreset));
+
     m_activePresetName = preset->id.empty() ? preset->name : preset->id;
     m_activeColors = preset->colors;
     m_activeMode = preset->mode;
@@ -602,15 +650,32 @@ void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSoun
     m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
     m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
     m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
+
+    DebugLog::log("[theme-apply] rebuildThemeFromColors start: preset=%s", presetRef.c_str());
     rebuildThemeFromColors();
+    DebugLog::log("[theme-apply] rebuildThemeFromColors done: preset=%s", presetRef.c_str());
 
     if (applyBundledSound && !preset->soundPreset.empty()) {
+        DebugLog::log("[theme-apply] changeSoundPreset queued: preset=%s sound=%s",
+                      presetRef.c_str(),
+                      preset->soundPreset.c_str());
         changeSoundPreset(preset->soundPreset);
         m_config.soundPreset = preset->soundPreset;
+    } else {
+        DebugLog::log("[theme-apply] bundled sound skipped: preset=%s apply=%d soundPreset=%s",
+                      presetRef.c_str(),
+                      applyBundledSound ? 1 : 0,
+                      safeLogPath(preset->soundPreset));
     }
 
+    DebugLog::log("[theme-apply] refreshThemeShopState start: preset=%s", presetRef.c_str());
     refreshThemeShopState();
+    DebugLog::log("[theme-apply] refreshThemeShopState done: preset=%s", presetRef.c_str());
+    m_themeRenderDebugFrames = 6;
+    if (m_themeShop)
+        m_themeShop->requestRenderDiagnostics(6);
     m_audio.playSfx(Sfx::ThemeToggle);
+    DebugLog::log("[theme-apply] complete preset=%s", presetRef.c_str());
 }
 
 void WiiUMenuApp::applyUiLanguage() {
@@ -626,7 +691,8 @@ std::string WiiUMenuApp::resolveThemeAssetPath(const ThemePreset& preset, const 
         return {};
     if (isAbsoluteThemePath(rawPath))
         return rawPath;
-    if (preset.source == ThemePresetSource::InstalledPackage && !preset.installPath.empty())
+    if ((preset.source == ThemePresetSource::InstalledPackage || preset.source == ThemePresetSource::BuiltIn)
+        && !preset.installPath.empty())
         return joinPath(preset.installPath, rawPath);
     return joinPath(SD_ASSETS, rawPath);
 }
@@ -644,25 +710,130 @@ ThemePreset WiiUMenuApp::buildEffectiveThemePreset() {
 void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
     auto& gpu = app().gpu();
     auto& ren = app().renderer();
+    const bool forceResourceReload = m_forceThemeResourceReload;
 
     const std::string fallbackFontPath = std::string(SD_ASSETS) + "/fonts/DejaVuSans.ttf";
     const std::string regularFontPath = resolveThemeAssetPath(preset, preset.fonts.regularPath);
     const std::string smallFontPath = resolveThemeAssetPath(
         preset,
         !preset.fonts.smallPath.empty() ? preset.fonts.smallPath : preset.fonts.regularPath);
+    const std::string themeIconsBase = resolveThemeAssetPath(preset, preset.icons.basePath);
+    const std::string backgroundImagePath = resolveThemeAssetPath(preset, preset.background.imagePath);
 
-    if (regularFontPath.empty() || !pathExists(regularFontPath) || !m_fontNormal.load(gpu, ren, regularFontPath, 24))
-        m_fontNormal.load(gpu, ren, fallbackFontPath, 24);
-    if (smallFontPath.empty() || !pathExists(smallFontPath) || !m_fontSmall.load(gpu, ren, smallFontPath, 18))
-        m_fontSmall.load(gpu, ren, fallbackFontPath, 18);
+    const std::string presetRef = preset.id.empty() ? preset.name : preset.id;
+    DebugLog::log("[theme-apply] resources start: preset=%s regularFont=%s smallFont=%s iconsBase=%s bgImage=%s",
+                  presetRef.c_str(),
+                  safeLogPath(regularFontPath),
+                  safeLogPath(smallFontPath),
+                  safeLogPath(themeIconsBase),
+                  safeLogPath(backgroundImagePath));
+
+    bool settingsLayoutNeedsRebuild = false;
+
+    const bool regularFontExists = !regularFontPath.empty() && pathExists(regularFontPath);
+    const std::string desiredRegularFontPath = regularFontExists ? regularFontPath : fallbackFontPath;
+    const bool regularFontNeedsReload = forceResourceReload || m_loadedRegularFontPath != desiredRegularFontPath;
+
+    const bool smallFontExists = !smallFontPath.empty() && pathExists(smallFontPath);
+    const std::string desiredSmallFontPath = smallFontExists ? smallFontPath : fallbackFontPath;
+    const bool smallFontNeedsReload = forceResourceReload || m_loadedSmallFontPath != desiredSmallFontPath;
 
     const std::string defaultGameCardPath = std::string(SD_ASSETS) + "/icons/gamecard.png";
-    const std::string themeIconsBase = resolveThemeAssetPath(preset, preset.icons.basePath);
     const std::string gameCardPath = !themeIconsBase.empty() ? joinPath(themeIconsBase, "gamecard.png") : std::string();
-    if (gameCardPath.empty() || !pathExists(gameCardPath) || !m_gameCardTex.loadFromFile(gpu, ren, gameCardPath))
-        m_gameCardTex.loadFromFile(gpu, ren, defaultGameCardPath);
+    const bool gameCardExists = !gameCardPath.empty() && pathExists(gameCardPath);
+    const std::string desiredGameCardPath = gameCardExists ? gameCardPath : defaultGameCardPath;
+    const bool gameCardNeedsReload = forceResourceReload || m_loadedGameCardPath != desiredGameCardPath;
+
+    const bool imageExists = !backgroundImagePath.empty() && pathExists(backgroundImagePath);
+    const bool wantsBackgroundImage = imageExists;
+    const bool backgroundImageNeedsReload = forceResourceReload
+        || m_loadedBackgroundImagePath != backgroundImagePath
+        || m_backgroundImageLoaded != wantsBackgroundImage;
+
+    const bool needsGpuResourceReload = regularFontNeedsReload
+        || smallFontNeedsReload
+        || gameCardNeedsReload
+        || backgroundImageNeedsReload;
+    if (needsGpuResourceReload) {
+        DebugLog::log("[theme-apply] waiting for GPU idle before reloading theme resources");
+        gpu.waitIdle();
+    }
+
+    if (regularFontNeedsReload) {
+        bool regularFontLoaded = regularFontExists && m_fontNormal.load(gpu, ren, regularFontPath, 24);
+        DebugLog::log("[theme-apply] regular font: path=%s exists=%d reloaded=%d loaded=%d",
+                      safeLogPath(regularFontPath),
+                      regularFontExists ? 1 : 0,
+                      1,
+                      regularFontLoaded ? 1 : 0);
+        if (!regularFontLoaded) {
+            regularFontLoaded = m_fontNormal.load(gpu, ren, fallbackFontPath, 24);
+            DebugLog::log("[theme-apply] regular font fallback: path=%s loaded=%d",
+                          fallbackFontPath.c_str(),
+                          regularFontLoaded ? 1 : 0);
+        }
+        if (regularFontLoaded) {
+            m_loadedRegularFontPath = desiredRegularFontPath;
+            settingsLayoutNeedsRebuild = true;
+        }
+    } else {
+        DebugLog::log("[theme-apply] regular font: path=%s exists=%d reloaded=%d loaded=%d",
+                      safeLogPath(regularFontPath),
+                      regularFontExists ? 1 : 0,
+                      0,
+                      1);
+    }
+
+    if (smallFontNeedsReload) {
+        bool smallFontLoaded = smallFontExists && m_fontSmall.load(gpu, ren, smallFontPath, 18);
+        DebugLog::log("[theme-apply] small font: path=%s exists=%d reloaded=%d loaded=%d",
+                      safeLogPath(smallFontPath),
+                      smallFontExists ? 1 : 0,
+                      1,
+                      smallFontLoaded ? 1 : 0);
+        if (!smallFontLoaded) {
+            smallFontLoaded = m_fontSmall.load(gpu, ren, fallbackFontPath, 18);
+            DebugLog::log("[theme-apply] small font fallback: path=%s loaded=%d",
+                          fallbackFontPath.c_str(),
+                          smallFontLoaded ? 1 : 0);
+        }
+        if (smallFontLoaded) {
+            m_loadedSmallFontPath = desiredSmallFontPath;
+            settingsLayoutNeedsRebuild = true;
+        }
+    } else {
+        DebugLog::log("[theme-apply] small font: path=%s exists=%d reloaded=%d loaded=%d",
+                      safeLogPath(smallFontPath),
+                      smallFontExists ? 1 : 0,
+                      0,
+                      1);
+    }
+
+    if (gameCardNeedsReload) {
+        bool gameCardLoaded = gameCardExists && m_gameCardTex.loadFromFile(gpu, ren, gameCardPath);
+        DebugLog::log("[theme-apply] gamecard icon: path=%s exists=%d reloaded=%d loaded=%d",
+                      safeLogPath(gameCardPath),
+                      gameCardExists ? 1 : 0,
+                      1,
+                      gameCardLoaded ? 1 : 0);
+        if (!gameCardLoaded) {
+            gameCardLoaded = m_gameCardTex.loadFromFile(gpu, ren, defaultGameCardPath);
+            DebugLog::log("[theme-apply] gamecard fallback: path=%s loaded=%d",
+                          defaultGameCardPath.c_str(),
+                          gameCardLoaded ? 1 : 0);
+        }
+        if (gameCardLoaded)
+            m_loadedGameCardPath = desiredGameCardPath;
+    } else {
+        DebugLog::log("[theme-apply] gamecard icon: path=%s exists=%d reloaded=%d loaded=%d",
+                      safeLogPath(gameCardPath),
+                      gameCardExists ? 1 : 0,
+                      0,
+                      1);
+    }
 
     if (m_background) {
+        DebugLog::log("[theme-apply] background config start: preset=%s", presetRef.c_str());
         WaraWaraBackground::Config backgroundConfig;
         backgroundConfig.layout = toBackgroundLayout(preset.background.layout);
         backgroundConfig.shapeSet = toBackgroundShapeSet(preset.background.shapeSet);
@@ -683,19 +854,48 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         backgroundConfig.imageCover = preset.background.imageCover;
         m_background->setConfig(backgroundConfig);
 
-        const std::string imagePath = resolveThemeAssetPath(preset, preset.background.imagePath);
-        if (imagePath.empty() || !pathExists(imagePath) || !m_background->loadImage(gpu, ren, imagePath))
-            m_background->clearImage();
+        if (backgroundImageNeedsReload) {
+            const bool imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);
+            DebugLog::log("[theme-apply] background image: path=%s exists=%d reloaded=%d loaded=%d",
+                          safeLogPath(backgroundImagePath),
+                          imageExists ? 1 : 0,
+                          1,
+                          imageLoaded ? 1 : 0);
+            if (!imageLoaded) {
+                if (m_backgroundImageLoaded)
+                    m_background->clearImage();
+                m_backgroundImageLoaded = false;
+                m_loadedBackgroundImagePath.clear();
+                DebugLog::log("[theme-apply] background image cleared");
+            } else {
+                m_backgroundImageLoaded = true;
+                m_loadedBackgroundImagePath = backgroundImagePath;
+            }
+        } else {
+            DebugLog::log("[theme-apply] background image: path=%s exists=%d reloaded=%d loaded=%d",
+                          safeLogPath(backgroundImagePath),
+                          imageExists ? 1 : 0,
+                          0,
+                          m_backgroundImageLoaded ? 1 : 0);
+        }
+    } else {
+        DebugLog::log("[theme-apply] background widget missing");
     }
 
-    if (m_settings)
-        m_settingsNeedRefresh = true;
+    if (settingsLayoutNeedsRebuild && m_settings && m_settings->isActive()) {
+        m_settings->rebuildCurrentTab();
+        DebugLog::log("[theme-apply] settings current tab rebuilt for font change");
+    }
+
+    DebugLog::log("[theme-apply] resources done: preset=%s", presetRef.c_str());
 }
 
 void WiiUMenuApp::applyTheme() {
+    DebugLog::log("[theme-apply] widget recolor start");
     m_background->setAccentColor(m_theme.backgroundAccent);
     m_background->setSecondaryColor(m_theme.background);
     m_background->setShapeColor(m_theme.shapeColor);
+    DebugLog::log("[theme-apply] widget recolor background done");
 
     for (auto& icon : m_grid->allIcons()) {
         icon->setBaseColor(m_theme.iconDefault);
@@ -703,6 +903,7 @@ void WiiUMenuApp::applyTheme() {
         icon->setHighlightColor(m_theme.panelHighlight);
         icon->setCornerRadius(m_theme.iconCornerRadius);
     }
+    DebugLog::log("[theme-apply] widget recolor grid icons done");
 
     m_cursor->setColor(m_theme.cursorNormal);
     m_cursor->setCornerRadius(m_theme.cursorCornerRadius);
@@ -712,6 +913,7 @@ void WiiUMenuApp::applyTheme() {
         m_pointerCursor->setCornerRadius(15.f);
         m_pointerCursor->setBorderWidth(2.5f);
     }
+    DebugLog::log("[theme-apply] widget recolor cursors done");
 
     m_clock->setBaseColor(m_theme.panelBase);
     m_clock->setBorderColor(m_theme.panelBorder);
@@ -733,6 +935,7 @@ void WiiUMenuApp::applyTheme() {
     m_pageIndicator->setBorderColor(m_theme.panelBorder);
     m_pageIndicator->setHighlightColor(m_theme.panelHighlight);
     m_pageIndicator->setTheme(&m_theme);
+    DebugLog::log("[theme-apply] widget recolor HUD done");
 
     m_userSelect->panel().setBaseColor(m_theme.panelBase);
     m_userSelect->panel().setBorderColor(m_theme.panelBorder);
@@ -757,6 +960,7 @@ void WiiUMenuApp::applyTheme() {
         m_dialog->setHighlightColor(m_theme.panelHighlight);
         m_dialog->cursor().setColor(m_theme.cursorNormal);
     }
+    DebugLog::log("[theme-apply] widget recolor overlays done");
 
     if (m_settings)
         m_settings->setTheme(&m_theme);
@@ -764,15 +968,36 @@ void WiiUMenuApp::applyTheme() {
         m_themeShop->setTheme(&m_theme);
 
     m_sidebar.applyTheme(m_theme);
+    DebugLog::log("[theme-apply] widget recolor complete");
 }
 
 void WiiUMenuApp::rebuildThemeFromColors() {
+    DebugLog::log("[theme-apply] rebuild start: activePreset=%s", m_activePresetName.c_str());
     m_effectivePreset = buildEffectiveThemePreset();
+    DebugLog::log("[theme-apply] effective preset resolved: id=%s name=%s source=%s installPath=%s",
+                  safeLogPath(m_effectivePreset.id),
+                  m_effectivePreset.name.c_str(),
+                  themeSourceName(m_effectivePreset.source),
+                  safeLogPath(m_effectivePreset.installPath));
     m_theme = m_effectivePreset.toTheme();
+    DebugLog::log("[theme-apply] theme object rebuilt");
+
+    DebugLog::log("[theme-apply] applyThemeResources start: preset=%s",
+                  safeLogPath(m_effectivePreset.id.empty() ? m_effectivePreset.name : m_effectivePreset.id));
     applyThemeResources(m_effectivePreset);
-    m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS,
-                           resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath));
+    DebugLog::log("[theme-apply] applyThemeResources done: preset=%s",
+                  safeLogPath(m_effectivePreset.id.empty() ? m_effectivePreset.name : m_effectivePreset.id));
+
+    const std::string customIconsBase = resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath);
+    DebugLog::log("[theme-apply] sidebar.reloadAssets start: customIcons=%s",
+                  safeLogPath(customIconsBase));
+    m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS, customIconsBase);
+    DebugLog::log("[theme-apply] sidebar.reloadAssets done");
+
+    DebugLog::log("[theme-apply] applyTheme start");
     applyTheme();
+    m_forceThemeResourceReload = false;
+    DebugLog::log("[theme-apply] rebuild complete: activePreset=%s", m_activePresetName.c_str());
 }
 
 ThemePreset* WiiUMenuApp::findPresetPtr(const std::string& name) {

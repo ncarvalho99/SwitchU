@@ -1,5 +1,7 @@
 #include "ThemeShopScreen.hpp"
 
+#include "core/DebugLog.hpp"
+
 #include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
 
@@ -1081,6 +1083,27 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     float slideOffset = (1.f - slideT) * 24.f * (float)m_tabSwitchDir;
     float contentOpacity = opacity * slideT;
     int count = currentEntryCount();
+
+    if (m_renderDebugFrames > 0) {
+        const ThemeShopEntry* installed = selectedThemeShopEntry();
+        const ThemeCatalogClient::Entry* community = selectedCommunityThemeEntry();
+        DebugLog::log("[themeshop-render] tab=%d count=%d installedCount=%zu communityCount=%zu selectedInstalled=%s selectedCommunity=%s detail=%d fullscreen=%d focusArea=%d contentFocus=%d active=%d visible=%d opacity=%.2f contentOpacity=%.2f",
+                      m_tabIndex,
+                      count,
+                      m_themeShopEntries.size(),
+                      m_communityEntries.size(),
+                      installed ? installed->id.c_str() : "<none>",
+                      community ? community->id.c_str() : "<none>",
+                      m_detailOpen ? 1 : 0,
+                      m_detailFullscreen ? 1 : 0,
+                      (int)m_focusArea,
+                      (int)m_contentFocusArea,
+                      isActive() ? 1 : 0,
+                      isVisible() ? 1 : 0,
+                      opacity,
+                      contentOpacity);
+        --m_renderDebugFrames;
+    }
 
     layout.header.x += slideOffset;
     layout.refreshButton.x += slideOffset;

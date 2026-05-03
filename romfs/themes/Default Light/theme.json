@@ -1,0 +1,11 @@
+{
+  "id": "builtin:Default Light",
+  "name": "Default Light",
+  "version": "1.0.0",
+  "theme": {
+    "mode": "light"
+  },
+  "audio": {
+    "preset": "wiiu"
+  }
+}

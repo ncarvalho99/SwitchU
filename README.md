@@ -102,7 +102,8 @@ Build outputs are generated under `build/cross/aarch64/<mode>/`.
 
 - `sdmc:/config/SwitchU/config.ini`: user settings
 - `sdmc:/config/SwitchU/applist.bin`: app metadata cache
-- `sdmc:/config/SwitchU/daemon.log` and `sdmc:/config/SwitchU/menu.log`: runtime logs
+- `sdmc:/config/SwitchU/menu.log` and `sdmc:/config/SwitchU/daemon.log`: current runtime logs
+- `sdmc:/config/SwitchU/menu-*.log` and `sdmc:/config/SwitchU/daemon-*.log`: previous sessions kept on rotation
 - `sdmc:/switch/SwitchU/`: assets in non-homebrew mode
 
 ## Help me

@@ -89,6 +89,23 @@ std::string normalizePackageId(const std::string& value) {
     return makeThemeId("package:", trimmed);
 }
 
+std::string normalizeThemeId(const char* prefix, const std::string& value) {
+    std::string trimmed = trimString(value);
+    if (trimmed.empty())
+        return trimmed;
+    if (trimmed.find(':') != std::string::npos)
+        return trimmed;
+    return makeThemeId(prefix, trimmed);
+}
+
+#ifdef SWITCHU_HOMEBREW
+static constexpr const char* kBuiltInThemesDir = "romfs:/themes";
+#else
+static constexpr const char* kBuiltInThemesDir = "sdmc:/switch/SwitchU/themes";
+#endif
+
+static constexpr const char* kDefaultSharedSoundPreset = "wiiu";
+
 bool parseHslTripletString(std::string value, float& h, float& s, float& l) {
     value = trimString(value);
     if (value.empty())
@@ -476,6 +493,106 @@ void readThemeColors(const nlohmann::json& j, ThemeColorSet& colors) {
     }
 }
 
+bool loadJsonFile(const std::string& path, nlohmann::json& j) {
+    std::ifstream f(path);
+    if (!f.is_open())
+        return false;
+
+    try {
+        f >> j;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool loadThemePresetFromManifest(const std::string& manifestPath,
+                                 ThemePresetSource source,
+                                 const std::string& defaultName,
+                                 nxui::ThemeMode defaultMode,
+                                 const std::string& installPath,
+                                 ThemePreset& preset) {
+    nlohmann::json j;
+    if (!loadJsonFile(manifestPath, j))
+        return false;
+
+    const char* idPrefix = (source == ThemePresetSource::InstalledPackage) ? "package:" : "builtin:";
+
+    preset = ThemePreset{};
+    preset.name = defaultName;
+    preset.id = makeThemeId(idPrefix, defaultName);
+    preset.builtIn = (source == ThemePresetSource::BuiltIn);
+    preset.source = source;
+    preset.installPath = installPath;
+    preset.soundPreset = kDefaultSharedSoundPreset;
+
+    std::string mode = (defaultMode == nxui::ThemeMode::Light) ? "light" : "dark";
+    readJsonAliases(j, {"name", "title", "displayName", "display_name"}, preset.name);
+    readJsonAliases(j, {"version", "themeVersion", "theme_version"}, preset.version);
+
+    std::string rawId;
+    if (readJsonAliases(j, {"id", "slug", "themeId", "theme_id"}, rawId))
+        preset.id = normalizeThemeId(idPrefix, rawId);
+    readJsonAliases(j, {"mode", "themeMode", "theme_mode", "variant"}, mode);
+    readJsonAliases(j, {"soundPreset", "audioPreset", "audio_preset"}, preset.soundPreset);
+
+    auto themeIt = j.find("theme");
+    if (themeIt != j.end() && themeIt->is_object())
+        readJsonAliases(*themeIt, {"mode", "themeMode", "theme_mode", "variant"}, mode);
+
+    auto audioIt = j.find("audio");
+    bool bundledAudio = false;
+    if (audioIt != j.end() && audioIt->is_object()) {
+        readJsonAliases(*audioIt, {"preset", "soundPreset", "sound_preset"}, preset.soundPreset);
+        readJsonAliases(*audioIt, {"bundled", "useBundled", "use_bundled"}, bundledAudio);
+    }
+
+    if (preset.id.empty())
+        preset.id = makeThemeId(idPrefix, defaultName);
+    if (preset.name.empty())
+        preset.name = defaultName;
+
+    if (preset.soundPreset == "bundled" || preset.soundPreset == "theme" || preset.soundPreset == "package") {
+        preset.soundPreset = (source == ThemePresetSource::InstalledPackage)
+            ? preset.id
+            : std::string(kDefaultSharedSoundPreset);
+    }
+
+    if (source == ThemePresetSource::InstalledPackage
+        && ((preset.soundPreset.empty() && hasBundledAudio(installPath)) || bundledAudio)) {
+        preset.soundPreset = preset.id;
+    }
+
+    if (preset.soundPreset.empty())
+        preset.soundPreset = kDefaultSharedSoundPreset;
+
+    std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char ch) {
+        return (char)std::tolower(ch);
+    });
+
+    preset.mode = (mode == "light") ? nxui::ThemeMode::Light : nxui::ThemeMode::Dark;
+    preset.colors = ThemePreset::extractColors(
+        preset.mode == nxui::ThemeMode::Light ? nxui::Theme::light() : nxui::Theme::dark());
+    readThemeColors(j, preset.colors);
+    readThemeBackground(j, preset.background);
+    readThemeFonts(j, preset.fonts);
+    readThemeIcons(j, preset.icons);
+    return true;
+}
+
+ThemePreset makeLegacyBuiltInPreset(const char* name, nxui::ThemeMode mode) {
+    ThemePreset preset;
+    preset.id = makeThemeId("builtin:", name);
+    preset.name = name;
+    preset.mode = mode;
+    preset.colors = ThemePreset::extractColors(
+        mode == nxui::ThemeMode::Light ? nxui::Theme::light() : nxui::Theme::dark());
+    preset.builtIn = true;
+    preset.source = ThemePresetSource::BuiltIn;
+    preset.soundPreset = kDefaultSharedSoundPreset;
+    return preset;
+}
+
 } // namespace
 
 nxui::Theme ThemePreset::toTheme() const {
@@ -506,26 +623,27 @@ ThemeColorSet ThemePreset::extractColors(const nxui::Theme& theme) {
 static std::vector<ThemePreset> makeBuiltInPresets() {
     std::vector<ThemePreset> v;
 
-    {
-        ThemePreset p;
-        p.id      = makeThemeId("builtin:", "Default Dark");
-        p.name    = "Default Dark";
-        p.mode    = nxui::ThemeMode::Dark;
-        p.colors  = ThemePreset::extractColors(nxui::Theme::dark());
-        p.builtIn = true;
-        p.source  = ThemePresetSource::BuiltIn;
-        v.push_back(std::move(p));
-    }
+    static const struct {
+        const char* dirName;
+        nxui::ThemeMode mode;
+    } defs[] = {
+        {"Default Dark", nxui::ThemeMode::Dark},
+        {"Default Light", nxui::ThemeMode::Light},
+    };
 
-    {
-        ThemePreset p;
-        p.id      = makeThemeId("builtin:", "Default Light");
-        p.name    = "Default Light";
-        p.mode    = nxui::ThemeMode::Light;
-        p.colors  = ThemePreset::extractColors(nxui::Theme::light());
-        p.builtIn = true;
-        p.source  = ThemePresetSource::BuiltIn;
-        v.push_back(std::move(p));
+    for (const auto& def : defs) {
+        ThemePreset preset;
+        std::string themeDir = std::string(kBuiltInThemesDir) + "/" + def.dirName;
+        std::string manifestPath = themeDir + "/theme.json";
+        if (!loadThemePresetFromManifest(manifestPath,
+                                         ThemePresetSource::BuiltIn,
+                                         def.dirName,
+                                         def.mode,
+                                         themeDir,
+                                         preset)) {
+            preset = makeLegacyBuiltInPreset(def.dirName, def.mode);
+        }
+        v.push_back(std::move(preset));
     }
 
     return v;
@@ -563,6 +681,7 @@ std::vector<ThemePreset> ThemePreset::loadUserPresets() {
             current.id = makeThemeId("user:", current.name);
             current.builtIn = false;
             current.source = ThemePresetSource::UserPreset;
+            current.soundPreset = kDefaultSharedSoundPreset;
             hasSection = true;
             continue;
         }
@@ -616,65 +735,15 @@ std::vector<ThemePreset> ThemePreset::loadInstalledPackages() {
             continue;
 
         std::string manifestPath = installDir + "/theme.json";
-        std::ifstream f(manifestPath);
-        if (!f.is_open())
-            continue;
-
-        nlohmann::json j;
-        try {
-            f >> j;
-        } catch (...) {
-            continue;
-        }
-
         ThemePreset preset;
-        preset.name = dirName;
-        preset.id = makeThemeId("package:", dirName);
-        preset.builtIn = false;
-        preset.source = ThemePresetSource::InstalledPackage;
-        preset.installPath = installDir;
-
-        std::string mode = "dark";
-        readJsonAliases(j, {"name", "title", "displayName", "display_name"}, preset.name);
-        readJsonAliases(j, {"version", "themeVersion", "theme_version"}, preset.version);
-        std::string rawId;
-        if (readJsonAliases(j, {"id", "slug", "themeId", "theme_id"}, rawId))
-            preset.id = normalizePackageId(rawId);
-        readJsonAliases(j, {"mode", "themeMode", "theme_mode", "variant"}, mode);
-        readJsonAliases(j, {"soundPreset", "audioPreset", "audio_preset"}, preset.soundPreset);
-
-        auto themeIt = j.find("theme");
-        if (themeIt != j.end() && themeIt->is_object()) {
-            readJsonAliases(*themeIt, {"mode", "themeMode", "theme_mode", "variant"}, mode);
+        if (!loadThemePresetFromManifest(manifestPath,
+                                         ThemePresetSource::InstalledPackage,
+                                         dirName,
+                                         nxui::ThemeMode::Dark,
+                                         installDir,
+                                         preset)) {
+            continue;
         }
-
-        auto audioIt = j.find("audio");
-        bool bundledAudio = false;
-        if (audioIt != j.end() && audioIt->is_object()) {
-            readJsonAliases(*audioIt, {"preset", "soundPreset", "sound_preset"}, preset.soundPreset);
-            readJsonAliases(*audioIt, {"bundled", "useBundled", "use_bundled"}, bundledAudio);
-        }
-
-        if (preset.id.empty())
-            preset.id = makeThemeId("package:", dirName);
-        if (preset.name.empty())
-            preset.name = dirName;
-        if (preset.soundPreset == "bundled" || preset.soundPreset == "theme" || preset.soundPreset == "package")
-            preset.soundPreset = preset.id;
-        if ((preset.soundPreset.empty() && hasBundledAudio(installDir)) || bundledAudio)
-            preset.soundPreset = preset.id;
-
-        std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char ch) {
-            return (char)std::tolower(ch);
-        });
-
-        preset.mode = (mode == "light") ? nxui::ThemeMode::Light : nxui::ThemeMode::Dark;
-        preset.colors = ThemePreset::extractColors(
-            preset.mode == nxui::ThemeMode::Light ? nxui::Theme::light() : nxui::Theme::dark());
-        readThemeColors(j, preset.colors);
-        readThemeBackground(j, preset.background);
-        readThemeFonts(j, preset.fonts);
-        readThemeIcons(j, preset.icons);
         result.push_back(std::move(preset));
     }
 

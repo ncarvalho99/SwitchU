@@ -99,6 +99,7 @@ private:
     void startThemePackageTransfer(const ThemeCatalogClient::Entry& entry, bool installMode);
     void syncThemePackageTransfer();
     void activateThemePreset(ThemePreset* preset, bool applyBundledSound);
+    std::string resolveSoundPresetId(const std::string& preset) const;
     void loadSoundPreset(const std::string& preset);
     void changeSoundPreset(const std::string& preset);
     std::vector<std::string> scanAvailablePresets();
@@ -162,6 +163,8 @@ private:
     bool                 m_audioStarted = false;
     std::vector<std::string> m_availablePresets;
     bool                 m_presetChangePending = false;
+    std::string          m_loadedSoundPreset;
+    std::string          m_pendingSoundPreset;
 
     struct ThemePackageTransferShared {
         std::mutex mutex;
@@ -213,6 +216,12 @@ private:
 
     AppConfig m_config;
     bool m_settingsNeedRefresh        = false;
+    std::string m_loadedRegularFontPath;
+    std::string m_loadedSmallFontPath;
+    std::string m_loadedGameCardPath;
+    std::string m_loadedBackgroundImagePath;
+    bool m_backgroundImageLoaded      = false;
+    bool m_forceThemeResourceReload   = false;
     nxui::Widget* m_dialogReturnFocus = nullptr;
     bool m_dialogWasActive            = false;
     bool m_suppressNextNavigateSfx    = false;
@@ -221,6 +230,7 @@ private:
     std::shared_ptr<ThemePackageTransferShared> m_themePackageTransfer;
     std::uint64_t m_themePackageTransferUiRevision = 0;
     std::uint64_t m_themePackageTransferHandledRevision = 0;
+    int m_themeRenderDebugFrames = 0;
 
     float m_returnFadeTimer = 0.f;
     static constexpr float kReturnFadeInDur = 0.45f;

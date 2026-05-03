@@ -44,7 +44,9 @@ void TabbedOverlayScreen::rebuildCurrentTab() {
     int oldFocus = m_contentIdx;
     float oldScroll = m_scrollTarget;
 
-    buildTabs();
+    const bool needsStructuralRebuild = !usesCustomContentLayout() || m_tabs.empty();
+    if (needsStructuralRebuild)
+        buildTabs();
 
     if (!m_tabs.empty()) {
         m_tabIndex = std::clamp(oldTab, 0, (int)m_tabs.size() - 1);
@@ -60,7 +62,8 @@ void TabbedOverlayScreen::rebuildCurrentTab() {
     m_scrollTarget = oldScroll;
     m_scrollY = oldScroll;
 
-    rebuildTabBar();
+    if (needsStructuralRebuild || !usesCustomContentLayout())
+        rebuildTabBar();
     rebuildContentItems();
 }
 

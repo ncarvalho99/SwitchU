@@ -28,6 +28,7 @@ namespace {
 
 static constexpr const char* kLayoutPath = "sdmc:/config/SwitchU/layout.json";
 static constexpr int kMinHomePages = 8;
+static constexpr const char* kBuiltInSoundPreset = "wiiu";
 
 static constexpr float kGridRectX = 0.f;
 static constexpr float kGridRectY = 90.f;
@@ -38,6 +39,10 @@ static constexpr float kGridBaseCellW = 150.f;
 static constexpr float kGridBaseCellH = 150.f;
 static constexpr float kGridBasePadX  = 20.f;
 static constexpr float kGridBasePadY  = 16.f;
+
+bool isPackageSoundPreset(const std::string& preset) {
+    return preset.rfind("package:", 0) == 0;
+}
 
 // Keep enough side/top clearance so large grids do not overlap HUD/side buttons.
 static constexpr float kGridSafeSideMargin = 220.f;
@@ -62,6 +67,12 @@ bool hexToTitleId(const std::string& s, uint64_t& out) {
     }
     out = (uint64_t)v;
     return true;
+}
+
+const char* safeTag(const nxui::Widget* widget) {
+    if (!widget || widget->tag().empty())
+        return "<none>";
+    return widget->tag().c_str();
 }
 
 }
@@ -92,7 +103,13 @@ bool WiiUMenuApp::onCreate() {
     m_audioFuture = m_threadPool.submit([this]() {
         m_audio.initialize();
         m_availablePresets = scanAvailablePresets();
-        loadSoundPreset(m_config.soundPreset);
+        if (!isPackageSoundPreset(m_config.soundPreset) && m_config.soundPreset != kBuiltInSoundPreset) {
+            DebugLog::log("[audio] preset '%s' is no longer shipped, falling back to '%s'",
+                          m_config.soundPreset.c_str(),
+                          kBuiltInSoundPreset);
+            m_config.soundPreset = kBuiltInSoundPreset;
+        }
+        loadSoundPreset(resolveSoundPresetId(m_config.soundPreset));
     });
     DebugLog::log("[init] Audio loading started on background thread");
 
@@ -688,13 +705,42 @@ void WiiUMenuApp::buildGrid() {
         saveMenuLayout();
 }
 
+std::string WiiUMenuApp::resolveSoundPresetId(const std::string& preset) const {
+    std::string effectivePreset = preset;
+    if (!isPackageSoundPreset(effectivePreset) && effectivePreset != kBuiltInSoundPreset) {
+        DebugLog::log("[audio] preset '%s' blocked, using '%s' instead",
+                      effectivePreset.c_str(),
+                      kBuiltInSoundPreset);
+        return kBuiltInSoundPreset;
+    }
+
+    if (!isPackageSoundPreset(effectivePreset))
+        return effectivePreset;
+
+    for (const auto& themePreset : m_allPresets) {
+        if (themePreset.source != ThemePresetSource::InstalledPackage || themePreset.installPath.empty())
+            continue;
+        if (themePreset.id != effectivePreset && themePreset.soundPreset != effectivePreset)
+            continue;
+        return effectivePreset;
+    }
+
+    DebugLog::log("[audio] package preset '%s' unavailable, using '%s' instead",
+                  effectivePreset.c_str(),
+                  kBuiltInSoundPreset);
+    return kBuiltInSoundPreset;
+}
+
 void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
+    std::string effectivePreset = preset;
+    const bool useBuiltInBase = (effectivePreset == kBuiltInSoundPreset);
+
     std::string base;
-    if (preset.rfind("package:", 0) == 0) {
+    if (!useBuiltInBase) {
         for (const auto& themePreset : m_allPresets) {
             if (themePreset.source != ThemePresetSource::InstalledPackage || themePreset.installPath.empty())
                 continue;
-            if (themePreset.id != preset && themePreset.soundPreset != preset)
+            if (themePreset.id != effectivePreset && themePreset.soundPreset != effectivePreset)
                 continue;
 
             struct stat directSfxSt {};
@@ -713,8 +759,8 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
     }
 
     if (base.empty())
-        base = std::string(SD_ASSETS) + "/sounds/" + preset;
-    DebugLog::log("[audio] Loading preset '%s' from %s", preset.c_str(), base.c_str());
+        base = std::string(SD_ASSETS) + "/sounds/" + effectivePreset;
+    DebugLog::log("[audio] Loading preset '%s' from %s", effectivePreset.c_str(), base.c_str());
 
     m_audio.loadSfx(Sfx::Navigate,        base + "/sfx/navigation.wav");
     m_audio.loadSfx(Sfx::Activate,        base + "/sfx/activation.wav");
@@ -745,18 +791,32 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
             m_audio.loadTrack(musicDir + "/" + t);
         DebugLog::log("[audio] Loaded %zu music tracks", tracks.size());
     } else {
-        DebugLog::log("[audio] No music directory for preset '%s'", preset.c_str());
+        DebugLog::log("[audio] No music directory for preset '%s'", effectivePreset.c_str());
     }
 }
 
 void WiiUMenuApp::changeSoundPreset(const std::string& preset) {
+    const std::string effectivePreset = resolveSoundPresetId(preset);
+    if (m_presetChangePending && effectivePreset == m_pendingSoundPreset) {
+        DebugLog::log("[audio] Preset change skipped; '%s' is already pending",
+                      effectivePreset.c_str());
+        return;
+    }
+
+    if (m_audioStarted && effectivePreset == m_loadedSoundPreset) {
+        DebugLog::log("[audio] Preset change skipped; '%s' is already active",
+                      effectivePreset.c_str());
+        return;
+    }
+
     m_audio.stop();
     m_audio.clearTracks();
     m_audio.clearSfx();
 
     m_presetChangePending = true;
-    m_audioFuture = m_threadPool.submit([this, preset]() {
-        loadSoundPreset(preset);
+    m_pendingSoundPreset = effectivePreset;
+    m_audioFuture = m_threadPool.submit([this, effectivePreset]() {
+        loadSoundPreset(effectivePreset);
     });
 }
 
@@ -770,6 +830,7 @@ std::vector<std::string> WiiUMenuApp::scanAvailablePresets() {
     while ((entry = readdir(dir)) != nullptr) {
         std::string name = entry->d_name;
         if (name == "." || name == "..") continue;
+        if (name != kBuiltInSoundPreset) continue;
 
         std::string sub = soundsDir + "/" + name;
         struct stat st;
@@ -951,6 +1012,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_audio.setVolume(m_config.musicVolume);
         m_audio.setSfxVolume(m_config.sfxVolume);
         if (m_config.musicEnabled) m_audio.play();
+        m_loadedSoundPreset = resolveSoundPresetId(m_config.soundPreset);
         m_audioStarted = true;
         DebugLog::log("[init] Audio ready (deferred)");
     }
@@ -962,6 +1024,9 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_audio.setSfxVolume(m_config.sfxVolume);
         if (m_config.musicEnabled)
             m_audio.play();
+        m_loadedSoundPreset = m_pendingSoundPreset.empty() ? resolveSoundPresetId(m_config.soundPreset)
+                                                           : m_pendingSoundPreset;
+        m_pendingSoundPreset.clear();
         m_presetChangePending = false;
         DebugLog::log("[audio] Preset change complete: %s", m_config.soundPreset.c_str());
     }
@@ -1150,6 +1215,36 @@ void WiiUMenuApp::onRender(nxui::Renderer& ren) {
 
     m_pageIndicator->setPageCount(m_grid->totalPages());
     m_pageIndicator->setCurrentPage(m_grid->currentPage());
+
+    if (m_themeRenderDebugFrames > 0) {
+        nxui::Widget* focus = focusManager().current();
+        nxui::Widget* focusParent = focus ? focus->parent() : nullptr;
+        std::vector<GlossyIcon*> pageIcons = m_grid ? m_grid->pageIcons() : std::vector<GlossyIcon*>();
+        GlossyIcon* firstPageIcon = pageIcons.empty() ? nullptr : pageIcons.front();
+        const nxui::Texture* firstTexture = firstPageIcon ? firstPageIcon->texture() : nullptr;
+
+        DebugLog::log("[theme-render] preset=%s focus=%s parent=%s rootChildren=%zu contentChildren=%zu overlayChildren=%zu grid(all=%zu page=%zu vis=%d op=%.2f firstTex=%d firstIconVis=%d firstIconOp=%.2f) settings(active=%d vis=%d op=%.2f) themeshop(active=%d vis=%d op=%.2f)",
+                      m_activePresetName.c_str(),
+                      safeTag(focus),
+                      safeTag(focusParent),
+                      rootBox().children().size(),
+                      m_contentLayer ? m_contentLayer->children().size() : 0,
+                      m_overlayLayer ? m_overlayLayer->children().size() : 0,
+                      m_grid ? m_grid->allIcons().size() : 0,
+                      pageIcons.size(),
+                      m_grid && m_grid->isVisible() ? 1 : 0,
+                      m_grid ? m_grid->opacity() : 0.f,
+                      (firstTexture && firstTexture->valid()) ? 1 : 0,
+                      (firstPageIcon && firstPageIcon->isVisible()) ? 1 : 0,
+                      firstPageIcon ? firstPageIcon->opacity() : 0.f,
+                      (m_settings && m_settings->isActive()) ? 1 : 0,
+                      (m_settings && m_settings->isVisible()) ? 1 : 0,
+                      m_settings ? m_settings->opacity() : 0.f,
+                      (m_themeShop && m_themeShop->isActive()) ? 1 : 0,
+                      (m_themeShop && m_themeShop->isVisible()) ? 1 : 0,
+                      m_themeShop ? m_themeShop->opacity() : 0.f);
+        --m_themeRenderDebugFrames;
+    }
 
     // Final topmost pass for move-mode ghost.
     if (m_editMode && m_editGhostIcon)

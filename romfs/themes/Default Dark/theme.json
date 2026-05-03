@@ -1,0 +1,11 @@
+{
+  "id": "builtin:Default Dark",
+  "name": "Default Dark",
+  "version": "1.0.0",
+  "theme": {
+    "mode": "dark"
+  },
+  "audio": {
+    "preset": "wiiu"
+  }
+}

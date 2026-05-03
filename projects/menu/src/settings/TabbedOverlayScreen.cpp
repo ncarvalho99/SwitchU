@@ -305,6 +305,9 @@ void TabbedOverlayScreen::rebuildContentItems() {
     nxui::Rect cr = contentRect();
     m_tabContent->setRect(cr);
 
+    if (usesCustomContentLayout())
+        return;
+
     if (m_tabIndex < 0 || m_tabIndex >= (int)m_tabs.size()) return;
     auto& items = m_tabs[m_tabIndex].items;
     auto& cache = m_cachedTabContentWidgets[(size_t)m_tabIndex];

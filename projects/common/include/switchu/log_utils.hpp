@@ -1,0 +1,146 @@
+#pragma once
+
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <dirent.h>
+#include <string>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <vector>
+
+namespace switchu::log_detail {
+
+inline void ensure_log_dir(const char* log_dir) {
+    ::mkdir("sdmc:/config", 0755);
+    ::mkdir(log_dir, 0755);
+}
+
+inline bool read_local_time(std::tm& local_time, long& milliseconds, long& tenths) {
+    timeval now{};
+    if (::gettimeofday(&now, nullptr) != 0) {
+        std::time_t fallback = std::time(nullptr);
+        if (fallback == static_cast<std::time_t>(-1) || !::localtime_r(&fallback, &local_time))
+            return false;
+
+        milliseconds = 0;
+        tenths = 0;
+        return true;
+    }
+
+    std::time_t seconds = static_cast<std::time_t>(now.tv_sec);
+    if (!::localtime_r(&seconds, &local_time))
+        return false;
+
+    milliseconds = now.tv_usec / 1000L;
+    tenths = now.tv_usec / 100000L;
+    return true;
+}
+
+inline void format_archive_timestamp(char* buffer, size_t size) {
+    std::tm local_time{};
+    long milliseconds = 0;
+    long tenths = 0;
+    if (!read_local_time(local_time, milliseconds, tenths)) {
+        std::snprintf(buffer, size, "0000-00-00_00-00-00-000");
+        return;
+    }
+
+    std::snprintf(buffer, size,
+                  "%04d-%02d-%02d_%02d-%02d-%02d-%03ld",
+                  local_time.tm_year + 1900,
+                  local_time.tm_mon + 1,
+                  local_time.tm_mday,
+                  local_time.tm_hour,
+                  local_time.tm_min,
+                  local_time.tm_sec,
+                  milliseconds);
+}
+
+inline void format_line_timestamp(char* buffer, size_t size) {
+    std::tm local_time{};
+    long milliseconds = 0;
+    long tenths = 0;
+    if (!read_local_time(local_time, milliseconds, tenths)) {
+        std::snprintf(buffer, size, "0000-00-00 00:00:00.0");
+        return;
+    }
+
+    std::snprintf(buffer, size,
+                  "%04d-%02d-%02d %02d:%02d:%02d.%01ld",
+                  local_time.tm_year + 1900,
+                  local_time.tm_mon + 1,
+                  local_time.tm_mday,
+                  local_time.tm_hour,
+                  local_time.tm_min,
+                  local_time.tm_sec,
+                  tenths);
+}
+
+inline void build_current_log_path(char* path, size_t size, const char* log_dir, const char* base_name, const char* extension) {
+    std::snprintf(path, size, "%s/%s%s", log_dir, base_name, extension);
+}
+
+inline void build_archived_log_path(char* path, size_t size, const char* log_dir, const char* base_name, const char* extension) {
+    char timestamp[32];
+    format_archive_timestamp(timestamp, sizeof(timestamp));
+    std::snprintf(path, size, "%s/%s-%s%s", log_dir, base_name, timestamp, extension);
+}
+
+inline bool has_archived_log_name(const char* file_name, const char* base_name, const char* extension) {
+    char prefix[128];
+    std::snprintf(prefix, sizeof(prefix), "%s-", base_name);
+
+    const size_t prefix_len = std::strlen(prefix);
+    const size_t file_len = std::strlen(file_name);
+    const size_t extension_len = std::strlen(extension);
+
+    return file_len > prefix_len + 4
+        && std::strncmp(file_name, prefix, prefix_len) == 0
+        && std::strcmp(file_name + file_len - extension_len, extension) == 0;
+}
+
+inline void prune_archived_logs(const char* log_dir, const char* base_name, const char* extension, size_t keep_count) {
+    DIR* dir = ::opendir(log_dir);
+    if (!dir)
+        return;
+
+    std::vector<std::string> matches;
+    while (dirent* entry = ::readdir(dir)) {
+        if (has_archived_log_name(entry->d_name, base_name, extension))
+            matches.emplace_back(entry->d_name);
+    }
+
+    ::closedir(dir);
+
+    if (matches.size() <= keep_count)
+        return;
+
+    std::sort(matches.begin(), matches.end());
+
+    char path[256];
+    const size_t delete_count = matches.size() - keep_count;
+    for (size_t i = 0; i < delete_count; ++i) {
+        std::snprintf(path, sizeof(path), "%s/%s", log_dir, matches[i].c_str());
+        ::unlink(path);
+    }
+}
+
+inline bool rotate_current_log(const char* log_dir, const char* base_name, const char* extension, size_t keep_count) {
+    char current_path[256];
+    build_current_log_path(current_path, sizeof(current_path), log_dir, base_name, extension);
+
+    bool can_truncate = true;
+    if (::access(current_path, F_OK) == 0) {
+        char archived_path[256];
+        build_archived_log_path(archived_path, sizeof(archived_path), log_dir, base_name, extension);
+        can_truncate = (::rename(current_path, archived_path) == 0);
+    }
+
+    prune_archived_logs(log_dir, base_name, extension, keep_count);
+    return can_truncate;
+}
+
+} // namespace switchu::log_detail
