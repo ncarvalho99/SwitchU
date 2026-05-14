@@ -82,6 +82,21 @@ inline void terminate() {
     g_suspended = false;
 }
 
+// Forcefully kill the suspended menu process without waiting for a graceful
+// exit.  The menu's idle-suspend loop does not respond to RequestExit, so we
+// go straight to Terminate.  Use this after launching/resuming a game so that
+// the game's own library applets (swkbd, WebApplet, …) are not blocked by the
+// SystemApplet holding an AllForeground AppletHolder.
+inline void forceTerminate() {
+    if (!g_active) return;
+    appletHolderTerminate(&g_holder);
+    appletHolderJoin(&g_holder);
+    appletHolderClose(&g_holder);
+    g_active = false;
+    g_suspended = false;
+    switchu::FileLog::log("[menu_la] force terminated");
+}
+
 inline bool checkFinished() {
     if (!g_active) return true;
     if (appletHolderCheckFinished(&g_holder)) {

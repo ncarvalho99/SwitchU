@@ -75,7 +75,7 @@ public:
 
     // Load from in-memory image data (JPEG/PNG via stb_image)
     bool loadFromMemory(GpuDevice& gpu, Renderer& ren,
-                        const uint8_t* data, size_t dataSize);
+                        const uint8_t* data, size_t dataSize, int maxSide = 0);
 
     // Load from SDL_Surface-style data (RGBA8, row pitch may differ)
     bool loadFromSurface(GpuDevice& gpu, Renderer& ren,

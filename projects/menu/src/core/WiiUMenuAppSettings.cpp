@@ -235,6 +235,8 @@ void WiiUMenuApp::createSettings() {
             focusManager().setFocus(m_sidebar.settingsButton());
         }
     });
+
+    m_settings->warmup();
 }
 
 void WiiUMenuApp::createThemeShop() {
@@ -431,6 +433,8 @@ void WiiUMenuApp::createThemeShop() {
             focusManager().setFocus(m_sidebar.themeShopButton());
         }
     });
+
+    m_themeShop->warmup();
 }
 
 void WiiUMenuApp::reloadThemePresets() {
@@ -850,6 +854,9 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         backgroundConfig.wobble = preset.background.wobble;
         backgroundConfig.opacity = preset.background.opacity;
         backgroundConfig.rotationSpeed = preset.background.rotationSpeed;
+        backgroundConfig.fixedOrientation = preset.background.fixedOrientation;
+        backgroundConfig.orientationDegrees = preset.background.orientationDegrees;
+        backgroundConfig.cornerRoundness = preset.background.cornerRoundness;
         backgroundConfig.imageOpacity = preset.background.imageOpacity;
         backgroundConfig.imageCover = preset.background.imageCover;
         m_background->setConfig(backgroundConfig);
@@ -951,6 +958,7 @@ void WiiUMenuApp::applyTheme() {
     m_userSelect->titlePanel().setBlurEnabled(true);
     m_userSelect->setTextColor(m_theme.textPrimary);
     m_userSelect->setSecondaryTextColor(m_theme.textSecondary);
+    m_userSelect->invalidateBackdropCache();
     m_userSelect->cursor().setColor(m_theme.cursorNormal);
 
     if (m_dialog) {

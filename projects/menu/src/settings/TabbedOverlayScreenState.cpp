@@ -81,8 +81,52 @@ void TabbedOverlayScreen::requestToast(const std::string& msg, float holdSeconds
 }
 
 void TabbedOverlayScreen::warmup() {
-    if (!m_tabs.empty()) return;
+    int oldTab = m_tabIndex;
+    int oldContent = m_contentIdx;
+    float oldScrollTarget = m_scrollTarget;
+    float oldScrollY = m_scrollY;
+
     buildTabs();
+
+    if (m_tabs.empty()) {
+        m_tabIndex = 0;
+        m_contentIdx = 0;
+        m_scrollTarget = 0.f;
+        m_scrollY = 0.f;
+        return;
+    }
+
+    m_tabIndex = std::clamp(oldTab, 0, (int)m_tabs.size() - 1);
+    clampContentIdx();
+    if (focusableCount() > 0)
+        m_contentIdx = std::clamp(oldContent, 0, focusableCount() - 1);
+    else
+        m_contentIdx = 0;
+    m_scrollTarget = oldScrollTarget;
+    m_scrollY = oldScrollY;
+
+    rebuildTabBar();
+
+    if (!usesCustomContentLayout()) {
+        for (int tabIndex = 0; tabIndex < (int)m_tabs.size(); ++tabIndex) {
+            m_tabIndex = tabIndex;
+            m_contentIdx = 0;
+            m_scrollTarget = 0.f;
+            m_scrollY = 0.f;
+            rebuildContentItems();
+        }
+
+        m_tabIndex = std::clamp(oldTab, 0, (int)m_tabs.size() - 1);
+        clampContentIdx();
+        if (focusableCount() > 0)
+            m_contentIdx = std::clamp(oldContent, 0, focusableCount() - 1);
+        else
+            m_contentIdx = 0;
+        m_scrollTarget = oldScrollTarget;
+        m_scrollY = oldScrollY;
+    }
+
+    rebuildContentItems();
 }
 
 int TabbedOverlayScreen::focusableCount() const {

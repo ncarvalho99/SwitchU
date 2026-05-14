@@ -10,6 +10,7 @@ enum class ThemePresetSource {
 };
 
 struct ThemeColorSet {
+    float cursorH = -1.f, cursorS = -1.f, cursorL = -1.f;
     float accentH = 0.f, accentS = 0.f, accentL = 0.f;
     float bgH = 0.f, bgS = 0.f, bgL = 0.f;
     float bgAccH = 0.f, bgAccS = 0.f, bgAccL = 0.f;
@@ -56,6 +57,9 @@ struct ThemeBackgroundConfig {
     float wobble = 16.f;
     float opacity = 1.f;
     float rotationSpeed = 0.5f;
+    bool fixedOrientation = false;
+    float orientationDegrees = 0.f;
+    float cornerRoundness = 0.f;
 };
 
 struct ThemeFontConfig {

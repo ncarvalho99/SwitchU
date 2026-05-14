@@ -306,6 +306,14 @@ void readThemeBackgroundFromObject(const nlohmann::json& j, ThemeBackgroundConfi
     readJsonAliases(j, {"opacity", "shapeOpacity", "shape_opacity"}, background.opacity);
     readJsonAliases(j, {"wobble", "drift"}, background.wobble);
     readJsonAliases(j, {"rotationSpeed", "rotation_speed", "spin", "spinSpeed", "spin_speed"}, background.rotationSpeed);
+    readJsonAliases(j, {"fixedOrientation", "fixed_orientation", "lockOrientation", "lock_orientation"}, background.fixedOrientation);
+    readJsonAliases(j, {"roundness", "cornerRoundness", "corner_roundness", "shapeRoundness", "shape_roundness"}, background.cornerRoundness);
+
+    float orientationDegrees = background.orientationDegrees;
+    if (readJsonAliases(j, {"orientation", "orientationDegrees", "orientation_degrees", "shapeOrientation", "shape_orientation", "angle"}, orientationDegrees)) {
+        background.orientationDegrees = orientationDegrees;
+        background.fixedOrientation = true;
+    }
 
     readFloatPair(j, {"spacing", "gap"}, background.spacingX, background.spacingY);
     readFloatPair(j, {"size", "sizeRange", "size_range", "shapeSize", "shape_size"}, background.sizeMin, background.sizeMax);
@@ -355,6 +363,7 @@ void readThemeBackgroundFromObject(const nlohmann::json& j, ThemeBackgroundConfi
     background.wobble = std::max(0.f, background.wobble);
     background.imageOpacity = std::clamp(background.imageOpacity, 0.f, 1.f);
     background.opacity = std::clamp(background.opacity, 0.f, 1.f);
+    background.cornerRoundness = std::clamp(background.cornerRoundness, 0.f, 1.f);
 }
 
 void readThemeBackground(const nlohmann::json& j, ThemeBackgroundConfig& background) {
@@ -453,6 +462,9 @@ void readThemeIcons(const nlohmann::json& j, ThemeIconConfig& icons) {
 }
 
 void readThemeColorsFromObject(const nlohmann::json& j, ThemeColorSet& colors) {
+    readJsonAliases(j, {"cursorH", "cursor_h"}, colors.cursorH);
+    readJsonAliases(j, {"cursorS", "cursor_s"}, colors.cursorS);
+    readJsonAliases(j, {"cursorL", "cursor_l"}, colors.cursorL);
     readJsonAliases(j, {"accentH", "accent_h"}, colors.accentH);
     readJsonAliases(j, {"accentS", "accent_s"}, colors.accentS);
     readJsonAliases(j, {"accentL", "accent_l"}, colors.accentL);
@@ -466,7 +478,9 @@ void readThemeColorsFromObject(const nlohmann::json& j, ThemeColorSet& colors) {
     readJsonAliases(j, {"shapeS", "shape_s", "shapesS", "shapes_s"}, colors.shapeS);
     readJsonAliases(j, {"shapeL", "shape_l", "shapesL", "shapes_l"}, colors.shapeL);
 
-    readHslTriplet(j, {"accent", "cursor", "primaryAccent"},
+    readHslTriplet(j, {"cursor", "cursorAccent", "cursor_accent"},
+                   colors.cursorH, colors.cursorS, colors.cursorL);
+    readHslTriplet(j, {"accent", "primaryAccent"},
                    colors.accentH, colors.accentS, colors.accentL);
     readHslTriplet(j, {"background", "bg"},
                    colors.bgH, colors.bgS, colors.bgL);
@@ -600,7 +614,12 @@ nxui::Theme ThemePreset::toTheme() const {
                         ? nxui::Theme::dark()
                         : nxui::Theme::light();
 
-    t.cursorNormal     = nxui::Color::fromHSL(colors.accentH, colors.accentS, colors.accentL, 1.f);
+    const bool hasExplicitCursor = colors.cursorH >= 0.f && colors.cursorS >= 0.f && colors.cursorL >= 0.f;
+    const float cursorH = hasExplicitCursor ? colors.cursorH : colors.accentH;
+    const float cursorS = hasExplicitCursor ? colors.cursorS : colors.accentS;
+    const float cursorL = hasExplicitCursor ? colors.cursorL : colors.accentL;
+
+    t.cursorNormal     = nxui::Color::fromHSL(cursorH, cursorS, cursorL, 1.f);
     float glowAlpha    = (mode == nxui::ThemeMode::Dark) ? 0.12f : 0.15f;
     t.cursorGlow       = t.cursorNormal.withAlpha(glowAlpha);
 
@@ -613,6 +632,7 @@ nxui::Theme ThemePreset::toTheme() const {
 
 ThemeColorSet ThemePreset::extractColors(const nxui::Theme& theme) {
     ThemeColorSet c;
+    theme.cursorNormal.toHSL(c.cursorH, c.cursorS, c.cursorL);
     theme.cursorNormal.toHSL(c.accentH, c.accentS, c.accentL);
     theme.background.toHSL(c.bgH, c.bgS, c.bgL);
     theme.backgroundAccent.toHSL(c.bgAccH, c.bgAccS, c.bgAccL);
@@ -695,6 +715,9 @@ std::vector<ThemePreset> ThemePreset::loadUserPresets() {
 
         try {
             if      (key == "mode")      current.mode = (val == "light") ? nxui::ThemeMode::Light : nxui::ThemeMode::Dark;
+            else if (key == "cursor_h")  current.colors.cursorH  = std::stof(val);
+            else if (key == "cursor_s")  current.colors.cursorS  = std::stof(val);
+            else if (key == "cursor_l")  current.colors.cursorL  = std::stof(val);
             else if (key == "accent_h")  current.colors.accentH  = std::stof(val);
             else if (key == "accent_s")  current.colors.accentS  = std::stof(val);
             else if (key == "accent_l")  current.colors.accentL  = std::stof(val);
@@ -762,8 +785,14 @@ bool ThemePreset::saveUserPresets(const std::vector<ThemePreset>& presets) {
     if (!f) return false;
 
     for (auto& p : presets) {
+        const float cursorH = p.colors.cursorH >= 0.f ? p.colors.cursorH : p.colors.accentH;
+        const float cursorS = p.colors.cursorS >= 0.f ? p.colors.cursorS : p.colors.accentS;
+        const float cursorL = p.colors.cursorL >= 0.f ? p.colors.cursorL : p.colors.accentL;
         fprintf(f, "[%s]\n", p.name.c_str());
         fprintf(f, "mode=%s\n", p.mode == nxui::ThemeMode::Light ? "light" : "dark");
+        fprintf(f, "cursor_h=%.4f\n", cursorH);
+        fprintf(f, "cursor_s=%.4f\n", cursorS);
+        fprintf(f, "cursor_l=%.4f\n", cursorL);
         fprintf(f, "accent_h=%.4f\n", p.colors.accentH);
         fprintf(f, "accent_s=%.4f\n", p.colors.accentS);
         fprintf(f, "accent_l=%.4f\n", p.colors.accentL);

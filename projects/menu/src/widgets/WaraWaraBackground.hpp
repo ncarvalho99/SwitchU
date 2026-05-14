@@ -46,6 +46,9 @@ public:
         float wobble = 16.f;
         float opacity = 1.f;
         float rotationSpeed = 0.5f;
+        bool fixedOrientation = false;
+        float orientationDegrees = 0.f;
+        float cornerRoundness = 0.f;
         float imageOpacity = 0.f;
         bool imageCover = true;
     };

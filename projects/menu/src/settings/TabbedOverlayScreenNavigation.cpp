@@ -714,8 +714,9 @@ void TabbedOverlayScreen::onContentUpdate(float dt) {
         }
     }
 
-    for (auto& tab : m_tabs) {
-        for (auto& item : tab.items) {
+    if (m_tabIndex >= 0 && m_tabIndex < (int)m_tabs.size()) {
+        auto& items = m_tabs[m_tabIndex].items;
+        for (auto& item : items) {
             if (item.type == ItemType::Toggle) {
                 float target = item.boolVal ? 1.f : 0.f;
                 item.anim01 += (target - item.anim01) * std::min(1.f, dt * 14.f);
@@ -732,30 +733,6 @@ void TabbedOverlayScreen::onContentUpdate(float dt) {
                 if (std::abs(target - item.anim01) < 0.0015f)
                     item.anim01 = target;
             }
-        }
-    }
-
-    nxui::Rect panel = panelRect();
-    nxui::Rect tr = tabsRect(panel);
-    nxui::Rect cr = contentRect(panel);
-
-    float tabTargetY = tr.y + m_tabIndex * kTabRowHeight;
-    m_tabGlowY.set(tabTargetY, 0.18f, nxui::Easing::outCubic);
-
-    if (m_tabIndex >= 0 && m_tabIndex < (int)m_tabs.size()) {
-        auto& items = m_tabs[m_tabIndex].items;
-        float y = cr.y - m_scrollY;
-        int focusIndex = 0;
-        for (auto& item : items) {
-            float height = item.type == ItemType::Section ? kSectionHeight : kRowHeight;
-            if (item.focusable()) {
-                if (focusIndex == m_contentIdx) {
-                    m_contentGlowY.set(y, 0.14f, nxui::Easing::outCubic);
-                    break;
-                }
-                ++focusIndex;
-            }
-            y += height;
         }
     }
 }

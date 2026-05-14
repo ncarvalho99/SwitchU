@@ -1,4 +1,5 @@
 #include "UserSelectScreen.hpp"
+#include "settings/SettingsGlassTuning.hpp"
 #include "core/AudioManager.hpp"
 #include "core/DebugLog.hpp"
 #include <nxui/core/I18n.hpp>
@@ -9,6 +10,75 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+
+namespace {
+
+nxui::Rect scaledRect(const nxui::Rect& rect, float scale) {
+    nxui::Rect scaled = rect;
+    if (scale >= 0.999f) {
+        return scaled;
+    }
+
+    float width = scaled.width * scale;
+    float height = scaled.height * scale;
+    scaled.x += (scaled.width - width) * 0.5f;
+    scaled.y += (scaled.height - height) * 0.5f;
+    scaled.width = width;
+    scaled.height = height;
+    return scaled;
+}
+
+void drawCachedGlassPanel(nxui::Renderer& ren,
+                          const nxui::GlassPanel& panel,
+                          int backdropTarget,
+                          float opacity) {
+    float panelOpacity = opacity * panel.panelOpacity();
+    if (panelOpacity <= 0.01f) {
+        return;
+    }
+
+    nxui::Rect panelRect = scaledRect(panel.rect(), panel.scale());
+    if (panelRect.width <= 0.f || panelRect.height <= 0.f) {
+        return;
+    }
+
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    nxui::Color glassTint = panel.baseColor().withAlpha(
+        std::clamp(panel.baseColor().a * 0.82f, 0.18f, 0.32f));
+    nxui::Rect glassRect = panelRect.shrunk(std::max(0.0f, tuning.inset));
+    float glassRadius = std::max(12.0f, panel.cornerRadius() - std::max(0.0f, tuning.inset) * 0.5f);
+
+    ren.drawLiquidGlass(backdropTarget,
+                        glassRect,
+                        glassRadius,
+                        glassTint,
+                        panelOpacity,
+                        std::clamp(tuning.shade + panel.liquidGlassShade(), 0.0f, 1.0f));
+    ren.drawRoundedRectOutline(glassRect,
+                               panel.borderColor().withAlpha(std::clamp(
+                                   panel.borderColor().a * 0.90f, 0.14f, 0.34f) * panelOpacity),
+                               glassRadius,
+                               panel.borderWidth());
+    ren.drawRoundedRectOutline(glassRect.shrunk(1.5f),
+                               panel.highlightColor().withAlpha(std::clamp(
+                                   panel.highlightColor().a * 0.90f, 0.04f, 0.10f) * panelOpacity),
+                               std::max(0.0f, glassRadius - 1.5f),
+                               1.0f);
+    ren.liquidGlassSettings() = savedGlass;
+}
+
+} // namespace
 
 UserSelectScreen::UserSelectScreen() {
     setFrameworkTouchEnabled(false);
@@ -73,6 +143,7 @@ void UserSelectScreen::show(SelectCallback onSelect, CancelCallback onCancel) {
     m_onCancel = std::move(onCancel);
     m_active   = true;
     m_animatingOut = false;
+    invalidateBackdropCache();
     m_ignoreInitialTouchRelease = true;
     m_overlayAlpha.setImmediate(0.f);
     m_panelScale.setImmediate(0.85f);
@@ -122,6 +193,12 @@ void UserSelectScreen::hide() {
 
     setFocusable(false);
     clearActions();
+}
+
+void UserSelectScreen::invalidateBackdropCache() {
+    m_backdropCacheValid = false;
+    m_cachedPreBlurRadius = -1.f;
+    m_cachedBlurIterations = -1;
 }
 
 void UserSelectScreen::handleTouch(nxui::Input& input) {
@@ -204,6 +281,22 @@ void UserSelectScreen::onRender(nxui::Renderer& ren) {
     int n       = (int)m_users.size();
     if (n == 0 || alpha < 0.01f) return;
 
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    bool needsBackdropRefresh = !m_backdropCacheValid
+        || std::abs(m_cachedPreBlurRadius - tuning.preBlurRadius) > 0.001f
+        || m_cachedBlurIterations != tuning.blurIterations;
+
+    if (needsBackdropRefresh) {
+        ren.captureToOffscreen(false);
+        if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
+            ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
+        }
+        ren.copyOffscreen(0, kBackdropCacheTarget);
+        m_backdropCacheValid = true;
+        m_cachedPreBlurRadius = tuning.preBlurRadius;
+        m_cachedBlurIterations = tuning.blurIterations;
+    }
+
     ren.drawRect({0, 0, 1280, 720}, nxui::Color(0, 0, 0, 0.55f * alpha));
 
     float avatarSize = 96.f;
@@ -236,7 +329,7 @@ void UserSelectScreen::onRender(nxui::Renderer& ren) {
         float tPillY = cy - scaledTotalH * 0.5f - tPadY;
         m_titlePanel.setCornerRadius(tPillH * 0.5f);
         m_titlePanel.setRect({tPillX, tPillY, tPillW, tPillH});
-        m_titlePanel.render(ren);
+        drawCachedGlassPanel(ren, m_titlePanel, kBackdropCacheTarget, alpha);
 
         float tx = cx - titleSz.x * 0.5f * sc;
         float ty = tPillY + tPadY;
@@ -247,7 +340,7 @@ void UserSelectScreen::onRender(nxui::Renderer& ren) {
     float panelX = cx - panelW * 0.5f;
     float panelY = cy - totalH * 0.5f + (titleH + 16.f);
     m_panel.setRect({panelX, panelY, panelW, panelH});
-    m_panel.render(ren);
+    drawCachedGlassPanel(ren, m_panel, kBackdropCacheTarget, alpha);
 
     float scaledPanelW = panelW * sc;
     float scaledPanelH = panelH * sc;

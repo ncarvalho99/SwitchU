@@ -155,13 +155,35 @@ bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& pat
 }
 
 bool Texture::loadFromMemory(GpuDevice& gpu, Renderer& ren,
-                             const uint8_t* data, size_t dataSize)
+                             const uint8_t* data, size_t dataSize, int maxSide)
 {
     int w, h, ch;
     uint8_t* pixels = stbi_load_from_memory(data, (int)dataSize, &w, &h, &ch, 4);
     if (!pixels) return false;
+
+    if (maxSide > 0 && (w > maxSide || h > maxSide)) {
+        float scale = std::min((float)maxSide / w, (float)maxSide / h);
+        int dw = std::max(1, (int)(w * scale));
+        int dh = std::max(1, (int)(h * scale));
+        uint8_t* scaled = (uint8_t*)std::malloc((size_t)dw * dh * 4);
+        if (scaled) {
+            for (int y = 0; y < dh; ++y) {
+                int sy = y * h / dh;
+                for (int x = 0; x < dw; ++x) {
+                    int sx = x * w / dw;
+                    std::memcpy(scaled + ((size_t)y * dw + x) * 4,
+                                pixels + ((size_t)sy * w + sx) * 4, 4);
+                }
+            }
+            stbi_image_free(pixels);
+            pixels = scaled;
+            w = dw;
+            h = dh;
+        }
+    }
+
     bool ok = loadFromPixels(gpu, ren, pixels, w, h);
-    stbi_image_free(pixels);
+    std::free(pixels);
     return ok;
 }
 

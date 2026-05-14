@@ -194,8 +194,6 @@ protected:
     const nxui::Theme* m_theme    = nullptr;
 
     SelectionCursor m_focusCursor;
-    nxui::AnimatedFloat m_tabGlowY;
-    nxui::AnimatedFloat m_contentGlowY;
     nxui::AnimatedFloat m_tabReveal;
     nxui::AnimatedFloat m_dropdownAnim;
     nxui::AnimatedFloat m_trackToastAnim;

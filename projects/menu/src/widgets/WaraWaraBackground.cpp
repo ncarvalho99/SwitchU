@@ -8,6 +8,33 @@ namespace {
 constexpr int kBackgroundRenderReserveVertices = 13312;
 constexpr int kWorstCaseShapeVertices = 36;
 constexpr int kGlassShapeLayers = 3;
+constexpr int kGridRenderedShapeBudget = 448;
+constexpr int kFloatingRenderedShapeBudget = 160;
+constexpr int kDenseRenderCopyThreshold = 96;
+constexpr float kPi = 3.14159265358979323846f;
+constexpr float kHalfPi = kPi * 0.5f;
+
+float degreesToRadians(float degrees) {
+    return degrees * kPi / 180.f;
+}
+
+void appendArcPoints(std::vector<nxui::Vec2>& points,
+                     float centerX,
+                     float centerY,
+                     float radius,
+                     float startAngle,
+                     float endAngle,
+                     int segments,
+                     bool includeStart)
+{
+    int startIndex = includeStart ? 0 : 1;
+    for (int i = startIndex; i <= segments; ++i) {
+        float t = segments > 0 ? (float)i / (float)segments : 0.f;
+        float angle = startAngle + (endAngle - startAngle) * t;
+        points.push_back({centerX + std::cos(angle) * radius,
+                          centerY + std::sin(angle) * radius});
+    }
+}
 
 float random01() {
     return (std::rand() % 1000) / 1000.f;
@@ -48,6 +75,23 @@ int maxSafeBaseShapeCount(const WaraWaraBackground::Config& config) {
     return std::max(1, maxBudget / perShapeBudget);
 }
 
+int maxVisualBaseShapeCount(const WaraWaraBackground::Config& config) {
+    const int multiplier = std::max(1, symmetryMultiplier(config.symmetry));
+    const int renderedBudget = (config.layout == WaraWaraBackground::Layout::Grid)
+        ? kGridRenderedShapeBudget
+        : kFloatingRenderedShapeBudget;
+    return std::max(1, renderedBudget / multiplier);
+}
+
+int renderedShapeCopies(const WaraWaraBackground::Config& config, int baseShapeCount) {
+    return std::max(0, baseShapeCount) * std::max(1, symmetryMultiplier(config.symmetry));
+}
+
+bool useDenseRenderMode(const WaraWaraBackground::Config& config, int baseShapeCount) {
+    return config.layout == WaraWaraBackground::Layout::Grid
+        && renderedShapeCopies(config, baseShapeCount) >= kDenseRenderCopyThreshold;
+}
+
 std::uint64_t estimateVertexCount(const WaraWaraBackground::Config& config, int baseShapeCount) {
     return (std::uint64_t)std::max(0, baseShapeCount)
         * (std::uint64_t)std::max(1, symmetryMultiplier(config.symmetry))
@@ -72,6 +116,7 @@ void WaraWaraBackground::setConfig(const Config& config) {
     m_config.speedMax = std::max(m_config.speedMin, m_config.speedMax);
     m_config.wobble = std::max(0.f, m_config.wobble);
     m_config.opacity = std::clamp(m_config.opacity, 0.f, 1.f);
+    m_config.cornerRoundness = std::clamp(m_config.cornerRoundness, 0.f, 1.f);
     m_config.imageOpacity = std::clamp(m_config.imageOpacity, 0.f, 1.f);
     regenerate(0);
 }
@@ -124,15 +169,18 @@ void WaraWaraBackground::regenerate(int count) {
         requestedShapeCount = requestedGridCells;
 
     const int safeShapeCount = maxSafeBaseShapeCount(m_config);
-    const int shapeCount = std::min(requestedShapeCount, safeShapeCount);
+    const int visualShapeCount = maxVisualBaseShapeCount(m_config);
+    const int shapeCount = std::min(requestedShapeCount, std::min(safeShapeCount, visualShapeCount));
     if (shapeCount != requestedShapeCount) {
-        DebugLog::log("[background] shape request clamped: layout=%s requested=%d effective=%d symmetry=%d estVerts=%llu safeVerts=%d",
+        DebugLog::log("[background] shape request clamped: layout=%s requested=%d effective=%d symmetry=%d estVerts=%llu safeVerts=%d visualCap=%d renderedCopies=%d",
                       m_config.layout == Layout::Grid ? "grid" : "floating",
                       requestedShapeCount,
                       shapeCount,
                       symmetryMultiplier(m_config.symmetry),
                       (unsigned long long)estimateVertexCount(m_config, requestedShapeCount),
-                      nxui::GpuDevice::MAX_VERTICES - kBackgroundRenderReserveVertices);
+                      nxui::GpuDevice::MAX_VERTICES - kBackgroundRenderReserveVertices,
+                      visualShapeCount,
+                      renderedShapeCopies(m_config, shapeCount));
     }
 
     m_shapes.resize(shapeCount);
@@ -158,9 +206,14 @@ void WaraWaraBackground::regenerate(int count) {
         s.speed = randomRange(m_config.speedMin, m_config.speedMax);
         s.phase = random01() * 6.28f;
         s.wobble = m_config.layout == Layout::Grid ? 0.f : randomRange(m_config.wobble * 0.4f, m_config.wobble);
-        s.rotation = random01() * 6.28f;
-        s.rotSpeed = randomRange(m_config.rotationSpeed * 0.35f, m_config.rotationSpeed);
-        if (std::rand() % 2) s.rotSpeed = -s.rotSpeed;
+        if (m_config.fixedOrientation) {
+            s.rotation = degreesToRadians(m_config.orientationDegrees);
+            s.rotSpeed = m_config.rotationSpeed;
+        } else {
+            s.rotation = random01() * 6.28f;
+            s.rotSpeed = randomRange(m_config.rotationSpeed * 0.35f, m_config.rotationSpeed);
+            if (std::rand() % 2) s.rotSpeed = -s.rotSpeed;
+        }
         s.glassAlpha = randomRange(0.05f, 0.16f) * m_config.opacity;
         s.color = nxui::Color::white().withAlpha(s.glassAlpha);
     }
@@ -269,6 +322,9 @@ void WaraWaraBackground::drawGlassShape(nxui::Renderer& ren, const Shape& s) con
     nxui::Color body = m_shapeColor.withAlpha(a);
     drawRoundedShape(ren, s, body);
 
+    if (useDenseRenderMode(m_config, (int)m_shapes.size()))
+        return;
+
     Shape highlight = s;
     highlight.pos.y -= s.size * 0.08f;
     highlight.size   = s.size * 0.85f;
@@ -304,6 +360,24 @@ void WaraWaraBackground::drawRoundedShape(nxui::Renderer& ren, const Shape& s, c
     }
     case Square: {
         float h = sz * 0.707f;
+        float roundness = std::clamp(m_config.cornerRoundness, 0.f, 1.f);
+        if (roundness > 0.001f) {
+            float radius = h * roundness;
+            std::vector<nxui::Vec2> points;
+            points.reserve(16);
+            appendArcPoints(points,  h - radius, -h + radius, radius, -kHalfPi, 0.f,      3, true);
+            appendArcPoints(points,  h - radius,  h - radius, radius,  0.f,      kHalfPi,  3, false);
+            appendArcPoints(points, -h + radius,  h - radius, radius,  kHalfPi,  kPi,      3, false);
+            appendArcPoints(points, -h + radius, -h + radius, radius,  kPi,      kPi * 1.5f, 3, false);
+
+            for (size_t i = 0; i < points.size(); ++i)
+                points[i] = rot(points[i].x, points[i].y);
+
+            for (size_t i = 0; i < points.size(); ++i)
+                ren.drawTriangle(s.pos, points[i], points[(i + 1) % points.size()], c);
+            break;
+        }
+
         nxui::Vec2 p0 = rot(-h, -h);
         nxui::Vec2 p1 = rot( h, -h);
         nxui::Vec2 p2 = rot( h,  h);

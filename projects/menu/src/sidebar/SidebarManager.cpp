@@ -58,7 +58,6 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     {
         auto album = makeBtn(&m_icons[0], "sidebar.album", "Album", actions.onAlbum);
         m_albumButton = album.get();
-        album->setIconCircular(true);
         album->setRect({leftX, startY + 0.f * (btnSize + gap), btnSize, btnSize});
         m_leftButtons.push_back(std::move(album));
 

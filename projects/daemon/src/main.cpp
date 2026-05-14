@@ -126,6 +126,7 @@ static uint64_t g_pendingTitleId = 0;
 static AccountUid g_pendingUid = {};
 
 static bool g_pendingResume = false;
+static bool g_pendingMenuClose = false;
 static bool g_pendingAlbum = false;
 static bool g_pendingMiiEditor = false;
 static bool g_pendingNetConnect = false;
@@ -279,6 +280,20 @@ static void handleAppletMessages() {
     while (R_SUCCEEDED(appletGetMessage(&msg))) {
         switchu::FileLog::log("[ae] msg=%u", msg);
         switch (msg) {
+            case 2:
+            // AppletMessage_ChangeIntoBackground: the foreground is being taken by a
+            // library applet (e.g. swkbd launched by the running game).  Our menu
+            // library applet is created with LibAppletMode_AllForeground, so as long
+            // as it holds an open AppletHolder the AM will block the game's library
+            // applet from acquiring the foreground, causing a freeze.  Close the menu
+            // now so the game's applet can proceed.  The HOME handler will relaunch
+            // the menu in Resume mode once the user returns.
+            switchu::FileLog::log("[ae] -> ChangeIntoBackground");
+            if (daemon::app::isRunning() && daemon::menu_la::isSuspended()) {
+                switchu::FileLog::log("[ae] closing suspended menu to unblock game library applet");
+                daemon::menu_la::terminate();
+            }
+            break;
             case 20:
             appletRequestToGetForeground();
             if (daemon::app::isRunning() && daemon::app::hasForeground()) {
@@ -525,20 +540,21 @@ static void handleMenuCommand() {
             g_pendingResume = false;
             switchu::FileLog::log("[smi] executing pending launch 0x%016lX (menu suspended)", g_pendingTitleId);
             Result launchRc = daemon::app::launch(g_pendingTitleId, g_pendingUid);
-            if (R_FAILED(launchRc))
+            if (R_FAILED(launchRc)) {
                 switchu::FileLog::log("[smi] pending launch FAIL: 0x%X", launchRc);
+            } else {
+                g_pendingMenuClose = true;
+            }
         } else if (g_pendingResume) {
             g_pendingResume = false;
             switchu::FileLog::log("[smi] executing pending resume (menu suspended)");
             Result resumeRc = daemon::app::resume();
-            if (R_FAILED(resumeRc))
+            if (R_FAILED(resumeRc)) {
                 switchu::FileLog::log("[smi] pending resume FAIL: 0x%X", resumeRc);
+            } else {
+                g_pendingMenuClose = true;
+            }
         }
-        break;
-
-    default:
-        switchu::FileLog::log("[smi] unknown command %u", (u32)msg);
-        result = MAKERESULT(Module_Libnx, 0xFB);
         break;
     }
 
@@ -554,6 +570,18 @@ static void mainLoop() {
     handleGeneralChannel();
     handleAppletMessages();
     handleMenuCommand();
+
+    // Close the suspended menu AppletHolder once the game is running.
+    // An AllForeground AppletHolder held by the SystemApplet blocks HOS AM
+    // from letting the game launch its own library applets (swkbd, WebApplet,
+    // etc.).  We close it here — after the response storage has been pushed
+    // and consumed — so the game can launch any applet freely.  When HOME is
+    // pressed, case 20 will relaunch the menu in Resume mode.
+    if (g_pendingMenuClose && daemon::menu_la::isSuspended()) {
+        g_pendingMenuClose = false;
+        switchu::FileLog::log("[main] closing suspended menu to unblock game library applets");
+        daemon::menu_la::forceTerminate();
+    }
 
     if (g_eventRefreshPending.exchange(false)) {
         if (!g_initialEventSkipped) {

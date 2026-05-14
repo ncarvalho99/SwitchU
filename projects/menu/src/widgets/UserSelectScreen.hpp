@@ -34,6 +34,7 @@ public:
     bool isActive() const { return m_active; }
 
     void handleTouch(nxui::Input& input);
+    void invalidateBackdropCache();
 
     nxui::GlassPanel& panel() { return m_panel; }
     nxui::GlassPanel& titlePanel() { return m_titlePanel; }
@@ -71,6 +72,9 @@ private:
     nxui::AnimatedFloat m_overlayAlpha;
     nxui::AnimatedFloat m_panelScale;
     bool m_animatingOut = false;
+    bool m_backdropCacheValid = false;
+    float m_cachedPreBlurRadius = -1.f;
+    int m_cachedBlurIterations = -1;
 
     nxui::Color m_textPrimary    {1.f, 1.f, 1.f, 1.f};
     nxui::Color m_textSecondary  {0.7f, 0.7f, 0.8f, 0.8f};
@@ -80,5 +84,7 @@ private:
     int m_touchHitAvatar = -1;
     bool m_touchOnSelected = false;
     bool m_ignoreInitialTouchRelease = false;
+
+    static constexpr int kBackdropCacheTarget = 3;
 };
 

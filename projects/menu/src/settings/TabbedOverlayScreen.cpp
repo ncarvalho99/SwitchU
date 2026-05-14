@@ -26,15 +26,11 @@ class SettingsTabWidget final : public nxui::GlassBox {
 public:
     explicit SettingsTabWidget(const std::string& text)
         : nxui::GlassBox(nxui::Axis::ROW) {
-        setAlignItems(nxui::AlignItems::CENTER);
-        setJustifyContent(nxui::JustifyContent::FLEX_START);
-        setPadding(0.f, 22.f, 0.f, 22.f);
         setCornerRadius(18.f);
         setBorderWidth(1.f);
         setWireframeEnabled(false);
 
         m_label = std::make_shared<nxui::Label>(text);
-        m_label->setGrow(1.f);
         m_label->setHAlign(nxui::Label::HAlign::Left);
         m_label->setVAlign(nxui::Label::VAlign::Center);
         addChild(m_label);
@@ -47,20 +43,31 @@ public:
               bool focused,
               float uiTime,
               float accentWidth) {
+        (void)uiTime;
         m_selected = selected;
         m_focused = focused;
         m_accentWidth = accentWidth;
         m_accentColor = theme ? theme->cursorNormal : nxui::Color::white();
 
-        if (font) {
-            m_label->setFont(font);
+        if (font != m_cachedFont) {
+            m_cachedFont = font;
+            if (font) {
+                m_label->setFont(font);
+            }
         }
-        m_label->setText(text);
+        if (m_cachedText != text) {
+            m_cachedText = text;
+            m_label->setText(m_cachedText);
+        }
 
-        float breathe = selected ? (0.5f + 0.5f * std::sin(uiTime * 4.6f)) : 0.f;
-        float textScale = selected ? (0.83f + 0.018f * breathe) : 0.79f;
-        m_label->setScale(textScale);
-        m_label->setSize(std::max(0.f, rect().width - 36.f), rect().height);
+        float textScale = selected ? 0.83f : 0.79f;
+        if (std::abs(m_cachedTextScale - textScale) > 0.001f) {
+            m_cachedTextScale = textScale;
+            m_label->setScale(textScale);
+        }
+        m_label->setOpacity(opacity());
+        m_label->setRect({rect().x + 22.f, rect().y,
+                          std::max(0.f, rect().width - 44.f), rect().height});
 
         if (theme) {
             nxui::Color textColor = selected ? theme->textPrimary : theme->textSecondary;
@@ -74,12 +81,10 @@ public:
             setBorderColor(borderColor);
             setHighlightColor(hiColor);
             setBorderWidth(selected || focused ? 1.2f : 1.f);
-            setScale(selected ? (1.01f + 0.01f * breathe) : 1.f);
+            setScale(selected ? 1.01f : 1.f);
 
-            m_label->setTextColor(textColor.withAlpha(opacity()));
+            m_label->setTextColor(textColor);
         }
-
-        layout();
     }
 
 protected:
@@ -106,6 +111,9 @@ private:
     bool m_focused = false;
     float m_accentWidth = 3.f;
     nxui::Color m_accentColor = nxui::Color::white();
+    nxui::Font* m_cachedFont = nullptr;
+    std::string m_cachedText;
+    float m_cachedTextScale = -1.f;
 };
 
 class SettingsItemCard final : public nxui::GlassBox {
@@ -182,8 +190,6 @@ TabbedOverlayScreen::TabbedOverlayScreen(ScreenMode mode)
 
     m_focusCursor.setBorderWidth(2.6f);
     m_focusCursor.setCornerRadius(10.f);
-    m_tabGlowY.setImmediate(0.f);
-    m_contentGlowY.setImmediate(0.f);
     m_tabReveal.setImmediate(1.f);
     m_dropdownAnim.setImmediate(0.f);
     m_trackToastAnim.setImmediate(0.f);
@@ -221,6 +227,14 @@ void TabbedOverlayScreen::setTheme(const nxui::Theme* t) {
     setHighlightColor(m_theme->panelHighlight.withAlpha(std::clamp(m_theme->panelHighlight.a * 0.92f, 0.05f, 0.18f)));
     setLiquidGlassShade(m_theme->mode == nxui::ThemeMode::Dark ? 0.08f : -0.03f);
     invalidateBackdropCache();
+
+    if (!usesCustomContentLayout()) {
+        m_cachedTabContentWidgets.clear();
+        m_cachedTabContentWidgets.resize(m_tabs.size());
+
+        if (isActive())
+            rebuildContentItems();
+    }
 }
 
 void TabbedOverlayScreen::show() {
@@ -237,8 +251,6 @@ void TabbedOverlayScreen::show() {
     m_contentIdx = 0;
     m_scrollY    = 0.f;
     m_scrollTarget = 0.f;
-    m_tabGlowY.setImmediate(0.f);
-    m_contentGlowY.setImmediate(0.f);
     m_tabReveal.setImmediate(0.f);
     m_tabReveal.set(1.f, 0.24f, nxui::Easing::outCubic);
     m_dropdownOpen = false;
@@ -496,13 +508,10 @@ void TabbedOverlayScreen::drawTabs(nxui::Renderer& ren, const nxui::Rect& panel,
     float tabY = tr.y + kTabRailInset;
     float tabW = std::max(0.f, tr.width - kTabRailInset * 2.f);
     float tabH = kTabRowHeight - kTabCardGap;
+    float rowOpacity = opacity * reveal;
+    float rowYOffset = (1.f - reveal) * 6.f;
 
     for (int i = 0; i < (int)tabChildren.size() && i < (int)m_tabs.size(); ++i) {
-        float delay = std::min(0.45f, i * 0.04f);
-        float local = std::clamp((reveal - delay) / 0.24f, 0.f, 1.f);
-        float rowOpacity = opacity * local;
-        float rowYOffset = (1.f - local) * 8.f;
-
         auto* tab = static_cast<SettingsTabWidget*>(tabChildren[i].get());
         tab->setRect({tr.x + kTabRailInset, tabY + rowYOffset, tabW, tabH});
         tab->setOpacity(rowOpacity);
@@ -553,30 +562,35 @@ void TabbedOverlayScreen::drawContent(nxui::Renderer& ren, const nxui::Rect& pan
         ? rawIndexFromFocusable(m_contentIdx) : -1;
 
     float slideT = std::clamp(m_contentSlideAnim.value(), 0.f, 1.f);
-    float slideOffset = (1.f - slideT) * 24.f * (float)m_tabSwitchDir;
-    float slideOpacity = opacity * slideT;
-    float reveal = std::clamp(m_tabReveal.value(), 0.f, 1.f);
+    float slideOffset = (1.f - slideT) * 18.f * (float)m_tabSwitchDir;
+    float slideOpacity = opacity * slideT * std::clamp(m_tabReveal.value(), 0.f, 1.f);
 
     float y = cr.y + 14.f - m_scrollY + slideOffset;
     int n = std::min((int)itemChildren.size(), (int)items.size());
     for (int i = 0; i < n; ++i) {
         float h = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
-        float delay = std::min(0.60f, i * 0.055f);
-        float local = std::clamp((reveal - delay) / 0.28f, 0.f, 1.f);
-        float rowOpacity = slideOpacity * local;
-        float rowYOffset = (1.f - local) * 10.f;
         float insetY = (items[i].type == ItemType::Section) ? 1.f : kContentCardInsetY;
         float cardH = std::max(0.f, h - (items[i].type == ItemType::Section ? 2.f : 6.f));
+        nxui::Rect itemRect = {
+            cr.x + kContentCardInsetX,
+            y + insetY,
+            std::max(0.f, cr.width - kContentCardInsetX * 2.f),
+            cardH
+        };
+        bool visible = itemRect.bottom() >= cr.y - 8.f && itemRect.y <= cr.bottom() + 8.f;
 
-        itemChildren[i]->setRect({cr.x + kContentCardInsetX,
-                                  y + rowYOffset + insetY,
-                                  std::max(0.f, cr.width - kContentCardInsetX * 2.f),
-                                  cardH});
-        itemChildren[i]->setOpacity(rowOpacity);
+        itemChildren[i]->setVisible(visible);
+        if (!visible) {
+            y += h;
+            continue;
+        }
+
+        itemChildren[i]->setRect(itemRect);
+        itemChildren[i]->setOpacity(slideOpacity);
 
         auto* card = static_cast<SettingsItemCard*>(itemChildren[i].get());
         bool selected = (i == focusedRawIdx);
-        card->sync(m_theme, selected, rowOpacity);
+        card->sync(m_theme, selected, slideOpacity);
 
         if (selected) {
             m_focusCursor.moveTo(itemChildren[i]->rect().expanded(1.f),

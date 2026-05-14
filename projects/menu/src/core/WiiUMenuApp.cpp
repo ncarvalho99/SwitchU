@@ -44,6 +44,55 @@ bool isPackageSoundPreset(const std::string& preset) {
     return preset.rfind("package:", 0) == 0;
 }
 
+bool pathExists(const std::string& path) {
+    struct stat st {};
+    return stat(path.c_str(), &st) == 0;
+}
+
+bool directoryExists(const std::string& path) {
+    struct stat st {};
+    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+std::string resolveAudioOverridePath(const std::string& preferredBase,
+                                    const std::string& fallbackBase,
+                                    const char* relativePath) {
+    if (!preferredBase.empty()) {
+        const std::string preferredPath = preferredBase + "/" + relativePath;
+        if (pathExists(preferredPath))
+            return preferredPath;
+    }
+    return fallbackBase + "/" + relativePath;
+}
+
+std::string installedThemePathFromPackagePreset(const std::string& preset) {
+    if (!isPackageSoundPreset(preset))
+        return {};
+
+    const std::string slug = preset.substr(std::strlen("package:"));
+    if (slug.empty())
+        return {};
+
+    const std::string installPath = std::string("sdmc:/config/SwitchU/themes/") + slug;
+    return directoryExists(installPath) ? installPath : std::string();
+}
+
+std::string resolveThemeSoundBase(const std::string& installPath) {
+    if (installPath.empty())
+        return {};
+
+    const std::string directSfx = installPath + "/sfx";
+    const std::string directMusic = installPath + "/music";
+    const std::string soundsRoot = installPath + "/sounds";
+
+    const bool hasDirect = directoryExists(directSfx) || directoryExists(directMusic);
+    if (hasDirect)
+        return installPath;
+    if (directoryExists(soundsRoot))
+        return soundsRoot;
+    return {};
+}
+
 // Keep enough side/top clearance so large grids do not overlap HUD/side buttons.
 static constexpr float kGridSafeSideMargin = 220.f;
 static constexpr float kGridSafeTopBottomMargin = 20.f;
@@ -717,6 +766,11 @@ std::string WiiUMenuApp::resolveSoundPresetId(const std::string& preset) const {
     if (!isPackageSoundPreset(effectivePreset))
         return effectivePreset;
 
+    if (!resolveThemeSoundBase(installedThemePathFromPackagePreset(effectivePreset)).empty()) {
+        DebugLog::log("[audio] package preset '%s' resolved from install directory", effectivePreset.c_str());
+        return effectivePreset;
+    }
+
     for (const auto& themePreset : m_allPresets) {
         if (themePreset.source != ThemePresetSource::InstalledPackage || themePreset.installPath.empty())
             continue;
@@ -734,26 +788,21 @@ std::string WiiUMenuApp::resolveSoundPresetId(const std::string& preset) const {
 void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
     std::string effectivePreset = preset;
     const bool useBuiltInBase = (effectivePreset == kBuiltInSoundPreset);
+    const std::string builtInBase = std::string(SD_ASSETS) + "/sounds/" + kBuiltInSoundPreset;
 
     std::string base;
     if (!useBuiltInBase) {
+        base = resolveThemeSoundBase(installedThemePathFromPackagePreset(effectivePreset));
+
         for (const auto& themePreset : m_allPresets) {
+            if (!base.empty())
+                break;
             if (themePreset.source != ThemePresetSource::InstalledPackage || themePreset.installPath.empty())
                 continue;
             if (themePreset.id != effectivePreset && themePreset.soundPreset != effectivePreset)
                 continue;
 
-            struct stat directSfxSt {};
-            struct stat directMusicSt {};
-            struct stat soundsRootSt {};
-            const std::string directSfx = themePreset.installPath + "/sfx";
-            const std::string directMusic = themePreset.installPath + "/music";
-            const std::string soundsRoot = themePreset.installPath + "/sounds";
-
-            bool hasDirect = (stat(directSfx.c_str(), &directSfxSt) == 0 && S_ISDIR(directSfxSt.st_mode))
-                || (stat(directMusic.c_str(), &directMusicSt) == 0 && S_ISDIR(directMusicSt.st_mode));
-            bool hasWrapped = (stat(soundsRoot.c_str(), &soundsRootSt) == 0 && S_ISDIR(soundsRootSt.st_mode));
-            base = hasDirect ? themePreset.installPath : (hasWrapped ? soundsRoot : themePreset.installPath);
+            base = resolveThemeSoundBase(themePreset.installPath);
             break;
         }
     }
@@ -762,20 +811,39 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
         base = std::string(SD_ASSETS) + "/sounds/" + effectivePreset;
     DebugLog::log("[audio] Loading preset '%s' from %s", effectivePreset.c_str(), base.c_str());
 
-    m_audio.loadSfx(Sfx::Navigate,        base + "/sfx/navigation.wav");
-    m_audio.loadSfx(Sfx::Activate,        base + "/sfx/activation.wav");
-    m_audio.loadSfx(Sfx::PageChange,      base + "/sfx/tab_transition.wav");
-    m_audio.loadSfx(Sfx::ModalShow,       base + "/sfx/show_modal.wav");
-    m_audio.loadSfx(Sfx::ModalHide,       base + "/sfx/hide_modal.wav");
-    m_audio.loadSfx(Sfx::LaunchGame,      base + "/sfx/launch_game.wav");
-    m_audio.loadSfx(Sfx::ThemeToggle,     base + "/sfx/toggle_on.wav");
-    m_audio.loadSfx(Sfx::ToggleOff,       base + "/sfx/toggle_off.wav");
-    m_audio.loadSfx(Sfx::SliderUp,        base + "/sfx/slider_up.wav");
-    m_audio.loadSfx(Sfx::SliderDown,      base + "/sfx/slider_down.wav");
-    m_audio.loadSfx(Sfx::ConfirmPositive, base + "/sfx/confirm.wav");
-    m_audio.loadSfx(Sfx::Volume,          base + "/sfx/volume.wav");
+    const bool hasCustomSfx = directoryExists(base + "/sfx");
+    const bool hasCustomMusic = directoryExists(base + "/music");
+    const std::string musicBase = hasCustomMusic ? base : builtInBase;
+    const std::string preferredSfxBase = (!useBuiltInBase && hasCustomSfx) ? base : std::string();
+    auto sfxPath = [&](const char* relativePath) {
+        return resolveAudioOverridePath(preferredSfxBase, builtInBase, relativePath);
+    };
 
-    std::string musicDir = base + "/music";
+    if (!useBuiltInBase && !hasCustomSfx) {
+        DebugLog::log("[audio] preset '%s' has no custom SFX directory, using '%s' SFX fallback",
+                      effectivePreset.c_str(),
+                      kBuiltInSoundPreset);
+    }
+    if (!useBuiltInBase && !hasCustomMusic) {
+        DebugLog::log("[audio] preset '%s' has no custom music, using '%s' music fallback",
+                      effectivePreset.c_str(),
+                      kBuiltInSoundPreset);
+    }
+
+    m_audio.loadSfx(Sfx::Navigate,        sfxPath("sfx/navigation.wav"));
+    m_audio.loadSfx(Sfx::Activate,        sfxPath("sfx/activation.wav"));
+    m_audio.loadSfx(Sfx::PageChange,      sfxPath("sfx/tab_transition.wav"));
+    m_audio.loadSfx(Sfx::ModalShow,       sfxPath("sfx/show_modal.wav"));
+    m_audio.loadSfx(Sfx::ModalHide,       sfxPath("sfx/hide_modal.wav"));
+    m_audio.loadSfx(Sfx::LaunchGame,      sfxPath("sfx/launch_game.wav"));
+    m_audio.loadSfx(Sfx::ThemeToggle,     sfxPath("sfx/toggle_on.wav"));
+    m_audio.loadSfx(Sfx::ToggleOff,       sfxPath("sfx/toggle_off.wav"));
+    m_audio.loadSfx(Sfx::SliderUp,        sfxPath("sfx/slider_up.wav"));
+    m_audio.loadSfx(Sfx::SliderDown,      sfxPath("sfx/slider_down.wav"));
+    m_audio.loadSfx(Sfx::ConfirmPositive, sfxPath("sfx/confirm.wav"));
+    m_audio.loadSfx(Sfx::Volume,          sfxPath("sfx/volume.wav"));
+
+    std::string musicDir = musicBase + "/music";
     DIR* dir = opendir(musicDir.c_str());
     if (dir) {
         std::vector<std::string> tracks;
@@ -786,7 +854,13 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
                 tracks.push_back(name);
         }
         closedir(dir);
-        std::sort(tracks.begin(), tracks.end());
+        std::sort(tracks.begin(), tracks.end(), [](const std::string& left, const std::string& right) {
+            const bool leftIsHome = (left == "home.mp3");
+            const bool rightIsHome = (right == "home.mp3");
+            if (leftIsHome != rightIsHome)
+                return leftIsHome;
+            return left < right;
+        });
         for (const auto& t : tracks)
             m_audio.loadTrack(musicDir + "/" + t);
         DebugLog::log("[audio] Loaded %zu music tracks", tracks.size());
@@ -1161,9 +1235,15 @@ void WiiUMenuApp::onUpdate(float dt) {
     {
         auto* cur = focusManager().current();
         if (!cur || !cur->isFocusable()) {
-            auto* target = m_grid->focusManager().current();
-            if (target)
-                focusManager().setFocus(target);
+            if (m_themeShop && m_themeShop->isActive()) {
+                focusManager().setFocus(m_themeShop.get());
+            } else if (m_settings && m_settings->isActive()) {
+                focusManager().setFocus(m_settings.get());
+            } else {
+                auto* target = m_grid->focusManager().current();
+                if (target)
+                    focusManager().setFocus(target);
+            }
         }
     }
 

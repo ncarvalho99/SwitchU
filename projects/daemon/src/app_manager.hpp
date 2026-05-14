@@ -10,8 +10,10 @@ static AppletApplication g_app = {};
 static bool g_running = false;
 static bool g_hasForeground = false;
 static uint64_t g_suspendedTitleId = 0;
-// Some titles are sensitive to forced save-data precreation; keep this off by default.
-static constexpr bool kEnableSaveDataEnsure = false;
+// Save-data pre-creation mirrors qlaunch/ulaunch behaviour.
+// The check-then-create path in ensureSaveData is safe: it tries to open first
+// and only calls fsCreateSaveDataFileSystem when the filesystem does not exist.
+static constexpr bool kEnableSaveDataEnsure = true;
 
 inline bool isRunning() { return g_running; }
 inline bool hasForeground() { return g_hasForeground; }
@@ -48,10 +50,15 @@ static inline void ensureSaveData(uint64_t app_id, uint64_t owner_id,
     FsFileSystem fs;
     if (R_SUCCEEDED(fsOpenSaveDataFileSystem(&fs, space_id, &attr))) {
         fsFsClose(&fs);
+        switchu::FileLog::log("[app] ensureSaveData type=%d already exists (ok)", (int)type);
     } else {
+        switchu::FileLog::log("[app] ensureSaveData type=%d creating (size=0x%lX journal=0x%lX)",
+                              (int)type, save_size, journal_size);
         Result rc = fsCreateSaveDataFileSystem(&attr, &cr, &meta);
         if (R_FAILED(rc))
             switchu::FileLog::log("[app] ensureSaveData type=%d FAIL: 0x%X", (int)type, rc);
+        else
+            switchu::FileLog::log("[app] ensureSaveData type=%d created ok", (int)type);
     }
 }
 
@@ -70,6 +77,13 @@ static inline void ensureApplicationSaveData(uint64_t title_id, AccountUid uid) 
 
     const NacpStruct& nacp = ctrl->nacp;
     uint64_t owner = nacp.save_data_owner_id;
+
+    switchu::FileLog::log("[app] NACP: startup_user=%u user_save=0x%lX device_save=0x%lX cache=0x%lX bcat=0x%lX",
+                          (unsigned)nacp.startup_user_account,
+                          nacp.user_account_save_data_size,
+                          nacp.device_save_data_size,
+                          nacp.cache_storage_size,
+                          nacp.bcat_delivery_cache_storage_size);
 
     ensureSaveData(title_id, owner, uid,
                    FsSaveDataType_Account, FsSaveDataSpaceId_User,
@@ -108,6 +122,14 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
         g_running = false;
     }
 
+    // nsTouchApplication prepares the title in the NS service (same as ulaunch/qlaunch).
+    // Non-fatal: some special titles (stubs, forwarders) may return an error here.
+    Result touchRc = nsTouchApplication(title_id);
+    if (R_FAILED(touchRc))
+        switchu::FileLog::log("[app] nsTouchApplication FAIL: 0x%X (non-fatal)", touchRc);
+    else
+        switchu::FileLog::log("[app] nsTouchApplication ok");
+
     if (kEnableSaveDataEnsure) {
         ensureApplicationSaveData(title_id, uid);
     } else {
@@ -130,6 +152,8 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
     static_assert(sizeof(userArg) == 0x88);
 
     if (accountUidIsValid(&uid)) {
+        switchu::FileLog::log("[app] preselecting user uid[0]=0x%016lX uid[1]=0x%016lX",
+                              uid.uid[0], uid.uid[1]);
         userArg.magic       = 0xC79497CA;
         userArg.is_selected = 1;
         userArg.uid         = uid;

@@ -1,5 +1,7 @@
 #include "ThemeShopScreen.hpp"
 
+#include "widgets/ActionButtonStyle.hpp"
+
 #include "core/DebugLog.hpp"
 
 #include <nxui/core/I18n.hpp>
@@ -246,6 +248,21 @@ nxui::Rect lerpRect(const nxui::Rect& from, const nxui::Rect& to, float t) {
     };
 }
 
+nxui::Rect scaledRect(const nxui::Rect& rect, float scale) {
+    if (scale >= 0.999f) {
+        return rect;
+    }
+
+    float width = rect.width * scale;
+    float height = rect.height * scale;
+    return {
+        rect.x + (rect.width - width) * 0.5f,
+        rect.y + (rect.height - height) * 0.5f,
+        width,
+        height
+    };
+}
+
 struct FullscreenOverlayLayout {
     nxui::Rect preview;
     nxui::Rect prev;
@@ -316,6 +333,42 @@ void drawChip(nxui::Renderer& ren, nxui::Font* font, const nxui::Rect& rect,
                      font,
                      textColor.withAlpha(opacity),
                      scale);
+    }
+}
+
+void drawActionButtonChip(nxui::Renderer& ren,
+                          nxui::Font* font,
+                          const nxui::Rect& rect,
+                          const std::string& text,
+                          const nxui::Theme* theme,
+                          const nxui::Color& textColor,
+                          float opacity,
+                          float emphasis,
+                          float accentMix = -1.f,
+                          float scale = 0.72f) {
+    auto style = switchu::ui::resolveActionButtonStyle(theme, opacity, emphasis, accentMix);
+    nxui::Rect buttonRect = scaledRect(rect, style.scale);
+    float radius = buttonRect.height * 0.5f;
+
+    ren.drawRoundedRect(buttonRect, style.baseColor, radius);
+    ren.drawRoundedRectOutline(buttonRect, style.borderColor, radius, style.borderWidth);
+    if (style.highlightColor.a > 0.01f) {
+        ren.drawRoundedRectOutline(buttonRect.shrunk(1.f),
+                                   style.highlightColor,
+                                   std::max(0.f, radius - 1.f),
+                                   1.f);
+    }
+
+    if (font) {
+        float textScale = scale * style.scale;
+        std::string fitted = ellipsize(font, text, buttonRect.width - 24.f, textScale);
+        nxui::Vec2 size = measureTextCached(font, fitted);
+        ren.drawText(fitted,
+                     {buttonRect.x + (buttonRect.width - size.x * textScale) * 0.5f,
+                      buttonRect.y + (buttonRect.height - size.y * textScale) * 0.5f},
+                     font,
+                     textColor.withAlpha(textColor.a * opacity),
+                     textScale);
     }
 }
 
@@ -1126,19 +1179,16 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         : m_searchQuery;
     bool searchSelected = !m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header
         && (!isCommunityTab() || m_headerButtonIndex == 1);
-    drawChip(ren,
-             m_smallFont,
-             layout.searchButton,
-             searchLabel,
-             searchSelected
-                 ? m_theme->cursorNormal.withAlpha(0.20f)
-                 : (m_searchQuery.empty() ? m_theme->panelBase.withAlpha(0.12f) : m_theme->cursorNormal.withAlpha(0.18f)),
-             searchSelected
-                 ? m_theme->cursorNormal.withAlpha(0.56f)
-                 : (m_searchQuery.empty() ? m_theme->panelBorder.withAlpha(0.26f) : m_theme->cursorNormal.withAlpha(0.44f)),
-             m_theme->textPrimary,
-             contentOpacity,
-             0.70f);
+    drawActionButtonChip(ren,
+                         m_smallFont,
+                         layout.searchButton,
+                         searchLabel,
+                         m_theme,
+                         m_theme->textPrimary,
+                         contentOpacity,
+                         searchSelected ? 1.f : 0.f,
+                         searchSelected ? 1.f : (m_searchQuery.empty() ? 0.f : 0.72f),
+                         0.70f);
 
     std::string counterText;
     if (count > 0) {
@@ -1202,15 +1252,16 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             : i18n.tr("themeshop.community.refresh", "Refresh");
         bool refreshSelected = !m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header
             && m_headerButtonIndex == 0;
-        drawChip(ren,
-                 m_smallFont,
-                 layout.refreshButton,
-                 refreshLabel,
-                 refreshSelected ? m_theme->cursorNormal.withAlpha(0.20f) : m_theme->cursorNormal.withAlpha(0.14f),
-                 refreshSelected ? m_theme->cursorNormal.withAlpha(0.56f) : m_theme->cursorNormal.withAlpha(0.44f),
-                 m_theme->textPrimary,
-                 contentOpacity,
-                 0.70f);
+        drawActionButtonChip(ren,
+                             m_smallFont,
+                             layout.refreshButton,
+                             refreshLabel,
+                             m_theme,
+                             m_theme->textPrimary,
+                             contentOpacity,
+                             refreshSelected ? 1.f : 0.f,
+                             refreshSelected ? 1.f : 0.68f,
+                             0.70f);
         if (m_communityTransferState.isRunning()) {
             drawSpinner(ren,
                         {layout.refreshButton.x + 18.f, layout.refreshButton.y + layout.refreshButton.height * 0.5f},
@@ -1495,32 +1546,26 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         if (detailScreenshotTotal > 1) {
             bool canGoPrev = m_detailScreenshotIndex > 0;
             bool canGoNext = m_detailScreenshotIndex + 1 < detailScreenshotTotal;
-            drawChip(ren,
-                     m_smallFont,
-                     previewControls.prev,
-                     i18n.tr("themeshop.preview.prev", "Prev"),
-                     canGoPrev
-                         ? m_theme->panelBase.withAlpha(0.22f)
-                         : m_theme->panelBase.withAlpha(0.10f),
-                     canGoPrev
-                         ? m_theme->panelBorder.withAlpha(0.32f)
-                         : m_theme->panelBorder.withAlpha(0.14f),
-                     canGoPrev ? m_theme->textPrimary : m_theme->textSecondary,
-                     contentOpacity,
-                     0.70f);
-            drawChip(ren,
-                     m_smallFont,
-                     previewControls.next,
-                     i18n.tr("themeshop.preview.next", "Next"),
-                     canGoNext
-                         ? m_theme->panelBase.withAlpha(0.22f)
-                         : m_theme->panelBase.withAlpha(0.10f),
-                     canGoNext
-                         ? m_theme->panelBorder.withAlpha(0.32f)
-                         : m_theme->panelBorder.withAlpha(0.14f),
-                     canGoNext ? m_theme->textPrimary : m_theme->textSecondary,
-                     contentOpacity,
-                     0.70f);
+            drawActionButtonChip(ren,
+                                 m_smallFont,
+                                 previewControls.prev,
+                                 i18n.tr("themeshop.preview.prev", "Prev"),
+                                 m_theme,
+                                 canGoPrev ? m_theme->textPrimary : m_theme->textSecondary,
+                                 contentOpacity,
+                                 0.f,
+                                 canGoPrev ? 0.24f : 0.f,
+                                 0.70f);
+            drawActionButtonChip(ren,
+                                 m_smallFont,
+                                 previewControls.next,
+                                 i18n.tr("themeshop.preview.next", "Next"),
+                                 m_theme,
+                                 canGoNext ? m_theme->textPrimary : m_theme->textSecondary,
+                                 contentOpacity,
+                                 0.f,
+                                 canGoNext ? 0.24f : 0.f,
+                                 0.70f);
             drawChip(ren,
                      m_smallFont,
                      previewControls.counter,
@@ -1617,35 +1662,38 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          m_uiTime,
                          contentOpacity);
 
-        drawChip(ren,
-                 m_smallFont,
-                 fullscreen.close,
-                 i18n.tr("button.close", "Close"),
-                 nxui::Color(0.f, 0.f, 0.f, 0.54f),
-                 nxui::Color(1.f, 1.f, 1.f, 0.30f),
-                 m_theme->textPrimary,
-                 contentOpacity * fullscreenT,
-                 0.76f);
+        drawActionButtonChip(ren,
+                             m_smallFont,
+                             fullscreen.close,
+                             i18n.tr("button.close", "Close"),
+                             m_theme,
+                             m_theme->textPrimary,
+                             contentOpacity * fullscreenT,
+                             0.f,
+                             0.38f,
+                             0.76f);
 
         if (detailScreenshotTotal > 1) {
-            drawChip(ren,
-                     m_smallFont,
-                     fullscreen.prev,
-                     i18n.tr("themeshop.preview.prev", "Prev"),
-                     nxui::Color(0.f, 0.f, 0.f, 0.54f),
-                     nxui::Color(1.f, 1.f, 1.f, 0.28f),
-                     m_theme->textPrimary,
-                     contentOpacity * fullscreenT,
-                     0.76f);
-            drawChip(ren,
-                     m_smallFont,
-                     fullscreen.next,
-                     i18n.tr("themeshop.preview.next", "Next"),
-                     nxui::Color(0.f, 0.f, 0.f, 0.54f),
-                     nxui::Color(1.f, 1.f, 1.f, 0.28f),
-                     m_theme->textPrimary,
-                     contentOpacity * fullscreenT,
-                     0.76f);
+            drawActionButtonChip(ren,
+                                 m_smallFont,
+                                 fullscreen.prev,
+                                 i18n.tr("themeshop.preview.prev", "Prev"),
+                                 m_theme,
+                                 m_theme->textPrimary,
+                                 contentOpacity * fullscreenT,
+                                 0.f,
+                                 0.32f,
+                                 0.76f);
+            drawActionButtonChip(ren,
+                                 m_smallFont,
+                                 fullscreen.next,
+                                 i18n.tr("themeshop.preview.next", "Next"),
+                                 m_theme,
+                                 m_theme->textPrimary,
+                                 contentOpacity * fullscreenT,
+                                 0.f,
+                                 0.32f,
+                                 0.76f);
             drawChip(ren,
                      m_smallFont,
                      fullscreen.counter,
@@ -1676,31 +1724,17 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     bool disableCommunityButtons = isCommunityTab() && m_packageTransferState.isRunning();
     for (int i = 0; i < (int)buttons.size(); ++i) {
         bool selectedButton = !disableCommunityButtons && (i == m_detailButtonIndex);
-        nxui::Color fill = selectedButton
-            ? m_theme->cursorNormal.withAlpha(0.24f)
-            : m_theme->panelBase.withAlpha(0.20f);
-        nxui::Color border = selectedButton
-            ? m_theme->cursorNormal.withAlpha(0.60f)
-            : m_theme->panelBorder.withAlpha(0.26f);
-        nxui::Color textColor = m_theme->textPrimary;
-        if (disableCommunityButtons) {
-            fill = m_theme->panelBase.withAlpha(0.10f);
-            border = m_theme->panelBorder.withAlpha(0.16f);
-            textColor = m_theme->textSecondary.withAlpha(0.78f);
-        }
-        if (!isCommunityTab() && i == 1) {
-            fill = selectedButton ? nxui::Color(0.70f, 0.18f, 0.18f, 0.26f) : nxui::Color(0.40f, 0.14f, 0.14f, 0.22f);
-            border = selectedButton ? nxui::Color(1.f, 0.34f, 0.34f, 0.70f) : nxui::Color(1.f, 0.30f, 0.30f, 0.28f);
-        }
-        drawChip(ren,
-                 m_smallFont,
-                 buttons[(size_t)i],
-                 buttonLabels[(size_t)i],
-                 fill,
-                 border,
-                 textColor,
-                 contentOpacity,
-                 0.76f);
+        nxui::Color textColor = disableCommunityButtons ? m_theme->textSecondary : m_theme->textPrimary;
+        drawActionButtonChip(ren,
+                             m_smallFont,
+                             buttons[(size_t)i],
+                             buttonLabels[(size_t)i],
+                             m_theme,
+                             textColor,
+                             contentOpacity,
+                             selectedButton ? 1.f : 0.f,
+                             disableCommunityButtons ? 0.f : (selectedButton ? 1.f : 0.18f),
+                             0.76f);
     }
 
     if (!(isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview && detailPreviewRequested)

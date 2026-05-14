@@ -6,19 +6,20 @@
 
 namespace switchu::ui {
 
-inline void prepareActionButton(nxui::GlassBox& button, float cornerRadius) {
-    button.setPadding(8.f, 12.f, 8.f, 12.f);
-    button.setAlignItems(nxui::AlignItems::CENTER);
-    button.setJustifyContent(nxui::JustifyContent::CENTER);
-    button.setCornerRadius(cornerRadius);
-    button.setBorderWidth(1.f);
-}
+struct ActionButtonVisualStyle {
+    nxui::Color baseColor;
+    nxui::Color borderColor;
+    nxui::Color highlightColor;
+    float borderWidth = 1.2f;
+    float scale = 1.f;
+};
 
-inline void applyActionButtonStyle(nxui::GlassBox& button,
-                                   const nxui::Theme* theme,
-                                   float opacity,
-                                   float emphasis,
-                                   float accentMix = -1.f) {
+inline ActionButtonVisualStyle resolveActionButtonStyle(const nxui::Theme* theme,
+                                                        float opacity,
+                                                        float emphasis,
+                                                        float accentMix = -1.f) {
+    ActionButtonVisualStyle style;
+
     emphasis = std::clamp(emphasis, 0.f, 1.f);
     accentMix = accentMix < 0.f ? emphasis : std::clamp(accentMix, 0.f, 1.f);
 
@@ -37,11 +38,33 @@ inline void applyActionButtonStyle(nxui::GlassBox& button,
     nxui::Color accentHighlight = theme ? theme->panelHighlight.withAlpha(0.09f * opacity)
                                         : nxui::Color(1.f, 1.f, 1.f, 0.09f * opacity);
 
-    button.setBaseColor(nxui::Color::lerp(idleBase, accentBase, accentMix));
-    button.setBorderColor(nxui::Color::lerp(idleBorder, accentBorder, accentMix));
-    button.setHighlightColor(nxui::Color::lerp(idleHighlight, accentHighlight, accentMix));
-    button.setBorderWidth(1.0f + 0.2f * accentMix);
-    button.setScale(1.f + 0.03f * accentMix);
+    style.baseColor = nxui::Color::lerp(idleBase, accentBase, accentMix);
+    style.borderColor = nxui::Color::lerp(idleBorder, accentBorder, accentMix);
+    style.highlightColor = nxui::Color::lerp(idleHighlight, accentHighlight, accentMix);
+    style.borderWidth = 1.2f + 0.35f * accentMix;
+    style.scale = 1.f + 0.03f * accentMix;
+    return style;
+}
+
+inline void prepareActionButton(nxui::GlassBox& button, float cornerRadius) {
+    button.setPadding(9.f, 14.f, 9.f, 14.f);
+    button.setAlignItems(nxui::AlignItems::CENTER);
+    button.setJustifyContent(nxui::JustifyContent::CENTER);
+    button.setCornerRadius(cornerRadius);
+    button.setBorderWidth(1.2f);
+}
+
+inline void applyActionButtonStyle(nxui::GlassBox& button,
+                                   const nxui::Theme* theme,
+                                   float opacity,
+                                   float emphasis,
+                                   float accentMix = -1.f) {
+    ActionButtonVisualStyle style = resolveActionButtonStyle(theme, opacity, emphasis, accentMix);
+    button.setBaseColor(style.baseColor);
+    button.setBorderColor(style.borderColor);
+    button.setHighlightColor(style.highlightColor);
+    button.setBorderWidth(style.borderWidth);
+    button.setScale(style.scale);
 }
 
 } // namespace switchu::ui

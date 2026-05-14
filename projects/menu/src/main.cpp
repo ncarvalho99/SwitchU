@@ -2,6 +2,7 @@
 #include "core/WiiUMenuApp.hpp"
 #include "core/DebugLog.hpp"
 #include <nxui/Application.hpp>
+#include <fmt/format.h>
 #ifdef SWITCHU_MENU
 #include <nxui/core/Renderer.hpp>
 #include <switchu/smi_protocol.hpp>
@@ -197,17 +198,17 @@ int main(int argc, char* argv[]) {
                   (int)startMode, sysStatus.suspended_app_id, sysStatus.app_running);
 
     {
-        std::string sdPath = std::string(SD_ASSETS) + "/shaders/";
+        std::string sdPath = fmt::format("{}/shaders/", SD_ASSETS);
         nxui::Renderer::setShaderBasePath(sdPath);
         DebugLog::log("[menu] shader path: %s", sdPath.c_str());
     }
 #endif
 
-    DebugLog::log("[main] SDL_Init...");
+    DebugLog::log("[main] SDL_Init");
     if (SDL_Init(SDL_INIT_AUDIO) < 0)
         DebugLog::log("[main] SDL_Init FAILED: %s", SDL_GetError());
 
-    DebugLog::log("[main] TTF_Init...");
+    DebugLog::log("[main] TTF_Init");
     if (TTF_Init() < 0)
         DebugLog::log("[main] TTF_Init FAILED: %s", TTF_GetError());
 

@@ -18,6 +18,10 @@ public:
     float scale() const               { return m_scale; }
     float panelOpacity() const        { return m_panelOpacity; }
     float cornerRadius() const        { return m_radius; }
+    float borderWidth() const         { return m_borderW; }
+    const Color& baseColor() const    { return m_base; }
+    const Color& borderColor() const  { return m_border; }
+    const Color& highlightColor() const { return m_highlight; }
 
     // Blur: real Gaussian blur of the background behind this panel
     void setBlurEnabled(bool b)       { m_blurEnabled = b; }

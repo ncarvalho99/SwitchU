@@ -204,7 +204,11 @@ void DebugImGuiOverlay::updateInput(nxui::GpuDevice& gpu, const nxui::Input& inp
     io.DisplaySize = ImVec2((float)gpu.width(), (float)gpu.height());
     io.DeltaTime = std::max(m_deltaTime, 1.0f / 240.0f);
 
-    if (input.isTouching()) {
+    const bool hasPointerPosition = input.isTouching()
+        || input.touchUp()
+        || input.virtualPointerEnabled();
+
+    if (hasPointerPosition) {
         io.AddMousePosEvent(input.touchX(), input.touchY());
     } else {
         io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);

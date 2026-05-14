@@ -143,10 +143,16 @@ void IconGrid::startWaveTransition(int targetPage) {
     targetPage = std::clamp(targetPage, 0, m_totalPages - 1);
     if (targetPage == m_page) return;
 
-    m_waveActive     = true;
+    m_waveActive = false;
+    m_wavePhase = WavePhase::Idle;
     m_waveTargetPage = targetPage;
-    m_waveTime       = 0.f;
-    m_wavePhase      = WavePhase::Capture;
+    m_waveTime = 0.f;
+
+    setPage(targetPage);
+    startAppearAnimation();
+
+    if (m_onPageSwitched)
+        m_onPageSwitched();
 }
 
 void IconGrid::onUpdate(float dt) {
