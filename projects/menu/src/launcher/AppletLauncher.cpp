@@ -84,9 +84,8 @@ void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid) {
         DebugLog::log("[launcher] FAIL: 0x%X", rc);
         return;
     }
-    DebugLog::log("[launcher] command sent, suspending menu");
-    if (m_cb.suspendForApp) m_cb.suspendForApp();
-    else if (m_cb.requestExit) m_cb.requestExit();
+    DebugLog::log("[launcher] command sent, closing menu");
+    if (m_cb.requestExit) m_cb.requestExit();
 }
 
 void AppletLauncher::resumeApplication() {
@@ -94,10 +93,9 @@ void AppletLauncher::resumeApplication() {
         DebugLog::log("[launcher] no app suspended!");
         return;
     }
-    DebugLog::log("[launcher] resume, suspending menu");
+    DebugLog::log("[launcher] resume, closing menu");
     switchu::menu::smi_cmd::resumeApplication();
-    if (m_cb.suspendForApp) m_cb.suspendForApp();
-    else if (m_cb.requestExit) m_cb.requestExit();
+    if (m_cb.requestExit) m_cb.requestExit();
 }
 
 void AppletLauncher::terminateApplication() {

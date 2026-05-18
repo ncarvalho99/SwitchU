@@ -235,7 +235,6 @@ void WiiUMenuApp::onDestroy() {
 
 #ifdef SWITCHU_MENU
     switchu::menu::smi_cmd::menuClosing();
-    switchu::menu::smi_cmd::drainAllResponses();
 #endif
     if (m_layoutDirty)
         saveMenuLayout();
@@ -1336,4 +1335,3 @@ void WiiUMenuApp::onRender(nxui::Renderer& ren) {
     }
 #endif
 }
-
