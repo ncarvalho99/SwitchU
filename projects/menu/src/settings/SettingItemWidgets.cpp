@@ -1,15 +1,34 @@
 #include "SettingItemWidgets.hpp"
-#include "widgets/ActionButtonStyle.hpp"
+#include "widgets/ActionButton.hpp"
 
 #include <nxui/core/Renderer.hpp>
 #include <nxui/widgets/Label.hpp>
 #include <nxui/widgets/GlassBox.hpp>
+#include <nxui/widgets/GlassWidget.hpp>
 #include <algorithm>
 #include <cmath>
 
 namespace settings::widgets {
 
 namespace {
+
+std::string fitTextToWidth(nxui::Font* font, const std::string& text, float scale, float maxWidth) {
+    if (!font || text.empty() || maxWidth <= 4.f)
+        return {};
+
+    if (font->measure(text).x * scale <= maxWidth)
+        return text;
+
+    constexpr const char* kEllipsis = "...";
+    std::string out = text;
+    while (!out.empty()) {
+        out.pop_back();
+        std::string candidate = out + kEllipsis;
+        if (font->measure(candidate).x * scale <= maxWidth)
+            return candidate;
+    }
+    return kEllipsis;
+}
 
 class LoadingSpinnerWidget final : public nxui::Box {
 public:
@@ -80,13 +99,13 @@ public:
         addChild(m_left);
 
         m_label = std::make_shared<nxui::Label>(item.label);
-        m_label->setScale(0.86f);
+        m_label->setScale(0.94f);
         m_label->setHAlign(nxui::Label::HAlign::Left);
         m_label->setVAlign(nxui::Label::VAlign::Top);
         m_left->addChild(m_label);
 
         m_desc = std::make_shared<nxui::Label>(item.description);
-        m_desc->setScale(0.68f);
+        m_desc->setScale(0.74f);
         m_desc->setHAlign(nxui::Label::HAlign::Left);
         m_desc->setVAlign(nxui::Label::VAlign::Top);
         m_left->addChild(m_desc);
@@ -164,7 +183,7 @@ protected:
         const nxui::Theme* rowTheme = theme();
         const bool isSection = (m_item.type == SettingsScreen::ItemType::Section);
         const bool showDesc = !m_item.description.empty() && !isSection;
-        const float labelScale = isSection ? 0.76f : 0.86f;
+        const float labelScale = isSection ? 0.82f : 0.94f;
 
         if (rowFont != m_cachedFont) {
             m_cachedFont = rowFont;
@@ -251,7 +270,7 @@ public:
     InfoRowWidget(SettingsScreen::SettingItem& item, const SettingWidgetContext& ctx)
         : SettingRowBase(item, ctx) {
         m_value = std::make_shared<nxui::Label>(item.infoText);
-        m_value->setScale(0.76f);
+        m_value->setScale(0.84f);
         m_value->setHAlign(nxui::Label::HAlign::Right);
         m_value->setVAlign(nxui::Label::VAlign::Center);
         m_right->addChild(m_value);
@@ -270,13 +289,14 @@ protected:
             if (rowSmallFont)
                 m_value->setFont(rowSmallFont);
         }
-        if (m_cachedValueText != m_item.infoText) {
-            m_cachedValueText = m_item.infoText;
-            m_value->setText(m_cachedValueText);
-        }
         if (rowTheme != m_cachedValueTheme && rowTheme) {
             m_cachedValueTheme = rowTheme;
             m_value->setTextColor(rowTheme->textSecondary);
+        }
+        std::string fitted = fitTextToWidth(rowSmallFont, m_item.infoText, 0.84f, rightRect.width);
+        if (m_cachedValueText != fitted) {
+            m_cachedValueText = fitted;
+            m_value->setText(m_cachedValueText);
         }
         m_value->setOpacity(opacity());
         m_value->setRect(rightRect);
@@ -373,7 +393,7 @@ public:
         m_track->addChild(m_knob);
 
         m_pct = std::make_shared<nxui::Label>("0%");
-        m_pct->setScale(0.78f);
+        m_pct->setScale(0.84f);
         m_pct->setHAlign(nxui::Label::HAlign::Right);
         m_pct->setVAlign(nxui::Label::VAlign::Center);
         m_pct->setMarginLeft(10.f);
@@ -418,7 +438,7 @@ protected:
         }
 
         int pct = (int)std::round(t * 100.f);
-        std::string pctText = std::to_string(pct) + "%";
+        std::string pctText = m_item.infoText.empty() ? (std::to_string(pct) + "%") : m_item.infoText;
         if (pctText != m_cachedPctText) {
             m_cachedPctText = pctText;
             m_pct->setText(m_cachedPctText);
@@ -469,7 +489,7 @@ public:
         m_track->addChild(m_fill);
 
         m_pct = std::make_shared<nxui::Label>("0%");
-        m_pct->setScale(0.72f);
+        m_pct->setScale(0.78f);
         m_pct->setHAlign(nxui::Label::HAlign::Right);
         m_pct->setVAlign(nxui::Label::VAlign::Center);
         m_pct->setMarginLeft(10.f);
@@ -558,7 +578,7 @@ public:
     SelectorRowWidget(SettingsScreen::SettingItem& item, const SettingWidgetContext& ctx)
         : SettingRowBase(item, ctx) {
         m_pill = std::make_shared<nxui::GlassBox>(nxui::Axis::ROW);
-        m_pill->setPadding(10.f, 14.f, 10.f, 14.f);
+        m_pill->setPadding(8.f, 12.f, 8.f, 12.f);
         m_pill->setAlignItems(nxui::AlignItems::CENTER);
         m_pill->setJustifyContent(nxui::JustifyContent::SPACE_BETWEEN);
         m_pill->setCornerRadius(11.f);
@@ -568,19 +588,13 @@ public:
         m_value->setGrow(1.f);
         m_value->setHAlign(nxui::Label::HAlign::Left);
         m_value->setVAlign(nxui::Label::VAlign::Center);
-        m_chev = std::make_shared<nxui::Label>("v");
-        m_chev->setScale(0.82f);
-        m_chev->setHAlign(nxui::Label::HAlign::Right);
-        m_chev->setVAlign(nxui::Label::VAlign::Center);
-        m_chev->setMarginLeft(12.f);
 
         m_pill->addChild(m_value);
-        m_pill->addChild(m_chev);
         m_right->addChild(m_pill);
     }
 protected:
     float preferredRightWidth(float rowWidth) const override {
-        return std::max(220.f, rowWidth * 0.50f);
+        return std::max(170.f, rowWidth * 0.38f);
     }
 
     void syncRight(const nxui::Rect& rightRect) override {
@@ -588,42 +602,38 @@ protected:
         const nxui::Theme* rowTheme = theme();
 
         int idx = std::clamp(m_item.intVal, 0, std::max(0, (int)m_item.options.size() - 1));
-        std::string text = m_item.options.empty() ? std::string() : m_item.options[idx];
-        if (text != m_cachedValueText) {
-            m_cachedValueText = text;
-            m_value->setText(m_cachedValueText);
-        }
-        if (rowSmallFont != m_cachedFont) {
-            m_cachedFont = rowSmallFont;
-            if (rowSmallFont) {
-                m_value->setFont(rowSmallFont);
-                m_chev->setFont(rowSmallFont);
-            }
-        }
-        if (rowTheme) {
-            m_pill->setBaseColor(rowTheme->panelBase.withAlpha(0.42f * opacity()));
-            m_pill->setBorderColor(rowTheme->panelBorder.withAlpha(0.5f * opacity()));
-            m_value->setTextColor(rowTheme->textPrimary);
-            m_chev->setTextColor(rowTheme->textPrimary);
-        }
-        float w = std::max(210.f, rightRect.width);
-        float h = std::max(38.f, rect().height - 14.f);
+        float w = std::max(170.f, rightRect.width);
+        float h = std::max(36.f, rect().height - 22.f);
         nxui::Rect pillRect = {
             rightRect.right() - w,
             rightRect.y + (rightRect.height - h) * 0.5f,
             w,
             h
         };
+
+        std::string text = m_item.options.empty() ? std::string() : m_item.options[idx];
+        text = fitTextToWidth(rowSmallFont, text, 0.82f, std::max(0.f, pillRect.width - 24.f));
+        if (text != m_cachedValueText) {
+            m_cachedValueText = text;
+            m_value->setText(m_cachedValueText);
+        }
+        if (rowSmallFont != m_cachedFont) {
+            m_cachedFont = rowSmallFont;
+            if (rowSmallFont)
+                m_value->setFont(rowSmallFont);
+        }
+        if (rowTheme) {
+            m_pill->setBaseColor(rowTheme->panelBase.withAlpha(0.42f * opacity()));
+            m_pill->setBorderColor(rowTheme->panelBorder.withAlpha(0.5f * opacity()));
+            m_value->setTextColor(rowTheme->textPrimary);
+        }
         m_pill->setRect(pillRect);
         m_value->setOpacity(opacity());
-        m_chev->setOpacity(opacity());
-        m_value->setRect({pillRect.x + 14.f, pillRect.y, std::max(0.f, pillRect.width - 48.f), pillRect.height});
-        m_chev->setRect({pillRect.right() - 22.f, pillRect.y, 22.f, pillRect.height});
+        m_value->setRect({pillRect.x + 12.f, pillRect.y, std::max(0.f, pillRect.width - 24.f), pillRect.height});
     }
 private:
     std::shared_ptr<nxui::GlassBox> m_pill;
     std::shared_ptr<nxui::Label> m_value;
-    std::shared_ptr<nxui::Label> m_chev;
     nxui::Font* m_cachedFont = nullptr;
     std::string m_cachedValueText;
 };
@@ -632,11 +642,11 @@ class ActionRowWidget final : public SettingRowBase {
 public:
     ActionRowWidget(SettingsScreen::SettingItem& item, const SettingWidgetContext& ctx)
         : SettingRowBase(item, ctx) {
-        m_btn = std::make_shared<nxui::GlassBox>(nxui::Axis::ROW);
-        switchu::ui::prepareActionButton(*m_btn, 9.f);
+        m_btn = std::make_shared<ActionButton>();
+        m_btn->setCornerRadius(9.f);
 
         m_btnLabel = std::make_shared<nxui::Label>(item.label);
-        m_btnLabel->setScale(0.76f);
+        m_btnLabel->setScale(0.84f);
         m_btnLabel->setHAlign(nxui::Label::HAlign::Center);
         m_btnLabel->setVAlign(nxui::Label::VAlign::Center);
         m_btnLabel->setGrow(1.f);
@@ -662,7 +672,8 @@ protected:
             m_btnLabel->setText(m_cachedButtonText);
         }
 
-        switchu::ui::applyActionButtonStyle(*m_btn, rowTheme, opacity(), m_item.anim01, 1.f);
+        m_btn->setTheme(rowTheme);
+        m_btn->setVisualState(opacity(), m_item.anim01, 1.f);
         if (rowTheme) {
             m_btnLabel->setTextColor(rowTheme->textPrimary);
         }
@@ -681,7 +692,7 @@ protected:
                              std::max(0.f, buttonRect.height - 8.f)});
     }
 private:
-    std::shared_ptr<nxui::GlassBox> m_btn;
+    std::shared_ptr<ActionButton> m_btn;
     std::shared_ptr<nxui::Label> m_btnLabel;
     nxui::Font* m_cachedLabelFont = nullptr;
     std::string m_cachedButtonText;

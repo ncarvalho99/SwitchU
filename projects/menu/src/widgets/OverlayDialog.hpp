@@ -1,13 +1,16 @@
 #pragma once
-#include <nxui/widgets/GlassBox.hpp>
 #include <nxui/widgets/GlassWidget.hpp>
 #include <nxui/widgets/Label.hpp>
 #include <nxui/widgets/Box.hpp>
 #include <nxui/core/Animation.hpp>
 #include <nxui/core/Font.hpp>
+#include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Input.hpp>
+#include <nxui/core/Texture.hpp>
 #include <nxui/Theme.hpp>
+#include "ActionButton.hpp"
 #include "SelectionCursor.hpp"
+#include <switch.h>
 #include <vector>
 #include <string>
 #include <functional>
@@ -22,6 +25,7 @@ public:
 
     using CancelCallback = std::function<void()>;
     using VoidCb = std::function<void()>;
+    using UserSelectCallback = std::function<void(AccountUid uid)>;
 
     OverlayDialog();
 
@@ -34,6 +38,8 @@ public:
               std::vector<ButtonDef> buttons,
               int initialSelected = 0,
               CancelCallback onCancel = {});
+    bool loadUsers(nxui::GpuDevice& gpu, nxui::Renderer& ren);
+    void showUserSelect(UserSelectCallback onSelect, CancelCallback onCancel = {});
 
     void hide();
 
@@ -47,19 +53,47 @@ public:
 
     SelectionCursor& cursor() { return m_cursor; }
 
+    static void renderGlassPanel(nxui::Renderer& ren,
+                                 const nxui::Theme* theme,
+                                 const nxui::Rect& panel,
+                                 float radius,
+                                 const nxui::Color& base,
+                                 const nxui::Color& border,
+                                 const nxui::Color& highlight,
+                                 float alpha,
+                                 int backdropTarget);
+
     void update(float dt) override;
     void render(nxui::Renderer& ren) override;
 
 private:
     void buildWidgetTree();
+    void buildUserSelect();
     void animateButtonFocus(float duration, nxui::EasingFunc easing);
     void setupActions();
+    void setupUserActions();
     void activateSelected();
+    void activateSelectedUser();
     void cancel();
     void syncCursor();
+    void syncUserCursor();
     void syncChildOpacities();
+    void syncUserOpacities();
+    nxui::Rect userAvatarRect(int index) const;
+    void renderUserContent(nxui::Renderer& ren, float alpha);
 
     nxui::Rect panelRect() const;
+
+    enum class DialogMode {
+        Buttons,
+        UserSelect,
+    };
+
+    struct UserEntry {
+        AccountUid uid;
+        std::string nickname;
+        nxui::Texture icon;
+    };
 
     nxui::Font*        m_font      = nullptr;
     nxui::Font*        m_smallFont = nullptr;
@@ -68,15 +102,18 @@ private:
     std::string              m_title;
     std::string              m_message;
     std::vector<ButtonDef>   m_buttons;
+    std::vector<UserEntry>   m_users;
     int  m_selected     = 0;
     bool m_active       = false;
     bool m_animatingOut = false;
+    DialogMode m_mode = DialogMode::Buttons;
 
     std::shared_ptr<nxui::Label>                     m_titleLabel;
     std::shared_ptr<nxui::Label>                     m_messageLabel;
     std::shared_ptr<nxui::Box>                       m_buttonRow;
-    std::vector<std::shared_ptr<nxui::GlassBox>>  m_btnWidgets;
+    std::vector<std::shared_ptr<ActionButton>>       m_btnWidgets;
     SelectionCursor m_cursor;
+    std::vector<nxui::Rect> m_userAvatarRects;
 
     nxui::AnimatedFloat m_overlayAlpha;
     nxui::AnimatedFloat m_panelScale;
@@ -89,13 +126,17 @@ private:
     int   m_cachedBlurIterations = -1;
 
     CancelCallback m_onCancel;
+    UserSelectCallback m_onUserSelect;
     VoidCb         m_navSfxCb;
     VoidCb         m_activateSfxCb;
     VoidCb         m_closeSfxCb;
 
     int  m_touchHitButton  = -1;
+    int  m_touchHitUser    = -1;
     bool m_touchOnSelected = false;
     bool m_ignoreInitialTouchRelease = false;
+
+    float m_panelW = 560.f;
 
     static constexpr float kPanelW       = 560.f;
     static constexpr float kPanelPadX    = 40.f;
@@ -106,5 +147,8 @@ private:
     static constexpr float kButtonGap    = 14.f;
     static constexpr float kTitleMsgGap  = 14.f;
     static constexpr float kMsgBtnGap    = 24.f;
+    static constexpr float kUserAvatarSize = 96.f;
+    static constexpr float kUserAvatarGap = 32.f;
+    static constexpr float kUserTitleGap = 30.f;
     static constexpr int   kBackdropCacheTarget = 1;
 };

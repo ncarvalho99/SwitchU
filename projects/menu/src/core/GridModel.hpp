@@ -13,6 +13,10 @@ struct AppEntry {
     int         iconTexIndex = -1;
     nxui::Color       tint = nxui::Color::white();
     uint32_t    viewFlags = 0;
+    bool        userRequired = true;
+    bool        startupUserKnown = true;
+    uint8_t     startupUserAccount = 1;
+    uint8_t     startupUserAccountOption = 0;
 
     bool isGameCard() const {
         return switchu::ns::viewHasFlag(viewFlags, switchu::ns::AppViewFlag_IsGameCard);
@@ -82,4 +86,3 @@ public:
 private:
     std::vector<AppEntry> m_entries;
 };
-

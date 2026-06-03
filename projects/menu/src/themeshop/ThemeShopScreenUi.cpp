@@ -1,6 +1,7 @@
 #include "ThemeShopScreen.hpp"
 
 #include "widgets/ActionButtonStyle.hpp"
+#include "settings/SettingsGlassTuning.hpp"
 
 #include "core/DebugLog.hpp"
 
@@ -12,6 +13,7 @@
 #include <cmath>
 #include <functional>
 #include <unordered_map>
+#include <utility>
 
 namespace {
 
@@ -19,14 +21,19 @@ constexpr int kGridCols = 2;
 constexpr int kVisibleRows = 2;
 constexpr float kContentInsetX = 24.f;
 constexpr float kContentInsetY = 18.f;
-constexpr float kHeaderHeight = 72.f;
+constexpr float kHeaderHeight = 78.f;
 constexpr float kGridGapX = 16.f;
 constexpr float kGridGapY = 20.f;
-constexpr float kFooterHintHeight = 24.f;
+constexpr float kFooterHintHeight = 74.f;
 constexpr float kPreviewAspect = 16.f / 9.f;
 constexpr float kSearchButtonWidth = 208.f;
 constexpr float kRefreshButtonWidth = 144.f;
 constexpr float kHeaderButtonGap = 12.f;
+constexpr int kEntriesPerPage = kGridCols * kVisibleRows;
+constexpr float kPageButtonWidth = 124.f;
+constexpr float kPageCounterWidth = 96.f;
+constexpr float kActionButtonRadius = 16.f;
+constexpr int kThemeShopBackdropCacheTarget = 2;
 constexpr size_t kTextMeasureCacheLimit = 1024;
 constexpr size_t kEllipsizeCacheLimit = 1024;
 
@@ -67,6 +74,9 @@ struct GridLayout {
     nxui::Rect header;
     nxui::Rect searchButton;
     nxui::Rect refreshButton;
+    nxui::Rect pagePrevButton;
+    nxui::Rect pageCounter;
+    nxui::Rect pageNextButton;
     nxui::Rect grid;
     float cardW = 0.f;
     float cardH = 0.f;
@@ -84,19 +94,40 @@ GridLayout makeGridLayout(const nxui::Rect& content) {
         layout.header.right() - kSearchButtonWidth,
         layout.header.y + 10.f,
         kSearchButtonWidth,
-        42.f
+        46.f
     };
     layout.refreshButton = {
         layout.searchButton.x - kHeaderButtonGap - kRefreshButtonWidth,
         layout.header.y + 10.f,
         kRefreshButtonWidth,
-        42.f
+        46.f
     };
     layout.grid = {
         content.x + kContentInsetX,
         layout.header.bottom() + 12.f,
         content.width - kContentInsetX * 2.f,
         content.height - (layout.header.bottom() - content.y) - 12.f - kFooterHintHeight
+    };
+    const float pageControlsW = kPageButtonWidth * 2.f + kPageCounterWidth + kHeaderButtonGap * 2.f;
+    const float pageControlsX = layout.grid.x + std::max(0.f, (layout.grid.width - pageControlsW) * 0.5f);
+    const float pageControlsY = layout.grid.bottom() + 8.f;
+    layout.pagePrevButton = {
+        pageControlsX,
+        pageControlsY,
+        kPageButtonWidth,
+        46.f
+    };
+    layout.pageCounter = {
+        layout.pagePrevButton.right() + kHeaderButtonGap,
+        pageControlsY,
+        kPageCounterWidth,
+        46.f
+    };
+    layout.pageNextButton = {
+        layout.pageCounter.right() + kHeaderButtonGap,
+        pageControlsY,
+        kPageButtonWidth,
+        46.f
     };
     layout.cardW = (layout.grid.width - kGridGapX * (kGridCols - 1)) / (float)kGridCols;
     layout.cardH = (layout.grid.height - kGridGapY * (kVisibleRows - 1)) / (float)kVisibleRows;
@@ -116,10 +147,10 @@ nxui::Rect gridCardRect(const GridLayout& layout, int localIndex) {
 
 nxui::Rect detailDialogRect(const nxui::Rect& content) {
     return {
-        content.x + 58.f,
-        content.y + 54.f,
-        content.width - 116.f,
-        content.height - 108.f
+        content.x + 38.f,
+        content.y + 42.f,
+        content.width - 76.f,
+        content.height - 84.f
     };
 }
 
@@ -249,7 +280,7 @@ nxui::Rect lerpRect(const nxui::Rect& from, const nxui::Rect& to, float t) {
 }
 
 nxui::Rect scaledRect(const nxui::Rect& rect, float scale) {
-    if (scale >= 0.999f) {
+    if (std::abs(scale - 1.f) <= 0.001f) {
         return rect;
     }
 
@@ -347,17 +378,10 @@ void drawActionButtonChip(nxui::Renderer& ren,
                           float accentMix = -1.f,
                           float scale = 0.72f) {
     auto style = switchu::ui::resolveActionButtonStyle(theme, opacity, emphasis, accentMix);
-    nxui::Rect buttonRect = scaledRect(rect, style.scale);
-    float radius = buttonRect.height * 0.5f;
+    nxui::Rect buttonRect = switchu::ui::scaledActionButtonRect(rect, style.scale);
+    float radius = std::min(kActionButtonRadius, buttonRect.height * 0.5f);
 
-    ren.drawRoundedRect(buttonRect, style.baseColor, radius);
-    ren.drawRoundedRectOutline(buttonRect, style.borderColor, radius, style.borderWidth);
-    if (style.highlightColor.a > 0.01f) {
-        ren.drawRoundedRectOutline(buttonRect.shrunk(1.f),
-                                   style.highlightColor,
-                                   std::max(0.f, radius - 1.f),
-                                   1.f);
-    }
+    switchu::ui::drawActionButtonChrome(ren, rect, radius, style);
 
     if (font) {
         float textScale = scale * style.scale;
@@ -370,6 +394,50 @@ void drawActionButtonChip(nxui::Renderer& ren,
                      textColor.withAlpha(textColor.a * opacity),
                      textScale);
     }
+}
+
+void drawLiquidGlassPanel(nxui::Renderer& ren,
+                          const nxui::Theme* theme,
+                          const nxui::Rect& rect,
+                          float radius,
+                          float opacity,
+                          float borderBoost = 1.f) {
+    if (!theme || opacity <= 0.01f)
+        return;
+
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    nxui::Rect glassRect = rect.shrunk(std::max(0.0f, tuning.inset));
+    float glassRadius = std::max(12.0f, radius - std::max(0.0f, tuning.inset) * 0.5f);
+    nxui::Color glassTint = theme->panelBase.withAlpha(theme->mode == nxui::ThemeMode::Dark
+        ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+        : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f));
+
+    ren.drawLiquidGlass(kThemeShopBackdropCacheTarget,
+                        glassRect,
+                        glassRadius,
+                        glassTint,
+                        opacity,
+                        std::clamp(tuning.shade, 0.0f, 1.0f));
+    ren.drawRoundedRectOutline(glassRect,
+                               theme->panelBorder.withAlpha(0.24f * borderBoost * opacity),
+                               glassRadius,
+                               1.2f);
+    ren.drawRoundedRectOutline(glassRect.shrunk(1.5f),
+                               theme->panelHighlight.withAlpha(0.08f * opacity),
+                               std::max(0.f, glassRadius - 1.5f),
+                               1.0f);
+    ren.liquidGlassSettings() = savedGlass;
 }
 
 void drawPreviewPlaceholder(nxui::Renderer& ren,
@@ -478,6 +546,37 @@ void ThemeShopScreen::setCurrentSelectedIndex(int idx) {
         m_themeShopSelectedId = m_themeShopEntries[(size_t)idx].id;
 }
 
+int ThemeShopScreen::pageCount() const {
+    int count = currentEntryCount();
+    return std::max(1, (count + kEntriesPerPage - 1) / kEntriesPerPage);
+}
+
+int ThemeShopScreen::currentPage() const {
+    int count = currentEntryCount();
+    if (count <= 0)
+        return 0;
+    int scrollRow = isCommunityTab() ? m_communityScrollRow : m_installedScrollRow;
+    return std::clamp(scrollRow / kVisibleRows, 0, pageCount() - 1);
+}
+
+void ThemeShopScreen::setCurrentPage(int page) {
+    int count = currentEntryCount();
+    if (count <= 0) {
+        currentScrollRowRef() = 0;
+        return;
+    }
+
+    page = std::clamp(page, 0, pageCount() - 1);
+    int target = std::min(count - 1, page * kEntriesPerPage);
+    setCurrentSelectedIndex(target);
+    currentScrollRowRef() = page * kVisibleRows;
+}
+
+void ThemeShopScreen::stepPage(int delta) {
+    int before = currentPage();
+    setCurrentPage(before + delta);
+}
+
 int& ThemeShopScreen::currentScrollRowRef() {
     return isCommunityTab() ? m_communityScrollRow : m_installedScrollRow;
 }
@@ -489,22 +588,24 @@ void ThemeShopScreen::ensureSelectionVisible() {
         return;
     }
 
-    int selected = std::max(0, currentSelectedIndex());
-    int selectedRow = selected / kGridCols;
-    int totalRows = (count + kGridCols - 1) / kGridCols;
-    int maxScroll = std::max(0, totalRows - kVisibleRows);
     int& scrollRow = currentScrollRowRef();
-    scrollRow = std::clamp(scrollRow, 0, maxScroll);
-    if (selectedRow < scrollRow)
-        scrollRow = selectedRow;
-    if (selectedRow >= scrollRow + kVisibleRows)
-        scrollRow = selectedRow - (kVisibleRows - 1);
+    int maxPageScroll = std::max(0, (pageCount() - 1) * kVisibleRows);
+    scrollRow = std::clamp(scrollRow, 0, maxPageScroll);
+
+    int page = std::clamp(scrollRow / kVisibleRows, 0, pageCount() - 1);
+    int pageStart = page * kEntriesPerPage;
+    int pageEnd = std::min(count, pageStart + kEntriesPerPage);
+    int selected = std::max(0, currentSelectedIndex());
+    if (selected < pageStart || selected >= pageEnd)
+        setCurrentSelectedIndex(std::min(count - 1, pageStart));
 }
 
 void ThemeShopScreen::openDetail() {
     if (currentEntryCount() <= 0)
         return;
     m_detailOpen = true;
+    m_detailSheetAnim.setImmediate(0.f);
+    m_detailSheetAnim.set(1.f, 0.22f, nxui::Easing::outCubic);
     m_detailFullscreen = false;
     m_detailFullscreenAnim.setImmediate(0.f);
     m_contentFocusArea = ContentFocusArea::Grid;
@@ -522,6 +623,7 @@ void ThemeShopScreen::openDetail() {
 
 void ThemeShopScreen::closeDetail() {
     m_detailOpen = false;
+    m_detailSheetAnim.set(0.f, 0.16f, nxui::Easing::outCubic);
     m_detailFullscreen = false;
     m_detailFullscreenAnim.setImmediate(0.f);
     m_detailFocusArea = DetailFocusArea::Buttons;
@@ -594,18 +696,25 @@ void ThemeShopScreen::activateDetailButton(int buttonIndex) {
 }
 
 void ThemeShopScreen::updateCustomContent(float dt) {
+    if (!usesCustomContentLayout())
+        return;
+
+    m_detailSheetAnim.update(std::min(dt, 0.03f));
     m_detailFullscreenAnim.update(std::min(dt, 0.03f));
 
     if (!m_showing) {
         closeDetail();
         clearCommunityPreviewCache();
+        m_lastPreviewPrimeKey.clear();
         return;
     }
 
     if (isCommunityTab())
         syncFinishedCommunityPreviewLoads();
-    else
+    else {
         clearCommunityPreviewCache();
+        m_lastPreviewPrimeKey.clear();
+    }
 
     int headerButtonCount = isCommunityTab() ? 2 : 1;
     m_headerButtonIndex = std::clamp(m_headerButtonIndex, 0, std::max(0, headerButtonCount - 1));
@@ -621,8 +730,10 @@ void ThemeShopScreen::updateCustomContent(float dt) {
             m_focusArea = FocusArea::Tabs;
         currentScrollRowRef() = 0;
         closeDetail();
-        if (isCommunityTab())
+        if (isCommunityTab()) {
             clearCommunityPreviewCache();
+            m_lastPreviewPrimeKey.clear();
+        }
         return;
     }
 
@@ -638,7 +749,15 @@ void ThemeShopScreen::updateCustomContent(float dt) {
         } else {
             m_detailPreviewButtonIndex = 0;
         }
-        primeVisibleCommunityPreviews();
+        std::string primeKey = std::to_string(m_communityRevision)
+            + "|" + m_communitySelectedId
+            + "|" + std::to_string(m_communityScrollRow)
+            + "|" + std::to_string(m_detailOpen ? 1 : 0)
+            + "|" + std::to_string(m_detailScreenshotIndex);
+        if (primeKey != m_lastPreviewPrimeKey) {
+            m_lastPreviewPrimeKey = std::move(primeKey);
+            primeVisibleCommunityPreviews();
+        }
     }
 }
 
@@ -668,6 +787,17 @@ bool ThemeShopScreen::handleCustomPressA() {
             promptSearchQuery();
         }
         if (m_activateSfxCb) m_activateSfxCb();
+        return true;
+    }
+
+    if (!m_detailOpen && m_contentFocusArea == ContentFocusArea::Pager) {
+        int before = currentPage();
+        if (m_pageButtonIndex == 0)
+            stepPage(-1);
+        else
+            stepPage(1);
+        if (before != currentPage() && m_navSfxCb)
+            m_navSfxCb();
         return true;
     }
 
@@ -749,12 +879,26 @@ bool ThemeShopScreen::handleCustomNavUp() {
         return true;
     }
 
+    if (m_contentFocusArea == ContentFocusArea::Pager) {
+        if (currentEntryCount() > 0) {
+            m_contentFocusArea = ContentFocusArea::Grid;
+            int pageStart = currentPage() * kEntriesPerPage;
+            int target = std::min(currentEntryCount() - 1,
+                                  pageStart + (kVisibleRows - 1) * kGridCols + m_pageButtonIndex);
+            setCurrentSelectedIndex(target);
+            ensureSelectionVisible();
+        }
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
     int count = currentEntryCount();
     if (count <= 0)
         return true;
 
     int selected = std::max(0, currentSelectedIndex());
-    if (selected - kGridCols >= 0) {
+    int pageStart = currentPage() * kEntriesPerPage;
+    if (selected - kGridCols >= pageStart) {
         setCurrentSelectedIndex(selected - kGridCols);
         ensureSelectionVisible();
     } else {
@@ -785,14 +929,26 @@ bool ThemeShopScreen::handleCustomNavDown() {
         return true;
     }
 
+    if (m_contentFocusArea == ContentFocusArea::Pager)
+        return true;
+
     int count = currentEntryCount();
     if (count <= 0)
         return true;
 
     int selected = std::max(0, currentSelectedIndex());
-    if (selected + kGridCols < count) {
+    int pageEnd = std::min(count, (currentPage() + 1) * kEntriesPerPage);
+    if (selected + kGridCols < pageEnd) {
         setCurrentSelectedIndex(selected + kGridCols);
         ensureSelectionVisible();
+        if (m_navSfxCb) m_navSfxCb();
+    } else {
+        m_contentFocusArea = ContentFocusArea::Pager;
+        m_pageButtonIndex = std::clamp(selected % kGridCols, 0, 1);
+        if (currentPage() == 0)
+            m_pageButtonIndex = 1;
+        else if (currentPage() + 1 >= pageCount())
+            m_pageButtonIndex = 0;
         if (m_navSfxCb) m_navSfxCb();
     }
     return true;
@@ -830,6 +986,15 @@ bool ThemeShopScreen::handleCustomNavLeft() {
         } else {
             m_focusArea = FocusArea::Tabs;
         }
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
+    if (m_contentFocusArea == ContentFocusArea::Pager) {
+        if (m_pageButtonIndex > 0)
+            --m_pageButtonIndex;
+        else
+            m_focusArea = FocusArea::Tabs;
         if (m_navSfxCb) m_navSfxCb();
         return true;
     }
@@ -899,6 +1064,13 @@ bool ThemeShopScreen::handleCustomNavRight() {
         return true;
     }
 
+    if (m_contentFocusArea == ContentFocusArea::Pager) {
+        if (m_pageButtonIndex < 1)
+            ++m_pageButtonIndex;
+        if (m_navSfxCb) m_navSfxCb();
+        return true;
+    }
+
     int count = currentEntryCount();
     if (count <= 0)
         return true;
@@ -935,6 +1107,12 @@ bool ThemeShopScreen::handleCustomTouch(nxui::Input& input, const nxui::Rect&, c
     };
     auto refreshHit = [&](float x, float y) {
         return isCommunityTab() && makeGridLayout(content).refreshButton.contains(x, y);
+    };
+    auto pagePrevHit = [&](float x, float y) {
+        return pageCount() > 1 && makeGridLayout(content).pagePrevButton.contains(x, y);
+    };
+    auto pageNextHit = [&](float x, float y) {
+        return pageCount() > 1 && makeGridLayout(content).pageNextButton.contains(x, y);
     };
     auto detailPreviewHitIndex = [&](float x, float y) {
         if (!isCommunityTab() || !m_detailOpen)
@@ -1015,6 +1193,16 @@ bool ThemeShopScreen::handleCustomTouch(nxui::Input& input, const nxui::Rect&, c
             return true;
         }
 
+        if (pagePrevHit(x, y)) {
+            m_themeTouchTarget = ThemeTouchTarget::PagePrev;
+            return true;
+        }
+
+        if (pageNextHit(x, y)) {
+            m_themeTouchTarget = ThemeTouchTarget::PageNext;
+            return true;
+        }
+
         int hit = hitTestGridCard(content, x, y);
         if (hit >= 0) {
             m_themeTouchTarget = ThemeTouchTarget::GridCard;
@@ -1057,6 +1245,24 @@ bool ThemeShopScreen::handleCustomTouch(nxui::Input& input, const nxui::Rect&, c
                 if (refreshHit(x, y)) {
                     refreshCommunityCatalog();
                     if (m_activateSfxCb) m_activateSfxCb();
+                }
+                return true;
+            case ThemeTouchTarget::PagePrev:
+                if (pagePrevHit(x, y)) {
+                    m_contentFocusArea = ContentFocusArea::Pager;
+                    m_pageButtonIndex = 0;
+                    int before = currentPage();
+                    stepPage(-1);
+                    if (before != currentPage() && m_navSfxCb) m_navSfxCb();
+                }
+                return true;
+            case ThemeTouchTarget::PageNext:
+                if (pageNextHit(x, y)) {
+                    m_contentFocusArea = ContentFocusArea::Pager;
+                    m_pageButtonIndex = 1;
+                    int before = currentPage();
+                    stepPage(1);
+                    if (before != currentPage() && m_navSfxCb) m_navSfxCb();
                 }
                 return true;
             case ThemeTouchTarget::GridCard:
@@ -1158,9 +1364,13 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         --m_renderDebugFrames;
     }
 
-    layout.header.x += slideOffset;
-    layout.refreshButton.x += slideOffset;
-    layout.grid.x += slideOffset;
+    layout.header.y += slideOffset;
+    layout.refreshButton.y += slideOffset;
+    layout.searchButton.y += slideOffset;
+    layout.pagePrevButton.y += slideOffset;
+    layout.pageCounter.y += slideOffset;
+    layout.pageNextButton.y += slideOffset;
+    layout.grid.y += slideOffset;
 
     std::string title = isCommunityTab()
         ? i18n.tr("themeshop.community.title", "Browse Community Themes")
@@ -1170,9 +1380,9 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         : i18n.tr("themeshop.installed.subtitle", "Your local themes in a gallery layout.");
 
     ren.drawText(title, {layout.header.x, layout.header.y + 2.f}, m_font,
-                 m_theme->textPrimary.withAlpha(contentOpacity), 0.92f);
-    ren.drawText(subtitle, {layout.header.x, layout.header.y + 34.f}, m_smallFont,
-                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity), 0.72f);
+                 m_theme->textPrimary.withAlpha(contentOpacity), 1.00f);
+    ren.drawText(subtitle, {layout.header.x, layout.header.y + 38.f}, m_smallFont,
+                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity), 0.78f);
 
     std::string searchLabel = m_searchQuery.empty()
         ? i18n.tr("themeshop.search.button", "Search")
@@ -1188,7 +1398,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          contentOpacity,
                          searchSelected ? 1.f : 0.f,
                          searchSelected ? 1.f : (m_searchQuery.empty() ? 0.f : 0.72f),
-                         0.70f);
+                         0.78f);
 
     std::string counterText;
     if (count > 0) {
@@ -1202,10 +1412,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     nxui::Vec2 countSize = measureTextCached(m_font, counterText);
     float countRight = (isCommunityTab() ? layout.refreshButton.x : layout.searchButton.x) - 18.f;
     ren.drawText(counterText,
-                 {countRight - countSize.x * 0.84f, layout.header.y + 4.f},
+                 {countRight - countSize.x * 0.90f, layout.header.y + 4.f},
                  m_font,
                  m_theme->textPrimary.withAlpha(contentOpacity),
-                 0.84f);
+                 0.90f);
 
     if (!m_packageTransferState.label().empty()) {
         nxui::Color statusFill = m_theme->panelBase.withAlpha(0.18f);
@@ -1235,7 +1445,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                  statusBorder,
                  m_theme->textPrimary,
                  contentOpacity,
-                 0.62f);
+                 0.70f);
         if (m_packageTransferState.isRunning()) {
             drawSpinner(ren,
                         {statusChip.x + 16.f, statusChip.y + statusChip.height * 0.5f},
@@ -1261,7 +1471,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                              contentOpacity,
                              refreshSelected ? 1.f : 0.f,
                              refreshSelected ? 1.f : 0.68f,
-                             0.70f);
+                             0.78f);
         if (m_communityTransferState.isRunning()) {
             drawSpinner(ren,
                         {layout.refreshButton.x + 18.f, layout.refreshButton.y + layout.refreshButton.height * 0.5f},
@@ -1272,12 +1482,54 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         }
     }
 
+    const int pages = pageCount();
+    const int page = currentPage();
+    const bool canPagePrev = page > 0;
+    const bool canPageNext = page + 1 < pages;
+    const bool pagerFocused = !m_detailOpen
+        && m_focusArea == FocusArea::Content
+        && m_contentFocusArea == ContentFocusArea::Pager;
+    drawActionButtonChip(ren,
+                         m_smallFont,
+                         layout.pagePrevButton,
+                         i18n.tr("themeshop.page.prev", "Previous"),
+                         m_theme,
+                         canPagePrev ? m_theme->textPrimary : m_theme->textSecondary,
+                         contentOpacity,
+                         pagerFocused && m_pageButtonIndex == 0 ? 1.f : 0.f,
+                         canPagePrev ? (pagerFocused && m_pageButtonIndex == 0 ? 1.f : 0.18f) : 0.f,
+                         0.74f);
+    drawChip(ren,
+             m_smallFont,
+             layout.pageCounter,
+             std::to_string(page + 1) + " / " + std::to_string(pages),
+             m_theme->panelBase.withAlpha(0.16f),
+             m_theme->panelBorder.withAlpha(0.24f),
+             m_theme->textPrimary,
+             contentOpacity,
+             0.74f);
+    drawActionButtonChip(ren,
+                         m_smallFont,
+                         layout.pageNextButton,
+                         i18n.tr("themeshop.page.next", "Next"),
+                         m_theme,
+                         canPageNext ? m_theme->textPrimary : m_theme->textSecondary,
+                         contentOpacity,
+                         pagerFocused && m_pageButtonIndex == 1 ? 1.f : 0.f,
+                         canPageNext ? (pagerFocused && m_pageButtonIndex == 1 ? 1.f : 0.18f) : 0.f,
+                         0.74f);
+
+    if (pagerFocused) {
+        nxui::Rect target = m_pageButtonIndex == 0 ? layout.pagePrevButton : layout.pageNextButton;
+        m_focusCursor.moveTo(target.expanded(2.f), 20.f, 0.08f);
+    }
+
     if (isCommunityTab() && !m_communityTransferState.label().empty() && m_packageTransferState.label().empty()) {
         ren.drawText(m_communityTransferState.label(),
                      {layout.header.x, layout.header.bottom() - 6.f},
                      m_smallFont,
                      m_theme->textSecondary.withAlpha(0.78f * contentOpacity),
-                     0.64f);
+                     0.72f);
     }
 
     if (isCommunityTab() && m_communityTransferState.isRunning() && count == 0) {
@@ -1289,7 +1541,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      {center.x - size.x * 0.40f, center.y + 28.f},
                      m_font,
                      m_theme->textPrimary.withAlpha(contentOpacity),
-                     0.80f);
+                     0.88f);
         return;
     }
 
@@ -1316,16 +1568,16 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
 
         nxui::Vec2 titleSize = measureTextCached(m_font, emptyTitle);
         ren.drawText(emptyTitle,
-                     {emptyBox.x + (emptyBox.width - titleSize.x * 0.82f) * 0.5f, emptyBox.y + 42.f},
+                     {emptyBox.x + (emptyBox.width - titleSize.x * 0.90f) * 0.5f, emptyBox.y + 40.f},
                      m_font,
                      m_theme->textPrimary.withAlpha(contentOpacity),
-                     0.82f);
+                     0.90f);
         nxui::Vec2 subSize = measureTextCached(m_smallFont, emptySubtitle);
         ren.drawText(emptySubtitle,
-                     {emptyBox.x + (emptyBox.width - subSize.x * 0.68f) * 0.5f, emptyBox.y + 92.f},
+                     {emptyBox.x + (emptyBox.width - subSize.x * 0.76f) * 0.5f, emptyBox.y + 94.f},
                      m_smallFont,
                      m_theme->textSecondary.withAlpha(0.90f * contentOpacity),
-                     0.68f);
+                     0.76f);
         if (!m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header) {
             auto headerButtons = headerButtonRects(layout, isCommunityTab());
             if (!headerButtons.empty()) {
@@ -1371,9 +1623,18 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         } else {
             const auto& entry = m_themeShopEntries[(size_t)globalIndex];
             titleText = entry.name;
-            subtitleText = entry.source;
+            std::string author = entry.author.empty()
+                ? i18n.tr("themeshop.community.author_unknown", "Unknown")
+                : entry.author;
+            subtitleText = entry.source.empty() ? author : (author + " - " + entry.source);
             versionText = entry.version;
             activeTheme = entry.active;
+            previewRequested = !entry.coverPath.empty();
+            if (previewRequested) {
+                primeInstalledPreview(entry.coverPath);
+                previewTexture = installedPreviewTexture(entry.coverPath);
+                previewPhase = installedPreviewPhase(entry.coverPath);
+            }
         }
 
         nxui::Color cardFill = m_theme->panelBase.withAlpha((cardSelected ? 0.18f : 0.14f) * rowOpacity);
@@ -1381,7 +1642,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         ren.drawRoundedRect(card, cardFill, 22.f);
         ren.drawRoundedRectOutline(card, cardBorder, 22.f, 1.0f);
 
-        nxui::Rect previewBounds = {card.x + 10.f, card.y + 10.f, card.width - 20.f, card.height - 64.f};
+        nxui::Rect previewBounds = {card.x + 10.f, card.y + 10.f, card.width - 20.f, card.height - 76.f};
         nxui::Rect preview = fitAspectRect(previewBounds, kPreviewAspect);
         bool previewLoading = previewPhase == PreviewPhase::Loading || previewPhase == PreviewPhase::Downloaded;
         std::string previewLabel = previewRequested
@@ -1400,8 +1661,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          rowOpacity);
 
         if (!versionText.empty()) {
-            float chipWidth = std::max(70.f, std::min(96.f, 30.f + measureTextCached(m_smallFont, versionText).x * 0.58f));
-            nxui::Rect versionChip = {preview.right() - chipWidth - 10.f, preview.y + 10.f, chipWidth, 24.f};
+            float chipWidth = std::max(74.f, std::min(108.f, 32.f + measureTextCached(m_smallFont, versionText).x * 0.64f));
+            nxui::Rect versionChip = {preview.right() - chipWidth - 10.f, preview.y + 10.f, chipWidth, 26.f};
             drawChip(ren,
                      m_smallFont,
                      versionChip,
@@ -1410,13 +1671,13 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      nxui::Color(1.f, 1.f, 1.f, 0.16f),
                      m_theme->textPrimary,
                      rowOpacity,
-                     0.58f);
+                     0.64f);
         }
 
         if (activeTheme) {
             const std::string activeLabel = i18n.tr("themeshop.installed.status_active", "Active");
-            float chipWidth = std::max(76.f, std::min(104.f, 30.f + measureTextCached(m_smallFont, activeLabel).x * 0.60f));
-            nxui::Rect activeChip = {preview.x + 10.f, preview.y + 10.f, chipWidth, 24.f};
+            float chipWidth = std::max(82.f, std::min(114.f, 32.f + measureTextCached(m_smallFont, activeLabel).x * 0.66f));
+            nxui::Rect activeChip = {preview.x + 10.f, preview.y + 10.f, chipWidth, 26.f};
             drawChip(ren,
                      m_smallFont,
                      activeChip,
@@ -1425,21 +1686,21 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      nxui::Color(0.34f, 0.92f, 0.52f, 0.50f),
                      m_theme->textPrimary,
                      rowOpacity,
-                     0.58f);
+                     0.66f);
         }
 
-        std::string titleFitted = ellipsize(m_font, titleText, card.width - 18.f, 0.78f);
+        std::string titleFitted = ellipsize(m_font, titleText, card.width - 18.f, 0.86f);
         ren.drawText(titleFitted,
                      {card.x + 10.f, preview.bottom() + 10.f},
                      m_font,
                      m_theme->textPrimary.withAlpha(rowOpacity),
-                     0.78f);
-        std::string subtitleFitted = ellipsize(m_smallFont, subtitleText, card.width - 18.f, 0.68f);
+                     0.86f);
+        std::string subtitleFitted = ellipsize(m_smallFont, subtitleText, card.width - 18.f, 0.76f);
         ren.drawText(subtitleFitted,
-                     {card.x + 10.f, card.bottom() - 26.f},
+                     {card.x + 10.f, card.bottom() - 30.f},
                      m_smallFont,
                      m_theme->textSecondary.withAlpha(0.92f * rowOpacity),
-                     0.68f);
+                     0.76f);
 
         if (!m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Grid && cardSelected) {
             m_focusCursor.moveTo(card.expanded(2.f), 22.f, 0.08f);
@@ -1457,20 +1718,21 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     int firstVisible = start + 1;
     int lastVisible = end;
     std::string footer = std::to_string(firstVisible) + "-" + std::to_string(lastVisible) + " / " + std::to_string(count);
-    nxui::Vec2 footerSize = measureTextCached(m_smallFont, footer);
     ren.drawText(footer,
-                 {layout.grid.right() - footerSize.x * 0.68f, layout.grid.bottom() + 6.f},
+                 {layout.grid.x, layout.grid.bottom() + 15.f},
                  m_smallFont,
                  m_theme->textSecondary.withAlpha(0.84f * contentOpacity),
-                 0.68f);
+                 0.76f);
 
-    if (!m_detailOpen)
+    float detailT = std::clamp(m_detailSheetAnim.value(), 0.f, 1.f);
+    if (!m_detailOpen && detailT <= 0.01f)
         return;
 
-    ren.drawRoundedRect(content, nxui::Color(0.f, 0.f, 0.f, 0.24f * contentOpacity), 26.f);
+    float detailOpacity = contentOpacity * detailT;
+    ren.drawRoundedRect(content, nxui::Color(0.f, 0.f, 0.f, 0.24f * detailOpacity), 26.f);
     nxui::Rect dialog = detailDialogRect(content);
-    ren.drawRoundedRect(dialog, m_theme->panelBase.withAlpha(0.96f * contentOpacity), 24.f);
-    ren.drawRoundedRectOutline(dialog, m_theme->cursorNormal.withAlpha(0.36f * contentOpacity), 24.f, 1.4f);
+    dialog = scaledRect(dialog, 0.96f + 0.04f * detailT);
+    drawLiquidGlassPanel(ren, m_theme, dialog, 24.f, detailOpacity, 1.4f);
 
     nxui::Rect preview = detailPreviewRect(dialog);
     std::string detailTitle;
@@ -1515,7 +1777,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         if (!entry)
             return;
         detailTitle = entry->name;
-        detailSubtitle = entry->source;
+        std::string author = entry->author.empty()
+            ? i18n.tr("themeshop.community.author_unknown", "Unknown")
+            : entry->author;
+        detailSubtitle = entry->source.empty() ? author : (author + " - " + entry->source);
         detailInfoA = i18n.tr("themeshop.installed.status", "Status") + std::string(": ")
             + (entry->active ? i18n.tr("themeshop.installed.status_active", "Active") : i18n.tr("themeshop.installed.status_available", "Available"));
         detailInfoB = i18n.tr("themeshop.installed.sound", "Bundled Sound Pack") + std::string(": ")
@@ -1523,6 +1788,12 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         detailInfoC = entry->removable
             ? i18n.tr("themeshop.installed.remove_hint", "This theme can be removed from the console.")
             : i18n.tr("themeshop.installed.builtin_hint", "This is part of the built-in theme set.");
+        detailPreviewRequested = !entry->coverPath.empty();
+        if (detailPreviewRequested) {
+            primeInstalledPreview(entry->coverPath);
+            detailPreviewTexture = installedPreviewTexture(entry->coverPath);
+            detailPreviewPhase = installedPreviewPhase(entry->coverPath);
+        }
     }
 
     bool detailPreviewLoading = detailPreviewPhase == PreviewPhase::Loading || detailPreviewPhase == PreviewPhase::Downloaded;
@@ -1539,7 +1810,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      detailPreviewLabel,
                      detailPreviewLoading,
                      m_uiTime,
-                     contentOpacity);
+                     detailOpacity);
 
     if (isCommunityTab() && detailPreviewRequested) {
         auto previewButtons = detailPreviewControlRects(previewControls, preview, detailScreenshotTotal);
@@ -1552,20 +1823,20 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                                  i18n.tr("themeshop.preview.prev", "Prev"),
                                  m_theme,
                                  canGoPrev ? m_theme->textPrimary : m_theme->textSecondary,
-                                 contentOpacity,
+                                 detailOpacity,
                                  0.f,
                                  canGoPrev ? 0.24f : 0.f,
-                                 0.70f);
+                                 0.78f);
             drawActionButtonChip(ren,
                                  m_smallFont,
                                  previewControls.next,
                                  i18n.tr("themeshop.preview.next", "Next"),
                                  m_theme,
                                  canGoNext ? m_theme->textPrimary : m_theme->textSecondary,
-                                 contentOpacity,
+                                 detailOpacity,
                                  0.f,
                                  canGoNext ? 0.24f : 0.f,
-                                 0.70f);
+                                 0.78f);
             drawChip(ren,
                      m_smallFont,
                      previewControls.counter,
@@ -1573,8 +1844,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      nxui::Color(0.f, 0.f, 0.f, 0.22f),
                      m_theme->panelBorder.withAlpha(0.20f),
                      m_theme->textPrimary,
-                     contentOpacity,
-                     0.60f);
+                     detailOpacity,
+                     0.68f);
         }
 
         if (m_detailFocusArea == DetailFocusArea::Preview && !previewButtons.empty()) {
@@ -1582,7 +1853,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         }
     }
 
-    float infoBlockHeight = (isCommunityTab() && !m_packageTransferState.label().empty()) ? 236.f : 194.f;
+    float infoBlockHeight = (isCommunityTab() && !m_packageTransferState.label().empty()) ? 272.f : 224.f;
     nxui::Rect infoBounds = {
         preview.right() + 24.f,
         dialog.y + 26.f,
@@ -1595,32 +1866,32 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         infoBounds.width,
         infoBlockHeight
     };
-    ren.drawText(ellipsize(m_font, detailTitle, info.width, 1.02f),
+    ren.drawText(ellipsize(m_font, detailTitle, info.width, 1.10f),
                  {info.x, info.y + 2.f},
                  m_font,
-                 m_theme->textPrimary.withAlpha(contentOpacity),
-                 1.02f);
-    ren.drawText(ellipsize(m_smallFont, detailSubtitle, info.width, 0.76f),
-                 {info.x, info.y + 38.f},
+                 m_theme->textPrimary.withAlpha(detailOpacity),
+                 1.10f);
+    ren.drawText(ellipsize(m_smallFont, detailSubtitle, info.width, 0.84f),
+                 {info.x, info.y + 44.f},
                  m_smallFont,
-                 m_theme->textSecondary.withAlpha(0.90f * contentOpacity),
-                 0.76f);
+                 m_theme->textSecondary.withAlpha(0.90f * detailOpacity),
+                 0.84f);
 
     ren.drawText(detailInfoA,
-                 {info.x, info.y + 92.f},
+                 {info.x, info.y + 108.f},
                  m_smallFont,
-                 m_theme->textPrimary.withAlpha(contentOpacity),
-                 0.72f);
-    ren.drawText(ellipsize(m_smallFont, detailInfoB, info.width, 0.68f),
-                 {info.x, info.y + 130.f},
+                 m_theme->textPrimary.withAlpha(detailOpacity),
+                 0.80f);
+    ren.drawText(ellipsize(m_smallFont, detailInfoB, info.width, 0.76f),
+                 {info.x, info.y + 150.f},
                  m_smallFont,
-                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity),
-                 0.68f);
-    ren.drawText(ellipsize(m_smallFont, detailInfoC, info.width, 0.68f),
-                 {info.x, info.y + 166.f},
+                 m_theme->textSecondary.withAlpha(0.92f * detailOpacity),
+                 0.76f);
+    ren.drawText(ellipsize(m_smallFont, detailInfoC, info.width, 0.76f),
+                 {info.x, info.y + 190.f},
                  m_smallFont,
-                 m_theme->textSecondary.withAlpha(0.92f * contentOpacity),
-                 0.68f);
+                 m_theme->textSecondary.withAlpha(0.92f * detailOpacity),
+                 0.76f);
 
     if (isCommunityTab() && !m_packageTransferState.label().empty()) {
         nxui::Color statusColor = m_theme->textSecondary;
@@ -1631,18 +1902,18 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         else if (m_packageTransferState.hasFailed())
             statusColor = nxui::Color(1.f, 0.56f, 0.52f, 1.f);
 
-        ren.drawText(ellipsize(m_smallFont, transferLabel(m_packageTransferState), info.width - 24.f, 0.68f),
-                     {info.x + 24.f, info.y + 206.f},
+        ren.drawText(ellipsize(m_smallFont, transferLabel(m_packageTransferState), info.width - 24.f, 0.76f),
+                     {info.x + 24.f, info.y + 236.f},
                      m_smallFont,
-                     statusColor.withAlpha(contentOpacity),
-                     0.68f);
+                     statusColor.withAlpha(detailOpacity),
+                     0.76f);
         if (m_packageTransferState.isRunning()) {
             drawSpinner(ren,
-                        {info.x + 10.f, info.y + 214.f},
+                        {info.x + 10.f, info.y + 246.f},
                         7.f,
                         m_uiTime,
                         m_theme->cursorNormal,
-                        contentOpacity);
+                        detailOpacity);
         }
     }
 
@@ -1651,7 +1922,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     if (fullscreenVisible) {
         FullscreenOverlayLayout fullscreen = makeFullscreenOverlayLayout(content);
         nxui::Rect animatedPreview = lerpRect(preview, fullscreen.preview, fullscreenT);
-        ren.drawRoundedRect(content, nxui::Color(0.f, 0.f, 0.f, 0.58f * contentOpacity * fullscreenT), 26.f);
+        ren.drawRoundedRect(content, nxui::Color(0.f, 0.f, 0.f, 0.58f * detailOpacity * fullscreenT), 26.f);
         drawThemePreview(ren,
                          m_smallFont,
                          m_theme,
@@ -1660,7 +1931,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          detailPreviewLabel,
                          detailPreviewLoading,
                          m_uiTime,
-                         contentOpacity);
+                         detailOpacity);
 
         drawActionButtonChip(ren,
                              m_smallFont,
@@ -1668,10 +1939,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                              i18n.tr("button.close", "Close"),
                              m_theme,
                              m_theme->textPrimary,
-                             contentOpacity * fullscreenT,
+                             detailOpacity * fullscreenT,
                              0.f,
                              0.38f,
-                             0.76f);
+                             0.84f);
 
         if (detailScreenshotTotal > 1) {
             drawActionButtonChip(ren,
@@ -1680,20 +1951,20 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                                  i18n.tr("themeshop.preview.prev", "Prev"),
                                  m_theme,
                                  m_theme->textPrimary,
-                                 contentOpacity * fullscreenT,
+                                 detailOpacity * fullscreenT,
                                  0.f,
                                  0.32f,
-                                 0.76f);
+                                 0.84f);
             drawActionButtonChip(ren,
                                  m_smallFont,
                                  fullscreen.next,
                                  i18n.tr("themeshop.preview.next", "Next"),
                                  m_theme,
                                  m_theme->textPrimary,
-                                 contentOpacity * fullscreenT,
+                                 detailOpacity * fullscreenT,
                                  0.f,
                                  0.32f,
-                                 0.76f);
+                                 0.84f);
             drawChip(ren,
                      m_smallFont,
                      fullscreen.counter,
@@ -1701,8 +1972,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      nxui::Color(0.f, 0.f, 0.f, 0.50f),
                      nxui::Color(1.f, 1.f, 1.f, 0.24f),
                      m_theme->textPrimary,
-                     contentOpacity * fullscreenT,
-                     0.62f);
+                     detailOpacity * fullscreenT,
+                     0.70f);
         }
 
         m_focusCursor.moveTo(fullscreen.close.expanded(2.f), 20.f, 0.08f);
@@ -1734,7 +2005,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                              contentOpacity,
                              selectedButton ? 1.f : 0.f,
                              disableCommunityButtons ? 0.f : (selectedButton ? 1.f : 0.18f),
-                             0.76f);
+                             0.84f);
     }
 
     if (!(isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview && detailPreviewRequested)

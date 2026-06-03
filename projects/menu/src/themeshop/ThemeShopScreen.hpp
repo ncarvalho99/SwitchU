@@ -6,6 +6,7 @@
 #include <nxui/core/Texture.hpp>
 
 #include <cstdint>
+#include <algorithm>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -14,6 +15,7 @@
 namespace themeshop::tabs {
 class InstalledTab;
 class CommunityTab;
+class OptionsTab;
 }
 
 namespace nxui {
@@ -26,9 +28,11 @@ public:
     struct ThemeShopEntry {
         std::string id;
         std::string name;
+        std::string author;
         std::string version;
         std::string source;
         std::string soundPreset;
+        std::string coverPath;
         bool active = false;
         bool removable = false;
     };
@@ -39,6 +43,8 @@ public:
     void onMusicEnabledChange(BoolCb cb) { m_musicEnabledCb = std::move(cb); }
     void onMusicVolumeChange(FloatCb cb) { m_musicVolumeCb = std::move(cb); }
     void onSfxVolumeChange(FloatCb cb)   { m_sfxVolumeCb = std::move(cb); }
+    void onGridColumnsChange(IntCb cb)   { m_gridColumnsCb = std::move(cb); }
+    void onGridRowsChange(IntCb cb)      { m_gridRowsCb = std::move(cb); }
     void onNextTrack(VoidCb cb)          { m_nextTrackCb = std::move(cb); }
     void onThemeShopApply(StringCb cb)   { m_themeShopApplyCb = std::move(cb); }
     void onThemeShopDelete(StringCb cb)  { m_themeShopDeleteCb = std::move(cb); }
@@ -50,6 +56,10 @@ public:
         m_musicEnabled = enabled;
         m_musicVolume = musicVol;
         m_sfxVolume = sfxVol;
+    }
+    void setGridLayoutState(int columns, int rows) {
+        m_gridColumns = std::clamp(columns, 3, 8);
+        m_gridRows = std::clamp(rows, 2, 5);
     }
 
     void setThreadPool(nxui::ThreadPool* pool);
@@ -74,7 +84,7 @@ public:
 
 protected:
     void buildTabs() override;
-    bool usesCustomContentLayout() const override { return true; }
+    bool usesCustomContentLayout() const override { return m_tabIndex < 2; }
     void drawCustomContent(nxui::Renderer& ren, const nxui::Rect& panel, const nxui::Rect& content, float opacity) override;
     void updateCustomContent(float dt) override;
     bool handleCustomPressA() override;
@@ -89,6 +99,7 @@ protected:
 private:
     friend class themeshop::tabs::InstalledTab;
     friend class themeshop::tabs::CommunityTab;
+    friend class themeshop::tabs::OptionsTab;
 
     enum class PreviewPhase {
         Idle,
@@ -112,6 +123,8 @@ private:
         None,
         Search,
         Refresh,
+        PagePrev,
+        PageNext,
         GridCard,
         DetailPreviewControl,
         DetailButton,
@@ -127,6 +140,7 @@ private:
     enum class ContentFocusArea {
         Grid,
         Header,
+        Pager,
     };
 
     bool pollCommunityCatalog();
@@ -135,6 +149,10 @@ private:
     int currentEntryCount() const;
     int currentSelectedIndex() const;
     void setCurrentSelectedIndex(int idx);
+    int currentPage() const;
+    int pageCount() const;
+    void setCurrentPage(int page);
+    void stepPage(int delta);
     void applySearchFilter();
     bool promptSearchQuery();
     int detailScreenshotCount() const;
@@ -156,6 +174,9 @@ private:
     PreviewPhase communityPreviewPhase(const ThemeCatalogClient::Entry& entry) const;
     const nxui::Texture* communityPreviewTexture(const std::string& previewPath) const;
     const nxui::Texture* communityPreviewTexture(const ThemeCatalogClient::Entry& entry) const;
+    PreviewPhase installedPreviewPhase(const std::string& previewPath) const;
+    const nxui::Texture* installedPreviewTexture(const std::string& previewPath) const;
+    void primeInstalledPreview(const std::string& previewPath);
     void primeCommunityPreview(const std::string& previewPath);
     void primeCommunityPreview(const ThemeCatalogClient::Entry& entry);
     void primeVisibleCommunityPreviews();
@@ -166,6 +187,8 @@ private:
     BoolCb m_musicEnabledCb;
     FloatCb m_musicVolumeCb;
     FloatCb m_sfxVolumeCb;
+    IntCb m_gridColumnsCb;
+    IntCb m_gridRowsCb;
     VoidCb m_nextTrackCb;
     StringCb m_themeShopApplyCb;
     StringCb m_themeShopDeleteCb;
@@ -176,6 +199,8 @@ private:
     bool m_musicEnabled = true;
     float m_musicVolume = 0.4f;
     float m_sfxVolume = 0.7f;
+    int m_gridColumns = 5;
+    int m_gridRows = 3;
     std::string m_searchQuery;
     std::vector<ThemeShopEntry> m_allThemeShopEntries;
     std::vector<ThemeShopEntry> m_themeShopEntries;
@@ -188,6 +213,7 @@ private:
     ThemeTransferState m_communityTransferState;
     ThemeTransferState m_packageTransferState;
     std::unordered_map<std::string, std::shared_ptr<PreviewImageState>> m_communityPreviewCache;
+    std::unordered_map<std::string, std::shared_ptr<PreviewImageState>> m_installedPreviewCache;
     std::vector<ThemeCatalogClient::Entry> m_allCommunityEntries;
     std::vector<ThemeCatalogClient::Entry> m_communityEntries;
     std::string m_communitySelectedId;
@@ -200,13 +226,16 @@ private:
     ContentFocusArea m_contentFocusArea = ContentFocusArea::Grid;
     DetailFocusArea m_detailFocusArea = DetailFocusArea::Buttons;
     int m_headerButtonIndex = 0;
+    int m_pageButtonIndex = 1;
     int m_detailButtonIndex = 0;
     int m_detailPreviewButtonIndex = 0;
     int m_detailScreenshotIndex = 0;
+    nxui::AnimatedFloat m_detailSheetAnim{0.f};
     nxui::AnimatedFloat m_detailFullscreenAnim{0.f};
     int m_installedScrollRow = 0;
     int m_communityScrollRow = 0;
     int m_lastCustomTabIndex = -1;
+    std::string m_lastPreviewPrimeKey;
     ThemeTouchTarget m_themeTouchTarget = ThemeTouchTarget::None;
     int m_themeTouchIndex = -1;
     float m_themeTouchStartX = 0.f;

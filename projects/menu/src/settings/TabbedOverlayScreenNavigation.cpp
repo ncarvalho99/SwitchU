@@ -1,8 +1,18 @@
 #include "TabbedOverlayScreen.hpp"
-#include "core/DebugLog.hpp"
 
 #include <algorithm>
 #include <cmath>
+
+namespace {
+float sliderStepValue(const TabbedOverlayScreen::SettingItem& item) {
+    return 1.f / (float)std::max(1, item.sliderSteps);
+}
+
+float quantizeSliderValue(const TabbedOverlayScreen::SettingItem& item, float value) {
+    int steps = std::max(1, item.sliderSteps);
+    return std::clamp(std::round(std::clamp(value, 0.f, 1.f) * (float)steps) / (float)steps, 0.f, 1.f);
+}
+}
 
 void TabbedOverlayScreen::setupActions() {
     clearActions();
@@ -18,12 +28,9 @@ void TabbedOverlayScreen::setupActions() {
 void TabbedOverlayScreen::onPressB() {
     if (!m_active || m_animating) return;
     if (usesCustomContentLayout() && handleCustomPressB()) return;
-    DebugLog::log("[settings] B (focus=%d dd=%d)", (int)m_focusArea, m_dropdownOpen ? 1 : 0);
 
     if (m_dropdownOpen) {
-        m_dropdownOpen = false;
-        m_dropdownRawIdx = -1;
-        m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
+        closeDropdown(true);
         return;
     }
     if (m_focusArea == FocusArea::Content) {
@@ -37,8 +44,6 @@ void TabbedOverlayScreen::onPressB() {
 void TabbedOverlayScreen::onPressA() {
     if (!m_active || m_animating) return;
     if (usesCustomContentLayout() && handleCustomPressA()) return;
-    DebugLog::log("[settings] A (focus=%d tab=%d ci=%d dd=%d)",
-                  (int)m_focusArea, m_tabIndex, m_contentIdx, m_dropdownOpen ? 1 : 0);
 
     if (m_focusArea == FocusArea::Tabs) {
         if (focusableCount() > 0) {
@@ -62,9 +67,7 @@ void TabbedOverlayScreen::onPressA() {
             if (sel.onChange) sel.onChange(sel);
             if (m_activateSfxCb) m_activateSfxCb();
         }
-        m_dropdownOpen = false;
-        m_dropdownRawIdx = -1;
-        m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
+        closeDropdown(true);
         return;
     }
 
@@ -73,10 +76,7 @@ void TabbedOverlayScreen::onPressA() {
         if (item.onChange) item.onChange(item);
         if (m_toggleSfxCb) m_toggleSfxCb(item.boolVal);
     } else if (item.type == ItemType::Selector) {
-        m_dropdownOpen = true;
-        m_dropdownRawIdx = rawIdx;
-        m_dropdownHover = std::clamp(item.intVal, 0, std::max(0, (int)item.options.size() - 1));
-        m_dropdownAnim.set(1.f, 0.14f, nxui::Easing::outCubic);
+        openDropdown(rawIdx);
         if (m_activateSfxCb) m_activateSfxCb();
     } else if (item.type == ItemType::Action) {
         if (item.onChange) item.onChange(item);
@@ -94,8 +94,6 @@ void TabbedOverlayScreen::onPressX() {
 void TabbedOverlayScreen::onNavUp() {
     if (!m_active || m_animating) return;
     if (usesCustomContentLayout() && handleCustomNavUp()) return;
-    DebugLog::log("[settings] Up (focus=%d tab=%d ci=%d)",
-                  (int)m_focusArea, m_tabIndex, m_contentIdx);
 
     if (m_focusArea == FocusArea::Tabs) {
         if (m_tabIndex > 0) {
@@ -108,9 +106,7 @@ void TabbedOverlayScreen::onNavUp() {
             m_contentSlideAnim.set(1.f, 0.28f, nxui::Easing::outCubic);
             m_tabAccentW.setImmediate(1.f);
             m_tabAccentW.set(3.f, 0.32f, nxui::Easing::outExpo);
-            m_dropdownOpen = false;
-            m_dropdownRawIdx = -1;
-            m_dropdownAnim.setImmediate(0.f);
+            closeDropdown(false);
             rebuildContentItems();
             if (m_navSfxCb) m_navSfxCb();
         }
@@ -138,8 +134,6 @@ void TabbedOverlayScreen::onNavUp() {
 void TabbedOverlayScreen::onNavDown() {
     if (!m_active || m_animating) return;
     if (usesCustomContentLayout() && handleCustomNavDown()) return;
-    DebugLog::log("[settings] Down (focus=%d tab=%d ci=%d)",
-                  (int)m_focusArea, m_tabIndex, m_contentIdx);
 
     if (m_focusArea == FocusArea::Tabs) {
         if (m_tabIndex < (int)m_tabs.size() - 1) {
@@ -152,9 +146,7 @@ void TabbedOverlayScreen::onNavDown() {
             m_contentSlideAnim.set(1.f, 0.28f, nxui::Easing::outCubic);
             m_tabAccentW.setImmediate(1.f);
             m_tabAccentW.set(3.f, 0.32f, nxui::Easing::outExpo);
-            m_dropdownOpen = false;
-            m_dropdownRawIdx = -1;
-            m_dropdownAnim.setImmediate(0.f);
+            closeDropdown(false);
             rebuildContentItems();
             if (m_navSfxCb) m_navSfxCb();
         }
@@ -182,12 +174,9 @@ void TabbedOverlayScreen::onNavDown() {
 void TabbedOverlayScreen::onNavLeft() {
     if (!m_active || m_animating) return;
     if (usesCustomContentLayout() && handleCustomNavLeft()) return;
-    DebugLog::log("[settings] Left (focus=%d)", (int)m_focusArea);
 
     if (m_dropdownOpen) {
-        m_dropdownOpen = false;
-        m_dropdownRawIdx = -1;
-        m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
+        closeDropdown(true);
         return;
     }
 
@@ -198,7 +187,8 @@ void TabbedOverlayScreen::onNavLeft() {
     auto& item = items[rawIdx];
 
     if (item.type == ItemType::Slider) {
-        item.floatVal = std::clamp(std::round((item.floatVal - 0.05f) * 20.f) / 20.f, 0.f, 1.f);
+        item.floatVal = quantizeSliderValue(item, item.floatVal - sliderStepValue(item));
+        item.anim01 = item.floatVal;
         if (item.onChange) item.onChange(item);
         if (m_sliderSfxCb) m_sliderSfxCb(false);
     } else {
@@ -210,12 +200,9 @@ void TabbedOverlayScreen::onNavLeft() {
 void TabbedOverlayScreen::onNavRight() {
     if (!m_active || m_animating) return;
     if (usesCustomContentLayout() && handleCustomNavRight()) return;
-    DebugLog::log("[settings] Right (focus=%d)", (int)m_focusArea);
 
     if (m_dropdownOpen) {
-        m_dropdownOpen = false;
-        m_dropdownRawIdx = -1;
-        m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
+        closeDropdown(true);
         return;
     }
 
@@ -233,14 +220,12 @@ void TabbedOverlayScreen::onNavRight() {
     auto& item = items[rawIdx];
 
     if (item.type == ItemType::Slider) {
-        item.floatVal = std::clamp(std::round((item.floatVal + 0.05f) * 20.f) / 20.f, 0.f, 1.f);
+        item.floatVal = quantizeSliderValue(item, item.floatVal + sliderStepValue(item));
+        item.anim01 = item.floatVal;
         if (item.onChange) item.onChange(item);
         if (m_sliderSfxCb) m_sliderSfxCb(true);
     } else if (item.type == ItemType::Selector) {
-        m_dropdownOpen = true;
-        m_dropdownRawIdx = rawIdx;
-        m_dropdownHover = std::clamp(item.intVal, 0, std::max(0, (int)item.options.size() - 1));
-        m_dropdownAnim.set(1.f, 0.14f, nxui::Easing::outCubic);
+        openDropdown(rawIdx);
         if (m_activateSfxCb) m_activateSfxCb();
     } else if (item.type == ItemType::Action) {
         if (item.onChange) item.onChange(item);
@@ -405,7 +390,7 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
 
         constexpr float kKnobW = 18.f;
         float newValue = (tx - track.x - kKnobW * 0.5f) / std::max(1.f, track.width - kKnobW);
-        newValue = std::clamp(std::round(newValue * 20.f) / 20.f, 0.f, 1.f);
+        newValue = quantizeSliderValue(item, newValue);
         if (std::abs(newValue - item.floatVal) < 0.0001f)
             return true;
 
@@ -428,7 +413,7 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
         auto& item = items[m_dropdownRawIdx];
         int total = (int)item.options.size();
         int visible = std::min(total, 6);
-        float listH = visible * 42.f + 12.f;
+        float listH = visible * 46.f + 16.f;
 
         float y = cr.y - m_scrollY;
         for (int i = 0; i < m_dropdownRawIdx; ++i)
@@ -468,14 +453,14 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
                 auto& item = items[m_dropdownRawIdx];
                 int total = (int)item.options.size();
                 int visible = std::min(total, 6);
-                float optH = 42.f;
+                float optH = 46.f;
                 nxui::Rect dropRect = dropdownRect();
                 if (dropRect.contains(tx, ty)) {
                     m_touchTarget = TouchTarget::Dropdown;
                     int start = 0;
                     if (total > visible)
                         start = std::clamp(m_dropdownHover - visible / 2, 0, total - visible);
-                    float localY = ty - dropRect.y - 5.f;
+                    float localY = ty - dropRect.y - 9.f;
                     int idx = start + (int)(localY / optH);
                     idx = std::clamp(idx, 0, total - 1);
                     m_touchHitIndex = idx;
@@ -584,9 +569,7 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
                             m_contentSlideAnim.set(1.f, 0.28f, nxui::Easing::outCubic);
                             m_tabAccentW.setImmediate(1.f);
                             m_tabAccentW.set(3.f, 0.32f, nxui::Easing::outExpo);
-                            m_dropdownOpen = false;
-                            m_dropdownRawIdx = -1;
-                            m_dropdownAnim.setImmediate(0.f);
+                            closeDropdown(false);
                             rebuildContentItems();
                         }
                         if (m_navSfxCb) m_navSfxCb();
@@ -636,17 +619,13 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
                             if (m_activateSfxCb) m_activateSfxCb();
                         }
                     }
-                    m_dropdownOpen = false;
-                    m_dropdownRawIdx = -1;
-                    m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
+                    closeDropdown(true);
                 }
                 break;
 
             case TouchTarget::None:
                 if (m_dropdownOpen) {
-                    m_dropdownOpen = false;
-                    m_dropdownRawIdx = -1;
-                    m_dropdownAnim.set(0.f, 0.10f, nxui::Easing::outCubic);
+                    closeDropdown(true);
                 } else if (!panel.contains(input.touchX(), input.touchY())) {
                     hide();
                 }
@@ -699,6 +678,11 @@ void TabbedOverlayScreen::onContentUpdate(float dt) {
     m_focusCursor.update(dt);
     m_tabReveal.update(std::min(dt, 0.03f));
     m_dropdownAnim.update(dt);
+    if (m_dropdownClosing && m_dropdownAnim.value() <= 0.01f) {
+        m_dropdownClosing = false;
+        m_dropdownRawIdx = -1;
+        m_dropdownAnim.setImmediate(0.f);
+    }
     m_trackToastAnim.update(dt);
     m_contentSlideAnim.update(std::min(dt, 0.03f));
     m_tabAccentW.update(std::min(dt, 0.03f));

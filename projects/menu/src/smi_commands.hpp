@@ -20,6 +20,7 @@ static Result pushOutStorage(const void* data, size_t size) {
     if (R_FAILED(rc)) { appletStorageClose(&stor); return rc; }
 
     rc = appletPushInteractiveOutData(&stor);
+    appletStorageClose(&stor);
     return rc;
 }
 
@@ -55,6 +56,18 @@ inline Result launchApplication(uint64_t titleId, AccountUid uid) {
     return pushOutStorage(buf, sizeof(buf));
 }
 
+inline Result launchUserPage(AccountUid uid) {
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::UserArgs)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    auto* args = reinterpret_cast<smi::UserArgs*>(buf + sizeof(smi::CommandHeader));
+
+    hdr->magic    = smi::kCommandMagic;
+    hdr->message  = static_cast<uint32_t>(smi::SystemMessage::LaunchUserPage);
+    std::memcpy(args->user_uid, &uid, sizeof(uid));
+
+    return pushOutStorage(buf, sizeof(buf));
+}
+
 inline Result resumeApplication() {
     return sendSimple(smi::SystemMessage::ResumeApplication);
 }
@@ -68,36 +81,26 @@ inline Result shutdown()    { return sendSimple(smi::SystemMessage::Shutdown); }
 inline Result reboot()      { return sendSimple(smi::SystemMessage::Reboot); }
 inline Result menuReady()      { return sendSimple(smi::SystemMessage::MenuReady); }
 inline Result menuClosing()    { return sendSimple(smi::SystemMessage::MenuClosing); }
-inline Result menuSuspending() { return sendSimple(smi::SystemMessage::MenuSuspending); }
-
-inline void drainAllResponses() {
-    AppletStorage stor{};
-    svcSleepThread(30'000'000ULL);
-    while (R_SUCCEEDED(appletPopInteractiveInData(&stor)))
-        appletStorageClose(&stor);
-}
-
-inline Result requestAppListRefresh() {
-    Result rc = sendSimple(smi::SystemMessage::GetAppList);
-    if (R_FAILED(rc)) return rc;
-    drainAllResponses();
-    return 0;
-}
 
 struct AppEntry {
     uint64_t titleId;
     uint32_t nameLen;
     uint32_t iconLen;
     uint32_t viewFlags = 0;
+    bool startupUserKnown = false;
+    uint8_t startupUserAccount = 1;
+    uint8_t startupUserAccountOption = 0;
     std::string name;
     std::vector<uint8_t> icon;
 };
 
-inline Result getAppList(std::vector<AppEntry>& outList) {
+inline Result getAppList(std::vector<AppEntry>& outList, bool waitForDaemon = true) {
+    outList.clear();
     FILE* f = nullptr;
-    for (int retry = 0; retry < 20 && !f; ++retry) {
+    const int retries = waitForDaemon ? 20 : 1;
+    for (int retry = 0; retry < retries && !f; ++retry) {
         f = std::fopen("sdmc:/config/SwitchU/applist.bin", "rb");
-        if (!f) svcSleepThread(50'000'000ULL);
+        if (!f && waitForDaemon) svcSleepThread(50'000'000ULL);
     }
     if (!f) return MAKERESULT(Module_Libnx, 0xFE);
 
@@ -116,6 +119,9 @@ inline Result getAppList(std::vector<AppEntry>& outList) {
         ent.nameLen = eh.name_len;
         ent.iconLen = eh.icon_data_len;
         ent.viewFlags = eh.view_flags;
+        ent.startupUserKnown = eh.startup_user_known != 0;
+        ent.startupUserAccount = eh.startup_user_account;
+        ent.startupUserAccountOption = eh.startup_user_account_option;
 
         if (eh.name_len > 0) {
             ent.name.resize(eh.name_len);

@@ -85,6 +85,7 @@ public:
         bool                     boolVal   = false;
         float                    floatVal  = 0.f;
         int                      intVal    = 0;
+        int                      sliderSteps = 20;
         std::vector<std::string> options;
         std::string              infoText;
         float                    anim01 = 0.f;
@@ -165,10 +166,10 @@ protected:
     void invalidateBackdropCache();
 
     static constexpr float kPanelMargin   = 32.f;
-    static constexpr float kTabWidth      = 248.f;
-    static constexpr float kRowHeight     = 60.f;
-    static constexpr float kSectionHeight = 44.f;
-    static constexpr float kTabRowHeight  = 52.f;
+    static constexpr float kTabWidth      = 260.f;
+    static constexpr float kRowHeight     = 68.f;
+    static constexpr float kSectionHeight = 48.f;
+    static constexpr float kTabRowHeight  = 58.f;
     static constexpr float kPanelRadius   = 26.f;
     static constexpr float kInnerPad      = 30.f;
 
@@ -186,6 +187,8 @@ protected:
     void drawDropdown(nxui::Renderer& ren, const nxui::Rect& panel, float opacity);
     void drawTrackChangedToast(nxui::Renderer& ren, const nxui::Rect& panel, float opacity);
     void syncDebugWireframeRects(const nxui::Rect& panel);
+    void openDropdown(int rawIdx);
+    void closeDropdown(bool animated);
 
     std::vector<Tab> m_tabs;
     ScreenMode m_mode = ScreenMode::Settings;
@@ -207,6 +210,7 @@ protected:
     nxui::AnimatedFloat m_tabAccentW;
 
     bool m_dropdownOpen = false;
+    bool m_dropdownClosing = false;
     int  m_dropdownRawIdx = -1;
     int  m_dropdownHover = 0;
 

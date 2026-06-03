@@ -233,8 +233,9 @@ void SidebarManager::applyTheme(const nxui::Theme& theme) {
         btn->setBorderColor(theme.panelBorder);
         btn->setHighlightColor(theme.panelHighlight);
         btn->setLiquidGlassEnabled(true);
+        btn->setForceLiquidGlass(true);
         btn->setBlurEnabled(false);
-        btn->setBorderWidth(0.f);
+        btn->setBorderWidth(2.2f);
     };
     for (auto& btn : m_leftButtons)  apply(btn);
     for (auto& btn : m_rightButtons) apply(btn);

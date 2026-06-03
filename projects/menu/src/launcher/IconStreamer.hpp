@@ -22,6 +22,8 @@ public:
     void setIconDataLoader(IconDataLoader loader);
     void setTitleId(int appIndex, uint64_t titleId);
     void setIconData(int appIndex, std::vector<uint8_t> compressed);
+    void setPinnedIndex(int appIndex);
+    void clearPinnedIndex();
 
     // Call when the visible page changes (or on first display).
     // Decodes + uploads textures for the new visible range and evicts
@@ -76,6 +78,8 @@ private:
     std::vector<int> m_freeSlots;
 
     int m_lastPage = -1;
+    int m_lastIconsPerPage = -1;
+    int m_pinnedIndex = -1;
 
     // How many pages around the current one to keep loaded.
     static constexpr int kPageMargin = 0;

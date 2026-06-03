@@ -74,6 +74,7 @@ struct ThemeIconConfig {
 struct ThemePreset {
     std::string     id;
     std::string     name;
+    std::string     author;
     std::string     version;
     nxui::ThemeMode mode   = nxui::ThemeMode::Dark;
     ThemeColorSet   colors;

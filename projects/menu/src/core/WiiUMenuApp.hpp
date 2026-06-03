@@ -14,10 +14,11 @@
 #include "widgets/TitlePillWidget.hpp"
 #include "core/AudioManager.hpp"
 #include "widgets/LaunchAnimation.hpp"
-#include "widgets/UserSelectScreen.hpp"
 #include "widgets/OverlayDialog.hpp"
+#include "widgets/ProgressDialog.hpp"
 #include "widgets/AppletButton.hpp"
 #include "widgets/PageIndicator.hpp"
+#include "widgets/UserAvatarButton.hpp"
 #include "settings/SettingsScreen.hpp"
 #include "themeshop/ThemeShopScreen.hpp"
 #include "core/Config.hpp"
@@ -76,7 +77,9 @@ private:
 
     void loadResources();
     GridLayoutMetrics computeGridLayoutMetrics() const;
+    void reflowHomeGrid();
     void buildGrid();
+    void buildUserAvatarBar();
     void applyTheme();
     void applyThemeResources(const ThemePreset& preset);
     void applyUiLanguage();
@@ -86,6 +89,16 @@ private:
     ThemePreset* findPresetPtr(const std::string& name);
     void deletePreset(const std::string& presetId);
     void updateCursor();
+    struct ActionHint {
+        std::string icon;
+        std::string label;
+    };
+    std::vector<ActionHint> buildActionHints();
+    void renderActionHintBar(nxui::Renderer& ren);
+    int findTitleIndex(uint64_t titleId) const;
+    bool focusTitle(uint64_t titleId);
+    void markSuspendedIcon(uint64_t titleId);
+    void closeActiveOverlays();
     void handleTouch();
     std::shared_ptr<GlossyIcon> makeIcon(const AppEntry& entry);
     void wireFocusCallback();
@@ -125,6 +138,7 @@ private:
 
     nxui::Font  m_fontNormal;
     nxui::Font  m_fontSmall;
+    nxui::Font  m_fontIcons;
 
     GridModel    m_model;
     nxui::Theme  m_theme;
@@ -144,8 +158,9 @@ private:
     std::shared_ptr<TitlePillWidget>   m_titlePill;
     std::shared_ptr<PageIndicator>     m_pageIndicator;
     std::shared_ptr<LaunchAnimation>   m_launchAnim;
-    std::shared_ptr<UserSelectScreen>  m_userSelect;
+    std::shared_ptr<OverlayDialog>     m_userSelect;
     std::shared_ptr<OverlayDialog>     m_dialog;
+    std::shared_ptr<ProgressDialog>    m_progressDialog;
     std::shared_ptr<SettingsScreen>    m_settings;
     std::shared_ptr<ThemeShopScreen>   m_themeShop;
 
@@ -157,6 +172,8 @@ private:
     std::shared_ptr<nxui::Box> m_topHud;
     std::shared_ptr<nxui::Box> m_leftSidebar;
     std::shared_ptr<nxui::Box> m_rightSidebar;
+    std::shared_ptr<nxui::Box> m_userAvatarBar;
+    std::vector<std::shared_ptr<UserAvatarButton>> m_userAvatarButtons;
 
     AudioManager m_audio;
     std::future<void>    m_audioFuture;
@@ -186,7 +203,6 @@ private:
 #ifdef SWITCHU_DEBUG_UI
     std::unique_ptr<DebugImGuiOverlay> m_debugOverlay;
 #endif
-    bool m_showLoadingScreen = false;
     bool m_showWireframe     = false;
     bool m_editMode          = false;
     int  m_editSourceIndex   = -1;
@@ -196,21 +212,17 @@ private:
     std::shared_ptr<GlossyIcon> m_editGhostIcon;
     nxui::Rect m_editGhostTargetRect {0.f, 0.f, 0.f, 0.f};
     float m_editGhostPulse = 0.f;
-    bool m_suspended         = false;
-    bool m_musicWasPlaying   = false;
-    uint64_t m_wakeSuspendedTid = 0;
-    uint32_t m_wakeReason       = 0;
-
     std::vector<uint64_t> m_layoutSlots;
     bool m_layoutDirty = false;
 
     int  m_touchHitIndex     = -1;
     bool m_touchOnFocused    = false;
     bool m_touchEditDragActive = false;
+    UserAvatarButton* m_touchAvatarTarget = nullptr;
+    bool m_touchAvatarWasFocused = false;
     int  m_deferredRefreshFrames = 0;
     bool m_refreshQueued         = false;
     int  m_refreshCooldownFrames = 0;
-    int  m_loadingScreenFrames   = 0;
     bool m_asyncRefreshPending   = false;
     int  m_refreshPrevPage       = 0;
 
@@ -226,6 +238,7 @@ private:
     bool m_dialogWasActive            = false;
     bool m_suppressNextNavigateSfx    = false;
     bool m_pendingNetConnect          = false;
+    int  m_deferredBluetoothInitFrames = 0;
     std::future<void> m_themePackageTransferFuture;
     std::shared_ptr<ThemePackageTransferShared> m_themePackageTransfer;
     std::uint64_t m_themePackageTransferUiRevision = 0;
@@ -233,5 +246,10 @@ private:
     int m_themeRenderDebugFrames = 0;
 
     float m_returnFadeTimer = 0.f;
-    static constexpr float kReturnFadeInDur = 0.45f;
+    bool m_hintPanelInitialized = false;
+    nxui::AnimatedFloat m_hintPanelW{0.f};
+    nxui::AnimatedFloat m_hintPanelH{0.f};
+    nxui::AnimatedFloat m_hintContentReveal{1.f};
+    std::string m_hintSignature;
+    static constexpr float kReturnFadeInDur = 0.22f;
 };

@@ -9,6 +9,8 @@ struct AppConfig {
     int   gridRows     = 3;
     std::string uiLanguageOverride = "auto";
     std::string soundPreset = "wiiu";
+    bool  defaultProfileEnabled = false;
+    std::string defaultProfileUid;
 
     std::string themePreset = "Default Dark";
     std::string themeMode = "";

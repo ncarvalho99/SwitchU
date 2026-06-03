@@ -23,7 +23,11 @@ public:
     void onGridColumnsChange(IntCb cb)  { m_gridColumnsCb = std::move(cb); }
     void onGridRowsChange(IntCb cb)     { m_gridRowsCb = std::move(cb); }
     void onUiLanguageChange(StringCb cb) { m_uiLanguageCb = std::move(cb); }
+    void onDefaultProfileChange(StringCb cb) { m_defaultProfileCb = std::move(cb); }
     void onNetConnect(VoidCb cb)        { m_netConnectCb = std::move(cb); }
+    void onSleepRequest(VoidCb cb)      { m_sleepCb = std::move(cb); }
+    void onShutdownRequest(VoidCb cb)   { m_shutdownCb = std::move(cb); }
+    void onRebootRequest(VoidCb cb)     { m_rebootCb = std::move(cb); }
 
     void setWireframeState(bool enabled) { m_wireframeEnabled = enabled; }
     void setGridLayoutState(int columns, int rows) {
@@ -32,6 +36,9 @@ public:
     }
     void setUiLanguageOverride(const std::string& tag) {
         m_uiLanguageOverride = tag.empty() ? "auto" : tag;
+    }
+    void setDefaultProfileState(bool enabled, const std::string& uidHex) {
+        m_defaultProfileUid = enabled ? uidHex : std::string();
     }
 
 protected:
@@ -52,10 +59,15 @@ private:
     IntCb m_gridColumnsCb;
     IntCb m_gridRowsCb;
     StringCb m_uiLanguageCb;
+    StringCb m_defaultProfileCb;
     VoidCb m_netConnectCb;
+    VoidCb m_sleepCb;
+    VoidCb m_shutdownCb;
+    VoidCb m_rebootCb;
 
     bool m_wireframeEnabled = false;
     int m_gridColumns = 5;
     int m_gridRows = 3;
     std::string m_uiLanguageOverride = "auto";
+    std::string m_defaultProfileUid;
 };

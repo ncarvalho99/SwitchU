@@ -9,6 +9,7 @@
     "mii_editor": "Editor Mii",
     "settings": "Ajustes",
     "controllers": "Mandos",
+    "theme_shop": "Tienda de temas",
     "sleep": "Suspender",
     "music": "Música"
   },
@@ -39,6 +40,9 @@
       "usb30_desc": "Activa USB 3.0 para transferencias más rápidas.",
       "battery_lot": "Lote de batería",
       "ui_language": "Idioma de la interfaz",
+      "default_profile": "Perfil predeterminado",
+      "default_profile_desc": "Inicia los juegos con este perfil cuando sea posible.",
+      "default_profile_ask": "Preguntar cada vez",
       "console_language": "Idioma de la consola",
       "region": "Región",
       "region_japan": "Japón",
@@ -110,6 +114,8 @@
       "connected_device": "Dispositivo conectado",
       "no_device_connected": "Ningún dispositivo conectado",
       "disconnect": "Desconectar",
+      "connected": "Conectado",
+      "not_connected": "No conectado",
       "paired_devices": "Dispositivos emparejados",
       "no_paired_devices": "Ningún dispositivo emparejado",
       "discover_devices": "Descubrir dispositivos",
@@ -210,6 +216,20 @@
   "userselect": {
     "title": "¿Quién está jugando?"
   },
+  "game": {
+    "move": "Mover",
+    "move_prefix": "Mover: ",
+    "close_title": "Cerrar juego",
+    "close_prefix": "Cerrar",
+    "close_suffix": "?\nSe perderá el progreso no guardado."
+  },
+  "power": {
+    "title": "Energía",
+    "choose_action": "Elige una acción de energía.",
+    "sleep": "Suspender",
+    "shutdown": "Apagar",
+    "reboot": "Reiniciar"
+  },
   "languages": {
     "ja-JP": "Japonés",
     "en-US": "Inglés (EE.UU.)",
@@ -239,6 +259,95 @@
   "button": {
     "ok": "OK",
     "cancel": "Cancelar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "close": "Cerrar",
+    "replace": "Reemplazar"
+  },
+  "themeshop": {
+    "source": {
+      "builtin": "Incluido",
+      "custom": "Personalizado",
+      "community": "Comunidad",
+      "unknown": "Desconocido",
+      "options": "Opciones"
+    },
+    "tabs": {
+      "installed": "Instalados",
+      "community": "Comunidad",
+      "options": "Opciones"
+    },
+    "search": {
+      "button": "Buscar",
+      "guide": "Buscar temas",
+      "unavailable": "El teclado de busqueda no esta disponible.",
+      "no_results": "Ningun tema coincide con la busqueda.",
+      "no_results_hint": "Pulsa X o usa Buscar para cambiar o borrar el filtro."
+    },
+    "installed": {
+      "title": "Biblioteca de temas instalados",
+      "subtitle": "Tus temas locales en una galeria.",
+      "empty": "No se encontraron temas instalados.",
+      "status": "Estado",
+      "status_active": "Activo",
+      "status_available": "Disponible",
+      "sound": "Paquete de sonido incluido",
+      "sound_none": "Ninguno",
+      "remove_hint": "Este tema se puede eliminar de la consola.",
+      "builtin_hint": "Este tema forma parte del conjunto incluido.",
+      "apply": "Aplicar tema",
+      "remove": "Eliminar tema"
+    },
+    "community": {
+      "title": "Explorar temas de la comunidad",
+      "subtitle": "Un catalogo visual, no un selector de ajustes.",
+      "counter_loading": "Cargando",
+      "refresh": "Actualizar",
+      "refreshing": "Actualizando",
+      "loading": "Cargando catalogo de temas...",
+      "catalog_empty": "No hay temas publicados en el catalogo.",
+      "catalog_failed": "No se pudo obtener el catalogo. Usa Actualizar para intentarlo de nuevo.",
+      "empty_hint": "Anade temas al repositorio y apareceran aqui.",
+      "author_unknown": "Desconocido",
+      "version": "Version",
+      "version_unknown": "Desconocida",
+      "manifest": "Manifiesto",
+      "manifest_missing": "No proporcionado",
+      "cover_missing": "Este tema aun no tiene capturas declaradas.",
+      "cover_present": "Usa izquierda/derecha para ver capturas y A para pantalla completa.",
+      "cover_single": "Pulsa A para abrir esta captura en pantalla completa.",
+      "cover_loading": "Cargando captura del tema...",
+      "cover_unavailable": "No se pudo cargar la captura. Se muestra un marcador.",
+      "install": "Instalar",
+      "download_apply": "Descargar + aplicar",
+      "transfer_busy": "Ya hay otra transferencia de tema en curso.",
+      "install_pending": "El flujo de instalacion aun no esta conectado.",
+      "download_apply_pending": "El flujo de descarga y aplicacion aun no esta conectado.",
+      "selected_missing": "El tema de la comunidad seleccionado ya no esta disponible en el catalogo.",
+      "overwrite_apply_title": "Reemplazar y aplicar tema",
+      "overwrite_apply_message": "Ya hay un paquete con este ID de tema instalado. Reemplazarlo con la version de GitHub y aplicarlo?",
+      "overwrite_install_title": "Reemplazar tema instalado",
+      "overwrite_install_message": "Ya hay un paquete con este ID de tema instalado. Reemplazarlo con la version de GitHub?"
+    },
+    "transfer": {
+      "prepare_apply": "Preparando descarga y aplicacion...",
+      "prepare_install": "Preparando descarga e instalacion...",
+      "unknown_error": "Error de transferencia desconocido",
+      "installed": "Tema instalado.",
+      "installed_applied": "Tema instalado y aplicado.",
+      "installed_apply_failed": "Tema instalado, pero no se pudo aplicar automaticamente.",
+      "dialog_title": "Descargando tema",
+      "downloading": "Descargando tema...",
+      "downloading_file": "Descargando",
+      "finalize_apply": "Finalizando instalación antes de aplicar...",
+      "finalize_install": "Finalizando instalación...",
+      "installed_applying": "Tema instalado. Aplicándolo ahora..."
+    },
+    "preview": {
+      "loading": "Cargando captura...",
+      "unavailable": "Captura no disponible",
+      "missing": "Sin captura",
+      "prev": "Anterior",
+      "next": "Siguiente"
+    }
   }
 }

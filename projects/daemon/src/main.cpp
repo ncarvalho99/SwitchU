@@ -1,5 +1,7 @@
 
 #include <switch.h>
+#include <switch/applets/friends_la.h>
+#include <cstdio>
 #include <cstdlib>
 #include <nxtc.h>
 #include <switchu/smi_protocol.hpp>
@@ -12,11 +14,16 @@
 #include <cstring>
 #include <atomic>
 #include <vector>
+#include <string>
+#include <utility>
+#include <algorithm>
+#include <sys/stat.h>
 
 using namespace switchu;
 
 extern "C" {
     u32 __nx_applet_type = AppletType_SystemApplet;
+    u32 __nx_fs_num_sessions = 3;
 
     size_t __nx_heap_size = 0x1400000;
 }
@@ -56,6 +63,7 @@ extern "C" void __appInit(void) {
     }
 
     nsInitialize();
+    ldrShellInitialize();
     accountInitialize(AccountServiceType_System);
     nssuInitialize();
     avmInitialize();
@@ -86,6 +94,7 @@ extern "C" void __appExit(void) {
     avmExit();
     nssuExit();
     accountExit();
+    ldrShellExit();
     nsExit();
     setExit();
     setsysExit();
@@ -107,31 +116,226 @@ static int  g_eventPollsRemaining = 0;
 static s32      g_lastRecordCount = 0;
 static uint64_t g_lastRecordTids[1024] = {};
 static uint32_t g_lastViewFlags[1024]  = {};
-static void pushWakeSignal(const char* tag, uint32_t reason, uint64_t suspendedTid) {
-    AppletStorage st;
-    Result rc = appletCreateStorage(&st, sizeof(smi::WakeSignal));
-    if (R_SUCCEEDED(rc)) {
-        smi::WakeSignal ws{};
-        ws.magic = smi::kWakeMagic;
-        ws.reason = reason;
-        ws.suspended_tid = suspendedTid;
-        appletStorageWrite(&st, 0, &ws, sizeof(ws));
-        daemon::menu_la::pushStorage(&st);
-        daemon::menu_la::setSuspended(false);
-        switchu::FileLog::log("[%s] pushed wake signal (reason=%u tid=0x%016lX)", tag, reason, suspendedTid);
-    }
-}
-static bool     g_pendingLaunch = false;
-static uint64_t g_pendingTitleId = 0;
-static AccountUid g_pendingUid = {};
 
-static bool g_pendingResume = false;
-static bool g_pendingMenuClose = false;
-static bool g_pendingAlbum = false;
-static bool g_pendingMiiEditor = false;
-static bool g_pendingNetConnect = false;
+struct DaemonAppCatalogEntry {
+    uint64_t titleId = 0;
+    uint32_t viewFlags = 0;
+    bool startupUserKnown = false;
+    uint8_t startupUserAccount = 1;
+    uint8_t startupUserAccountOption = 0;
+    std::string name;
+};
+
+static std::vector<DaemonAppCatalogEntry> g_appCatalog;
+static std::atomic<bool> g_appCatalogRefreshPending{false};
+static int g_appCatalogRefreshDelay = 0;
+static NsApplicationControlData g_catalogControlData;
+static constexpr const char* kAppCatalogPath = "sdmc:/config/SwitchU/applist.bin";
+static constexpr const char* kAppCatalogTmpPath = "sdmc:/config/SwitchU/applist.tmp";
+
+enum class ActionType : uint32_t {
+    LaunchApplication,
+    ResumeApplication,
+    OpenAlbum,
+    OpenMiiEditor,
+    OpenNetConnect,
+    OpenUserPage,
+};
+
+struct Action {
+    ActionType type;
+    uint64_t title_id = 0;
+    AccountUid uid = {};
+};
+
+static std::vector<Action> g_actionQueue;
 static bool g_foregroundAppletActive = false;
 static bool g_pendingForegroundAppletHome = false;
+
+static bool shouldDeferViewPolling() {
+    return daemon::app::isRunning() &&
+           daemon::app::hasForeground() &&
+           !daemon::menu_la::isActive() &&
+           !g_foregroundAppletActive;
+}
+
+static bool getCatalogNameFromControlData(const NacpStruct& nacp, std::string& outName) {
+    NacpLanguageEntry* langEntry = nullptr;
+    Result rc = nacpGetLanguageEntry(const_cast<NacpStruct*>(&nacp), &langEntry);
+    if (R_FAILED(rc) || !langEntry || langEntry->name[0] == '\0') {
+        langEntry = nullptr;
+        for (int l = 0; l < 16; ++l) {
+            auto* e = const_cast<NacpLanguageEntry*>(&nacp.lang[l]);
+            if (e->name[0] != '\0') {
+                langEntry = e;
+                break;
+            }
+        }
+    }
+    if (!langEntry || langEntry->name[0] == '\0')
+        return false;
+
+    outName = langEntry->name;
+    return true;
+}
+
+static bool writeAppCatalogFile() {
+    mkdir("sdmc:/config", 0777);
+    mkdir("sdmc:/config/SwitchU", 0777);
+
+    FILE* f = std::fopen(kAppCatalogTmpPath, "wb");
+    if (!f) {
+        switchu::FileLog::log("[catalog] fopen tmp FAIL");
+        return false;
+    }
+
+    uint32_t count = static_cast<uint32_t>(g_appCatalog.size());
+    bool ok = std::fwrite(&count, sizeof(count), 1, f) == 1;
+    for (const auto& ent : g_appCatalog) {
+        if (!ok) break;
+
+        smi::AppEntryHeader eh{};
+        eh.title_id = ent.titleId;
+        eh.name_len = static_cast<uint32_t>(ent.name.size());
+        eh.icon_data_len = 0;
+        eh.view_flags = ent.viewFlags;
+        eh.startup_user_account = ent.startupUserAccount;
+        eh.startup_user_account_option = ent.startupUserAccountOption;
+        eh.startup_user_known = ent.startupUserKnown ? 1 : 0;
+
+        ok = std::fwrite(&eh, sizeof(eh), 1, f) == 1;
+        if (ok && eh.name_len > 0)
+            ok = std::fwrite(ent.name.data(), 1, eh.name_len, f) == eh.name_len;
+    }
+
+    std::fclose(f);
+    if (!ok) {
+        std::remove(kAppCatalogTmpPath);
+        switchu::FileLog::log("[catalog] write FAIL");
+        return false;
+    }
+
+    std::remove(kAppCatalogPath);
+    if (std::rename(kAppCatalogTmpPath, kAppCatalogPath) != 0) {
+        std::remove(kAppCatalogTmpPath);
+        switchu::FileLog::log("[catalog] rename FAIL");
+        return false;
+    }
+
+    return true;
+}
+
+static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
+    NsApplicationRecord records[1024] = {};
+    s32 recordCount = 0;
+    Result listRc = nsListApplicationRecord(records, 1024, 0, &recordCount);
+    if (R_FAILED(listRc)) {
+        switchu::FileLog::log("[catalog] nsListApplicationRecord FAIL: 0x%X (%s)",
+                              listRc, reason);
+        return false;
+    }
+
+    const s32 count = recordCount > 1024 ? 1024 : recordCount;
+    std::sort(records, records + count, [](const NsApplicationRecord& a,
+                                           const NsApplicationRecord& b) {
+        return a.application_id < b.application_id;
+    });
+
+    static switchu::ns::ExtApplicationView views[1024] = {};
+    std::memset(views, 0, sizeof(views));
+    if (count > 0) {
+        uint64_t tids[1024];
+        for (s32 i = 0; i < count; ++i)
+            tids[i] = records[i].application_id;
+        Result viewRc = switchu::ns::queryApplicationViews(tids, count, views);
+        if (R_FAILED(viewRc))
+            switchu::FileLog::log("[catalog] queryApplicationViews FAIL: 0x%X", viewRc);
+    }
+
+    g_appCatalog.clear();
+    g_appCatalog.reserve(count);
+
+    for (s32 i = 0; i < count; ++i) {
+        const uint64_t tid = records[i].application_id;
+        DaemonAppCatalogEntry ent;
+        ent.titleId = tid;
+        ent.viewFlags = views[i].flags;
+
+        NxTitleCacheApplicationMetadata* meta = nxtcGetApplicationMetadataEntryById(tid);
+        if (meta) {
+            if (meta->name && meta->name[0] != '\0')
+                ent.name = meta->name;
+            nxtcFreeApplicationMetadata(&meta);
+        }
+
+        size_t controlSize = 0;
+        Result controlRc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
+                                                       tid, &g_catalogControlData,
+                                                       sizeof(g_catalogControlData),
+                                                       &controlSize);
+        if (R_SUCCEEDED(controlRc)) {
+            ent.startupUserKnown = true;
+            ent.startupUserAccount = g_catalogControlData.nacp.startup_user_account;
+            ent.startupUserAccountOption = g_catalogControlData.nacp.startup_user_account_option;
+
+            if (ent.name.empty())
+                getCatalogNameFromControlData(g_catalogControlData.nacp, ent.name);
+
+            if (controlSize > sizeof(NacpStruct)) {
+                const size_t iconSize = controlSize - sizeof(NacpStruct);
+                nxtcAddEntry(tid, &g_catalogControlData.nacp, iconSize,
+                             iconSize > 0 ? g_catalogControlData.icon : nullptr, false);
+            }
+        } else {
+            switchu::FileLog::log("[catalog] control data unavailable tid=0x%016lX rc=0x%X",
+                                  tid, controlRc);
+        }
+
+        if (!ent.name.empty())
+            g_appCatalog.push_back(std::move(ent));
+    }
+
+    nxtcFlushCacheFile();
+
+    const s32 prevCount = g_lastRecordCount;
+    bool changed = prevCount != count;
+    if (!changed) {
+        for (s32 i = 0; i < count; ++i) {
+            if (g_lastRecordTids[i] != records[i].application_id) {
+                changed = true;
+                break;
+            }
+        }
+    }
+    g_lastRecordCount = count;
+    for (s32 i = 0; i < count; ++i) {
+        g_lastRecordTids[i] = records[i].application_id;
+        g_lastViewFlags[i] = views[i].flags;
+    }
+    for (s32 i = count; i < prevCount && i < 1024; ++i) {
+        g_lastRecordTids[i] = 0;
+        g_lastViewFlags[i] = 0;
+    }
+
+    const bool ok = writeAppCatalogFile();
+    switchu::FileLog::log("[catalog] rebuilt %d/%d apps reason=%s write=%d",
+                          (int)g_appCatalog.size(), (int)count, reason, ok ? 1 : 0);
+    if (outChanged)
+        *outChanged = changed;
+    return ok;
+}
+
+static void cancelViewPolling(const char* reason) {
+    const bool hadPendingEvent = g_eventRefreshPending.exchange(false);
+    if (hadPendingEvent || g_eventPollsRemaining > 0) {
+        switchu::FileLog::log("[views] cancelling background poll (%s) pending=%d remaining=%d",
+                              reason,
+                              hadPendingEvent ? 1 : 0,
+                              g_eventPollsRemaining);
+    }
+    g_eventPollCountdown = 0;
+    g_eventPollsRemaining = 0;
+}
 
 static smi::SystemStatus buildSystemStatus() {
     smi::SystemStatus st{};
@@ -151,11 +355,96 @@ static void pushNotification(smi::MenuMessage msg,
     notif.payload = payload;
     AppletStorage st;
     if (R_SUCCEEDED(appletCreateStorage(&st, sizeof(notif)))) {
-        appletStorageWrite(&st, 0, &notif, sizeof(notif));
-        switchu::FileLog::log("[notify] push msg=%u", (unsigned)msg);
-        daemon::menu_la::pushStorage(&st);
+        Result rc = appletStorageWrite(&st, 0, &notif, sizeof(notif));
+        if (R_SUCCEEDED(rc)) {
+            switchu::FileLog::log("[notify] push msg=%u", (unsigned)msg);
+            daemon::menu_la::pushStorage(&st);
+        } else {
+            appletStorageClose(&st);
+            switchu::FileLog::log("[notify] write FAIL: 0x%X msg=%u", rc, (unsigned)msg);
+        }
     } else {
         switchu::FileLog::log("[notify] push FAIL (alloc) msg=%u", (unsigned)msg);
+    }
+}
+
+static void logHomeState(const char* source, const char* stage) {
+    switchu::FileLog::log("[%s] HOME %s: appRunning=%d appFg=%d suspended=0x%016lX menuHolder=%d menuActive=%d fgApplet=%d",
+                          source, stage,
+                          daemon::app::isRunning() ? 1 : 0,
+                          daemon::app::hasForeground() ? 1 : 0,
+                          daemon::app::suspendedTitleId(),
+                          daemon::menu_la::hasHolder() ? 1 : 0,
+                          daemon::menu_la::isActive() ? 1 : 0,
+                          g_foregroundAppletActive ? 1 : 0);
+}
+
+static bool takeForegroundFromRunningApp(const char* source) {
+    if (!daemon::app::isRunning() || !daemon::app::hasForeground())
+        return true;
+
+    Result unlockRc = appletUnlockForeground();
+    switchu::FileLog::log("[%s] UnlockForeground rc=0x%X", source, unlockRc);
+    Result fgRc = appletRequestToGetForeground();
+    switchu::FileLog::log("[%s] RequestToGetForeground rc=0x%X", source, fgRc);
+    if (R_FAILED(fgRc))
+        return false;
+
+    daemon::app::onHomeSuspend();
+    return true;
+}
+
+static void startPowerSequence(const char* source, smi::SystemMessage action) {
+    cancelViewPolling(source);
+    takeForegroundFromRunningApp(source);
+
+    switch (action) {
+        case smi::SystemMessage::EnterSleep:
+            appletStartSleepSequence(true);
+            break;
+        case smi::SystemMessage::Shutdown:
+            appletStartShutdownSequence();
+            break;
+        case smi::SystemMessage::Reboot:
+            appletStartRebootSequence();
+            break;
+        default:
+            break;
+    }
+}
+
+static void openMenuFromHome(const char* source) {
+    logHomeState(source, "request");
+    cancelViewPolling("home");
+
+    if (daemon::app::isRunning() && daemon::app::hasForeground()) {
+        if (!takeForegroundFromRunningApp(source)) {
+            switchu::FileLog::log("[%s] HOME aborted: foreground request failed", source);
+            return;
+        }
+        const auto status = buildSystemStatus();
+        switchu::FileLog::log("[%s] HOME launching MainMenu status.running=%d suspended=0x%016lX",
+                              source, status.app_running ? 1 : 0, status.suspended_app_id);
+        Result menuRc = daemon::menu_la::launch(smi::MenuStartMode::MainMenu, status);
+        switchu::FileLog::log("[%s] HOME MainMenu launch rc=0x%X", source, menuRc);
+        if (R_SUCCEEDED(menuRc))
+            g_appCatalogRefreshDelay = 200;
+        logHomeState(source, "after");
+        return;
+    }
+
+    if (daemon::menu_la::isActive()) {
+        switchu::FileLog::log("[%s] HOME forwarding HomeRequest to active menu", source);
+        pushNotification(smi::MenuMessage::HomeRequest);
+    } else if (g_foregroundAppletActive) {
+        switchu::FileLog::log("[%s] HOME requested while foreground applet active", source);
+        g_pendingForegroundAppletHome = true;
+    } else {
+        switchu::FileLog::log("[%s] HOME no app/menu active; launching MainMenu", source);
+        Result menuRc = daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+        switchu::FileLog::log("[%s] HOME MainMenu launch rc=0x%X", source, menuRc);
+        if (R_SUCCEEDED(menuRc))
+            g_appCatalogRefreshDelay = 80;
     }
 }
 
@@ -164,38 +453,44 @@ static bool sendViewFlagsUpdates() {
     s32 recordCount = 0;
     nsListApplicationRecord(records, 1024, 0, &recordCount);
 
+    const s32 count = recordCount > 1024 ? 1024 : recordCount;
+    std::sort(records, records + count, [](const NsApplicationRecord& a,
+                                           const NsApplicationRecord& b) {
+        return a.application_id < b.application_id;
+    });
+
     static switchu::ns::ExtApplicationView views[1024] = {};
-    if (recordCount > 0) {
+    if (count > 0) {
         uint64_t tids[1024];
-        for (s32 i = 0; i < recordCount && i < 1024; ++i)
+        for (s32 i = 0; i < count; ++i)
             tids[i] = records[i].application_id;
-        Result rc = switchu::ns::queryApplicationViews(tids, recordCount, views);
+        Result rc = switchu::ns::queryApplicationViews(tids, count, views);
         if (R_FAILED(rc)) {
             switchu::FileLog::log("[views] queryApplicationViews FAIL: 0x%X", rc);
             std::memset(views, 0, sizeof(views));
         }
     }
 
-    if (recordCount != g_lastRecordCount) {
+    if (count != g_lastRecordCount) {
         const s32 prevCount = g_lastRecordCount;
         switchu::FileLog::log("[views] title count changed %d -> %d, full reload needed",
-                              g_lastRecordCount, recordCount);
+                              g_lastRecordCount, count);
 
-        for (s32 i = 0; i < recordCount && i < 1024; ++i) {
+        for (s32 i = 0; i < count; ++i) {
             g_lastRecordTids[i] = records[i].application_id;
             g_lastViewFlags[i]  = views[i].flags;
         }
-        for (s32 i = recordCount; i < prevCount && i < 1024; ++i) {
+        for (s32 i = count; i < prevCount && i < 1024; ++i) {
             g_lastRecordTids[i] = 0;
             g_lastViewFlags[i]  = 0;
         }
-        g_lastRecordCount = recordCount;
+        g_lastRecordCount = count;
 
         return true;
     }
 
     int pushed = 0;
-    for (s32 i = 0; i < recordCount && i < 1024; ++i) {
+    for (s32 i = 0; i < count; ++i) {
         uint32_t newFlags = views[i].flags;
         uint32_t oldFlags = 0;
         for (s32 j = 0; j < g_lastRecordCount; ++j) {
@@ -212,10 +507,10 @@ static bool sendViewFlagsUpdates() {
         g_lastRecordTids[i] = records[i].application_id;
         g_lastViewFlags[i]  = newFlags;
     }
-    g_lastRecordCount = recordCount;
+    g_lastRecordCount = count;
 
     switchu::FileLog::log("[views] checked %d titles, pushed %d flag updates",
-                          recordCount, pushed);
+                          count, pushed);
     return false;
 }
 
@@ -242,101 +537,70 @@ static void handleGeneralChannel() {
     switch (hdr.msg) {
         case 2:
         switchu::FileLog::log("[sams] -> Home");
-        if (daemon::app::isRunning() && daemon::app::hasForeground()) {
-            daemon::app::onHomeSuspend();
-            appletRequestToGetForeground();
-            if (daemon::menu_la::isActive()) {
-                pushNotification(smi::MenuMessage::ApplicationSuspended,
-                                 daemon::app::suspendedTitleId());
-                if (daemon::menu_la::isSuspended())
-                    pushWakeSignal("sams", 0, daemon::app::suspendedTitleId());
-            } else {
-                daemon::menu_la::launch(smi::MenuStartMode::Resume, buildSystemStatus());
-            }
-        } else if (daemon::menu_la::isActive()) {
-            pushNotification(smi::MenuMessage::HomeRequest);
-        } else if (g_foregroundAppletActive) {
-            switchu::FileLog::log("[sams] -> Home requested while foreground applet active");
-            g_pendingForegroundAppletHome = true;
-        }
+        openMenuFromHome("sams");
         break;
         case 3:
         switchu::FileLog::log("[sams] -> Sleep");
-        appletStartSleepSequence(true);
+        startPowerSequence("sams-sleep", smi::SystemMessage::EnterSleep);
         break;
         case 5:
         switchu::FileLog::log("[sams] -> Shutdown");
-        appletStartShutdownSequence();
+        startPowerSequence("sams-shutdown", smi::SystemMessage::Shutdown);
         break;
         case 6:
         switchu::FileLog::log("[sams] -> Reboot");
-        appletStartRebootSequence();
+        startPowerSequence("sams-reboot", smi::SystemMessage::Reboot);
         break;
     }
 }
 
 static void handleAppletMessages() {
     u32 msg = 0;
-    while (R_SUCCEEDED(appletGetMessage(&msg))) {
-        switchu::FileLog::log("[ae] msg=%u", msg);
-        switch (msg) {
-            case 2:
-            // AppletMessage_ChangeIntoBackground: the foreground is being taken by a
-            // library applet (e.g. swkbd launched by the running game).  Our menu
-            // library applet is created with LibAppletMode_AllForeground, so as long
-            // as it holds an open AppletHolder the AM will block the game's library
-            // applet from acquiring the foreground, causing a freeze.  Close the menu
-            // now so the game's applet can proceed.  The HOME handler will relaunch
-            // the menu in Resume mode once the user returns.
-            switchu::FileLog::log("[ae] -> ChangeIntoBackground");
-            if (daemon::app::isRunning() && daemon::menu_la::isSuspended()) {
-                switchu::FileLog::log("[ae] closing suspended menu to unblock game library applet");
-                daemon::menu_la::terminate();
-            }
-            break;
-            case 20:
-            appletRequestToGetForeground();
-            if (daemon::app::isRunning() && daemon::app::hasForeground()) {
-                daemon::app::onHomeSuspend();
-                if (!daemon::menu_la::isActive()) {
-                    daemon::menu_la::launch(smi::MenuStartMode::Resume, buildSystemStatus());
-                } else {
-                    pushNotification(smi::MenuMessage::ApplicationSuspended,
-                                     daemon::app::suspendedTitleId());
-                    if (daemon::menu_la::isSuspended())
-                        pushWakeSignal("ae", 0, daemon::app::suspendedTitleId());
-                }
-            } else if (daemon::menu_la::isActive()) {
-                pushNotification(smi::MenuMessage::HomeRequest);
-            } else if (g_foregroundAppletActive) {
-                switchu::FileLog::log("[ae] -> Home requested while foreground applet active");
-                g_pendingForegroundAppletHome = true;
-            }
-            break;
-            case 22:
-            case 29:
+    Result rc = appletGetMessage(&msg);
+    if (R_FAILED(rc))
+        return;
+
+    switchu::FileLog::log("[ae] msg=%u", msg);
+    switch (msg) {
+        case 1:
+        switchu::FileLog::log("[ae] -> ChangeIntoForeground");
+        break;
+
+        case 2:
+        // AppletMessage_ChangeIntoBackground: another foreground participant is
+        // taking over. The menu no longer stays alive in a hidden suspended
+        // state, so there is no extra holder to clean up here.
+        switchu::FileLog::log("[ae] -> ChangeIntoBackground");
+        break;
+
+        case 20:
+        openMenuFromHome("ae");
+        break;
+
+        case 22:
+        case 29:
         case 32:
-            switchu::FileLog::log("[ae] -> Sleep (msg=%u)", msg);
-            appletStartSleepSequence(true);
-            break;
-            case 26:
-            switchu::FileLog::log("[ae] -> Wakeup");
-            if (daemon::app::isRunning() && !daemon::menu_la::isActive()) {
-                Result rc = daemon::app::resume();
-                if (R_FAILED(rc)) {
-                    switchu::FileLog::log("[ae] wake resume FAIL: 0x%X", rc);
-                    appletRequestToGetForeground();
-                }
-            } else {
+        switchu::FileLog::log("[ae] -> Sleep (msg=%u)", msg);
+        appletStartSleepSequence(true);
+        break;
+
+        case 26:
+        switchu::FileLog::log("[ae] -> Wakeup");
+        if (daemon::app::isRunning() && !daemon::menu_la::isActive()) {
+            Result rc = daemon::app::resume();
+            if (R_FAILED(rc)) {
+                switchu::FileLog::log("[ae] wake resume FAIL: 0x%X", rc);
                 appletRequestToGetForeground();
             }
-            if (daemon::menu_la::isActive()) {
-                pushNotification(smi::MenuMessage::WakeUp);
-            } else if (!daemon::app::isRunning()) {
-                daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
-            }
-            break;
+        } else {
+            appletRequestToGetForeground();
         }
+        if (daemon::menu_la::isActive()) {
+            pushNotification(smi::MenuMessage::WakeUp);
+        } else if (!daemon::app::isRunning()) {
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+        }
+        break;
     }
 }
 
@@ -344,23 +608,31 @@ static void handleAppletMessages() {
 static Result launchLibraryApplet(AppletId id, const char* name,
                                   const void* inData = nullptr, size_t inDataSize = 0,
                                   u32 libAppletVersion = 0) {
-    switchu::FileLog::log("[applet] launching %s", name);
+    switchu::FileLog::log("[applet] launching %s id=0x%X version=0x%X in=%zu",
+                          name, (u32)id, libAppletVersion, inDataSize);
+    Result fgRc = appletRequestToGetForeground();
+    switchu::FileLog::log("[applet] %s RequestToGetForeground rc=0x%X", name, fgRc);
+
     AppletHolder holder;
+    switchu::FileLog::log("[applet] %s create call", name);
     Result rc = appletCreateLibraryApplet(&holder, id, LibAppletMode_AllForeground);
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[applet] %s create FAIL: 0x%X", name, rc);
         return rc;
     }
+    switchu::FileLog::log("[applet] %s create ok", name);
 
     if (libAppletVersion != 0) {
         LibAppletArgs args;
         libappletArgsCreate(&args, libAppletVersion);
+        libappletArgsSetPlayStartupSound(&args, true);
         rc = libappletArgsPush(&args, &holder);
         if (R_FAILED(rc)) {
             switchu::FileLog::log("[applet] %s args FAIL: 0x%X", name, rc);
             appletHolderClose(&holder);
             return rc;
         }
+        switchu::FileLog::log("[applet] %s args ok", name);
     }
 
     if (inData && inDataSize > 0) {
@@ -371,7 +643,13 @@ static Result launchLibraryApplet(AppletId id, const char* name,
             appletHolderClose(&holder);
             return rc;
         }
-        appletStorageWrite(&inStor, 0, inData, inDataSize);
+        rc = appletStorageWrite(&inStor, 0, inData, inDataSize);
+        if (R_FAILED(rc)) {
+            switchu::FileLog::log("[applet] %s in data write FAIL: 0x%X", name, rc);
+            appletStorageClose(&inStor);
+            appletHolderClose(&holder);
+            return rc;
+        }
         rc = appletHolderPushInData(&holder, &inStor);
         if (R_FAILED(rc)) {
             switchu::FileLog::log("[applet] %s in data push FAIL: 0x%X", name, rc);
@@ -379,14 +657,18 @@ static Result launchLibraryApplet(AppletId id, const char* name,
             appletHolderClose(&holder);
             return rc;
         }
+        switchu::FileLog::log("[applet] %s in data ok", name);
+        appletStorageClose(&inStor);
     }
 
+    switchu::FileLog::log("[applet] %s start call", name);
     rc = appletHolderStart(&holder);
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[applet] %s start FAIL: 0x%X", name, rc);
         appletHolderClose(&holder);
         return rc;
     }
+    switchu::FileLog::log("[applet] %s start ok", name);
 
     g_foregroundAppletActive = true;
     g_pendingForegroundAppletHome = false;
@@ -442,16 +724,22 @@ static void handleMenuCommand() {
     switch (msg) {
     case smi::SystemMessage::LaunchApplication: {
         auto args = reader.pop<smi::LaunchAppArgs>();
-        g_pendingLaunch = true;
-        g_pendingTitleId = args.title_id;
-        std::memcpy(&g_pendingUid, args.user_uid, sizeof(g_pendingUid));
-        switchu::FileLog::log("[smi] pending launch 0x%016lX (waiting for menu exit)", args.title_id);
+        Action action{};
+        action.type = ActionType::LaunchApplication;
+        action.title_id = args.title_id;
+        std::memcpy(&action.uid, args.user_uid, sizeof(action.uid));
+        g_actionQueue.push_back(action);
+        switchu::FileLog::log("[smi] queued launch 0x%016lX (actions=%zu)", args.title_id, g_actionQueue.size());
         break;
     }
 
     case smi::SystemMessage::ResumeApplication:
-        g_pendingResume = true;
-        switchu::FileLog::log("[smi] pending resume (waiting for menu exit)");
+        {
+            Action action{};
+            action.type = ActionType::ResumeApplication;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued resume (actions=%zu)", g_actionQueue.size());
         break;
 
     case smi::SystemMessage::TerminateApplication:
@@ -462,28 +750,41 @@ static void handleMenuCommand() {
         break;
 
     case smi::SystemMessage::LaunchAlbum:
-        g_pendingAlbum = true;
-        g_pendingMiiEditor = false;
-        g_pendingLaunch = false;
-        g_pendingResume = false;
-        switchu::FileLog::log("[smi] pending album launch (waiting for menu exit)");
+        {
+            Action action{};
+            action.type = ActionType::OpenAlbum;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued album launch (actions=%zu)", g_actionQueue.size());
         break;
 
     case smi::SystemMessage::LaunchMiiEditor:
-        g_pendingMiiEditor = true;
-        g_pendingAlbum = false;
-        g_pendingLaunch = false;
-        g_pendingResume = false;
-        switchu::FileLog::log("[smi] pending Mii Editor launch (waiting for menu exit)");
+        {
+            Action action{};
+            action.type = ActionType::OpenMiiEditor;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued Mii Editor launch (actions=%zu)", g_actionQueue.size());
         break;
 
     case smi::SystemMessage::LaunchNetConnect:
-        g_pendingNetConnect = true;
-        g_pendingMiiEditor = false;
-        g_pendingLaunch = false;
-        g_pendingResume = false;
-        switchu::FileLog::log("[smi] pending NetConnect launch (waiting for menu exit)");
+        {
+            Action action{};
+            action.type = ActionType::OpenNetConnect;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued NetConnect launch (actions=%zu)", g_actionQueue.size());
         break;
+
+    case smi::SystemMessage::LaunchUserPage: {
+        auto args = reader.pop<smi::UserArgs>();
+        Action action{};
+        action.type = ActionType::OpenUserPage;
+        std::memcpy(&action.uid, args.user_uid, sizeof(action.uid));
+        g_actionQueue.push_back(action);
+        switchu::FileLog::log("[smi] queued User Page launch (actions=%zu)", g_actionQueue.size());
+        break;
+    }
 
     case smi::SystemMessage::LaunchControllers:
         switchu::FileLog::log("[smi] LaunchControllers ignored while menu active");
@@ -491,15 +792,15 @@ static void handleMenuCommand() {
         break;
 
     case smi::SystemMessage::EnterSleep:
-        appletStartSleepSequence(true);
+        startPowerSequence("smi-sleep", smi::SystemMessage::EnterSleep);
         break;
 
     case smi::SystemMessage::Shutdown:
-        appletStartShutdownSequence();
+        startPowerSequence("smi-shutdown", smi::SystemMessage::Shutdown);
         break;
 
     case smi::SystemMessage::Reboot:
-        appletStartRebootSequence();
+        startPowerSequence("smi-reboot", smi::SystemMessage::Reboot);
         break;
 
     case smi::SystemMessage::RequestForeground:
@@ -515,8 +816,11 @@ static void handleMenuCommand() {
         smi::StorageWriter writer((Result)0);
         writer.push(status);
         AppletStorage respSt;
-        writer.createStorage(respSt);
-        daemon::menu_la::pushStorage(&respSt);
+        Result respRc = writer.createStorage(respSt);
+        if (R_SUCCEEDED(respRc))
+            daemon::menu_la::pushStorage(&respSt);
+        else
+            switchu::FileLog::log("[smi] GetSystemStatus response create FAIL: 0x%X", respRc);
         return;
     }
 
@@ -528,42 +832,106 @@ static void handleMenuCommand() {
         switchu::FileLog::log("[smi] menu closing");
         break;
 
-    case smi::SystemMessage::MenuSuspending:
-        switchu::FileLog::log("[smi] menu suspending (keep-alive)");
-        daemon::menu_la::setSuspended(true);
-        if (g_pendingAlbum) {
-            switchu::FileLog::log("[smi] WARN: album pending during suspend");
-            g_pendingAlbum = false;
-        }
-        if (g_pendingLaunch) {
-            g_pendingLaunch = false;
-            g_pendingResume = false;
-            switchu::FileLog::log("[smi] executing pending launch 0x%016lX (menu suspended)", g_pendingTitleId);
-            Result launchRc = daemon::app::launch(g_pendingTitleId, g_pendingUid);
-            if (R_FAILED(launchRc)) {
-                switchu::FileLog::log("[smi] pending launch FAIL: 0x%X", launchRc);
-            } else {
-                g_pendingMenuClose = true;
-            }
-        } else if (g_pendingResume) {
-            g_pendingResume = false;
-            switchu::FileLog::log("[smi] executing pending resume (menu suspended)");
-            Result resumeRc = daemon::app::resume();
-            if (R_FAILED(resumeRc)) {
-                switchu::FileLog::log("[smi] pending resume FAIL: 0x%X", resumeRc);
-            } else {
-                g_pendingMenuClose = true;
-            }
-        }
-        break;
     }
 
     if (msg != smi::SystemMessage::MenuClosing) {
         smi::StorageWriter writer(result);
         AppletStorage respSt;
-        writer.createStorage(respSt);
-        daemon::menu_la::pushStorage(&respSt);
+        Result respRc = writer.createStorage(respSt);
+        if (R_SUCCEEDED(respRc))
+            daemon::menu_la::pushStorage(&respSt);
+        else
+            switchu::FileLog::log("[smi] response create FAIL: 0x%X", respRc);
     }
+}
+
+static bool handleAction(Action& action) {
+    if (daemon::menu_la::hasHolder() || g_foregroundAppletActive)
+        return false;
+
+    switchu::FileLog::log("[action] handling type=%u", (u32)action.type);
+    switch (action.type) {
+        case ActionType::LaunchApplication: {
+            Result rc = daemon::app::launch(action.title_id, action.uid);
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] launch 0x%016lX FAIL: 0x%X", action.title_id, rc);
+            return true;
+        }
+
+        case ActionType::ResumeApplication: {
+            Result rc = daemon::app::resume();
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] resume FAIL: 0x%X", rc);
+            return true;
+        }
+
+        case ActionType::OpenAlbum: {
+            const u8 albumArg = AlbumLaArg_ShowAllAlbumFilesForHomeMenu;
+            Result rc = launchLibraryApplet(AppletId_LibraryAppletPhotoViewer,
+                                            "Album",
+                                            &albumArg,
+                                            sizeof(albumArg),
+                                            0x10000);
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] album FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after album");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+
+        case ActionType::OpenMiiEditor: {
+            const auto miiVer = hosversionAtLeast(10, 2, 0) ? 0x4 : 0x3;
+            const MiiLaAppletInput in = {
+                .version = miiVer,
+                .mode = MiiLaAppletMode_ShowMiiEdit,
+                .special_key_code = MiiSpecialKeyCode_Normal,
+            };
+            Result rc = launchLibraryApplet(AppletId_LibraryAppletMiiEdit,
+                                            "MiiEditor", &in, sizeof(in));
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] Mii Editor FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after Mii Editor");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+
+        case ActionType::OpenNetConnect: {
+            const u32 netType = 1;
+            Result rc = launchLibraryApplet(AppletId_LibraryAppletNetConnect,
+                                            "NetConnect", &netType,
+                                            sizeof(netType), 1);
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] NetConnect FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after NetConnect");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+
+        case ActionType::OpenUserPage: {
+            Result rc = friendsLaShowMyProfileForHomeMenu(action.uid);
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] User Page FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after User Page");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool consumeOneAction() {
+    if (g_actionQueue.empty())
+        return false;
+
+    switchu::FileLog::log("[action] queue has %zu actions", g_actionQueue.size());
+    for (size_t i = 0; i < g_actionQueue.size(); ++i) {
+        if (handleAction(g_actionQueue[i])) {
+            g_actionQueue.erase(g_actionQueue.begin() + i);
+            return true;
+        }
+    }
+    return false;
 }
 
 static void mainLoop() {
@@ -571,21 +939,15 @@ static void mainLoop() {
     handleAppletMessages();
     handleMenuCommand();
 
-    // Close the suspended menu AppletHolder once the game is running.
-    // An AllForeground AppletHolder held by the SystemApplet blocks HOS AM
-    // from letting the game launch its own library applets (swkbd, WebApplet,
-    // etc.).  We close it here — after the response storage has been pushed
-    // and consumed — so the game can launch any applet freely.  When HOME is
-    // pressed, case 20 will relaunch the menu in Resume mode.
-    if (g_pendingMenuClose && daemon::menu_la::isSuspended()) {
-        g_pendingMenuClose = false;
-        switchu::FileLog::log("[main] closing suspended menu to unblock game library applets");
-        daemon::menu_la::forceTerminate();
-    }
+    bool didWork = false;
 
-    if (g_eventRefreshPending.exchange(false)) {
+    if (g_eventRefreshPending.load() && shouldDeferViewPolling()) {
+        g_eventPollCountdown = 20;
+        g_eventPollsRemaining = 1;
+    } else if (g_eventRefreshPending.exchange(false)) {
         if (!g_initialEventSkipped) {
             g_initialEventSkipped = true;
+            g_appCatalogRefreshPending.store(false);
             switchu::FileLog::log("[views] skipping initial catch-up event");
         } else {
             switchu::FileLog::log("[views] app record event — starting poll");
@@ -593,7 +955,22 @@ static void mainLoop() {
             g_eventPollsRemaining = 50;
         }
     }
-    if (g_eventPollsRemaining > 0 && --g_eventPollCountdown == 0) {
+
+    if (g_appCatalogRefreshPending.load() && !shouldDeferViewPolling() &&
+        g_appCatalogRefreshDelay > 0) {
+        --g_appCatalogRefreshDelay;
+    } else if (g_appCatalogRefreshPending.load() && !shouldDeferViewPolling()) {
+        g_appCatalogRefreshPending.store(false);
+        bool catalogChanged = false;
+        if (rebuildAppCatalog("record-event", &catalogChanged)) {
+            if (catalogChanged && daemon::menu_la::isActive())
+                pushNotification(smi::MenuMessage::AppRecordsChanged);
+            didWork = true;
+        }
+    }
+    if (g_eventPollsRemaining > 0 && shouldDeferViewPolling()) {
+        g_eventPollCountdown = 20;
+    } else if (g_eventPollsRemaining > 0 && --g_eventPollCountdown == 0) {
         bool needFullReload = sendViewFlagsUpdates();
         if (needFullReload) {
             if (daemon::menu_la::isActive())
@@ -615,70 +992,26 @@ static void mainLoop() {
     if (daemon::menu_la::checkFinished()) {
         switchu::FileLog::log("[main] menu exited (reason=%d)",
             (int)daemon::menu_la::exitReason());
-
-        if (g_pendingAlbum) {
-            g_pendingAlbum = false;
-            switchu::FileLog::log("[main] executing pending album launch");
-            Result rc = launchLibraryApplet(AppletId_LibraryAppletPhotoViewer, "Album");
-            if (R_FAILED(rc))
-                switchu::FileLog::log("[main] pending album FAIL: 0x%X", rc);
-            switchu::FileLog::log("[main] relaunching menu after album");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
-        } else if (g_pendingNetConnect) {
-            g_pendingNetConnect = false;
-            switchu::FileLog::log("[main] executing pending NetConnect launch");
-            const u32 netType = 1;
-            Result rc = launchLibraryApplet(AppletId_LibraryAppletNetConnect,
-                                            "NetConnect", &netType,
-                                            sizeof(netType), 1);
-            if (R_FAILED(rc)) {
-                switchu::FileLog::log("[main] NetConnect create FAIL: 0x%X", rc);
-            }
-            switchu::FileLog::log("[main] relaunching menu after NetConnect");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
-        } else if (g_pendingMiiEditor) {
-            g_pendingMiiEditor = false;
-            switchu::FileLog::log("[main] executing pending Mii Editor launch");
-            const auto miiVer = hosversionAtLeast(10, 2, 0) ? 0x4 : 0x3;
-            const MiiLaAppletInput in = {
-                .version = miiVer,
-                .mode = MiiLaAppletMode_ShowMiiEdit,
-                .special_key_code = MiiSpecialKeyCode_Normal,
-            };
-            Result rc = launchLibraryApplet(AppletId_LibraryAppletMiiEdit,
-                                            "MiiEditor", &in, sizeof(in));
-            if (R_FAILED(rc))
-                switchu::FileLog::log("[main] pending Mii Editor FAIL: 0x%X", rc);
-            switchu::FileLog::log("[main] relaunching menu after Mii Editor");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
-        } else if (g_pendingLaunch) {
-            g_pendingLaunch = false;
-            g_pendingResume = false;
-            switchu::FileLog::log("[main] executing pending launch 0x%016lX", g_pendingTitleId);
-            Result rc = daemon::app::launch(g_pendingTitleId, g_pendingUid);
-            if (R_FAILED(rc))
-                switchu::FileLog::log("[main] pending launch FAIL: 0x%X", rc);
-        } else if (g_pendingResume) {
-            g_pendingResume = false;
-            switchu::FileLog::log("[main] executing pending resume");
-            Result rc = daemon::app::resume();
-            if (R_FAILED(rc))
-                switchu::FileLog::log("[main] pending resume FAIL: 0x%X", rc);
-        } else if (!daemon::app::isRunning()) {
-            switchu::FileLog::log("[main] relaunching menu");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
-        }
+        didWork = true;
     }
+
+    didWork |= consumeOneAction();
 
     if (daemon::app::checkFinished()) {
         switchu::FileLog::log("[main] app exited");
         if (daemon::menu_la::isActive()) {
             pushNotification(smi::MenuMessage::ApplicationExited);
-            if (daemon::menu_la::isSuspended())
-                pushWakeSignal("main", 1, 0);
         } else {
             daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
         }
+        didWork = true;
+    }
+
+    if (!didWork && g_actionQueue.empty() &&
+        !daemon::app::isRunning() && !daemon::menu_la::hasHolder() &&
+        !g_foregroundAppletActive) {
+        switchu::FileLog::log("[main] no app/menu active; relaunching menu");
+        daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
     }
 }
 
@@ -731,6 +1064,7 @@ static void eventManagerThreadFunc(void* arg) {
             eventClear(&recordEvent);
             switchu::FileLog::log("[event] ApplicationRecordUpdateSystemEvent fired");
 
+            g_appCatalogRefreshPending.store(true);
             g_eventRefreshPending.store(true);
         } else if (evIdx == 1 && hasGcEvent) {
             eventClear(&gcMountFailEvent);
@@ -783,21 +1117,7 @@ int main(int argc, char* argv[]) {
     if (!nxtcInitialize())
         switchu::FileLog::log("[daemon] nxtc init failed (non-fatal)");
 
-    {
-        NsApplicationRecord recs[1024] = {};
-        nsListApplicationRecord(recs, 1024, 0, &g_lastRecordCount);
-        if (g_lastRecordCount > 0) {
-            uint64_t tids[1024];
-            for (s32 i = 0; i < g_lastRecordCount; ++i)
-                tids[i] = recs[i].application_id;
-            static switchu::ns::ExtApplicationView vws[1024];
-            switchu::ns::queryApplicationViews(tids, g_lastRecordCount, vws);
-            for (s32 i = 0; i < g_lastRecordCount; ++i) {
-                g_lastRecordTids[i] = recs[i].application_id;
-                g_lastViewFlags[i]  = vws[i].flags;
-            }
-        }
-    }
+    rebuildAppCatalog("boot");
 
     Result rc = daemon::ipc::startServer();
     if (R_FAILED(rc))

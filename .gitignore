@@ -13,3 +13,4 @@ build_nro/
 .xmake/
 .DS_Store
 Thumbs.db
+compile_commands.json

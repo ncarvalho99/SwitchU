@@ -1,6 +1,9 @@
 #include "BluetoothManager.hpp"
 #include "core/DebugLog.hpp"
 #include <atomic>
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 
@@ -43,6 +46,26 @@ bool UpdateList(std::vector<BtmAudioDevice>& dst, const std::vector<BtmAudioDevi
     }
     dst = src;
     return changed != prev;
+}
+
+std::string SanitizedDeviceName(const BtmAudioDevice& device) {
+    size_t len = 0;
+    while (len < sizeof(device.name) && device.name[len] != '\0')
+        ++len;
+
+    std::string name(device.name, device.name + len);
+    name.erase(std::remove_if(name.begin(), name.end(), [](unsigned char ch) {
+        return ch < 0x20 || ch == 0x7F;
+    }), name.end());
+
+    if (!name.empty())
+        return name;
+
+    char fallback[32] = {};
+    std::snprintf(fallback, sizeof(fallback), "%02X:%02X:%02X:%02X:%02X:%02X",
+                  device.addr.address[0], device.addr.address[1], device.addr.address[2],
+                  device.addr.address[3], device.addr.address[4], device.addr.address[5]);
+    return fallback;
 }
 
 void ReloadConnected() {
@@ -220,6 +243,10 @@ Result UnpairAudioDevice(const BtmAudioDevice& device) {
     return btmsysRemoveAudioDevicePairing(device.addr);
 }
 
+std::string DeviceName(const BtmAudioDevice& device) {
+    return SanitizedDeviceName(device);
+}
+
 void StartDiscovery() {
     Result rc = btmsysStartAudioDeviceDiscovery();
     if (R_FAILED(rc))
@@ -257,6 +284,7 @@ bool HasDiscoveredChanges() { return false; }
 Result ConnectAudioDevice(const BtmAudioDevice&) { return 0; }
 Result DisconnectAudioDevice(const BtmAudioDevice&) { return 0; }
 Result UnpairAudioDevice(const BtmAudioDevice&) { return 0; }
+std::string DeviceName(const BtmAudioDevice&) { return {}; }
 void StartDiscovery() {}
 void StopDiscovery() {}
 bool IsDiscovering() { return false; }

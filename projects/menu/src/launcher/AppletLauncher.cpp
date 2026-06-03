@@ -72,9 +72,29 @@ void AppletLauncher::launchNetConnect() {
     }
 }
 
+void AppletLauncher::launchUserPage(AccountUid uid) {
+    DebugLog::log("[launcher] requesting User Page launch via daemon");
+    Result rc = switchu::menu::smi_cmd::launchUserPage(uid);
+    DebugLog::log("[launcher] User Page rc=0x%X", rc);
+    if (R_SUCCEEDED(rc)) {
+        if (m_cb.playSfxModalHide) m_cb.playSfxModalHide();
+        if (m_cb.requestExit)      m_cb.requestExit();
+    }
+}
+
 void AppletLauncher::enterSleep() {
     DebugLog::log("[launcher] requesting sleep");
     switchu::menu::smi_cmd::enterSleep();
+}
+
+void AppletLauncher::shutdown() {
+    DebugLog::log("[launcher] requesting shutdown");
+    switchu::menu::smi_cmd::shutdown();
+}
+
+void AppletLauncher::reboot() {
+    DebugLog::log("[launcher] requesting reboot");
+    switchu::menu::smi_cmd::reboot();
 }
 
 void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid) {
@@ -123,7 +143,10 @@ void AppletLauncher::launchAlbum()             {}
 void AppletLauncher::launchMiiEditor()         {}
 void AppletLauncher::launchControllerPairing() {}
 void AppletLauncher::launchNetConnect()        {}
+void AppletLauncher::launchUserPage(AccountUid) {}
 void AppletLauncher::enterSleep()              {}
+void AppletLauncher::shutdown()                {}
+void AppletLauncher::reboot()                  {}
 void AppletLauncher::launchApplication(uint64_t, AccountUid) {}
 void AppletLauncher::resumeApplication()       {}
 void AppletLauncher::terminateApplication()    {}

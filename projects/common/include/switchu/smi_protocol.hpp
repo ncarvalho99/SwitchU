@@ -5,15 +5,7 @@
 namespace switchu::smi {
 
 static constexpr uint32_t kCommandMagic      = 0x53575543;
-static constexpr uint32_t kWakeMagic         = 0x57414B45;
 static constexpr uint32_t kStorageSize       = 0x8000;
-
-struct WakeSignal {
-    uint32_t magic;
-    uint32_t reason;
-    uint64_t suspended_tid;
-};
-static_assert(sizeof(WakeSignal) == 16);
 static constexpr uint32_t kMaxRetries        = 5000;
 static constexpr uint64_t kRetrySleepNs      = 10'000'000;
 
@@ -41,6 +33,7 @@ enum class SystemMessage : uint32_t {
     LaunchMiiEditor       = 11,
     LaunchControllers     = 12,
     LaunchNetConnect      = 13,
+    LaunchUserPage        = 14,
 
     EnterSleep            = 20,
     Shutdown              = 21,
@@ -53,13 +46,11 @@ enum class SystemMessage : uint32_t {
 
     MenuReady             = 40,
     MenuClosing           = 41,
-    MenuSuspending        = 42,
 };
 
 enum class MenuStartMode : uint32_t {
     MainMenu       = 0,
     StartupBoot    = 1,
-    Resume         = 2,
 };
 
 struct CommandHeader {
@@ -74,6 +65,11 @@ struct LaunchAppArgs {
 };
 static_assert(sizeof(LaunchAppArgs) == 24);
 
+struct UserArgs {
+    uint8_t user_uid[16];
+};
+static_assert(sizeof(UserArgs) == 16);
+
 struct SystemStatus {
     uint64_t  suspended_app_id;
     uint8_t   selected_user[16];
@@ -87,7 +83,10 @@ struct AppEntryHeader {
     uint32_t  name_len;
     uint32_t  icon_data_len;
     uint32_t  view_flags;
-    uint32_t  _pad;
+    uint8_t   startup_user_account;
+    uint8_t   startup_user_account_option;
+    uint8_t   startup_user_known;
+    uint8_t   _pad;
 };
 static_assert(sizeof(AppEntryHeader) == 24);
 
@@ -117,7 +116,8 @@ enum class PrivateServiceCmd : uint32_t {
     Initialize     = 0,
     TryPopMessage  = 1,
 };
-static constexpr uint64_t kEShopProgramId = 0x010000000000100BULL;
+static constexpr uint64_t kMenuTakeoverProgramId = 0x010000000000100BULL;
+static constexpr uint64_t kMenuProcessProgramId  = 0x010000000000FFFFULL;
 static constexpr uint32_t kLdrAtmosRegisterExternalCode   = 65000;
 static constexpr uint32_t kLdrAtmosUnregisterExternalCode = 65001;
 

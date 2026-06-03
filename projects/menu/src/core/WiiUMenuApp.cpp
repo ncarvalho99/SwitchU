@@ -118,10 +118,98 @@ bool hexToTitleId(const std::string& s, uint64_t& out) {
     return true;
 }
 
+int hexNibble(char ch) {
+    if (ch >= '0' && ch <= '9') return ch - '0';
+    if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+    if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+    return -1;
+}
+
+bool hexToAccountUid(const std::string& s, AccountUid& out) {
+    if (s.size() != 32)
+        return false;
+
+    AccountUid uid{};
+    for (int part = 0; part < 2; ++part) {
+        uint64_t value = 0;
+        for (int i = 0; i < 16; ++i) {
+            int nibble = hexNibble(s[(size_t)(part * 16 + i)]);
+            if (nibble < 0)
+                return false;
+            value = (value << 4) | (uint64_t)nibble;
+        }
+        uid.uid[part] = value;
+    }
+
+    if (!accountUidIsValid(&uid))
+        return false;
+    out = uid;
+    return true;
+}
+
 const char* safeTag(const nxui::Widget* widget) {
     if (!widget || widget->tag().empty())
         return "<none>";
     return widget->tag().c_str();
+}
+
+std::string utf8Codepoint(uint32_t cp) {
+    std::string out;
+    if (cp <= 0x7F) {
+        out.push_back((char)cp);
+    } else if (cp <= 0x7FF) {
+        out.push_back((char)(0xC0 | (cp >> 6)));
+        out.push_back((char)(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0xFFFF) {
+        out.push_back((char)(0xE0 | (cp >> 12)));
+        out.push_back((char)(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back((char)(0x80 | (cp & 0x3F)));
+    } else {
+        out.push_back((char)(0xF0 | (cp >> 18)));
+        out.push_back((char)(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back((char)(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back((char)(0x80 | (cp & 0x3F)));
+    }
+    return out;
+}
+
+std::string buttonGlyph(nxui::Button button) {
+    switch (button) {
+        case nxui::Button::A: return utf8Codepoint(0xE0E0);
+        case nxui::Button::B: return utf8Codepoint(0xE0E1);
+        case nxui::Button::X: return utf8Codepoint(0xE0E2);
+        case nxui::Button::Y: return utf8Codepoint(0xE0E3);
+        case nxui::Button::L: return utf8Codepoint(0xE0E4);
+        case nxui::Button::R: return utf8Codepoint(0xE0E5);
+        case nxui::Button::Plus: return utf8Codepoint(0xE0F1);
+        case nxui::Button::Minus: return utf8Codepoint(0xE0F2);
+        default: return {};
+    }
+}
+
+std::string dpadGlyph() {
+    return utf8Codepoint(0xE0EA);
+}
+
+bool appEntriesRefreshEquivalent(const AppEntry& a, const AppEntry& b) {
+    return a.id == b.id &&
+           a.title == b.title &&
+           a.titleId == b.titleId &&
+           a.viewFlags == b.viewFlags &&
+           a.userRequired == b.userRequired &&
+           a.startupUserKnown == b.startupUserKnown &&
+           a.startupUserAccount == b.startupUserAccount &&
+           a.startupUserAccountOption == b.startupUserAccountOption;
+}
+
+bool gridModelsRefreshEquivalent(const GridModel& a, const GridModel& b) {
+    if (a.count() != b.count())
+        return false;
+    for (int i = 0; i < a.count(); ++i) {
+        if (!appEntriesRefreshEquivalent(a.at(i), b.at(i)))
+            return false;
+    }
+    return true;
 }
 
 }
@@ -162,8 +250,13 @@ bool WiiUMenuApp::onCreate() {
     });
     DebugLog::log("[init] Audio loading started on background thread");
 
-    bluetooth::Initialize();
-    DebugLog::log("[init] Bluetooth manager initialized");
+    if (m_launcher.suspendedTitleId() != 0) {
+        m_deferredBluetoothInitFrames = 120;
+        DebugLog::log("[init] Bluetooth manager initialization deferred for fast return");
+    } else {
+        bluetooth::Initialize();
+        DebugLog::log("[init] Bluetooth manager initialized");
+    }
     DebugLog::log("[init] Theme Shop HTTP runtime deferred until first request");
 
     DebugLog::log("[init] Config loaded (theme=%s, musicVol=%.2f, sfxVol=%.2f)",
@@ -171,24 +264,7 @@ bool WiiUMenuApp::onCreate() {
 
     m_launcher.init({
         .playSfxModalHide = [this]() { m_audio.playSfx(Sfx::ModalHide); },
-        .playSfxLaunchGame = [this]() { m_audio.playSfx(Sfx::LaunchGame); },
         .requestExit = [this]() { app().requestExit(); },
-#ifdef SWITCHU_MENU
-        .suspendForApp = [this]() {
-            DebugLog::log("[suspend] entering keep-alive suspend");
-            m_musicWasPlaying = m_audio.isPlaying();
-            m_audio.stop();
-            app().setRenderEnabled(false);
-            switchu::menu::smi_cmd::menuSuspending();
-            switchu::menu::smi_cmd::drainAllResponses();
-            m_suspended = true;
-            DebugLog::log("[suspend] now idle");
-        },
-#else
-        .suspendForApp = nullptr,
-#endif
-        .waitGpuIdle = [this]() { app().gpu().waitIdle(); },
-        .setRenderEnabled = [this](bool e) { app().setRenderEnabled(e); },
     });
 
 
@@ -245,11 +321,82 @@ void WiiUMenuApp::loadResources() {
     std::string fontPath = std::string(SD_ASSETS) + "/fonts/DejaVuSans.ttf";
     m_fontNormal.load(app().gpu(), app().renderer(), fontPath, 24);
     m_fontSmall.load(app().gpu(), app().renderer(), fontPath, 18);
+    m_fontIcons.load(app().gpu(), app().renderer(), std::string(SD_ASSETS) + "/fonts/switch_icons.ttf", 24);
 
     std::string gameCardPath = std::string(SD_ASSETS) + "/icons/gamecard.png";
     m_gameCardTex.loadFromFile(app().gpu(), app().renderer(), gameCardPath);
 
+#ifdef SWITCHU_MENU
+    m_appLoader.setFastStartupUserInfo(m_launcher.suspendedTitleId() != 0);
+#endif
     m_appLoader.load(m_model, m_iconStreamer);
+}
+
+void WiiUMenuApp::buildUserAvatarBar() {
+    m_userAvatarButtons.clear();
+
+    m_userAvatarBar = std::make_shared<nxui::Box>(nxui::Axis::ROW);
+    m_userAvatarBar->setMarginTop(17.f);
+    m_userAvatarBar->setGap(10.f);
+    m_userAvatarBar->setShrink(0.f);
+    m_userAvatarBar->setSize(0.f, 56.f);
+    m_userAvatarBar->setTag("userAvatarBar");
+    m_userAvatarBar->setWireframeEnabled(false);
+
+    AccountUid uids[8] = {};
+    s32 count = 0;
+    Result rc = accountListAllUsers(uids, 8, &count);
+    DebugLog::log("[profiles] accountListAllUsers rc=0x%X count=%d", rc, count);
+    if (R_FAILED(rc) || count <= 0)
+        return;
+
+    for (int i = 0; i < count; ++i) {
+        AccountProfile profile{};
+        rc = accountGetProfile(&profile, uids[i]);
+        if (R_FAILED(rc))
+            continue;
+
+        auto avatar = std::make_shared<UserAvatarButton>();
+        avatar->setSize(56.f, 56.f);
+        avatar->setMinWidth(56.f);
+        avatar->setMinHeight(56.f);
+        avatar->setShrink(0.f);
+        avatar->setCornerRadius(28.f);
+        avatar->setUid(uids[i]);
+        avatar->setFocusable(true);
+
+        AccountProfileBase base{};
+        AccountUserData userData{};
+        if (R_SUCCEEDED(accountProfileGet(&profile, &userData, &base)))
+            avatar->setNickname(base.nickname);
+
+        u32 imgSize = 0;
+        if (R_SUCCEEDED(accountProfileGetImageSize(&profile, &imgSize)) && imgSize > 0) {
+            std::vector<uint8_t> imgBuf(imgSize);
+            u32 realSize = 0;
+            if (R_SUCCEEDED(accountProfileLoadImage(&profile, imgBuf.data(), imgSize, &realSize))
+                    && realSize > 0) {
+                avatar->loadAvatar(app().gpu(), app().renderer(), imgBuf.data(), realSize);
+            }
+        }
+
+        AccountUid uid = uids[i];
+        avatar->setOnActivate([this, uid]() {
+            m_audio.playSfx(Sfx::Activate);
+#ifdef SWITCHU_MENU
+            m_launcher.launchUserPage(uid);
+#endif
+        });
+
+        accountProfileClose(&profile);
+        m_userAvatarButtons.push_back(avatar);
+        m_userAvatarBar->addChild(avatar);
+    }
+
+    if (!m_userAvatarButtons.empty()) {
+        const float countF = static_cast<float>(m_userAvatarButtons.size());
+        m_userAvatarBar->setSize(countF * 56.f + (countF - 1.f) * 10.f, 56.f);
+    }
 }
 
 WiiUMenuApp::GridLayoutMetrics WiiUMenuApp::computeGridLayoutMetrics() const {
@@ -272,6 +419,138 @@ WiiUMenuApp::GridLayoutMetrics WiiUMenuApp::computeGridLayoutMetrics() const {
     m.padX = std::max(8.f, kGridBasePadX * scale);
     m.padY = std::max(8.f, kGridBasePadY * scale);
     return m;
+}
+
+void WiiUMenuApp::reflowHomeGrid() {
+    if (!m_grid)
+        return;
+
+    const int oldFocusedIndex = m_grid->focusedGlobalIndex();
+    const int oldPage = m_grid->currentPage();
+    uint64_t focusedTitleId = 0;
+    if (oldFocusedIndex >= 0 && oldFocusedIndex < m_model.count())
+        focusedTitleId = m_model.at(oldFocusedIndex).titleId;
+
+    std::unordered_map<uint64_t, AppEntry> byId;
+    std::vector<uint64_t> appOrder;
+    byId.reserve((size_t)std::max(0, m_model.count()));
+    appOrder.reserve((size_t)std::max(0, m_model.count()));
+    for (const auto& entry : m_model.entries()) {
+        if (entry.titleId == 0 || byId.count(entry.titleId))
+            continue;
+        appOrder.push_back(entry.titleId);
+        byId.emplace(entry.titleId, entry);
+    }
+
+    std::vector<uint64_t> slots = m_layoutSlots;
+    if (slots.empty())
+        slots = appOrder;
+
+    std::unordered_set<uint64_t> placed;
+    placed.reserve(byId.size());
+    for (auto& slotTid : slots) {
+        if (slotTid == 0)
+            continue;
+        if (!byId.count(slotTid) || placed.count(slotTid)) {
+            slotTid = 0;
+            continue;
+        }
+        placed.insert(slotTid);
+    }
+
+    for (uint64_t tid : appOrder) {
+        if (placed.count(tid))
+            continue;
+
+        auto emptyIt = std::find(slots.begin(), slots.end(), 0);
+        if (emptyIt != slots.end())
+            *emptyIt = tid;
+        else
+            slots.push_back(tid);
+        placed.insert(tid);
+    }
+
+    const int cols = std::clamp(m_config.gridColumns, 3, 8);
+    const int rows = std::clamp(m_config.gridRows, 2, 5);
+    const int perPage = std::max(1, cols * rows);
+    int minSlots = std::max(perPage * kMinHomePages, (int)slots.size());
+    int roundedSlots = ((minSlots + perPage - 1) / perPage) * perPage;
+    if ((int)slots.size() < roundedSlots)
+        slots.resize(roundedSlots, 0);
+
+    if (slots != m_layoutSlots) {
+        m_layoutSlots = slots;
+        m_layoutDirty = true;
+    }
+
+    GridModel rebuiltModel;
+    for (uint64_t tid : slots) {
+        if (tid == 0) {
+            rebuiltModel.addEntry(AppEntry{});
+            continue;
+        }
+
+        auto it = byId.find(tid);
+        if (it != byId.end())
+            rebuiltModel.addEntry(it->second);
+        else
+            rebuiltModel.addEntry(AppEntry{});
+    }
+
+    app().gpu().waitIdle();
+    m_model = std::move(rebuiltModel);
+    m_iconStreamer.clear();
+    m_iconStreamer.init(m_model.count());
+    m_iconStreamer.setIconDataLoader(AppListLoader::loadIconData);
+    for (int i = 0; i < m_model.count(); ++i)
+        m_iconStreamer.setTitleId(i, m_model.at(i).titleId);
+
+    std::vector<std::shared_ptr<GlossyIcon>> icons;
+    icons.reserve((size_t)std::max(0, m_model.count()));
+    for (int i = 0; i < m_model.count(); ++i) {
+        auto icon = makeIcon(m_model.at(i));
+        icon->setBaseColor(m_theme.iconDefault);
+        icons.push_back(std::move(icon));
+    }
+
+    GridLayoutMetrics gridMetrics = computeGridLayoutMetrics();
+    m_grid->setup(std::move(icons), cols, rows,
+                  gridMetrics.cellW, gridMetrics.cellH,
+                  gridMetrics.padX, gridMetrics.padY);
+
+    int targetIndex = -1;
+    if (focusedTitleId != 0)
+        targetIndex = findTitleIndex(focusedTitleId);
+    if (targetIndex < 0 && oldFocusedIndex >= 0 && m_model.count() > 0)
+        targetIndex = std::clamp(oldFocusedIndex, 0, m_model.count() - 1);
+
+    if (targetIndex >= 0)
+        m_grid->focusGlobalIndex(targetIndex);
+    else
+        m_grid->setPage(oldPage);
+
+    for (auto* icon : m_grid->pageIcons()) {
+        if (icon)
+            icon->forceVisible();
+    }
+
+    m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                 app().gpu(), app().renderer(),
+                                 m_grid->allIcons());
+
+    const bool overlayActive =
+        (m_dialog && m_dialog->isActive()) ||
+        (m_themeShop && m_themeShop->isActive()) ||
+        (m_settings && m_settings->isActive()) ||
+        (m_userSelect && m_userSelect->isActive());
+    if (!overlayActive) {
+        if (auto* cur = m_grid->focusManager().current())
+            focusManager().setFocus(cur);
+        updateCursor();
+    }
+
+    DebugLog::log("[grid] reflowed layout cols=%d rows=%d apps=%d page=%d",
+                  cols, rows, m_model.count(), m_grid->currentPage());
 }
 
 void WiiUMenuApp::loadMenuLayout() {
@@ -443,7 +722,10 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
                 nullptr,
                 [this]() { m_launcher.resumeApplication(); });
         } else {
-            const AppEntry* entry = m_model.findByTitleId(tid);
+            AppEntry* entry = nullptr;
+            int entryIndex = findTitleIndex(tid);
+            if (entryIndex >= 0)
+                entry = &m_model.at(entryIndex);
             if (entry && !entry->isLaunchable()) {
                 m_audio.playSfx(Sfx::ModalShow);
                 m_dialogReturnFocus = raw;
@@ -474,15 +756,77 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             float  cr   = raw->cornerRadius();
             nxui::Color  base = m_theme.panelBase;
             nxui::Color  bord = m_theme.panelBorder;
-            if (m_userSelect) {
-                bool usersLoaded = m_userSelect->loadUsers(app().gpu(), app().renderer());
-                DebugLog::log("[UserSelect] lazy load result=%d", usersLoaded ? 1 : 0);
-            }
-            m_userSelect->show([this, fr, tex, cr, base, bord, tid](AccountUid uid) {
+            auto startLaunch = [this, fr, tex, cr, base, bord, tid](AccountUid uid) {
                 m_audio.playSfx(Sfx::LaunchGame);
                 m_launchAnim->start(fr, tex, cr, base, bord, tid, uid,
                     [this](uint64_t id, AccountUid u) { m_launcher.launchApplication(id, u); });
-            });
+            };
+            if (entry) {
+                if (!entry->startupUserKnown) {
+                    uint8_t account = 1;
+                    uint8_t option = 0;
+                    if (AppListLoader::queryStartupUserInfo(tid, account, option)) {
+                        entry->startupUserAccount = account;
+                        entry->startupUserAccountOption = option;
+                        entry->userRequired = (account == 1 && option == 0);
+                        entry->startupUserKnown = true;
+                    }
+                }
+                DebugLog::log("[launcher] user decision tid=%016lX startup_user=%u option=%u interactive_user=%d",
+                              tid,
+                              (unsigned)entry->startupUserAccount,
+                              (unsigned)entry->startupUserAccountOption,
+                              entry->userRequired ? 1 : 0);
+
+                if (entry->startupUserAccount == 0) {
+                    AccountUid emptyUid = {};
+                    DebugLog::log("[launcher] skipping user select: NACP StartupUserAccount=None");
+                    startLaunch(emptyUid);
+                    return;
+                }
+
+                if (m_config.defaultProfileEnabled) {
+                    AccountUid defaultUid = {};
+                    if (hexToAccountUid(m_config.defaultProfileUid, defaultUid)) {
+                        DebugLog::log("[launcher] skipping user select: default profile configured uid[0]=0x%016lX uid[1]=0x%016lX",
+                                      defaultUid.uid[0], defaultUid.uid[1]);
+                        startLaunch(defaultUid);
+                        return;
+                    }
+                    DebugLog::log("[launcher] default profile enabled but uid is invalid");
+                }
+
+                AccountUid silentUid = {};
+                const bool networkRequired = entry->startupUserAccount == 2;
+                Result silentRc = accountTrySelectUserWithoutInteraction(&silentUid, networkRequired);
+                DebugLog::log("[launcher] TrySelectUserWithoutInteraction network_required=%d rc=0x%X uid_valid=%d uid[0]=0x%016lX uid[1]=0x%016lX",
+                              networkRequired ? 1 : 0,
+                              silentRc,
+                              accountUidIsValid(&silentUid) ? 1 : 0,
+                              silentUid.uid[0],
+                              silentUid.uid[1]);
+                if (R_SUCCEEDED(silentRc) && accountUidIsValid(&silentUid)) {
+                    DebugLog::log("[launcher] skipping user select: silent account selection succeeded");
+                    startLaunch(silentUid);
+                    return;
+                }
+
+                if (!entry->userRequired) {
+                    AccountUid emptyUid = {};
+                    DebugLog::log("[launcher] skipping user select fallback: startup_user=%u option=%u did not require interactive picker",
+                                  (unsigned)entry->startupUserAccount,
+                                  (unsigned)entry->startupUserAccountOption);
+                    startLaunch(emptyUid);
+                    return;
+                }
+            }
+            if (m_userSelect) {
+                bool usersLoaded = m_userSelect->loadUsers(app().gpu(), app().renderer());
+                DebugLog::log("[UserSelect] lazy load result=%d", usersLoaded ? 1 : 0);
+                if (usersLoaded)
+                    m_audio.playSfx(Sfx::ModalShow);
+            }
+            m_userSelect->showUserSelect([startLaunch](AccountUid uid) { startLaunch(uid); });
             focusManager().setFocus(m_userSelect.get());
         }
     });
@@ -576,6 +920,8 @@ void WiiUMenuApp::buildGrid() {
     m_battery->setForceLiquidGlass(true);
     m_battery->setBlurEnabled(false);
 
+    buildUserAvatarBar();
+
     m_titlePill = std::make_shared<TitlePillWidget>();
     m_titlePill->setPosition(0, 630.f);
     m_titlePill->setFont(&m_fontNormal);
@@ -591,10 +937,13 @@ void WiiUMenuApp::buildGrid() {
 
     m_launchAnim = std::make_shared<LaunchAnimation>();
 
-    m_userSelect = std::make_shared<UserSelectScreen>();
+    m_userSelect = std::make_shared<OverlayDialog>();
     m_userSelect->setFont(&m_fontNormal);
     m_userSelect->setSmallFont(&m_fontSmall);
-    m_userSelect->setAudio(&m_audio);
+    m_userSelect->setTheme(&m_theme);
+    m_userSelect->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+    m_userSelect->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+    m_userSelect->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
 
     m_dialog = std::make_shared<OverlayDialog>();
     m_dialog->setFont(&m_fontNormal);
@@ -603,6 +952,11 @@ void WiiUMenuApp::buildGrid() {
     m_dialog->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
     m_dialog->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
     m_dialog->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+
+    m_progressDialog = std::make_shared<ProgressDialog>();
+    m_progressDialog->setFont(&m_fontNormal);
+    m_progressDialog->setSmallFont(&m_fontSmall);
+    m_progressDialog->setTheme(&m_theme);
 
     app().renderer().setBoxWireframeEnabled(m_showWireframe);
 
@@ -623,7 +977,14 @@ void WiiUMenuApp::buildGrid() {
                                  app().gpu(), app().renderer(),
                                  m_grid->allIcons());
 
-    m_grid->startAppearAnimation();
+    const bool returningFromSuspendedApp = m_launcher.suspendedTitleId() != 0;
+    if (returningFromSuspendedApp) {
+        for (auto& icon : m_grid->allIcons())
+            icon->forceVisible();
+        m_returnFadeTimer = kReturnFadeInDur;
+    } else {
+        m_grid->startAppearAnimation();
+    }
 
     SidebarManager::Actions sidebarActions;
 #ifdef SWITCHU_MENU
@@ -646,14 +1007,15 @@ void WiiUMenuApp::buildGrid() {
     };
     sidebarActions.onSleep = [this]() {
         if (!m_dialog) return;
+        auto& i18n = nxui::I18n::instance();
         m_audio.playSfx(Sfx::ModalShow);
         m_dialogReturnFocus = focusManager().current();
         m_dialog->show(
-            "Sleep",
-            "Put the console into sleep mode?",
+            i18n.tr("power.title", "Power"),
+            i18n.tr("power.choose_action", "Choose a power action."),
             {
-                {"Cancel", [this]() {  }, true},
-                {"Sleep", [this]() {
+                {i18n.tr("button.cancel", "Cancel"), [this]() {  }, true},
+                {i18n.tr("power.sleep", "Sleep"), [this]() {
 #ifdef SWITCHU_MENU
                     m_audio.playSfx(Sfx::ConfirmPositive);
                     m_launcher.enterSleep();
@@ -661,9 +1023,27 @@ void WiiUMenuApp::buildGrid() {
                     m_audio.playSfx(Sfx::ConfirmPositive);
                     app().requestExit();
 #endif
+                }, true},
+                {i18n.tr("power.shutdown", "Shutdown"), [this]() {
+#ifdef SWITCHU_MENU
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_launcher.shutdown();
+#else
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    app().requestExit();
+#endif
+                }, true},
+                {i18n.tr("power.reboot", "Reboot"), [this]() {
+#ifdef SWITCHU_MENU
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_launcher.reboot();
+#else
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    app().requestExit();
+#endif
                 }, true}
             },
-            1,
+            0,
             {}
         );
         focusManager().setFocus(m_dialog.get());
@@ -706,6 +1086,8 @@ void WiiUMenuApp::buildGrid() {
     m_topHud->setJustifyContent(nxui::JustifyContent::SPACE_BETWEEN);
     m_topHud->setAlignItems(nxui::AlignItems::FLEX_START);
     m_topHud->addChild(m_clock);
+    if (m_userAvatarBar)
+        m_topHud->addChild(m_userAvatarBar);
     m_topHud->addChild(m_battery);
     m_topHud->layout();
 
@@ -739,6 +1121,7 @@ void WiiUMenuApp::buildGrid() {
     createThemeShop();
 
     m_overlayLayer->addChild(m_dialog);
+    m_overlayLayer->addChild(m_progressDialog);
     m_overlayLayer->addChild(m_launchAnim);
     m_overlayLayer->addChild(m_pointerCursor);
 
@@ -746,8 +1129,10 @@ void WiiUMenuApp::buildGrid() {
     root.addChild(m_contentLayer);
     root.addChild(m_overlayLayer);
 
-    if (auto* firstIcon = m_grid->focusManager().current())
-        focusManager().setFocus(firstIcon);
+    if (!focusTitle(m_launcher.suspendedTitleId())) {
+        if (auto* firstIcon = m_grid->focusManager().current())
+            focusManager().setFocus(firstIcon);
+    }
 
     if (m_layoutDirty)
         saveMenuLayout();
@@ -942,6 +1327,7 @@ void WiiUMenuApp::refreshAppList() {
     m_asyncRefreshPending = true;
     m_refreshQueued = false;
 
+    m_appLoader.setFastStartupUserInfo(false);
     m_appLoader.startAsync(m_threadPool);
 }
 
@@ -949,13 +1335,23 @@ void WiiUMenuApp::finalizeRefresh() {
     DebugLog::log("[refresh] finalizing (GPU upload)");
     m_asyncRefreshPending = false;
 
+    GridModel refreshedModel;
+    IconStreamer refreshedStreamer;
+    m_appLoader.finalize(refreshedModel, refreshedStreamer);
+    DebugLog::log("[refresh] found %d apps", refreshedModel.count());
+
+    if (gridModelsRefreshEquivalent(m_model, refreshedModel)) {
+        DebugLog::log("[refresh] unchanged, keeping existing grid");
+        m_refreshCooldownFrames = 20;
+        if (m_layoutDirty)
+            saveMenuLayout();
+        return;
+    }
+
     app().gpu().waitIdle();
     m_grid->clearChildren();
-    m_model.clear();
-    m_iconStreamer.clear();
-
-    m_appLoader.finalize(m_model, m_iconStreamer);
-    DebugLog::log("[refresh] found %d apps", m_model.count());
+    m_model = std::move(refreshedModel);
+    m_iconStreamer = std::move(refreshedStreamer);
 
     std::vector<std::shared_ptr<GlossyIcon>> icons;
     for (int i = 0; i < m_model.count(); ++i) {
@@ -1009,74 +1405,17 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 #endif
 
-    if (m_suspended) {
-#ifdef SWITCHU_MENU
-        AppletStorage wakeSt;
-        if (R_SUCCEEDED(appletPopInteractiveInData(&wakeSt))) {
-            switchu::smi::WakeSignal ws{};
-            s64 sz = 0;
-            appletStorageGetSize(&wakeSt, &sz);
-            if (sz >= (s64)sizeof(ws))
-                appletStorageRead(&wakeSt, 0, &ws, sizeof(ws));
-            appletStorageClose(&wakeSt);
-
-            if (ws.magic == switchu::smi::kWakeMagic) {
-                DebugLog::log("[suspend] wake signal received (reason=%u tid=0x%016lX)",
-                              ws.reason, ws.suspended_tid);
-                m_wakeReason = ws.reason;
-                m_wakeSuspendedTid = ws.suspended_tid;
-                m_suspended = false;
-            } else {
-                return;
-            }
-        } else {
-            m_sysMsg.pump();
-            return;
-        }
-#else
-        return;
-#endif
-    }
-
     if (m_returnFadeTimer > 0.f)
         m_returnFadeTimer = std::max(0.f, m_returnFadeTimer - dt);
 
     syncThemePackageTransfer();
 
-    if (!app().renderEnabled()) {
-        DebugLog::log("[suspend] resuming GPU on main thread");
-        if (m_launchAnim && m_launchAnim->isPlaying()) m_launchAnim->stop();
-
-#ifdef SWITCHU_MENU
-        if (m_wakeReason == 0) {
-            m_launcher.setAppRunning(true);
-            m_launcher.setAppHasForeground(false);
-            m_launcher.setSuspendedTitleId(m_wakeSuspendedTid);
-        } else {
-            m_launcher.setAppRunning(false);
-            m_launcher.setAppHasForeground(false);
-            m_launcher.setSuspendedTitleId(0);
+    if (m_deferredBluetoothInitFrames > 0) {
+        --m_deferredBluetoothInitFrames;
+        if (m_deferredBluetoothInitFrames == 0) {
+            bluetooth::Initialize();
+            DebugLog::log("[init] Bluetooth manager initialized (deferred)");
         }
-
-        {
-            uint64_t sTid = m_launcher.suspendedTitleId();
-            for (auto& ic : m_grid->allIcons())
-                ic->setSuspended(sTid != 0 && ic->titleId() == sTid);
-            if (auto* cur = m_grid->focusManager().current()) {
-                auto* icon = static_cast<GlossyIcon*>(cur);
-                if (m_launcher.isAppSuspended(icon->titleId()))
-                    m_titlePill->setText(std::string("\xe2\x96\xb6  ") + icon->title());
-                else
-                    m_titlePill->setText(icon->title());
-            }
-            DebugLog::log("[suspend] icons updated (suspendedTid=0x%016lX)", sTid);
-        }
-#endif
-        app().gpu().waitIdle();
-        app().setRenderEnabled(true);
-        if (m_musicWasPlaying && m_config.musicEnabled) m_audio.play();
-        m_musicWasPlaying = false;
-        m_returnFadeTimer = kReturnFadeInDur;
     }
 
     if (!m_audioStarted && m_audioFuture.valid() &&
@@ -1186,11 +1525,6 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 #endif
 
-    if (m_showLoadingScreen && ++m_loadingScreenFrames > 60) {
-        m_showLoadingScreen = false;
-        m_loadingScreenFrames = 0;
-    }
-
     bool debugTouchBlocked = false;
 #ifdef SWITCHU_DEBUG_UI
     debugTouchBlocked = m_showDebugOverlay;
@@ -1274,10 +1608,208 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_editGhostIcon->update(dt);
 }
 
-void WiiUMenuApp::onRender(nxui::Renderer& ren) {
-    if (m_showLoadingScreen && !m_launchAnim->isPlaying())
-        ren.drawRect({0, 0, 1280, 720}, nxui::Color(0, 0, 0, 1.f));
+std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
+    std::vector<ActionHint> hints;
+    auto& i18n = nxui::I18n::instance();
+    auto add = [&](const std::string& icon, const std::string& label) {
+        if (!icon.empty() && !label.empty())
+            hints.push_back({icon, label});
+    };
 
+    if (m_launchAnim && m_launchAnim->isPlaying())
+        return hints;
+
+    if (m_dialog && m_dialog->isActive()) {
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.confirm", "Confirm"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        return hints;
+    }
+
+    if (m_userSelect && m_userSelect->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        return hints;
+    }
+
+    if (m_themeShop && m_themeShop->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        add(buttonGlyph(nxui::Button::X), i18n.tr("hint.search", "Search"));
+        return hints;
+    }
+
+    if (m_settings && m_settings->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        return hints;
+    }
+
+    if (m_editMode) {
+        add(dpadGlyph(), i18n.tr("hint.move", "Move"));
+        add(buttonGlyph(nxui::Button::Y), i18n.tr("hint.place", "Place"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.cancel", "Cancel"));
+        return hints;
+    }
+
+    nxui::Widget* cur = focusManager().current();
+    if (cur && cur->tag() == "glossy_icon") {
+        auto* icon = static_cast<GlossyIcon*>(cur);
+        if (icon->titleId() != 0) {
+#ifdef SWITCHU_MENU
+            add(buttonGlyph(nxui::Button::A),
+                m_launcher.isAppSuspended(icon->titleId())
+                    ? i18n.tr("hint.resume", "Resume")
+                    : i18n.tr("hint.launch", "Launch"));
+            if (m_launcher.isAppSuspended(icon->titleId()))
+                add(buttonGlyph(nxui::Button::X), i18n.tr("hint.close", "Close"));
+#else
+            add(buttonGlyph(nxui::Button::A), i18n.tr("hint.open", "Open"));
+#endif
+            add(buttonGlyph(nxui::Button::Y), i18n.tr("hint.move", "Move"));
+        }
+    } else if (cur) {
+        for (const auto& btn : m_sidebar.leftButtons()) {
+            if (btn.get() == cur) {
+                add(buttonGlyph(nxui::Button::A), btn->label());
+                break;
+            }
+        }
+        for (const auto& btn : m_sidebar.rightButtons()) {
+            if (btn.get() == cur) {
+                add(buttonGlyph(nxui::Button::A), btn->label());
+                break;
+            }
+        }
+        for (const auto& avatar : m_userAvatarButtons) {
+            if (avatar.get() == cur) {
+                add(buttonGlyph(nxui::Button::A), i18n.tr("hint.profile", "Profile"));
+                break;
+            }
+        }
+    }
+
+    if (m_grid && m_grid->totalPages() > 1) {
+        add(buttonGlyph(nxui::Button::L), i18n.tr("hint.prev_page", "Prev page"));
+        add(buttonGlyph(nxui::Button::R), i18n.tr("hint.next_page", "Next page"));
+    }
+
+    return hints;
+}
+
+void WiiUMenuApp::renderActionHintBar(nxui::Renderer& ren) {
+    std::vector<ActionHint> hints = buildActionHints();
+    if (hints.empty())
+        return;
+
+    constexpr float kIconScale = 0.66f;
+    constexpr float kTextScale = 0.54f;
+    constexpr float kRowH = 22.f;
+    constexpr float kRowGap = 3.f;
+    constexpr float kPadX = 10.f;
+    constexpr float kPadY = 8.f;
+    constexpr float kIconTextGap = 6.f;
+    constexpr float kScreenMargin = 18.f;
+    constexpr int kMaxItems = 5;
+
+    int count = std::min((int)hints.size(), kMaxItems);
+    if (count <= 0)
+        return;
+
+    float contentW = 0.f;
+    for (int i = 0; i < count; ++i) {
+        nxui::Vec2 iconSize = m_fontIcons.measure(hints[(size_t)i].icon);
+        nxui::Vec2 labelSize = m_fontSmall.measure(hints[(size_t)i].label);
+        contentW = std::max(contentW,
+                            iconSize.x * kIconScale + kIconTextGap + labelSize.x * kTextScale);
+    }
+
+    float panelW = std::clamp(contentW + kPadX * 2.f, 104.f, 210.f);
+    float panelH = kPadY * 2.f + count * kRowH + (count - 1) * kRowGap;
+    std::string signature;
+    for (int i = 0; i < count; ++i) {
+        signature += hints[(size_t)i].icon;
+        signature += '\n';
+        signature += hints[(size_t)i].label;
+        signature += '\n';
+    }
+
+    if (!m_hintPanelInitialized) {
+        m_hintPanelInitialized = true;
+        m_hintPanelW.setImmediate(panelW);
+        m_hintPanelH.setImmediate(panelH);
+        m_hintContentReveal.setImmediate(1.f);
+        m_hintSignature = signature;
+    } else {
+        if (std::abs(m_hintPanelW.target() - panelW) > 0.5f)
+            m_hintPanelW.set(panelW, 0.20f, nxui::Easing::outCubic);
+        if (std::abs(m_hintPanelH.target() - panelH) > 0.5f)
+            m_hintPanelH.set(panelH, 0.20f, nxui::Easing::outCubic);
+        if (m_hintSignature != signature) {
+            m_hintSignature = signature;
+            m_hintContentReveal.setImmediate(0.45f);
+            m_hintContentReveal.set(1.f, 0.18f, nxui::Easing::outCubic);
+        }
+    }
+
+    panelW = std::max(1.f, m_hintPanelW.value());
+    panelH = std::max(1.f, m_hintPanelH.value());
+
+    nxui::Rect panel = {
+        1280.f - kScreenMargin - panelW,
+        720.f - kScreenMargin - panelH,
+        panelW,
+        panelH
+    };
+    float radius = 16.f;
+
+    ren.drawRoundedRect({panel.x + 0.f, panel.y + 4.f, panel.width, panel.height},
+                        nxui::Color(0.f, 0.f, 0.f, 0.12f),
+                        radius);
+
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = 0.018f;
+    glass.blurIntensity = 0.10f;
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = 0.035f;
+    glass.saturation = 0.96f;
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = 0.004f;
+    glass.powerFactor = 18.0f;
+
+    nxui::Color tint = m_theme.panelBase.withAlpha(m_theme.mode == nxui::ThemeMode::Dark ? 0.22f : 0.18f);
+    ren.drawLiquidGlass(0, panel, radius, tint, 0.86f, m_theme.mode == nxui::ThemeMode::Dark ? 0.08f : 0.04f);
+    ren.liquidGlassSettings() = savedGlass;
+
+    ren.drawRoundedRect(panel, m_theme.panelBase.withAlpha(m_theme.mode == nxui::ThemeMode::Dark ? 0.10f : 0.08f), radius);
+
+    ren.pushClipRect(panel.shrunk(3.f));
+
+    float reveal = std::clamp(m_hintContentReveal.value(), 0.f, 1.f);
+    float y = panel.y + kPadY + (1.f - reveal) * 4.f;
+    for (int i = 0; i < count; ++i) {
+        const auto& hint = hints[(size_t)i];
+        nxui::Vec2 iconSize = m_fontIcons.measure(hint.icon);
+        nxui::Vec2 labelSize = m_fontSmall.measure(hint.label);
+        float iconX = panel.x + kPadX;
+        float iconY = y + (kRowH - iconSize.y * kIconScale) * 0.5f;
+        float labelX = iconX + iconSize.x * kIconScale + 7.f;
+        float labelY = y + (kRowH - labelSize.y * kTextScale) * 0.5f;
+
+        ren.drawText(hint.icon, {iconX, iconY}, &m_fontIcons,
+                     m_theme.textPrimary.withAlpha(0.88f * reveal), kIconScale);
+        ren.drawText(hint.label, {labelX, labelY}, &m_fontSmall,
+                     m_theme.textSecondary.withAlpha(0.82f * reveal), kTextScale);
+        y += kRowH + kRowGap;
+    }
+
+    ren.popClipRect();
+}
+
+void WiiUMenuApp::onRender(nxui::Renderer& ren) {
     if (m_returnFadeTimer > 0.f) {
         float alpha = m_returnFadeTimer / kReturnFadeInDur;
         ren.drawRect({0, 0, 1280, 720}, nxui::Color(0, 0, 0, alpha));
@@ -1328,6 +1860,8 @@ void WiiUMenuApp::onRender(nxui::Renderer& ren) {
     // Final topmost pass for move-mode ghost.
     if (m_editMode && m_editGhostIcon)
         m_editGhostIcon->render(ren);
+
+    renderActionHintBar(ren);
 
 #ifdef SWITCHU_DEBUG_UI
     if (m_debugOverlay) {

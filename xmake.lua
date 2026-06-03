@@ -144,6 +144,7 @@ target("SwitchU")
         set_values("switch.json",    "projects/menu/menu.json")
         set_values("switch.format",  "nsp")
         set_values("switch.assets_dir", "SwitchU")
+        set_values("switch.raw_exefs_dir", "switch/SwitchU/bin/uMenu")
     end
 target_end()
 
@@ -179,4 +180,3 @@ target("switchu-daemon")
     set_values("switch.json",    "projects/daemon/daemon.json")
     set_values("switch.format",  "nsp")
 target_end()
-

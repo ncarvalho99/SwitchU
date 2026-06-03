@@ -542,6 +542,7 @@ bool loadThemePresetFromManifest(const std::string& manifestPath,
 
     std::string mode = (defaultMode == nxui::ThemeMode::Light) ? "light" : "dark";
     readJsonAliases(j, {"name", "title", "displayName", "display_name"}, preset.name);
+    readJsonAliases(j, {"author", "creator", "by", "artist", "designer"}, preset.author);
     readJsonAliases(j, {"version", "themeVersion", "theme_version"}, preset.version);
 
     std::string rawId;
@@ -598,6 +599,7 @@ ThemePreset makeLegacyBuiltInPreset(const char* name, nxui::ThemeMode mode) {
     ThemePreset preset;
     preset.id = makeThemeId("builtin:", name);
     preset.name = name;
+    preset.author = "SwitchU";
     preset.mode = mode;
     preset.colors = ThemePreset::extractColors(
         mode == nxui::ThemeMode::Light ? nxui::Theme::light() : nxui::Theme::dark());

@@ -37,8 +37,11 @@ public:
 
     Result createStorage(AppletStorage& st) const {
         Result rc = appletCreateStorage(&st, kStorageSize);
-        if (R_SUCCEEDED(rc))
+        if (R_SUCCEEDED(rc)) {
             rc = appletStorageWrite(&st, 0, m_buf.data(), kStorageSize);
+            if (R_FAILED(rc))
+                appletStorageClose(&st);
+        }
         return rc;
     }
 

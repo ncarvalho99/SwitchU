@@ -60,7 +60,7 @@ public:
             m_label->setText(m_cachedText);
         }
 
-        float textScale = selected ? 0.83f : 0.79f;
+        float textScale = selected ? 0.91f : 0.87f;
         if (std::abs(m_cachedTextScale - textScale) > 0.001f) {
             m_cachedTextScale = textScale;
             m_label->setScale(textScale);
@@ -254,6 +254,7 @@ void TabbedOverlayScreen::show() {
     m_tabReveal.setImmediate(0.f);
     m_tabReveal.set(1.f, 0.24f, nxui::Easing::outCubic);
     m_dropdownOpen = false;
+    m_dropdownClosing = false;
     m_dropdownRawIdx = -1;
     m_dropdownHover = 0;
     m_dropdownAnim.setImmediate(0.f);
@@ -278,9 +279,7 @@ void TabbedOverlayScreen::hide() {
     if (!m_active) return;
     DebugLog::log("[settings] hide()");
     if (m_closeSfxCb) m_closeSfxCb();
-    m_dropdownOpen = false;
-    m_dropdownRawIdx = -1;
-    m_dropdownAnim.setImmediate(0.f);
+    closeDropdown(false);
     m_trackToastAnim.setImmediate(0.f);
     m_trackToastHold = 0.f;
     m_trackToastFading = false;
@@ -290,6 +289,37 @@ void TabbedOverlayScreen::hide() {
 
     setFocusable(false);
     clearActions();
+}
+
+void TabbedOverlayScreen::openDropdown(int rawIdx) {
+    if (m_tabIndex < 0 || m_tabIndex >= (int)m_tabs.size())
+        return;
+
+    auto& items = m_tabs[m_tabIndex].items;
+    if (rawIdx < 0 || rawIdx >= (int)items.size())
+        return;
+
+    auto& item = items[rawIdx];
+    if (item.type != ItemType::Selector || item.options.empty())
+        return;
+
+    m_dropdownOpen = true;
+    m_dropdownClosing = false;
+    m_dropdownRawIdx = rawIdx;
+    m_dropdownHover = std::clamp(item.intVal, 0, std::max(0, (int)item.options.size() - 1));
+    m_dropdownAnim.set(1.f, 0.18f, nxui::Easing::outCubic);
+}
+
+void TabbedOverlayScreen::closeDropdown(bool animated) {
+    m_dropdownOpen = false;
+    m_dropdownClosing = animated && m_dropdownRawIdx >= 0;
+    if (animated && m_dropdownRawIdx >= 0) {
+        m_dropdownAnim.set(0.f, 0.16f, nxui::Easing::outCubic);
+    } else {
+        m_dropdownClosing = false;
+        m_dropdownRawIdx = -1;
+        m_dropdownAnim.setImmediate(0.f);
+    }
 }
 
 
@@ -466,12 +496,13 @@ void TabbedOverlayScreen::syncDebugWireframeRects(const nxui::Rect& panel) {
     float slideOffset = (1.f - slideT) * 24.f * (float)m_tabSwitchDir;
 
     float y = cr.y - m_scrollY + slideOffset;
+    float x = cr.x;
     int n = std::min((int)itemChildren.size(), (int)items.size());
     for (int i = 0; i < n; ++i) {
         float h = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
         float insetY = (items[i].type == ItemType::Section) ? 1.f : kContentCardInsetY;
         float cardH = std::max(0.f, h - (items[i].type == ItemType::Section ? 2.f : 6.f));
-        itemChildren[i]->setRect({cr.x + kContentCardInsetX, y + insetY,
+        itemChildren[i]->setRect({x + kContentCardInsetX, y + insetY,
                                   std::max(0.f, cr.width - kContentCardInsetX * 2.f), cardH});
         y += h;
     }
@@ -565,14 +596,15 @@ void TabbedOverlayScreen::drawContent(nxui::Renderer& ren, const nxui::Rect& pan
     float slideOffset = (1.f - slideT) * 18.f * (float)m_tabSwitchDir;
     float slideOpacity = opacity * slideT * std::clamp(m_tabReveal.value(), 0.f, 1.f);
 
-    float y = cr.y + 14.f - m_scrollY + slideOffset;
+    float y = cr.y + 16.f - m_scrollY + slideOffset;
+    float x = cr.x;
     int n = std::min((int)itemChildren.size(), (int)items.size());
     for (int i = 0; i < n; ++i) {
         float h = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
         float insetY = (items[i].type == ItemType::Section) ? 1.f : kContentCardInsetY;
         float cardH = std::max(0.f, h - (items[i].type == ItemType::Section ? 2.f : 6.f));
         nxui::Rect itemRect = {
-            cr.x + kContentCardInsetX,
+            x + kContentCardInsetX,
             y + insetY,
             std::max(0.f, cr.width - kContentCardInsetX * 2.f),
             cardH
@@ -628,8 +660,8 @@ void TabbedOverlayScreen::drawDropdown(nxui::Renderer& ren, const nxui::Rect& pa
 
     int total = (int)item.options.size();
     int visible = std::min(total, 6);
-    float optH = 42.f;
-    float listH = visible * optH + 10.f;
+    float optH = 46.f;
+    float listH = visible * optH + 16.f;
 
     int start = 0;
     if (total > visible)
@@ -639,40 +671,66 @@ void TabbedOverlayScreen::drawDropdown(nxui::Renderer& ren, const nxui::Rect& pa
     if (dy + listH > cr.bottom() - 4.f)
         dy = y - listH - 6.f;
 
-    float scale = 0.94f + 0.06f * open;
+    float scale = 0.965f + 0.035f * open;
     float w = ctrlW * scale;
     float h = listH * scale;
     float dx = ctrlX + (ctrlW - w) * 0.5f;
-    float fy = dy + (listH - h) * 0.5f;
+    float fy = dy + (listH - h) * 0.5f + (1.f - open) * 8.f;
 
     nxui::Rect pop = { dx, fy, w, h };
 
-    nxui::Color bg = (m_theme->mode == nxui::ThemeMode::Dark)
-        ? nxui::Color(0.10f, 0.10f, 0.14f, 0.97f * opacity * open)
-        : nxui::Color(0.97f, 0.97f, 0.99f, 0.98f * opacity * open);
+    float a = opacity * open;
+    nxui::Color bg = m_theme->mode == nxui::ThemeMode::Dark
+        ? nxui::Color::lerp(m_theme->panelBase, nxui::Color(0.055f, 0.060f, 0.075f, 1.f), 0.36f).withAlpha(0.94f * a)
+        : nxui::Color::lerp(m_theme->panelBase, nxui::Color(0.98f, 0.985f, 1.f, 1.f), 0.30f).withAlpha(0.96f * a);
+    float radius = 15.f;
 
-    ren.drawRoundedRect(pop, bg, 10.f);
+    nxui::Rect contact = pop;
+    contact.y += 6.f;
+    ren.drawRoundedRect(contact.expanded(3.f), nxui::Color::black().withAlpha(0.12f * a), radius + 3.f);
+    ren.drawRoundedRect(pop.expanded(1.f), m_theme->panelHighlight.withAlpha(0.08f * a), radius + 1.f);
+    ren.drawRoundedRect(pop, bg, radius);
     ren.drawRoundedRectOutline(pop,
-                               m_theme->panelBorder.withAlpha(0.8f * opacity * open),
-                               10.f, 1.2f);
+                               m_theme->panelBorder.withAlpha(0.70f * a),
+                               radius, 1.4f);
+    ren.drawRoundedRectOutline(pop.shrunk(2.f),
+                               m_theme->panelHighlight.withAlpha(0.10f * a),
+                               std::max(0.f, radius - 2.f), 1.f);
 
-    nxui::Rect listClip = pop.shrunk(4.f);
+    nxui::Rect listClip = pop.shrunk(6.f);
     ren.pushClipRect(listClip);
 
     for (int i = 0; i < visible; ++i) {
         int idx = start + i;
-        float ry = listClip.y + 2.f + i * optH;
-        nxui::Rect rr = { listClip.x + 2.f, ry, listClip.width - 4.f, optH };
+        float rowReveal = std::clamp((open - i * 0.025f) / 0.25f, 0.f, 1.f);
+        float ry = listClip.y + 3.f + i * optH + (1.f - rowReveal) * 5.f;
+        nxui::Rect rr = { listClip.x + 3.f, ry, listClip.width - 6.f, optH - 2.f };
 
         bool hovered = idx == m_dropdownHover;
+        bool active = idx == item.intVal;
+        float rowAlpha = a * rowReveal;
+        if (active) {
+            ren.drawRoundedRect(rr,
+                                m_theme->panelHighlight.withAlpha(0.065f * rowAlpha),
+                                10.f);
+            ren.drawRoundedRectOutline(rr.shrunk(1.f),
+                                       m_theme->panelHighlight.withAlpha(0.075f * rowAlpha),
+                                       9.f,
+                                       1.f);
+        }
         if (hovered) {
             float pulse = 0.9f + 0.1f * (std::sin(m_uiTime * 5.2f) * 0.5f + 0.5f);
-            nxui::Color hi = m_theme->cursorNormal.withAlpha(0.22f * pulse * opacity * open);
-            ren.drawRoundedRect(rr, hi, 7.f);
-            m_focusCursor.moveTo(rr.shrunk(0.5f), 7.f, 0.08f);
+            nxui::Color hi = m_theme->cursorNormal.withAlpha(0.20f * pulse * rowAlpha);
+            ren.drawRoundedRect(rr, hi, 10.f);
+            ren.drawRoundedRectOutline(rr,
+                                       m_theme->cursorNormal.withAlpha(0.42f * rowAlpha),
+                                       10.f,
+                                       1.2f);
+            if (m_dropdownOpen)
+                m_focusCursor.moveTo(rr.shrunk(0.5f), 10.f, 0.08f);
         }
 
-        nxui::Color tc = (idx == item.intVal) ? m_theme->textPrimary : m_theme->textSecondary;
+        nxui::Color tc = active ? m_theme->textPrimary : m_theme->textSecondary;
         std::string displayText = item.options[idx];
         float maxWidth = std::max(0.f, rr.width - 16.f);
         if (!displayText.empty()) {
@@ -689,9 +747,9 @@ void TabbedOverlayScreen::drawDropdown(nxui::Renderer& ren, const nxui::Rect& pa
             }
         }
         nxui::Vec2 tsz = m_smallFont->measure(displayText);
-        float tx = rr.x + 10.f;
-        float ty = rr.y + (rr.height - tsz.y * 0.7f) * 0.5f;
-        ren.drawText(displayText, {tx, ty}, m_smallFont, tc.withAlpha(opacity * open), 0.76f);
+        float tx = rr.x + 14.f;
+        float ty = rr.y + (rr.height - tsz.y * 0.84f) * 0.5f;
+        ren.drawText(displayText, {tx, ty}, m_smallFont, tc.withAlpha(rowAlpha), 0.84f);
     }
 
     ren.popClipRect();
@@ -732,4 +790,3 @@ void TabbedOverlayScreen::drawTrackChangedToast(nxui::Renderer& ren, const nxui:
     float ty = r.y + (r.height - tsz.y * 0.72f) * 0.5f;
     ren.drawText(displayText, {tx, ty}, m_smallFont, m_theme->textPrimary.withAlpha(t * opacity), 0.78f);
 }
-

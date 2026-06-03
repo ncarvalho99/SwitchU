@@ -112,35 +112,5 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         t.items.push_back(std::move(it));
     }
 
-    {
-        SettingItem it;
-        it.label = i18n.tr("settings.display.grid_columns", "Home Grid Columns");
-        it.type = ItemType::Selector;
-        it.description = i18n.tr("settings.display.grid_columns_desc", "Number of icon columns per page.");
-        it.options = {"3", "4", "5", "6", "7", "8"};
-        it.intVal = std::clamp(screen.m_gridColumns, 3, 8) - 3;
-        it.onChange = [&screen](SettingItem& self) {
-            int cols = std::clamp(self.intVal + 3, 3, 8);
-            screen.m_gridColumns = cols;
-            if (screen.m_gridColumnsCb) screen.m_gridColumnsCb(cols);
-        };
-        t.items.push_back(std::move(it));
-    }
-
-    {
-        SettingItem it;
-        it.label = i18n.tr("settings.display.grid_rows", "Home Grid Rows");
-        it.type = ItemType::Selector;
-        it.description = i18n.tr("settings.display.grid_rows_desc", "Number of icon rows per page.");
-        it.options = {"2", "3", "4", "5"};
-        it.intVal = std::clamp(screen.m_gridRows, 2, 5) - 2;
-        it.onChange = [&screen](SettingItem& self) {
-            int rows = std::clamp(self.intVal + 2, 2, 5);
-            screen.m_gridRows = rows;
-            if (screen.m_gridRowsCb) screen.m_gridRowsCb(rows);
-        };
-        t.items.push_back(std::move(it));
-    }
-
     return t;
 }

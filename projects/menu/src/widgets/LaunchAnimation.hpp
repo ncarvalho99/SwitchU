@@ -34,6 +34,7 @@ private:
     static constexpr float kFadeDur   = 0.25f;
     static constexpr float kBlackDur  = 0.30f;
     static constexpr float kBlackHold = 0.10f;
+    static constexpr float kPostLaunchBlackHold = 0.15f;
     static constexpr float kTotalDur  = kZoomDur + kHoldDur + kFadeDur
                                       + kBlackDur + kBlackHold;
 
@@ -48,5 +49,6 @@ private:
     LaunchCallback m_onLaunch;
     nxui::VoidCallback m_onDone;
     bool    m_launched = false;
+    bool    m_doneCalled = false;
+    bool    m_postLaunchHold = false;
 };
-

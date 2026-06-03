@@ -73,6 +73,9 @@ uint64_t queryApplicationSize(uint64_t titleId) {
 }
 
 std::string storageLocationLabel(const nxui::I18n& i18n, u8 storageId);
+std::string formatAppDetails(const std::string& location,
+                             const std::string& sizeText,
+                             const std::string& status);
 
 std::string applicationStorageLocation(uint64_t titleId, const nxui::I18n& i18n) {
 #ifdef SWITCHU_HOMEBREW
@@ -109,7 +112,11 @@ std::string formatAppOption(const std::string& title,
                             const std::string& location,
                             const std::string& sizeText,
                             const std::string& status) {
-return "0";
+    std::string result = title;
+    std::string detail = formatAppDetails(location, sizeText, status);
+    if (!detail.empty())
+        result += "  -  " + detail;
+    return result;
 }
 
 std::string formatMessageWithTitle(const std::string& pattern, const std::string& title) {
@@ -386,22 +393,28 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
 
     auto selectedIndex = std::make_shared<int>(0);
     auto appsPtr = std::make_shared<std::vector<AppEntry>>(std::move(apps));
-    t.items.reserve(t.items.size() + 6);
+    t.items.reserve(t.items.size() + 7);
+
+    auto& chooserSection = t.items.emplace_back();
+    chooserSection.label = i18n.tr("settings.storage.manage_title", "Manage Software");
+    chooserSection.type = ItemType::Section;
 
     auto& selector = t.items.emplace_back();
     selector.label = i18n.tr("settings.storage.select_game", "Installed Game");
     selector.type = ItemType::Selector;
-    selector.description = i18n.tr("settings.storage.select_game_desc", "Choose a title to uninstall from the system.");
+    selector.description = formatAppDetails((*appsPtr)[0].location,
+                                           (*appsPtr)[0].sizeText,
+                                           appStateLabel(i18n, (*appsPtr)[0].state));
     selector.intVal = 0;
     selector.options.reserve(appsPtr->size());
     for (auto& app : *appsPtr) {
-        selector.options.push_back(formatAppPreview(app.title, app.location, app.sizeText));
+        selector.options.push_back(app.title);
     }
 
     auto& selectedTitle = t.items.emplace_back();
-    selectedTitle.label = i18n.tr("settings.storage.selected_title", "Selected Title");
+    selectedTitle.label = i18n.tr("settings.storage.title_id", "Title ID");
     selectedTitle.type = ItemType::Info;
-    selectedTitle.infoText = (*appsPtr)[0].title;
+    selectedTitle.infoText = fmt::format("{:016X}", (*appsPtr)[0].titleId);
 
     auto& selectedDetails = t.items.emplace_back();
     selectedDetails.label = i18n.tr("settings.storage.details", "Details");
@@ -410,11 +423,15 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
                                                (*appsPtr)[0].sizeText,
                                                appStateLabel(i18n, (*appsPtr)[0].state));
 
-    selector.onChange = [selectedIndex, appsPtr, &i18n, &selectedTitle, &selectedDetails](SettingItem& self) {
+    selector.onChange = [selectedIndex, appsPtr, &i18n, &selector, &selectedTitle, &selectedDetails](SettingItem& self) {
         int newIndex = std::clamp(self.intVal, 0, (int)self.options.size() - 1);
         *selectedIndex = newIndex;
         const auto& app = (*appsPtr)[newIndex];
-        selectedTitle.infoText = app.title;
+        std::string details = formatAppDetails(app.location,
+                                               app.sizeText,
+                                               appStateLabel(i18n, app.state));
+        selector.description = details;
+        selectedTitle.infoText = fmt::format("{:016X}", app.titleId);
         selectedDetails.infoText = formatAppDetails(app.location,
                                                    app.sizeText,
                                                    appStateLabel(i18n, app.state));

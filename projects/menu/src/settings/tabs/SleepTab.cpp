@@ -4,7 +4,6 @@
 #include <algorithm>
 
 SettingsScreen::Tab settings::tabs::SleepTab::build(SettingsScreen& screen) {
-    (void)screen;
     using Tab = SettingsScreen::Tab;
     using SettingItem = SettingsScreen::SettingItem;
     using ItemType = SettingsScreen::ItemType;
@@ -31,6 +30,72 @@ SettingsScreen::Tab settings::tabs::SleepTab::build(SettingsScreen& screen) {
 
     SetSysSleepSettings sleep{};
     setsysGetSleepSettings(&sleep);
+
+    {
+        SettingItem it; it.label = i18n.tr("settings.sleep.power_actions", "Power");
+        it.type = ItemType::Section;
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it; it.label = i18n.tr("settings.sleep.sleep_now", "Sleep");
+        it.type = ItemType::Action;
+        it.description = i18n.tr("settings.sleep.sleep_now_desc", "Put the console into sleep mode.");
+        it.onChange = [&screen, &i18n](SettingItem&) {
+            screen.requestDialog(
+                i18n.tr("settings.sleep.sleep_now", "Sleep"),
+                i18n.tr("settings.sleep.sleep_confirm", "Put the console into sleep mode?"),
+                {
+                    { i18n.tr("settings.sleep.sleep_now", "Sleep"), [&screen]() {
+                        if (screen.m_sleepCb) screen.m_sleepCb();
+                    } },
+                    { i18n.tr("button.cancel", "Cancel"), []() {} }
+                });
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it; it.label = i18n.tr("settings.sleep.shutdown", "Shutdown");
+        it.type = ItemType::Action;
+        it.description = i18n.tr("settings.sleep.shutdown_desc", "Completely power off the console.");
+        it.onChange = [&screen, &i18n](SettingItem&) {
+            screen.requestDialog(
+                i18n.tr("settings.sleep.shutdown", "Shutdown"),
+                i18n.tr("settings.sleep.shutdown_confirm", "Power off the console?"),
+                {
+                    { i18n.tr("settings.sleep.shutdown", "Shutdown"), [&screen]() {
+                        if (screen.m_shutdownCb) screen.m_shutdownCb();
+                    } },
+                    { i18n.tr("button.cancel", "Cancel"), []() {} }
+                });
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it; it.label = i18n.tr("settings.sleep.reboot", "Reboot");
+        it.type = ItemType::Action;
+        it.description = i18n.tr("settings.sleep.reboot_desc", "Restart the console.");
+        it.onChange = [&screen, &i18n](SettingItem&) {
+            screen.requestDialog(
+                i18n.tr("settings.sleep.reboot", "Reboot"),
+                i18n.tr("settings.sleep.reboot_confirm", "Restart the console?"),
+                {
+                    { i18n.tr("settings.sleep.reboot", "Reboot"), [&screen]() {
+                        if (screen.m_rebootCb) screen.m_rebootCb();
+                    } },
+                    { i18n.tr("button.cancel", "Cancel"), []() {} }
+                });
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it; it.label = i18n.tr("settings.sleep.auto_sleep", "Auto-Sleep");
+        it.type = ItemType::Section;
+        t.items.push_back(std::move(it));
+    }
 
     {
         SettingItem it; it.label = i18n.tr("settings.sleep.handheld", "Handheld Auto-Sleep"); it.type = ItemType::Selector;

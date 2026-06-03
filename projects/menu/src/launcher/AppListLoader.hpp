@@ -16,6 +16,10 @@ struct PendingApp {
     std::string         title;
     uint64_t            titleId = 0;
     uint32_t            viewFlags = 0;
+    bool                userRequired = true;
+    bool                startupUserKnown = true;
+    uint8_t             startupUserAccount = 1;
+    uint8_t             startupUserAccountOption = 0;
     std::vector<uint8_t> iconData;
 };
 
@@ -23,6 +27,7 @@ class AppListLoader {
 public:
     using PendingTransform = std::function<void(std::vector<PendingApp>&)>;
     static std::vector<uint8_t> loadIconData(uint64_t titleId);
+    static bool queryStartupUserInfo(uint64_t titleId, uint8_t& account, uint8_t& option);
 
     // Streaming path: fetch apps and hand compressed icon data to the streamer.
     void load(GridModel& model, IconStreamer& streamer);
@@ -37,10 +42,15 @@ public:
         m_pendingTransform = std::move(transform);
     }
 
+    void setFastStartupUserInfo(bool enabled) {
+        m_fastStartupUserInfo = enabled;
+    }
+
 private:
     void fetchApps();
 
     std::future<void>       m_future;
     std::vector<PendingApp> m_pending;
     PendingTransform        m_pendingTransform;
+    bool                    m_fastStartupUserInfo = false;
 };

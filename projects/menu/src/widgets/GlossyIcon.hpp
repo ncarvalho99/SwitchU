@@ -36,8 +36,8 @@ public:
 
     void setFocusable(bool f) { m_focusable = f; }
     bool isFocusable() const override { return m_focusable; }
-    void onFocusGained() override { m_focused = true; }
-    void onFocusLost()   override { m_focused = false; }
+    void onFocusGained() override;
+    void onFocusLost() override;
 
 protected:
     void onRender(nxui::Renderer& ren) override;
@@ -58,8 +58,9 @@ private:
 
     nxui::AnimatedFloat m_animScale;
     nxui::AnimatedFloat m_appearOpacity;
+    nxui::AnimatedFloat m_focusScale;
+    nxui::AnimatedFloat m_focusGlow;
     float         m_appearDelay = 0.f;
     float         m_appearTimer = 0.f;
     bool          m_appearing   = false;
 };
-

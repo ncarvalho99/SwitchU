@@ -20,6 +20,10 @@
 #endif
 #include <memory>
 
+namespace {
+constexpr size_t kMenuAppletHeapSize = 296u * 1024u * 1024u;
+}
+
 extern "C" {
 #ifdef SWITCHU_HOMEBREW
     u32 __nx_applet_type = AppletType_Application;
@@ -27,8 +31,9 @@ extern "C" {
     size_t __nx_heap_size = 0xD000000;
 #else
     u32 __nx_applet_type = AppletType_LibraryApplet;
+    u32 __nx_fs_num_sessions = 1;
 
-    size_t __nx_heap_size = 0xFA00000;
+    size_t __nx_heap_size = kMenuAppletHeapSize;
 
     TimeServiceType __nx_time_service_type = TimeServiceType_Menu;
 

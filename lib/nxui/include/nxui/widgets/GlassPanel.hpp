@@ -33,8 +33,14 @@ public:
     bool liquidGlassEnabled() const    { return m_liquidGlassEnabled; }
     void setForceLiquidGlass(bool b)   { m_forceLiquidGlass = b; }
     bool forceLiquidGlass() const      { return m_forceLiquidGlass; }
+    void setLiquidGlassShaderEnabled(bool b) { m_liquidGlassShaderEnabled = b; }
+    bool liquidGlassShaderEnabled() const    { return m_liquidGlassShaderEnabled; }
     void setLiquidGlassShade(float s)  { m_liquidGlassShade = s; }
     float liquidGlassShade() const     { return m_liquidGlassShade; }
+    void setMaterialTextureEnabled(bool b) { m_materialTextureEnabled = b; }
+    bool materialTextureEnabled() const    { return m_materialTextureEnabled; }
+    void setMaterialTextureIntensity(float v) { m_materialTextureIntensity = v; }
+    float materialTextureIntensity() const    { return m_materialTextureIntensity; }
 
     // Opaque backing: draws a fully-opaque rounded rect BEFORE all glass
     // layers so that anything underneath (e.g. a screen dimmer) is blocked.
@@ -59,7 +65,10 @@ protected:
     int   m_blurPasses   = 3;
     bool  m_liquidGlassEnabled = false;
     bool  m_forceLiquidGlass = false;
+    bool  m_liquidGlassShaderEnabled = true;
     float m_liquidGlassShade = 0.f;
+    bool  m_materialTextureEnabled = false;
+    float m_materialTextureIntensity = 0.55f;
 
     // Opaque backing
     bool  m_backingEnabled = false;

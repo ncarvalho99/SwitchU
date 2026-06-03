@@ -16,6 +16,9 @@ void WiiUMenuApp::startEditGhost(GlossyIcon* sourceIcon) {
     if (!sourceIcon)
         return;
 
+    if (m_editSourceIndex >= 0)
+        m_iconStreamer.setPinnedIndex(m_editSourceIndex);
+
     m_editSourceIcon = sourceIcon;
     m_editSourceIcon->setOpacity(0.10f);
 
@@ -43,6 +46,8 @@ void WiiUMenuApp::startEditGhost(GlossyIcon* sourceIcon) {
 }
 
 void WiiUMenuApp::stopEditGhost() {
+    m_iconStreamer.clearPinnedIndex();
+
     if (m_editSourceIcon)
         m_editSourceIcon->setOpacity(1.f);
     m_editSourceIcon = nullptr;
@@ -105,7 +110,7 @@ void WiiUMenuApp::enterEditMode() {
     m_editHeldTitle = icon->title();
     startEditGhost(icon);
     bindEditActions(icon);
-    m_titlePill->setText(std::string("Move: ") + m_editHeldTitle);
+    m_titlePill->setText(nxui::I18n::instance().tr("game.move_prefix", "Move: ") + m_editHeldTitle);
     m_titlePill->setVisible(true);
 }
 
@@ -125,7 +130,7 @@ void WiiUMenuApp::exitEditMode() {
         m_titlePill->setText(icon->title());
         m_titlePill->setVisible(true);
     } else {
-        m_titlePill->setVisible(false);
+        m_titlePill->hideAnimated();
     }
 
     if (m_layoutDirty)
@@ -152,6 +157,7 @@ bool WiiUMenuApp::commitEditModePlacement() {
         m_model.swapEntries(from, target);
         m_iconStreamer.swapIndices(from, target);
         m_grid->swapSlots(from, target);
+        m_editSourceIndex = target;
         m_layoutDirty = true;
     }
 
@@ -233,22 +239,19 @@ bool WiiUMenuApp::moveFocusedIcon(nxui::FocusDirection dir) {
     if (target == from)
         return true;
 
-    int oldPage = m_grid->currentPage();
-
     if (!m_layoutSlots.empty() && from < (int)m_layoutSlots.size() && target < (int)m_layoutSlots.size())
         std::swap(m_layoutSlots[from], m_layoutSlots[target]);
 
     m_model.swapEntries(from, target);
     m_iconStreamer.swapIndices(from, target);
     m_grid->swapSlots(from, target);
+    m_editSourceIndex = target;
     m_grid->focusGlobalIndex(target);
 
     int newPage = m_grid->currentPage();
-    if (newPage != oldPage) {
-        m_iconStreamer.onPageChanged(newPage, m_grid->iconsPerPage(),
-                                     app().gpu(), app().renderer(),
-                                     m_grid->allIcons());
-    }
+    m_iconStreamer.onPageChanged(newPage, m_grid->iconsPerPage(),
+                                 app().gpu(), app().renderer(),
+                                 m_grid->allIcons());
 
     if (auto* cur = m_grid->focusManager().current())
         focusManager().setFocus(cur);
@@ -257,7 +260,7 @@ bool WiiUMenuApp::moveFocusedIcon(nxui::FocusDirection dir) {
     if (isEditableIcon(cur)) {
         auto* icon = static_cast<GlossyIcon*>(cur);
         bindEditActions(icon);
-        m_titlePill->setText(std::string("Move: ") + icon->title());
+        m_titlePill->setText(nxui::I18n::instance().tr("game.move_prefix", "Move: ") + icon->title());
     }
 
     m_layoutDirty = true;
@@ -283,26 +286,27 @@ void WiiUMenuApp::wireFocusCallback() {
         if (cur && cur->tag() == "glossy_icon") {
             m_grid->focusManager().setFocus(cur);
             auto* icon = static_cast<GlossyIcon*>(cur);
+            auto& i18n = nxui::I18n::instance();
             if (m_editMode) {
                 bindEditActions(icon);
                 m_editGhostTargetRect = icon->focusRect();
                 if (!m_editHeldTitle.empty())
-                    m_titlePill->setText(std::string("Move: ") + m_editHeldTitle);
+                    m_titlePill->setText(i18n.tr("game.move_prefix", "Move: ") + m_editHeldTitle);
                 else if (icon->titleId() != 0)
-                    m_titlePill->setText(std::string("Move: ") + icon->title());
+                    m_titlePill->setText(i18n.tr("game.move_prefix", "Move: ") + icon->title());
                 else
-                    m_titlePill->setText("Move");
+                    m_titlePill->setText(i18n.tr("game.move", "Move"));
                 m_titlePill->setVisible(true);
                 return;
             }
             if (icon->titleId() == 0) {
-                m_titlePill->setVisible(false);
+                m_titlePill->hideAnimated();
                 return;
             }
 #ifdef SWITCHU_MENU
-            if (m_launcher.isAppSuspended(icon->titleId()))
-                m_titlePill->setText(std::string("\xe2\x96\xb6  ") + icon->title());
-            else
+            if (m_launcher.isAppSuspended(icon->titleId())) {
+                m_titlePill->setText(icon->title());
+            } else
 #endif
             m_titlePill->setText(icon->title());
             m_titlePill->setVisible(true);
@@ -315,9 +319,16 @@ void WiiUMenuApp::wireFocusCallback() {
             for (auto& btn : m_sidebar.rightButtons()) {
                 if (btn.get() == cur) { m_titlePill->setText(btn->label()); m_titlePill->setVisible(true); return; }
             }
-            m_titlePill->setVisible(false);
+            for (auto& avatar : m_userAvatarButtons) {
+                if (avatar.get() == cur) {
+                    m_titlePill->setText(avatar->nickname());
+                    m_titlePill->setVisible(!avatar->nickname().empty());
+                    return;
+                }
+            }
+            m_titlePill->hideAnimated();
         } else {
-            m_titlePill->setVisible(false);
+            m_titlePill->hideAnimated();
         }
     });
     updateCursor();
@@ -338,14 +349,80 @@ bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
         if (btn.get() == w) return w->isFocusable();
     for (const auto& btn : m_sidebar.rightButtons())
         if (btn.get() == w) return w->isFocusable();
+    for (const auto& avatar : m_userAvatarButtons)
+        if (avatar.get() == w) return w->isFocusable();
     if (m_grid)
         for (const auto& icon : m_grid->allIcons())
             if (icon.get() == w) return w->isFocusable();
     return false;
 }
 
+int WiiUMenuApp::findTitleIndex(uint64_t titleId) const {
+    if (titleId == 0)
+        return -1;
+    for (int i = 0; i < m_model.count(); ++i) {
+        if (m_model.at(i).titleId == titleId)
+            return i;
+    }
+    return -1;
+}
+
+bool WiiUMenuApp::focusTitle(uint64_t titleId) {
+    if (!m_grid)
+        return false;
+
+    int idx = findTitleIndex(titleId);
+    if (idx < 0)
+        return false;
+
+    int oldPage = m_grid->currentPage();
+    if (!m_grid->focusGlobalIndex(idx))
+        return false;
+
+    if (m_grid->currentPage() != oldPage || titleId != 0) {
+        m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                     app().gpu(), app().renderer(),
+                                     m_grid->allIcons());
+    }
+
+    if (auto* cur = m_grid->focusManager().current())
+        focusManager().setFocus(cur);
+    updateCursor();
+    return true;
+}
+
+void WiiUMenuApp::markSuspendedIcon(uint64_t titleId) {
+    if (!m_grid)
+        return;
+    for (auto& icon : m_grid->allIcons())
+        icon->setSuspended(titleId != 0 && icon->titleId() == titleId);
+    if (titleId != 0)
+        focusTitle(titleId);
+
+    if (auto* cur = m_grid->focusManager().current()) {
+        auto* icon = static_cast<GlossyIcon*>(cur);
+        if (m_launcher.isAppSuspended(icon->titleId())) {
+            m_titlePill->setText(icon->title());
+        } else {
+            m_titlePill->setText(icon->title());
+        }
+    }
+}
+
+void WiiUMenuApp::closeActiveOverlays() {
+    if (m_editMode)
+        exitEditMode();
+    if (m_userSelect && m_userSelect->isActive())
+        m_userSelect->hide();
+    if (m_dialog && m_dialog->isActive())
+        m_dialog->hide();
+    if (m_settings && m_settings->isActive())
+        m_settings->hide();
+    if (m_themeShop && m_themeShop->isActive())
+        m_themeShop->hide();
+}
+
 nxui::Widget* WiiUMenuApp::focusRoot() {
-    if (m_suspended) return nullptr;
     if (m_launchAnim && m_launchAnim->isPlaying()) return nullptr;
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
     if (m_themeShop && m_themeShop->isActive()) return m_themeShop.get();
@@ -417,13 +494,14 @@ void WiiUMenuApp::wireGlobalActions() {
 
         m_audio.playSfx(Sfx::ModalShow);
         m_dialogReturnFocus = cur;
+        auto& i18n = nxui::I18n::instance();
         m_dialog->show(
-            "Close game",
-            "Close " + icon->title() + "?\nUnsaved progress will be lost.",
+            i18n.tr("game.close_title", "Close game"),
+            i18n.tr("game.close_prefix", "Close") + std::string(" ") + icon->title()
+                + i18n.tr("game.close_suffix", "?\nUnsaved progress will be lost."),
             {
-                {"Cancel", [this]() {}, true},
-                {"Close",  [this]() {
-                    m_audio.playSfx(Sfx::ConfirmPositive);
+                {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                {i18n.tr("button.close", "Close"),  [this]() {
                     m_launcher.terminateApplication();
                     m_launcher.setAppRunning(false);
                     m_launcher.setAppHasForeground(false);
@@ -436,7 +514,7 @@ void WiiUMenuApp::wireGlobalActions() {
                     }
                 }, true}
             },
-            0,
+            1,
             {}
         );
         focusManager().setFocus(m_dialog.get());
@@ -450,6 +528,14 @@ void WiiUMenuApp::handleTouch() {
     constexpr float kLongPressMoveThreshold = 18.f;
 
     auto& input = app().input();
+
+    auto hitAvatar = [this](float x, float y) -> UserAvatarButton* {
+        for (auto& avatar : m_userAvatarButtons) {
+            if (avatar && avatar->isVisible() && avatar->hitTest(x, y))
+                return avatar.get();
+        }
+        return nullptr;
+    };
 
     auto focusTouchedIcon = [this](int localHit) -> GlossyIcon* {
         if (!m_grid || localHit < 0)
@@ -479,6 +565,15 @@ void WiiUMenuApp::handleTouch() {
     if (input.touchDown()) {
         float tx = input.touchX();
         float ty = input.touchY();
+        m_touchAvatarTarget = hitAvatar(tx, ty);
+        m_touchAvatarWasFocused = m_touchAvatarTarget && (focusManager().current() == m_touchAvatarTarget);
+        if (m_touchAvatarTarget) {
+            m_touchHitIndex = -1;
+            m_touchOnFocused = false;
+            m_touchEditDragActive = false;
+            return;
+        }
+
         int hit = m_grid->hitTest(tx, ty);
         m_touchHitIndex = hit;
         m_touchOnFocused = false;
@@ -517,6 +612,22 @@ void WiiUMenuApp::handleTouch() {
     }
 
     if (input.touchUp()) {
+        if (m_touchAvatarTarget) {
+            float dx = input.touchDeltaX();
+            float dy = input.touchDeltaY();
+            UserAvatarButton* avatar = m_touchAvatarTarget;
+            m_touchAvatarTarget = nullptr;
+            if (std::abs(dx) < 20.f && std::abs(dy) < 20.f &&
+                hitAvatar(input.touchX(), input.touchY()) == avatar)
+            {
+                focusManager().setFocus(avatar);
+                if (!m_touchAvatarWasFocused)
+                    avatar->activate();
+            }
+            m_touchAvatarWasFocused = false;
+            return;
+        }
+
         if (m_editMode && m_touchEditDragActive) {
             bool changed = commitEditModePlacement();
             exitEditMode();
@@ -546,18 +657,10 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
         case SysAction::HomeButton:
             DebugLog::log("[pump] HomeButton -> UI update");
             m_launcher.setAppHasForeground(false);
-            m_showLoadingScreen = false;
 
-            for (auto& ic : m_grid->allIcons())
-                ic->setSuspended(m_launcher.suspendedTitleId() != 0 &&
-                                 ic->titleId() == m_launcher.suspendedTitleId());
-            if (auto* cur = m_grid->focusManager().current()) {
-                auto* icon = static_cast<GlossyIcon*>(cur);
-                if (m_launcher.isAppSuspended(icon->titleId()))
-                    m_titlePill->setText(std::string("\xe2\x96\xb6  ") + icon->title());
-                else
-                    m_titlePill->setText(icon->title());
-            }
+            markSuspendedIcon(m_launcher.suspendedTitleId());
+            closeActiveOverlays();
+            focusTitle(m_launcher.suspendedTitleId());
             break;
         default:
             break;

@@ -10,6 +10,10 @@ static AppletApplication g_app = {};
 static bool g_running = false;
 static bool g_hasForeground = false;
 static uint64_t g_suspendedTitleId = 0;
+static bool g_lastLaunchAcceptsUser = true;
+static bool g_lastLaunchNeedsUser = true;
+static uint8_t g_lastStartupUserAccount = 1;
+static uint8_t g_lastStartupUserAccountOption = 0;
 // Save-data pre-creation mirrors qlaunch/ulaunch behaviour.
 // The check-then-create path in ensureSaveData is safe: it tries to open first
 // and only calls fsCreateSaveDataFileSystem when the filesystem does not exist.
@@ -18,6 +22,22 @@ static constexpr bool kEnableSaveDataEnsure = true;
 inline bool isRunning() { return g_running; }
 inline bool hasForeground() { return g_hasForeground; }
 inline uint64_t suspendedTitleId() { return g_suspendedTitleId; }
+
+inline bool startupUserRequiresInteractiveSelection(uint8_t account, uint8_t option) {
+    return account == 1 && option == 0;
+}
+
+inline bool titleIdLooksStandardApplication(uint64_t title_id) {
+    return (title_id & 0xFF00000000000000ULL) == 0x0100000000000000ULL;
+}
+
+inline bool looksLikeHomebrewForwarder(uint64_t title_id) {
+    return title_id != 0 && !titleIdLooksStandardApplication(title_id);
+}
+
+inline bool suspendedTitleLooksLikeHomebrewForwarder() {
+    return g_running && looksLikeHomebrewForwarder(g_suspendedTitleId);
+}
 
 static inline void ensureSaveData(uint64_t app_id, uint64_t owner_id,
                                   AccountUid user_id, FsSaveDataType type,
@@ -77,9 +97,18 @@ static inline void ensureApplicationSaveData(uint64_t title_id, AccountUid uid) 
 
     const NacpStruct& nacp = ctrl->nacp;
     uint64_t owner = nacp.save_data_owner_id;
+    g_lastStartupUserAccount = nacp.startup_user_account;
+    g_lastStartupUserAccountOption = nacp.startup_user_account_option;
+    g_lastLaunchAcceptsUser = g_lastStartupUserAccount != 0;
+    g_lastLaunchNeedsUser = startupUserRequiresInteractiveSelection(g_lastStartupUserAccount,
+                                                                    g_lastStartupUserAccountOption);
 
-    switchu::FileLog::log("[app] NACP: startup_user=%u user_save=0x%lX device_save=0x%lX cache=0x%lX bcat=0x%lX",
+    switchu::FileLog::log("[app] NACP: startup_user=%u startup_user_option=%u accepts_user=%d needs_user=%d switch_lock=%u user_save=0x%lX device_save=0x%lX cache=0x%lX bcat=0x%lX",
                           (unsigned)nacp.startup_user_account,
+                          (unsigned)nacp.startup_user_account_option,
+                          g_lastLaunchAcceptsUser ? 1 : 0,
+                          g_lastLaunchNeedsUser ? 1 : 0,
+                          (unsigned)nacp.user_account_switch_lock,
                           nacp.user_account_save_data_size,
                           nacp.device_save_data_size,
                           nacp.cache_storage_size,
@@ -114,6 +143,13 @@ static inline void ensureApplicationSaveData(uint64_t title_id, AccountUid uid) 
 }
 
 inline Result launch(uint64_t title_id, AccountUid uid) {
+    switchu::FileLog::log("[app] launch request title=0x%016lX running=%d fg=%d suspended=0x%016lX uid_valid=%d uid[0]=0x%016lX uid[1]=0x%016lX",
+                          title_id,
+                          g_running ? 1 : 0,
+                          g_hasForeground ? 1 : 0,
+                          g_suspendedTitleId,
+                          accountUidIsValid(&uid) ? 1 : 0,
+                          uid.uid[0], uid.uid[1]);
     if (g_running) {
         switchu::FileLog::log("[app] closing previous app before launch");
         appletApplicationRequestExit(&g_app);
@@ -121,6 +157,7 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
         appletApplicationClose(&g_app);
         g_running = false;
     }
+    appletApplicationClose(&g_app);
 
     // nsTouchApplication prepares the title in the NS service (same as ulaunch/qlaunch).
     // Non-fatal: some special titles (stubs, forwarders) may return an error here.
@@ -131,8 +168,16 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
         switchu::FileLog::log("[app] nsTouchApplication ok");
 
     if (kEnableSaveDataEnsure) {
+        g_lastLaunchAcceptsUser = true;
+        g_lastLaunchNeedsUser = true;
+        g_lastStartupUserAccount = 1;
+        g_lastStartupUserAccountOption = 0;
         ensureApplicationSaveData(title_id, uid);
     } else {
+        g_lastLaunchAcceptsUser = true;
+        g_lastLaunchNeedsUser = true;
+        g_lastStartupUserAccount = 1;
+        g_lastStartupUserAccountOption = 0;
         switchu::FileLog::log("[app] save data precreate skipped for 0x%016lX", title_id);
     }
 
@@ -151,8 +196,11 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
     } userArg = {};
     static_assert(sizeof(userArg) == 0x88);
 
-    if (accountUidIsValid(&uid)) {
-        switchu::FileLog::log("[app] preselecting user uid[0]=0x%016lX uid[1]=0x%016lX",
+    if (g_lastLaunchAcceptsUser && accountUidIsValid(&uid)) {
+        switchu::FileLog::log("[app] preselecting user startup_user=%u option=%u needs_user=%d uid[0]=0x%016lX uid[1]=0x%016lX",
+                              (unsigned)g_lastStartupUserAccount,
+                              (unsigned)g_lastStartupUserAccountOption,
+                              g_lastLaunchNeedsUser ? 1 : 0,
                               uid.uid[0], uid.uid[1]);
         userArg.magic       = 0xC79497CA;
         userArg.is_selected = 1;
@@ -176,21 +224,32 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
             switchu::FileLog::log("[app] PushUser storage create FAIL: 0x%X", rc);
         }
     } else {
-        switchu::FileLog::log("[app] launch without preselected user (invalid uid)");
+        switchu::FileLog::log("[app] launch without preselected user (accepts_user=%d needs_user=%d startup_user=%u option=%u uid_valid=%d)",
+                              g_lastLaunchAcceptsUser ? 1 : 0,
+                              g_lastLaunchNeedsUser ? 1 : 0,
+                              (unsigned)g_lastStartupUserAccount,
+                              (unsigned)g_lastStartupUserAccountOption,
+                              accountUidIsValid(&uid) ? 1 : 0);
     }
 
     appletUnlockForeground();
 
+    switchu::FileLog::log("[app] Start call");
     rc = appletApplicationStart(&g_app);
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[app] Start FAIL: 0x%X", rc);
         appletApplicationClose(&g_app);
         return rc;
     }
+    switchu::FileLog::log("[app] Start ok");
 
     rc = appletApplicationRequestForApplicationToGetForeground(&g_app);
-    if (R_FAILED(rc))
-        switchu::FileLog::log("[app] ReqFG FAIL: 0x%X (non-fatal)", rc);
+    if (R_FAILED(rc)) {
+        switchu::FileLog::log("[app] ReqFG FAIL: 0x%X", rc);
+        appletApplicationClose(&g_app);
+        return rc;
+    }
+    switchu::FileLog::log("[app] ReqFG ok");
 
     g_running = true;
     g_hasForeground = true;
@@ -201,18 +260,61 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
 
 inline Result resume() {
     if (!g_running) return MAKERESULT(Module_Libnx, 0xFE);
+    switchu::FileLog::log("[app] resume request fg=%d suspended=0x%016lX",
+                          g_hasForeground ? 1 : 0, g_suspendedTitleId);
     appletUnlockForeground();
     Result rc = appletApplicationRequestForApplicationToGetForeground(&g_app);
     if (R_FAILED(rc))
         switchu::FileLog::log("[app] resume ReqFG FAIL: 0x%X", rc);
+    else
+        switchu::FileLog::log("[app] resume ReqFG ok");
     g_hasForeground = true;
+    return rc;
+}
+
+inline Result areLibraryAppletsLeft(bool* out) {
+    if (!out) return MAKERESULT(Module_Libnx, 0xFD);
+    *out = false;
+    if (!g_running) return 0;
+    Result rc = appletApplicationAreAnyLibraryAppletsLeft(&g_app, out);
+    if (R_FAILED(rc)) {
+        switchu::FileLog::log("[app] AreAnyLibraryAppletsLeft FAIL: 0x%X", rc);
+    } else {
+        switchu::FileLog::log("[app] AreAnyLibraryAppletsLeft -> %d", *out ? 1 : 0);
+    }
+    return rc;
+}
+
+inline Result requestExitLibraryAppletOrTerminate(u64 timeout) {
+    if (!g_running) return 0;
+    switchu::FileLog::log("[app] RequestExitLibraryAppletOrTerminate timeout=%lu app=0x%016lX",
+                          timeout, g_suspendedTitleId);
+    Result rc = appletApplicationRequestExitLibraryAppletOrTerminate(&g_app, timeout);
+    if (R_FAILED(rc))
+        switchu::FileLog::log("[app] RequestExitLibraryAppletOrTerminate FAIL: 0x%X", rc);
+    else
+        switchu::FileLog::log("[app] RequestExitLibraryAppletOrTerminate ok");
     return rc;
 }
 
 inline Result terminate() {
     if (!g_running) return 0;
-    appletApplicationRequestExit(&g_app);
-    appletApplicationJoin(&g_app);
+    switchu::FileLog::log("[app] terminate request app=0x%016lX fg=%d",
+                          g_suspendedTitleId, g_hasForeground ? 1 : 0);
+    Result libRc = appletApplicationTerminateAllLibraryApplets(&g_app);
+    switchu::FileLog::log("[app] terminate TerminateAllLibraryApplets rc=0x%X", libRc);
+    Result requestRc = appletApplicationRequestExit(&g_app);
+    switchu::FileLog::log("[app] terminate RequestExit rc=0x%X", requestRc);
+    Result waitRc = eventWait(&g_app.StateChangedEvent, 15'000'000'000ULL);
+    if (waitRc == KERNELRESULT(TimedOut)) {
+        switchu::FileLog::log("[app] terminate graceful wait timed out; forcing terminate");
+        Result forceRc = appletApplicationTerminate(&g_app);
+        switchu::FileLog::log("[app] terminate force rc=0x%X", forceRc);
+    } else {
+        switchu::FileLog::log("[app] terminate wait rc=0x%X", waitRc);
+    }
+    Result resultRc = serviceDispatch(&g_app.s, 30);
+    switchu::FileLog::log("[app] terminate result rc=0x%X", resultRc);
     appletApplicationClose(&g_app);
     g_running = false;
     g_hasForeground = false;
@@ -236,6 +338,8 @@ inline bool checkFinished() {
 }
 
 inline void onHomeSuspend() {
+    switchu::FileLog::log("[app] onHomeSuspend fg %d -> 0 app=0x%016lX",
+                          g_hasForeground ? 1 : 0, g_suspendedTitleId);
     g_hasForeground = false;
 }
 

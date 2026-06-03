@@ -7,8 +7,9 @@ AppletButton::AppletButton() {
     setCornerRadius(16.f);
     setPadding(6.f);
     setLiquidGlassEnabled(true);
+    setForceLiquidGlass(true);
     setBlurEnabled(false);
-    setBorderWidth(0.f);
+    setBorderWidth(2.2f);
     m_i18nListenerId = nxui::I18n::instance().addLanguageChangedListener([this]() {
         refreshLocalizedLabel();
     });
@@ -52,4 +53,3 @@ void AppletButton::onContentRender(nxui::Renderer& ren) {
                            iconCorner,
                            nxui::Color::white().withAlpha(m_opacity));
 }
-

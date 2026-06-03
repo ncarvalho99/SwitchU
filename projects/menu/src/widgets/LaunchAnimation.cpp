@@ -1,6 +1,5 @@
 #include "LaunchAnimation.hpp"
 #include <nxui/core/Renderer.hpp>
-#include <cmath>
 
 
 void LaunchAnimation::start(const nxui::Rect& from, const nxui::Texture* tex, float cornerRadius,
@@ -20,6 +19,8 @@ void LaunchAnimation::start(const nxui::Rect& from, const nxui::Texture* tex, fl
     m_timer        = 0.f;
     m_playing      = true;
     m_launched     = false;
+    m_doneCalled   = false;
+    m_postLaunchHold = false;
 
     float side = std::min(from.width, from.height) * 1.8f;
     m_target = {(1280 - side) * 0.5f, (720 - side) * 0.5f, side, side};
@@ -30,14 +31,23 @@ void LaunchAnimation::onUpdate(float dt) {
     m_timer += dt;
 
     if (m_timer >= kTotalDur) {
-        m_playing = false;
         if (!m_launched) {
             m_launched = true;
             if (m_titleId != 0 && m_onLaunch) {
                 m_onLaunch(m_titleId, m_uid);
+                m_postLaunchHold = true;
             }
         }
-        if (m_onDone) m_onDone();
+        if (!m_doneCalled) {
+            m_doneCalled = true;
+            if (m_onDone) {
+                m_onDone();
+                m_postLaunchHold = true;
+            }
+        }
+        if (!m_postLaunchHold || m_timer >= kTotalDur + kPostLaunchBlackHold) {
+            m_playing = false;
+        }
     }
 }
 
@@ -100,4 +110,3 @@ void LaunchAnimation::onRender(nxui::Renderer& ren) {
                                nxui::Color::white().withAlpha(fadeAlpha));
     }
 }
-

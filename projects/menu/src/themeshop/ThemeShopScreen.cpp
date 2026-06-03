@@ -67,6 +67,7 @@ bool containsInsensitive(const std::string& haystack, const std::string& needleL
 bool matchesSearch(const ThemeShopScreen::ThemeShopEntry& entry, const std::string& needleLower) {
     return needleLower.empty()
         || containsInsensitive(entry.name, needleLower)
+        || containsInsensitive(entry.author, needleLower)
         || containsInsensitive(entry.id, needleLower)
         || containsInsensitive(entry.version, needleLower)
         || containsInsensitive(entry.source, needleLower)
@@ -107,6 +108,7 @@ void ThemeShopScreen::refreshCommunityCatalog() {
 void ThemeShopScreen::setThemeShopState(const std::vector<ThemeShopEntry>& entries,
                                         const std::string& activeId) {
     m_allThemeShopEntries = entries;
+    m_installedPreviewCache.clear();
     applySearchFilter();
 
     auto hasId = [&](const std::string& id) {
@@ -365,6 +367,66 @@ const nxui::Texture* ThemeShopScreen::communityPreviewTexture(const std::string&
 
 const nxui::Texture* ThemeShopScreen::communityPreviewTexture(const ThemeCatalogClient::Entry& entry) const {
     return communityPreviewTexture(entry.cover);
+}
+
+ThemeShopScreen::PreviewPhase ThemeShopScreen::installedPreviewPhase(const std::string& previewPath) const {
+    if (previewPath.empty())
+        return PreviewPhase::Failed;
+
+    auto it = m_installedPreviewCache.find(previewPath);
+    if (it == m_installedPreviewCache.end() || !it->second)
+        return PreviewPhase::Idle;
+
+    std::lock_guard<std::mutex> lk(it->second->mutex);
+    return it->second->phase;
+}
+
+const nxui::Texture* ThemeShopScreen::installedPreviewTexture(const std::string& previewPath) const {
+    if (previewPath.empty())
+        return nullptr;
+
+    auto it = m_installedPreviewCache.find(previewPath);
+    if (it == m_installedPreviewCache.end() || !it->second)
+        return nullptr;
+
+    std::lock_guard<std::mutex> lk(it->second->mutex);
+    if (it->second->phase != PreviewPhase::Ready || !it->second->texture.valid())
+        return nullptr;
+    return &it->second->texture;
+}
+
+void ThemeShopScreen::primeInstalledPreview(const std::string& previewPath) {
+    if (!m_gpu || !m_renderer || previewPath.empty())
+        return;
+
+    auto& slot = m_installedPreviewCache[previewPath];
+    if (!slot)
+        slot = std::make_shared<PreviewImageState>();
+
+    {
+        std::lock_guard<std::mutex> lk(slot->mutex);
+        if (slot->url != previewPath) {
+            slot->url = previewPath;
+            slot->phase = PreviewPhase::Idle;
+            slot->failureCount = 0;
+            slot->texture = nxui::Texture();
+        }
+        if (slot->phase == PreviewPhase::Ready || slot->phase == PreviewPhase::Failed)
+            return;
+        slot->phase = PreviewPhase::Loading;
+    }
+
+    nxui::Texture uploaded;
+    bool ok = uploaded.loadFromFile(*m_gpu, *m_renderer, previewPath, kCommunityPreviewMaxSide);
+    std::lock_guard<std::mutex> lk(slot->mutex);
+    if (ok) {
+        slot->texture = std::move(uploaded);
+        slot->phase = PreviewPhase::Ready;
+        slot->failureCount = 0;
+    } else {
+        slot->phase = PreviewPhase::Failed;
+        slot->failureCount += 1;
+    }
 }
 
 void ThemeShopScreen::primeCommunityPreview(const std::string& previewPath) {

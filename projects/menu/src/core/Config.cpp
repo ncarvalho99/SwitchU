@@ -41,6 +41,8 @@ bool AppConfig::load() {
     readJsonOpt(j, "gridRows", gridRows);
     readJsonOpt(j, "uiLanguageOverride", uiLanguageOverride);
     readJsonOpt(j, "soundPreset", soundPreset);
+    readJsonOpt(j, "defaultProfileEnabled", defaultProfileEnabled);
+    readJsonOpt(j, "defaultProfileUid", defaultProfileUid);
     readJsonOpt(j, "themePreset", themePreset);
     readJsonOpt(j, "themeMode", themeMode);
     readJsonOpt(j, "accentH", accentH);
@@ -64,6 +66,7 @@ bool AppConfig::load() {
     gridRows = std::clamp(gridRows, 2, 5);
     if (uiLanguageOverride.empty()) uiLanguageOverride = "auto";
     if (soundPreset.empty()) soundPreset = "wiiu";
+    if (!defaultProfileEnabled) defaultProfileUid.clear();
     if (themePreset.empty()) themePreset = "Default Dark";
 
     auto clampHSL = [](float& v) { if (v < 0.f) v = -1.f; else if (v > 1.f) v = 1.f; };
@@ -87,6 +90,8 @@ bool AppConfig::save() const {
     j["gridRows"] = std::clamp(gridRows, 2, 5);
     j["uiLanguageOverride"] = uiLanguageOverride;
     j["soundPreset"] = soundPreset;
+    j["defaultProfileEnabled"] = defaultProfileEnabled;
+    j["defaultProfileUid"] = defaultProfileEnabled ? defaultProfileUid : std::string();
     j["themePreset"] = themePreset;
     j["themeMode"] = themeMode;
 

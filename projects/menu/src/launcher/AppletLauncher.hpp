@@ -7,11 +7,7 @@ class AppletLauncher {
 public:
     struct Callbacks {
         std::function<void()>     playSfxModalHide;
-        std::function<void()>     playSfxLaunchGame;
         std::function<void()>     requestExit;
-        std::function<void()>     suspendForApp;
-        std::function<void()>     waitGpuIdle;
-        std::function<void(bool)> setRenderEnabled;
     };
 
     void init(Callbacks cbs);
@@ -20,7 +16,10 @@ public:
     void launchMiiEditor();
     void launchControllerPairing();
     void launchNetConnect();
+    void launchUserPage(AccountUid uid);
     void enterSleep();
+    void shutdown();
+    void reboot();
 
     void launchApplication(uint64_t titleId, AccountUid uid);
     void resumeApplication();

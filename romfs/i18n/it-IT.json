@@ -10,7 +10,8 @@
     "settings": "Impostazioni",
     "controllers": "Controller",
     "sleep": "Sospensione",
-    "music": "Musica"
+    "music": "Musica",
+    "theme_shop": "Theme Shop"
   },
   "settings": {
     "tabs": {
@@ -49,7 +50,10 @@
       "region_taiwan": "Taiwan",
       "region_south_korea": "Corea del Sud",
       "auto_update": "Aggiornamento automatico",
-      "error_reporting": "Segnalazione errori"
+      "error_reporting": "Segnalazione errori",
+      "default_profile": "Default Profile",
+      "default_profile_desc": "Launch games with this profile when possible.",
+      "default_profile_ask": "Ask each time"
     },
     "audio": {
       "speaker_auto_mute": "Auto-mute altoparlanti",
@@ -118,7 +122,9 @@
       "connect": "Connetti",
       "unpair": "Dissocia",
       "pair_connect": "Associa e connetti",
-      "device_actions": "Azioni dispositivo"
+      "device_actions": "Azioni dispositivo",
+      "connected": "Connected",
+      "not_connected": "Not connected"
     },
     "sleep": {
       "1min": "1 min",
@@ -210,6 +216,20 @@
   "userselect": {
     "title": "Chi sta giocando?"
   },
+  "game": {
+    "move": "Sposta",
+    "move_prefix": "Sposta: ",
+    "close_title": "Chiudi gioco",
+    "close_prefix": "Chiudi",
+    "close_suffix": "?\nI progressi non salvati andranno persi."
+  },
+  "power": {
+    "title": "Alimentazione",
+    "choose_action": "Scegli un'azione di alimentazione.",
+    "sleep": "Sospendi",
+    "shutdown": "Spegni",
+    "reboot": "Riavvia"
+  },
   "languages": {
     "ja-JP": "Giapponese",
     "en-US": "Inglese (USA)",
@@ -239,6 +259,95 @@
   "button": {
     "ok": "OK",
     "cancel": "Annulla",
-    "delete": "Elimina"
+    "delete": "Elimina",
+    "close": "Close",
+    "replace": "Replace"
+  },
+  "themeshop": {
+    "source": {
+      "builtin": "Built-in",
+      "custom": "Custom",
+      "community": "Community",
+      "options": "Opzioni",
+      "unknown": "Unknown"
+    },
+    "tabs": {
+      "installed": "Installed",
+      "community": "Community",
+      "options": "Opzioni"
+    },
+    "search": {
+      "button": "Search",
+      "guide": "Search themes",
+      "unavailable": "Search keyboard is unavailable.",
+      "no_results": "No themes match this search.",
+      "no_results_hint": "Press X or use Search to change or clear the filter."
+    },
+    "installed": {
+      "title": "Installed Theme Library",
+      "subtitle": "Your local themes in a gallery layout.",
+      "empty": "No installed themes found.",
+      "status": "Status",
+      "status_active": "Active",
+      "status_available": "Available",
+      "sound": "Bundled Sound Pack",
+      "sound_none": "None",
+      "remove_hint": "This theme can be removed from the console.",
+      "builtin_hint": "This is part of the built-in theme set.",
+      "apply": "Apply Theme",
+      "remove": "Remove Theme"
+    },
+    "community": {
+      "title": "Browse Community Themes",
+      "subtitle": "A visual catalog, not a settings selector.",
+      "counter_loading": "Loading",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing",
+      "loading": "Loading theme catalog...",
+      "catalog_empty": "No published themes are listed in the catalog.",
+      "catalog_failed": "The catalog could not be fetched. Use Refresh to try again.",
+      "empty_hint": "Add themes to the repository and they will appear here.",
+      "author_unknown": "Unknown",
+      "version": "Version",
+      "version_unknown": "Unknown",
+      "manifest": "Manifest",
+      "manifest_missing": "Not provided",
+      "cover_missing": "No screenshot has been declared for this theme yet.",
+      "cover_present": "Use Left/Right to browse screenshots and A for fullscreen.",
+      "cover_single": "Press A to open this screenshot in fullscreen.",
+      "cover_loading": "Loading theme screenshot...",
+      "cover_unavailable": "The screenshot could not be loaded. Placeholder shown instead.",
+      "install": "Install",
+      "download_apply": "Download + Apply",
+      "transfer_busy": "Another theme transfer is already running.",
+      "install_pending": "Install flow is not wired yet.",
+      "download_apply_pending": "Download + apply flow is not wired yet.",
+      "selected_missing": "The selected community theme is no longer available in the catalog.",
+      "overwrite_apply_title": "Replace And Apply Theme",
+      "overwrite_apply_message": "A package with this theme ID is already installed. Replace it with the GitHub version, then apply it?",
+      "overwrite_install_title": "Replace Installed Theme",
+      "overwrite_install_message": "A package with this theme ID is already installed. Replace it with the version from GitHub?"
+    },
+    "transfer": {
+      "prepare_apply": "Preparing download + apply...",
+      "prepare_install": "Preparing download + install...",
+      "unknown_error": "Unknown transfer error",
+      "dialog_title": "Download del tema",
+      "downloading": "Download del tema...",
+      "downloading_file": "Download",
+      "finalize_apply": "Finalizzazione dell'installazione prima dell'applicazione...",
+      "finalize_install": "Finalizzazione dell'installazione...",
+      "installed_applying": "Tema installato. Applicazione in corso...",
+      "installed": "Theme installed.",
+      "installed_applied": "Theme installed and applied.",
+      "installed_apply_failed": "Theme installed, but it could not be applied automatically."
+    },
+    "preview": {
+      "loading": "Loading screenshot...",
+      "unavailable": "Screenshot unavailable",
+      "missing": "No screenshot",
+      "prev": "Prev",
+      "next": "Next"
+    }
   }
 }

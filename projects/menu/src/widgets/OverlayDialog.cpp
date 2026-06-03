@@ -1,8 +1,9 @@
 #include "OverlayDialog.hpp"
-#include "ActionButtonStyle.hpp"
 #include "settings/SettingsGlassTuning.hpp"
+#include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <algorithm>
+#include <cstdint>
 #include <utility>
 #include <cmath>
 
@@ -34,13 +35,14 @@ OverlayDialog::OverlayDialog() {
 
 
 nxui::Rect OverlayDialog::panelRect() const {
-    float panelX = 640.f - kPanelW * 0.5f;
+    float panelX = 640.f - m_panelW * 0.5f;
     float panelY = 360.f - m_panelH * 0.5f;
-    return {panelX, panelY, kPanelW, m_panelH};
+    return {panelX, panelY, m_panelW, m_panelH};
 }
 
 
 void OverlayDialog::buildWidgetTree() {
+    m_mode = DialogMode::Buttons;
     clearChildren();
     m_btnWidgets.clear();
     m_buttonFocus.clear();
@@ -55,7 +57,8 @@ void OverlayDialog::buildWidgetTree() {
     nxui::Color textSecondary = m_theme ? m_theme->textSecondary
                                         : nxui::Color(0.82f, 0.82f, 0.9f, 1.f);
 
-    float contentW = kPanelW - kPanelPadX * 2.f;
+    m_panelW = kPanelW;
+    float contentW = m_panelW - kPanelPadX * 2.f;
 
     float titleH = (titleFont && !m_title.empty())
                        ? titleFont->measure(m_title).y : 0.f;
@@ -122,11 +125,11 @@ void OverlayDialog::buildWidgetTree() {
     m_buttonRow->setWireframeEnabled(false);
 
     for (int i = 0; i < btnCount; ++i) {
-        auto btn = std::make_shared<nxui::GlassBox>(nxui::Axis::ROW);
-        switchu::ui::prepareActionButton(*btn, kButtonRadius);
+        auto btn = std::make_shared<ActionButton>();
+        btn->setTheme(m_theme);
         btn->setCornerRadius(kButtonRadius);
         btn->setRect({0, 0, btnW, kButtonH});
-        switchu::ui::applyActionButtonStyle(*btn, m_theme, 1.f, 0.f);
+        btn->setVisualState(1.f, 0.f);
         btn->setWireframeEnabled(false);
         btn->setGrow(1.f);
 
@@ -151,6 +154,86 @@ void OverlayDialog::buildWidgetTree() {
     addChild(m_buttonRow);
 
     layout();
+}
+
+bool OverlayDialog::loadUsers(nxui::GpuDevice& gpu, nxui::Renderer& ren) {
+    m_users.clear();
+
+    AccountUid uids[8] = {};
+    s32 count = 0;
+    Result rc = accountListAllUsers(uids, 8, &count);
+    if (R_FAILED(rc) || count <= 0)
+        return false;
+
+    for (int i = 0; i < count; ++i) {
+        AccountProfile profile{};
+        rc = accountGetProfile(&profile, uids[i]);
+        if (R_FAILED(rc))
+            continue;
+
+        AccountProfileBase base{};
+        AccountUserData userData{};
+        rc = accountProfileGet(&profile, &userData, &base);
+        if (R_FAILED(rc)) {
+            accountProfileClose(&profile);
+            continue;
+        }
+
+        UserEntry entry;
+        entry.uid = uids[i];
+        entry.nickname = base.nickname;
+
+        u32 imgSize = 0;
+        if (R_SUCCEEDED(accountProfileGetImageSize(&profile, &imgSize)) && imgSize > 0) {
+            std::vector<std::uint8_t> imgBuf(imgSize);
+            u32 realSize = 0;
+            if (R_SUCCEEDED(accountProfileLoadImage(&profile, imgBuf.data(), imgSize, &realSize))
+                && realSize > 0) {
+                entry.icon.loadFromMemory(gpu, ren, imgBuf.data(), realSize);
+            }
+        }
+
+        accountProfileClose(&profile);
+        m_users.push_back(std::move(entry));
+    }
+
+    return !m_users.empty();
+}
+
+void OverlayDialog::buildUserSelect() {
+    m_mode = DialogMode::UserSelect;
+    clearChildren();
+    m_btnWidgets.clear();
+    m_buttonFocus.clear();
+    m_titleLabel.reset();
+    m_messageLabel.reset();
+    m_buttonRow.reset();
+
+    int count = std::max(1, (int)m_users.size());
+    float titleH = m_font ? m_font->measure("A").y * 1.1f : 28.f;
+    float nameH = m_smallFont ? m_smallFont->measure("Ag").y : (m_font ? m_font->measure("Ag").y : 20.f);
+    float totalUsersW = count * kUserAvatarSize + (count - 1) * kUserAvatarGap;
+
+    m_panelW = totalUsersW + kPanelPadX * 2.f;
+    m_panelH = kPanelPadY * 2.f + titleH + kUserTitleGap + kUserAvatarSize + 12.f + nameH;
+
+    setAxis(nxui::Axis::COLUMN);
+    setRect(panelRect());
+    setCornerRadius(kPanelRadius);
+    setPadding(0.f);
+    setAlignItems(nxui::AlignItems::STRETCH);
+    setBackingEnabled(false);
+    setLiquidGlassEnabled(false);
+    setBlurEnabled(false);
+    setWireframeEnabled(false);
+    setPanelOpacity(0.94f);
+    if (m_theme) {
+        setBaseColor(m_theme->panelBase.withAlpha(std::clamp(m_theme->panelBase.a * 0.82f, 0.18f, 0.32f)));
+        setBorderColor(m_theme->panelBorder.withAlpha(std::clamp(m_theme->panelBorder.a * 0.95f, 0.14f, 0.36f)));
+        setHighlightColor(m_theme->panelHighlight.withAlpha(std::clamp(m_theme->panelHighlight.a * 0.70f, 0.03f, 0.10f)));
+    }
+
+    m_userAvatarRects.resize(m_users.size());
 }
 
 void OverlayDialog::animateButtonFocus(float duration, nxui::EasingFunc easing) {
@@ -205,6 +288,52 @@ void OverlayDialog::show(const std::string& title,
     setupActions();
 
     m_touchHitButton  = -1;
+    m_touchHitUser = -1;
+    m_touchOnSelected = false;
+    m_ignoreInitialTouchRelease = true;
+}
+
+void OverlayDialog::showUserSelect(UserSelectCallback onSelect, CancelCallback onCancel) {
+    if (m_users.empty()) {
+        if (onSelect) {
+            AccountUid uid{};
+            onSelect(uid);
+        }
+        return;
+    }
+
+    m_title = nxui::I18n::instance().tr("userselect.title", "Who's playing?");
+    m_message.clear();
+    m_buttons.clear();
+    m_selected = std::clamp(m_selected, 0, (int)m_users.size() - 1);
+    m_onUserSelect = std::move(onSelect);
+    m_onCancel = std::move(onCancel);
+
+    m_active = true;
+    m_animatingOut = false;
+    m_backdropCacheValid = false;
+    m_cachedPreBlurRadius = -1.f;
+    m_cachedBlurIterations = -1;
+
+    buildUserSelect();
+
+    m_overlayAlpha.setImmediate(0.f);
+    m_panelScale.setImmediate(0.92f);
+    m_contentReveal.setImmediate(0.f);
+
+    m_overlayAlpha.set(1.f, 0.24f, nxui::Easing::outCubic);
+    m_panelScale.set(1.f, 0.28f, nxui::Easing::outCubic);
+    m_contentReveal.set(1.f, 0.34f, nxui::Easing::outCubic);
+
+    m_cursor.setCornerRadius(kUserAvatarSize * 0.5f);
+    m_cursor.moveTo(userAvatarRect(m_selected).expanded(4.f), kUserAvatarSize * 0.5f, 0.001f);
+
+    setFocusable(true);
+    setVisible(true);
+    setupUserActions();
+
+    m_touchHitButton = -1;
+    m_touchHitUser = -1;
     m_touchOnSelected = false;
     m_ignoreInitialTouchRelease = true;
 }
@@ -254,6 +383,39 @@ void OverlayDialog::setupActions() {
     });
 }
 
+void OverlayDialog::setupUserActions() {
+    clearActions();
+
+    auto selectPrevious = [this]() {
+        if (!m_active || m_animatingOut || m_users.empty()) return;
+        int n = (int)m_users.size();
+        m_selected = (m_selected + n - 1) % n;
+        if (m_navSfxCb) m_navSfxCb();
+    };
+
+    auto selectNext = [this]() {
+        if (!m_active || m_animatingOut || m_users.empty()) return;
+        int n = (int)m_users.size();
+        m_selected = (m_selected + 1) % n;
+        if (m_navSfxCb) m_navSfxCb();
+    };
+
+    addDirectionAction(nxui::FocusDirection::LEFT, selectPrevious);
+    addDirectionAction(nxui::FocusDirection::UP, selectPrevious);
+    addDirectionAction(nxui::FocusDirection::RIGHT, selectNext);
+    addDirectionAction(nxui::FocusDirection::DOWN, selectNext);
+
+    addAction(static_cast<uint64_t>(nxui::Button::A), [this]() {
+        if (!m_active || m_animatingOut) return;
+        activateSelectedUser();
+    });
+
+    addAction(static_cast<uint64_t>(nxui::Button::B), [this]() {
+        if (!m_active || m_animatingOut) return;
+        cancel();
+    });
+}
+
 void OverlayDialog::activateSelected() {
     if (m_selected < 0 || m_selected >= (int)m_buttons.size()) return;
 
@@ -261,6 +423,17 @@ void OverlayDialog::activateSelected() {
     if (!btn.closeOnPress && m_activateSfxCb) m_activateSfxCb();
     if (btn.closeOnPress) hide();
     if (btn.onPress) btn.onPress();
+}
+
+void OverlayDialog::activateSelectedUser() {
+    if (m_selected < 0 || m_selected >= (int)m_users.size())
+        return;
+    AccountUid uid = m_users[(size_t)m_selected].uid;
+    auto cb = std::move(m_onUserSelect);
+    if (m_activateSfxCb) m_activateSfxCb();
+    hide();
+    if (cb)
+        cb(uid);
 }
 
 void OverlayDialog::cancel() {
@@ -272,6 +445,56 @@ void OverlayDialog::cancel() {
 
 void OverlayDialog::handleTouch(nxui::Input& input) {
     if (!m_active || m_animatingOut) return;
+
+    if (m_mode == DialogMode::UserSelect) {
+        if (input.touchDown()) {
+            if (m_ignoreInitialTouchRelease)
+                m_ignoreInitialTouchRelease = false;
+
+            float tx = input.touchX();
+            float ty = input.touchY();
+            m_touchHitUser = -1;
+            m_touchOnSelected = false;
+            for (int i = 0; i < (int)m_users.size(); ++i) {
+                if (userAvatarRect(i).expanded(12.f).contains(tx, ty)) {
+                    m_touchHitUser = i;
+                    break;
+                }
+            }
+            if (m_touchHitUser >= 0 && m_touchHitUser == m_selected)
+                m_touchOnSelected = true;
+        }
+
+        if (input.touchUp()) {
+            if (m_ignoreInitialTouchRelease) {
+                m_ignoreInitialTouchRelease = false;
+                m_touchHitUser = -1;
+                m_touchOnSelected = false;
+                return;
+            }
+
+            float dx = std::abs(input.touchDeltaX());
+            float dy = std::abs(input.touchDeltaY());
+            if (dx < 20.f && dy < 20.f) {
+                if (m_touchHitUser >= 0 && m_touchHitUser < (int)m_users.size()) {
+                    if (m_touchOnSelected) {
+                        activateSelectedUser();
+                    } else {
+                        m_selected = m_touchHitUser;
+                        if (m_navSfxCb) m_navSfxCb();
+                    }
+                } else {
+                    float px = input.touchX();
+                    float py = input.touchY();
+                    if (!scaledRect(rect(), m_panelScale.value()).contains(px, py))
+                        cancel();
+                }
+            }
+            m_touchHitUser = -1;
+            m_touchOnSelected = false;
+        }
+        return;
+    }
 
     if (input.touchDown()) {
         if (m_ignoreInitialTouchRelease)
@@ -325,6 +548,11 @@ void OverlayDialog::handleTouch(nxui::Input& input) {
 
 
 void OverlayDialog::syncCursor() {
+    if (m_mode == DialogMode::UserSelect) {
+        syncUserCursor();
+        return;
+    }
+
     if (m_selected >= 0 && m_selected < (int)m_btnWidgets.size()) {
         nxui::Rect br = scaledRect(m_btnWidgets[m_selected]->rect(), m_panelScale.value());
         m_cursor.moveTo(br.expanded(3.f), kButtonRadius, 0.16f);
@@ -334,7 +562,22 @@ void OverlayDialog::syncCursor() {
     m_cursor.setOpacity(m_overlayAlpha.value());
 }
 
+void OverlayDialog::syncUserCursor() {
+    if (m_selected >= 0 && m_selected < (int)m_users.size()) {
+        nxui::Rect r = userAvatarRect(m_selected);
+        m_cursor.moveTo(r.expanded(4.f), r.width * 0.5f, 0.16f);
+    }
+    if (m_theme)
+        m_cursor.setColor(m_theme->cursorNormal);
+    m_cursor.setOpacity(m_overlayAlpha.value());
+}
+
 void OverlayDialog::syncChildOpacities() {
+    if (m_mode == DialogMode::UserSelect) {
+        syncUserOpacities();
+        return;
+    }
+
     float alpha  = m_overlayAlpha.value();
     float reveal = m_contentReveal.value();
     float sc     = m_panelScale.value();
@@ -363,7 +606,91 @@ void OverlayDialog::syncChildOpacities() {
     for (int i = 0; i < (int)m_btnWidgets.size(); ++i) {
         float focus = (i < (int)m_buttonFocus.size()) ? m_buttonFocus[(size_t)i].value() : 0.f;
         focus = std::clamp(focus, 0.f, 1.f);
-        switchu::ui::applyActionButtonStyle(*m_btnWidgets[i], m_theme, alpha, focus);
+        m_btnWidgets[i]->setTheme(m_theme);
+        m_btnWidgets[i]->setVisualState(alpha, focus);
+    }
+}
+
+void OverlayDialog::syncUserOpacities() {
+    float alpha = m_overlayAlpha.value();
+    float sc = m_panelScale.value();
+    setScale(sc);
+    setPanelOpacity(alpha);
+    setRect(panelRect());
+}
+
+nxui::Rect OverlayDialog::userAvatarRect(int index) const {
+    int n = (int)m_users.size();
+    if (n <= 0 || index < 0 || index >= n)
+        return {};
+
+    nxui::Rect panel = scaledRect(panelRect(), m_panelScale.value());
+    float sc = m_panelScale.value();
+    float titleH = m_font ? m_font->measure("A").y * 1.1f : 28.f;
+    float totalUsersW = n * kUserAvatarSize + (n - 1) * kUserAvatarGap;
+    float startX = panel.x + (panel.width - totalUsersW * sc) * 0.5f;
+    float startY = panel.y + (kPanelPadY + titleH + kUserTitleGap) * sc;
+    return {
+        startX + index * (kUserAvatarSize + kUserAvatarGap) * sc,
+        startY,
+        kUserAvatarSize * sc,
+        kUserAvatarSize * sc,
+    };
+}
+
+void OverlayDialog::renderUserContent(nxui::Renderer& ren, float alpha) {
+    if (alpha <= 0.01f)
+        return;
+
+    nxui::Rect panel = scaledRect(panelRect(), m_panelScale.value());
+    float sc = m_panelScale.value();
+    float reveal = m_contentReveal.value();
+    float contentAlpha = alpha * reveal;
+
+    nxui::Color textPrimary = m_theme ? m_theme->textPrimary : nxui::Color::white();
+    nxui::Color textSecondary = m_theme ? m_theme->textSecondary : nxui::Color(0.82f, 0.82f, 0.9f, 1.f);
+
+    if (m_font && !m_title.empty()) {
+        nxui::Vec2 titleSz = m_font->measure(m_title);
+        float tx = panel.x + (panel.width - titleSz.x * sc) * 0.5f;
+        float ty = panel.y + kPanelPadY * sc;
+        ren.drawText(m_title, {tx, ty}, m_font, textPrimary.withAlpha(contentAlpha), sc);
+    }
+
+    nxui::Font* nameFont = m_smallFont ? m_smallFont : m_font;
+    m_userAvatarRects.resize(m_users.size());
+    for (int i = 0; i < (int)m_users.size(); ++i) {
+        nxui::Rect avatar = userAvatarRect(i);
+        m_userAvatarRects[(size_t)i] = avatar;
+
+        float selected = (i == m_selected) ? 1.f : 0.f;
+        float visualScale = 1.f + 0.08f * selected;
+        nxui::Rect drawRect = scaledRect(avatar, visualScale);
+        if (m_users[(size_t)i].icon.valid()) {
+            ren.drawTextureRounded(&m_users[(size_t)i].icon,
+                                   drawRect,
+                                   drawRect.width * 0.5f,
+                                   nxui::Color::white().withAlpha(contentAlpha));
+        } else {
+            float r = drawRect.width * 0.5f;
+            ren.drawCircle({drawRect.x + r, drawRect.y + r}, r,
+                           textSecondary.withAlpha(0.35f * contentAlpha), 32);
+        }
+
+        if (nameFont && !m_users[(size_t)i].nickname.empty()) {
+            float nameScale = 0.85f * sc;
+            nxui::Vec2 nameSz = nameFont->measure(m_users[(size_t)i].nickname);
+            float maxW = avatar.width;
+            float tx = avatar.x + (maxW - std::min(nameSz.x * nameScale, maxW)) * 0.5f;
+            float ty = avatar.bottom() + 8.f * sc;
+            ren.pushClipRect({avatar.x, ty - 2.f * sc, maxW, nameSz.y * nameScale + 4.f * sc});
+            ren.drawText(m_users[(size_t)i].nickname,
+                         {tx, ty},
+                         nameFont,
+                         (i == m_selected ? textPrimary : textSecondary).withAlpha(contentAlpha),
+                         nameScale);
+            ren.popClipRect();
+        }
     }
 }
 
@@ -381,11 +708,61 @@ void OverlayDialog::update(float dt) {
     syncChildOpacities();
     syncCursor();
 
-    for (auto& c : children())
-        c->update(dt);
+    if (m_mode == DialogMode::Buttons) {
+        for (auto& c : children())
+            c->update(dt);
+    }
     m_cursor.update(dt);
 }
 
+void OverlayDialog::renderGlassPanel(nxui::Renderer& ren,
+                                     const nxui::Theme* theme,
+                                     const nxui::Rect& panel,
+                                     float radius,
+                                     const nxui::Color& base,
+                                     const nxui::Color& border,
+                                     const nxui::Color& highlight,
+                                     float alpha,
+                                     int backdropTarget) {
+    if (alpha <= 0.01f)
+        return;
+
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    nxui::Color glassTint = theme
+        ? theme->panelBase.withAlpha(theme->mode == nxui::ThemeMode::Dark
+            ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+            : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f))
+        : base.withAlpha(0.14f);
+    nxui::Rect glassRect = panel.shrunk(std::max(0.0f, tuning.inset));
+    float glassRadius = std::max(12.0f, radius - std::max(0.0f, tuning.inset) * 0.5f);
+
+    ren.drawLiquidGlass(backdropTarget,
+                        glassRect,
+                        glassRadius,
+                        glassTint,
+                        alpha,
+                        std::clamp(tuning.shade, 0.0f, 1.0f));
+    ren.drawRoundedRectOutline(glassRect,
+                               border.withAlpha(std::clamp(border.a * 0.90f, 0.14f, 0.34f) * alpha),
+                               glassRadius,
+                               1.2f);
+    ren.drawRoundedRectOutline(glassRect.shrunk(1.5f),
+                               highlight.withAlpha(std::clamp(highlight.a * 0.90f, 0.04f, 0.10f) * alpha),
+                               std::max(0.0f, glassRadius - 1.5f),
+                               1.0f);
+    ren.liquidGlassSettings() = savedGlass;
+}
 
 void OverlayDialog::render(nxui::Renderer& ren) {
     if (!m_active && !m_animatingOut) return;
@@ -410,43 +787,15 @@ void OverlayDialog::render(nxui::Renderer& ren) {
         m_cachedBlurIterations = tuning.blurIterations;
     }
 
-    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
-    auto& glass = ren.liquidGlassSettings();
-    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
-    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
-    glass.noiseIntensity = 0.0f;
-    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
-    glass.saturation = std::max(0.0f, tuning.saturation);
-    glass.opacityMultiplier = 1.0f;
-    glass.roughness = std::max(0.0f, tuning.roughness);
-    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+    renderGlassPanel(ren, m_theme, panel, kPanelRadius, m_base, m_border, m_highlight,
+                     alpha, kBackdropCacheTarget);
 
-    nxui::Color glassTint = m_theme
-        ? m_theme->panelBase.withAlpha(m_theme->mode == nxui::ThemeMode::Dark
-            ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
-            : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f))
-        : m_base.withAlpha(0.14f);
-    nxui::Rect glassRect = panel.shrunk(std::max(0.0f, tuning.inset));
-    float glassRadius = std::max(12.0f, kPanelRadius - std::max(0.0f, tuning.inset) * 0.5f);
-
-    ren.drawLiquidGlass(kBackdropCacheTarget,
-                        glassRect,
-                        glassRadius,
-                        glassTint,
-                        alpha,
-                        std::clamp(tuning.shade, 0.0f, 1.0f));
-    ren.drawRoundedRectOutline(glassRect,
-                               m_border.withAlpha(std::clamp(m_border.a * 0.90f, 0.14f, 0.34f) * alpha),
-                               glassRadius,
-                               1.2f);
-    ren.drawRoundedRectOutline(glassRect.shrunk(1.5f),
-                               m_highlight.withAlpha(std::clamp(m_highlight.a * 0.90f, 0.04f, 0.10f) * alpha),
-                               std::max(0.0f, glassRadius - 1.5f),
-                               1.0f);
-    ren.liquidGlassSettings() = savedGlass;
-
-    for (auto& c : children())
-        c->render(ren);
+    if (m_mode == DialogMode::UserSelect) {
+        renderUserContent(ren, alpha);
+    } else {
+        for (auto& c : children())
+            c->render(ren);
+    }
 
     m_cursor.render(ren);
 }

@@ -28,6 +28,14 @@ void IconStreamer::setIconData(int appIndex, std::vector<uint8_t> compressed) {
         m_compressed[appIndex] = std::move(compressed);
 }
 
+void IconStreamer::setPinnedIndex(int appIndex) {
+    m_pinnedIndex = (appIndex >= 0 && appIndex < (int)m_appToSlot.size()) ? appIndex : -1;
+}
+
+void IconStreamer::clearPinnedIndex() {
+    m_pinnedIndex = -1;
+}
+
 void IconStreamer::clear() {
     m_pool.clear();
     m_compressed.clear();
@@ -35,6 +43,8 @@ void IconStreamer::clear() {
     m_appToSlot.clear();
     m_freeSlots.clear();
     m_lastPage = -1;
+    m_lastIconsPerPage = -1;
+    m_pinnedIndex = -1;
 }
 
 bool IconStreamer::swapIndices(int a, int b) {
@@ -59,6 +69,13 @@ bool IconStreamer::swapIndices(int a, int b) {
             m_pool[slotB]->appIndex = a;
     }
 
+    if (m_pinnedIndex == a)
+        m_pinnedIndex = b;
+    else if (m_pinnedIndex == b)
+        m_pinnedIndex = a;
+
+    m_lastPage = -1;
+    m_lastIconsPerPage = -1;
     return true;
 }
 
@@ -137,11 +154,16 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
                                  nxui::GpuDevice& gpu, nxui::Renderer& ren,
                                  const std::vector<std::shared_ptr<GlossyIcon>>& allIcons)
 {
-    if (currentPage == m_lastPage) return;
-    m_lastPage = currentPage;
-
     int totalApps  = (int)m_appToSlot.size();
-    if (totalApps == 0 || iconsPerPage == 0) return;
+    if (totalApps == 0 || iconsPerPage <= 0) {
+        m_lastPage = currentPage;
+        m_lastIconsPerPage = iconsPerPage;
+        return;
+    }
+
+    m_lastPage = currentPage;
+    m_lastIconsPerPage = iconsPerPage;
+
     int totalPages = (totalApps + iconsPerPage - 1) / iconsPerPage;
 
     int startPage = std::max(0, currentPage - kPageMargin);
@@ -152,6 +174,8 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     // 1. Evict textures outside the new visible range.
     for (int i = 0; i < (int)m_pool.size(); ++i) {
         int app = m_pool[i]->appIndex;
+        if (app == m_pinnedIndex)
+            continue;
         if (app >= 0 && (app < startApp || app >= endApp)) {
             if (app < (int)allIcons.size())
                 allIcons[app]->setTexture(nullptr);
@@ -161,7 +185,29 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         }
     }
 
-    // 2. Collect apps that need loading.
+    // 2. Re-attach already-loaded slots to the current widget order. This is
+    //    needed after grid relayouts and swaps where the GlossyIcon objects
+    //    may have moved while the GPU texture pool stayed valid.
+    for (int i = startApp; i < endApp; ++i) {
+        int slotIdx = m_appToSlot[i];
+        if (slotIdx < 0)
+            continue;
+
+        bool validSlot = slotIdx < (int)m_pool.size() &&
+                         m_pool[slotIdx] &&
+                         m_pool[slotIdx]->appIndex == i &&
+                         m_pool[slotIdx]->texture.valid();
+        if (validSlot) {
+            if (i < (int)allIcons.size())
+                allIcons[i]->setTexture(&m_pool[slotIdx]->texture);
+        } else {
+            m_appToSlot[i] = -1;
+            if (i < (int)allIcons.size())
+                allIcons[i]->setTexture(nullptr);
+        }
+    }
+
+    // 3. Collect apps that need loading.
     std::vector<int> toLoad;
     for (int i = startApp; i < endApp; ++i) {
         if (m_appToSlot[i] < 0 && hasData(i))
@@ -194,7 +240,7 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     DebugLog::log("[streamer] page %d: loading %d icons [%d..%d)",
                   currentPage, (int)pending.size(), startApp, endApp);
 
-    // 3. Decode icons in parallel (CPU-bound work).
+    // 4. Decode icons in parallel (CPU-bound work).
     struct Decoded {
         int appIndex;
         uint8_t* rgba = nullptr;
@@ -208,7 +254,7 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     }
     pending.clear();
 
-    // 4. Upload to GPU (must happen on the main/render thread) and
+    // 5. Upload to GPU (must happen on the main/render thread) and
     //    wire the texture pointers on the corresponding GlossyIcons.
 
     // Pre-reserve pool capacity so emplace_back() never reallocates.
@@ -267,5 +313,6 @@ void IconStreamer::forceReload(int currentPage, int iconsPerPage,
     m_freeSlots.clear();
 
     m_lastPage = -1;
+    m_lastIconsPerPage = -1;
     onPageChanged(currentPage, iconsPerPage, gpu, ren, allIcons);
 }

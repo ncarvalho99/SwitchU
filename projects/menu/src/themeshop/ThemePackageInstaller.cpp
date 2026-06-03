@@ -4,6 +4,7 @@
 
 #include "core/DebugLog.hpp"
 
+#include <nxui/core/I18n.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Exception.hpp>
 #include <curlpp/Infos.hpp>
@@ -58,6 +59,13 @@ std::string basename(const std::string& path) {
     if (slash == std::string::npos)
         return clean;
     return clean.substr(slash + 1);
+}
+
+std::string dirnameForPreview(const std::string& path) {
+    std::string name = basename(path);
+    if (name.empty())
+        return {};
+    return "preview/" + name;
 }
 
 bool startsWith(const std::string& value, const std::string& prefix) {
@@ -228,7 +236,8 @@ std::vector<RemoteFile> listThemeFilesFromTree(const GitHubRepoSource& repo,
 
 std::vector<RemoteFile> listThemeFiles(const std::string& catalogUrl,
                                        const std::string& themePath,
-                                       const std::string& manifestPath) {
+                                       const std::string& manifestPath,
+                                       const ThemeCatalogClient::Entry& entry) {
     std::vector<RemoteFile> files;
 
     GitHubRepoSource repo;
@@ -246,6 +255,41 @@ std::vector<RemoteFile> listThemeFiles(const std::string& catalogUrl,
             manifestName = "theme.json";
         files.push_back({manifestName, joinUrl(catalogUrl, manifestPath)});
     }
+
+    auto hasRelativePath = [&](const std::string& relativePath) {
+        return std::any_of(files.begin(), files.end(), [&](const RemoteFile& file) {
+            return file.relativePath == relativePath;
+        });
+    };
+    auto addPreviewFile = [&](const std::string& previewPath) {
+        if (previewPath.empty())
+            return;
+
+        std::string clean = trimSlashes(previewPath);
+        std::string relativePath;
+        std::string downloadUrl;
+        if (startsWith(clean, "https://") || startsWith(clean, "http://")) {
+            relativePath = dirnameForPreview(clean);
+            downloadUrl = clean;
+        } else {
+            std::string prefix = themePath.empty() ? std::string() : trimSlashes(themePath) + "/";
+            std::string remotePath = clean;
+            if (!themePath.empty() && !startsWith(clean, prefix))
+                remotePath = joinPath(themePath, clean);
+            relativePath = (!prefix.empty() && startsWith(clean, prefix))
+                ? clean.substr(prefix.size())
+                : clean;
+            downloadUrl = joinUrl(catalogUrl, remotePath);
+        }
+
+        if (relativePath.empty() || hasRelativePath(relativePath))
+            return;
+        files.push_back({relativePath, downloadUrl});
+    };
+
+    addPreviewFile(entry.cover);
+    for (const auto& screenshot : entry.screenshots)
+        addPreviewFile(screenshot);
 
     std::sort(files.begin(), files.end(), [](const RemoteFile& lhs, const RemoteFile& rhs) {
         bool lhsManifest = lhs.relativePath == "theme.json";
@@ -294,9 +338,10 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
         throw std::runtime_error("Catalog entry is missing a manifest path");
 
     if (onProgress) {
+        auto& i18n = nxui::I18n::instance();
         onProgress(mode == Mode::InstallAndApply
-                       ? "Preparing download + apply..."
-                       : "Preparing install...",
+                       ? i18n.tr("themeshop.transfer.prepare_apply", "Preparing download + apply...")
+                       : i18n.tr("themeshop.transfer.prepare_install", "Preparing download + install..."),
                    0.f);
     }
 
@@ -305,7 +350,7 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
     if (!ensureDirectoryRecursive(result.destinationPath))
         throw std::runtime_error("Failed to prepare destination: " + result.destinationPath);
 
-    std::vector<RemoteFile> files = listThemeFiles(catalogUrl, themePath, manifestPath);
+    std::vector<RemoteFile> files = listThemeFiles(catalogUrl, themePath, manifestPath, entry);
     if (files.empty())
         throw std::runtime_error("Theme package contains no downloadable files");
 
@@ -313,7 +358,9 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
         const auto& file = files[i];
         float progress = files.size() > 1 ? (float)i / (float)files.size() : 0.f;
         if (onProgress) {
-            onProgress("Downloading " + file.relativePath + " (" + std::to_string(i + 1)
+            auto& i18n = nxui::I18n::instance();
+            onProgress(i18n.tr("themeshop.transfer.downloading_file", "Downloading")
+                           + " " + file.relativePath + " (" + std::to_string(i + 1)
                            + "/" + std::to_string(files.size()) + ")",
                        progress);
         }
@@ -323,15 +370,17 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
     }
 
     if (onProgress) {
+        auto& i18n = nxui::I18n::instance();
         onProgress(mode == Mode::InstallAndApply
-                       ? "Finalizing install before apply..."
-                       : "Finalizing installation...",
+                       ? i18n.tr("themeshop.transfer.finalize_apply", "Finalizing install before apply...")
+                       : i18n.tr("themeshop.transfer.finalize_install", "Finalizing installation..."),
                    1.f);
     }
 
     result.success = true;
+    auto& i18n = nxui::I18n::instance();
     result.message = mode == Mode::InstallAndApply
-        ? "Theme installed. Applying it now..."
-        : "Theme installed.";
+        ? i18n.tr("themeshop.transfer.installed_applying", "Theme installed. Applying it now...")
+        : i18n.tr("themeshop.transfer.installed", "Theme installed.");
     return result;
 }

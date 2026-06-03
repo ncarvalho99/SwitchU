@@ -90,7 +90,7 @@ rule("switch")
 
         elseif format == "nsp" then
             -- ── NSP ──────────────────────────────────────────────────────
-            local exefsdir = path.join(outdir, "exefs")
+            local exefsdir = path.join(outdir, "exefs", name)
             os.mkdir(exefsdir)
 
             -- ELF → NSO
@@ -139,6 +139,15 @@ rule("switch")
                 -- NSP as ExeFS override via Atmosphère LayeredFS
                 os.cp(path.join(outdir, name .. ".nsp"), path.join(contentsdir, "exefs.nsp"))
                 cprint("${bright green}installed${clear} NSP → %s", contentsdir)
+
+                local raw_exefs_dir = target:values("switch.raw_exefs_dir")
+                if raw_exefs_dir and raw_exefs_dir ~= "" then
+                    local raw_dest = path.join(installdir, raw_exefs_dir)
+                    os.mkdir(raw_dest)
+                    os.cp(path.join(outdir, "exefs", name, "main"), path.join(raw_dest, "main"))
+                    os.cp(path.join(outdir, "exefs", name, "main.npdm"), path.join(raw_dest, "main.npdm"))
+                    cprint("${bright green}installed${clear} raw ExeFS → %s", raw_dest)
+                end
             end
 
             -- SD assets: sdmc:/switch/<assets_name>/

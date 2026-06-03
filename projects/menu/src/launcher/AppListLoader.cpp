@@ -1,5 +1,6 @@
 #include "AppListLoader.hpp"
 #include "core/DebugLog.hpp"
+#include "smi_commands.hpp"
 #include <switch.h>
 #include <cstdio>
 #include <cstdlib>
@@ -13,9 +14,77 @@
 
 namespace {
 
+bool requiresInteractiveUserSelection(uint8_t account, uint8_t option) {
+    return account == 1 && option == 0;
+}
+
 #ifdef SWITCHU_MENU
 static NsApplicationControlData g_controlData;
+
+struct StartupUserInfo {
+    uint8_t account = 1;
+    uint8_t option = 0;
+};
+
+StartupUserInfo queryStartupUserInfoImpl(uint64_t tid, StartupUserInfo fallback = {}) {
+    size_t controlSize = 0;
+    Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage, tid,
+                                            &g_controlData, sizeof(g_controlData), &controlSize);
+    if (R_FAILED(rc)) {
+        DebugLog::log("[loader] startup_user query failed tid=%016lX rc=0x%X",
+                      (unsigned long)tid, rc);
+        return fallback;
+    }
+    StartupUserInfo info{};
+    info.account = g_controlData.nacp.startup_user_account;
+    info.option = g_controlData.nacp.startup_user_account_option;
+    return info;
+}
 #endif
+
+bool fetchDaemonCatalog(std::vector<PendingApp>& out) {
+#ifdef SWITCHU_MENU
+    std::vector<switchu::menu::smi_cmd::AppEntry> catalog;
+    Result rc = switchu::menu::smi_cmd::getAppList(catalog, false);
+    if (R_FAILED(rc) || catalog.empty()) {
+        DebugLog::log("[loader] daemon catalog unavailable rc=0x%X count=%d",
+                      rc, (int)catalog.size());
+        return false;
+    }
+
+    char tidBuf[17];
+    out.clear();
+    out.reserve(catalog.size());
+    for (auto& ent : catalog) {
+        if (ent.titleId == 0 || ent.name.empty())
+            continue;
+
+        std::snprintf(tidBuf, sizeof(tidBuf), "%016lX", (unsigned long)ent.titleId);
+        PendingApp a;
+        a.id      = tidBuf;
+        a.title   = std::move(ent.name);
+        a.titleId = ent.titleId;
+        a.viewFlags = ent.viewFlags;
+        a.startupUserKnown = ent.startupUserKnown;
+        a.startupUserAccount = ent.startupUserKnown ? ent.startupUserAccount : 1;
+        a.startupUserAccountOption = ent.startupUserKnown ? ent.startupUserAccountOption : 0;
+        a.userRequired = !ent.startupUserKnown ||
+                         requiresInteractiveUserSelection(a.startupUserAccount,
+                                                          a.startupUserAccountOption);
+        a.iconData = std::move(ent.icon);
+        out.push_back(std::move(a));
+    }
+
+    if (out.empty())
+        return false;
+
+    DebugLog::log("[loader] loaded %d apps from daemon catalog", (int)out.size());
+    return true;
+#else
+    (void)out;
+    return false;
+#endif
+}
 
 void registerEntries(std::vector<PendingApp>& apps,
                      GridModel& model,
@@ -33,12 +102,29 @@ void registerEntries(std::vector<PendingApp>& apps,
         entry.titleId      = p.titleId;
         entry.iconTexIndex = -1;  // unused — IconStreamer handles textures
         entry.viewFlags    = p.viewFlags;
+        entry.userRequired = p.userRequired;
+        entry.startupUserKnown = p.startupUserKnown;
+        entry.startupUserAccount = p.startupUserAccount;
+        entry.startupUserAccountOption = p.startupUserAccountOption;
         model.addEntry(std::move(entry));
     }
 }
 
 }
 
+bool AppListLoader::queryStartupUserInfo(uint64_t titleId, uint8_t& account, uint8_t& option) {
+#ifdef SWITCHU_MENU
+    StartupUserInfo info = queryStartupUserInfoImpl(titleId);
+    account = info.account;
+    option = info.option;
+    return true;
+#else
+    (void)titleId;
+    account = 1;
+    option = 0;
+    return true;
+#endif
+}
 
 void AppListLoader::fetchApps() {
     char tidBuf[17];
@@ -75,6 +161,9 @@ void AppListLoader::fetchApps() {
         a.id      = tidBuf;
         a.title   = dummyNames[i];
         a.titleId = fakeTid;
+        a.userRequired = true;
+        a.startupUserAccount = 1;
+        a.startupUserAccountOption = 0;
         uint32_t flags = (1u << 0) | (1u << 1) | (1u << 8);
         if (i == 5)  flags |= (1u << 6) | (1u << 7);
         if (i == 10) flags = (1u << 6);
@@ -85,6 +174,12 @@ void AppListLoader::fetchApps() {
     DebugLog::log("[loader] generated %d dummy apps", kDummyCount);
 
 #else
+    if (fetchDaemonCatalog(m_pending)) {
+        DebugLog::log("[loader] fetched %d apps via daemon catalog",
+                      (int)m_pending.size());
+        return;
+    }
+
     NsApplicationRecord records[1024] = {};
     s32 recordCount = 0;
     nsListApplicationRecord(records, 1024, 0, &recordCount);
@@ -108,11 +203,18 @@ void AppListLoader::fetchApps() {
 
         NxTitleCacheApplicationMetadata* meta = nxtcGetApplicationMetadataEntryById(tid);
         if (meta) {
+            StartupUserInfo startup{};
             PendingApp a;
             a.id      = tidBuf;
             a.title   = meta->name ? meta->name : "";
             a.titleId = tid;
             a.viewFlags = vf;
+            a.startupUserKnown = !m_fastStartupUserInfo;
+            if (!m_fastStartupUserInfo)
+                startup = queryStartupUserInfoImpl(tid);
+            a.startupUserAccount = startup.account;
+            a.startupUserAccountOption = startup.option;
+            a.userRequired = requiresInteractiveUserSelection(startup.account, startup.option);
             m_pending.push_back(std::move(a));
             nxtcFreeApplicationMetadata(&meta);
             continue;
@@ -143,10 +245,16 @@ void AppListLoader::fetchApps() {
         a.title   = langEntry->name;
         a.titleId = tid;
         a.viewFlags = vf;
+        a.startupUserKnown = true;
+        a.startupUserAccount = g_controlData.nacp.startup_user_account;
+        a.startupUserAccountOption = g_controlData.nacp.startup_user_account_option;
+        a.userRequired = requiresInteractiveUserSelection(a.startupUserAccount, a.startupUserAccountOption);
         m_pending.push_back(std::move(a));
     }
     nxtcFlushCacheFile();
 #endif
+    DebugLog::log("[loader] fetched %d apps (fast_startup_user=%d)",
+                  (int)m_pending.size(), m_fastStartupUserInfo ? 1 : 0);
 }
 
 

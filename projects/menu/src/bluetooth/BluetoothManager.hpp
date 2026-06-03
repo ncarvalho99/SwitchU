@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstring>
+#include <string>
 #include <switch.h>
 
 namespace bluetooth {
@@ -23,6 +24,7 @@ bool HasDiscoveredChanges();
 Result ConnectAudioDevice(const BtmAudioDevice& device);
 Result DisconnectAudioDevice(const BtmAudioDevice& device);
 Result UnpairAudioDevice(const BtmAudioDevice& device);
+std::string DeviceName(const BtmAudioDevice& device);
 
 void StartDiscovery();
 void StopDiscovery();

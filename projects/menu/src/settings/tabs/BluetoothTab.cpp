@@ -3,6 +3,7 @@
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
 #include <cstdio>
+#include <vector>
 
 namespace {
 
@@ -17,47 +18,6 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, TabbedOverlayScreen& screen) {
     if ((int)t.items.size() > kStaticCount)
         t.items.erase(t.items.begin() + kStaticCount, t.items.end());
 
-    // Connected device section
-    {
-        SettingItem sec;
-        sec.label = i18n.tr("settings.bluetooth.connected_device", "Connected Device");
-        sec.type = ItemType::Section;
-        t.items.push_back(std::move(sec));
-    }
-
-    if (bluetooth::IsAvailable()) {
-        auto connected = bluetooth::GetConnectedAudioDevice();
-        if (bluetooth::IsDeviceValid(connected)) {
-            SettingItem it;
-            it.label = connected.name;
-            it.description = i18n.tr("settings.bluetooth.disconnect", "Disconnect");
-            it.type = ItemType::Action;
-            auto dev = connected;
-            it.onChange = [dev, &screen](SettingItem&) {
-                auto& i = nxui::I18n::instance();
-                screen.requestDialog(
-                    i.tr("settings.bluetooth.device_actions", "Device Actions"),
-                    std::string(dev.name),
-                    {{i.tr("settings.bluetooth.disconnect", "Disconnect"), [dev]() {
-                        bluetooth::DisconnectAudioDevice(dev);
-                    }},
-                    {i.tr("button.cancel", "Cancel"), []() {}}}
-                );
-            };
-            t.items.push_back(std::move(it));
-        } else {
-            SettingItem it;
-            it.label = i18n.tr("settings.bluetooth.no_device_connected", "No device connected");
-            it.type = ItemType::Info;
-            t.items.push_back(std::move(it));
-        }
-    } else {
-        SettingItem it;
-        it.label = i18n.tr("settings.bluetooth.no_device_connected", "No device connected");
-        it.type = ItemType::Info;
-        t.items.push_back(std::move(it));
-    }
-
     // Paired devices section
     {
         SettingItem sec;
@@ -67,6 +27,7 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, TabbedOverlayScreen& screen) {
     }
 
     if (bluetooth::IsAvailable()) {
+        auto connected = bluetooth::GetConnectedAudioDevice();
         auto paired = bluetooth::ListPairedAudioDevices();
         if (paired.empty()) {
             SettingItem it;
@@ -76,21 +37,34 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, TabbedOverlayScreen& screen) {
         } else {
             for (auto& device : paired) {
                 SettingItem it;
-                it.label = device.name;
+                const bool isConnected = bluetooth::IsDeviceValid(connected)
+                    && bluetooth::AddressesEqual(connected.addr, device.addr);
+                it.label = bluetooth::DeviceName(device);
+                it.description = isConnected
+                    ? i18n.tr("settings.bluetooth.connected", "Connected")
+                    : i18n.tr("settings.bluetooth.not_connected", "Not connected");
                 it.type = ItemType::Action;
                 auto dev = device;
-                it.onChange = [dev, &screen](SettingItem&) {
+                it.onChange = [dev, isConnected, &screen](SettingItem&) {
                     auto& i = nxui::I18n::instance();
+                    std::vector<TabbedOverlayScreen::DialogButtonDef> buttons;
+                    if (isConnected) {
+                        buttons.push_back({i.tr("settings.bluetooth.disconnect", "Disconnect"), [dev]() {
+                            bluetooth::DisconnectAudioDevice(dev);
+                        }});
+                    } else {
+                        buttons.push_back({i.tr("settings.bluetooth.connect", "Connect"), [dev]() {
+                            bluetooth::ConnectAudioDevice(dev);
+                        }});
+                    }
+                    buttons.push_back({i.tr("settings.bluetooth.unpair", "Unpair"), [dev]() {
+                        bluetooth::UnpairAudioDevice(dev);
+                    }});
+                    buttons.push_back({i.tr("button.cancel", "Cancel"), []() {}});
                     screen.requestDialog(
                         i.tr("settings.bluetooth.device_actions", "Device Actions"),
-                        std::string(dev.name),
-                        {{i.tr("settings.bluetooth.connect", "Connect"), [dev]() {
-                            bluetooth::ConnectAudioDevice(dev);
-                        }},
-                        {i.tr("settings.bluetooth.unpair", "Unpair"), [dev]() {
-                            bluetooth::UnpairAudioDevice(dev);
-                        }},
-                        {i.tr("button.cancel", "Cancel"), []() {}}}
+                        bluetooth::DeviceName(dev),
+                        std::move(buttons)
                     );
                 };
                 t.items.push_back(std::move(it));
@@ -127,14 +101,14 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, TabbedOverlayScreen& screen) {
             auto discovered = bluetooth::ListDiscoveredAudioDevices();
             for (auto& device : discovered) {
                 SettingItem it;
-                it.label = device.name;
+                it.label = bluetooth::DeviceName(device);
                 it.type = ItemType::Action;
                 auto dev = device;
                 it.onChange = [dev, &screen](SettingItem&) {
                     auto& i = nxui::I18n::instance();
                     screen.requestDialog(
                         i.tr("settings.bluetooth.device_actions", "Device Actions"),
-                        std::string(dev.name),
+                        bluetooth::DeviceName(dev),
                         {{i.tr("settings.bluetooth.pair_connect", "Pair & Connect"), [dev]() {
                             bluetooth::ConnectAudioDevice(dev);
                         }},

@@ -7,10 +7,24 @@
 GlossyIcon::GlossyIcon() {
     m_animScale.setImmediate(0.f);
     m_appearOpacity.setImmediate(0.f);
+    m_focusScale.setImmediate(1.f);
+    m_focusGlow.setImmediate(0.f);
     setCornerRadius(16.f);
     setPadding(8.f);
     setLiquidGlassEnabled(true);
     setBlurEnabled(false);
+}
+
+void GlossyIcon::onFocusGained() {
+    m_focused = true;
+    m_focusScale.set(1.075f, 0.18f, nxui::Easing::outBack);
+    m_focusGlow.set(1.f, 0.16f, nxui::Easing::outCubic);
+}
+
+void GlossyIcon::onFocusLost() {
+    m_focused = false;
+    m_focusScale.set(1.f, 0.20f, nxui::Easing::outCubic);
+    m_focusGlow.set(0.f, 0.16f, nxui::Easing::outCubic);
 }
 
 void GlossyIcon::startAppear(float delay) {
@@ -38,18 +52,28 @@ void GlossyIcon::onContentUpdate(float dt) {
             m_appearOpacity.set(1.f, 0.3f, nxui::Easing::outExpo);
         }
     }
-    if (m_suspended) {
-        m_suspendPulse += dt * 2.2f;
-    }
+    m_suspendPulse += dt * 2.2f;
 }
 
 void GlossyIcon::onRender(nxui::Renderer& ren) {
     float externalScale = scale();
-    float s = m_animScale.value() * externalScale;
+    float focusS = m_focusScale.value();
+    float s = m_animScale.value() * externalScale * focusS;
     float a = m_appearOpacity.value();
     if (s < 0.01f || a < 0.01f) return;
 
-    setScale(s);
+    nxui::Rect savedRect = m_rect;
+    nxui::Rect drawRect = savedRect;
+    if (std::abs(s - 1.f) > 0.001f) {
+        float w = savedRect.width * s;
+        float h = savedRect.height * s;
+        drawRect.x += (savedRect.width - w) * 0.5f;
+        drawRect.y += (savedRect.height - h) * 0.5f;
+        drawRect.width = w;
+        drawRect.height = h;
+        m_rect = drawRect;
+    }
+    setScale(1.f);
     float savedShade = liquidGlassShade();
     setLiquidGlassShade(m_notLaunchable ? 0.58f : 0.0f);
 
@@ -59,19 +83,19 @@ void GlossyIcon::onRender(nxui::Renderer& ren) {
     nxui::GlassWidget::onRender(ren);
 
     m_opacity = savedOp;
+    m_rect = savedRect;
     setLiquidGlassShade(savedShade);
     setScale(externalScale);
 
-    nxui::Rect r = m_rect;
-    if (s < 1.f) {
-        float w = r.width  * s;
-        float h = r.height * s;
-        r.x += (r.width  - w) * 0.5f;
-        r.y += (r.height - h) * 0.5f;
-        r.width  = w;
-        r.height = h;
-    }
+    nxui::Rect r = drawRect;
     float rad = cornerRadius();
+
+    float focusGlow = m_focusGlow.value();
+    if (focusGlow > 0.01f && s > 0.5f) {
+        float breathe = 0.5f + 0.5f * std::sin(m_suspendPulse * 1.8f + 0.4f);
+        nxui::Color focusColor = nxui::Color(0.65f, 0.90f, 1.f, (0.08f + 0.04f * breathe) * focusGlow * a);
+        ren.drawRoundedRect(r.expanded(7.f * focusGlow), focusColor, rad + 7.f);
+    }
 
     if (m_isGameCard && !m_notLaunchable && s > 0.5f) {
         float badgeW = 66.f * s;
@@ -115,7 +139,8 @@ void GlossyIcon::onRender(nxui::Renderer& ren) {
         float badgeY = r.y + r.height - badgeSize - 4.f * s;
 
         nxui::Vec2 badgeCenter = { badgeX + badgeSize * 0.5f, badgeY + badgeSize * 0.5f };
-        ren.drawCircle(badgeCenter, badgeSize * 0.5f, nxui::Color(0.1f, 0.1f, 0.1f, 0.85f * a), 16);
+        ren.drawCircle(badgeCenter, badgeSize * 0.5f,
+                       nxui::Color(0.1f, 0.1f, 0.1f, 0.85f * a), 16);
 
         float triH = badgeSize * 0.45f;
         float triW = triH * 0.85f;
@@ -152,4 +177,3 @@ void GlossyIcon::onContentRender(nxui::Renderer& ren) {
     }
     ren.drawTextureRounded(m_tex, texRect, rad - 3.f, iconTint);
 }
-
