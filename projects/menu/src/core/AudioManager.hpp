@@ -41,6 +41,8 @@ public:
     void loadSfx(Sfx id, const std::string& path);
     void clearSfx();
     void playSfx(Sfx id);
+    void loadNamedSfx(const std::string& id, const std::string& path, float volumeScale = 1.f);
+    void playNamedSfx(const std::string& id);
     void setSfxVolume(float vol);
     float sfxVolume() const { return m_sfxVolume; }
 
@@ -57,5 +59,7 @@ private:
 
     std::mutex m_sfxMutex;
     std::unordered_map<int, Mix_Chunk*> m_sfx;
+    std::unordered_map<std::string, Mix_Chunk*> m_namedSfx;
+    std::unordered_map<std::string, float> m_namedSfxVolumeScales;
     float m_sfxVolume = 0.7f;
 };

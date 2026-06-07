@@ -456,6 +456,7 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
                     Result rc = nsDeleteApplicationCompletely(app.titleId);
                     if (R_SUCCEEDED(rc)) {
                         screen.requestToast(i18n.tr("settings.storage.uninstall_success", "Uninstalled successfully."), 2.8f);
+                        screen.rebuildCurrentTab();
                     } else {
                         screen.requestDialog(
                             i18n.tr("settings.storage.uninstall_failed_title", "Uninstall Failed"),

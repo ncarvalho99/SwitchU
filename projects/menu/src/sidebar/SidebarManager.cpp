@@ -190,7 +190,7 @@ void SidebarManager::loadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,
 
         nxui::Texture* idleTex = def.useFirstFrame ? nullptr : staticTex;
         tryLoadAnimation(gpu, ren, resolveAsset(def.webpFile), btn, idleTex);
-        btn->setIcon(idleTex ? idleTex : nullptr);
+        btn->setIcon(idleTex ? idleTex : staticTex);
     }
 
     m_loadedAssetsBase = assetsBase;

@@ -43,6 +43,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "soundPreset", soundPreset);
     readJsonOpt(j, "defaultProfileEnabled", defaultProfileEnabled);
     readJsonOpt(j, "defaultProfileUid", defaultProfileUid);
+    readJsonOpt(j, "tutorialCompleted", tutorialCompleted);
     readJsonOpt(j, "themePreset", themePreset);
     readJsonOpt(j, "themeMode", themeMode);
     readJsonOpt(j, "accentH", accentH);
@@ -67,7 +68,7 @@ bool AppConfig::load() {
     if (uiLanguageOverride.empty()) uiLanguageOverride = "auto";
     if (soundPreset.empty()) soundPreset = "wiiu";
     if (!defaultProfileEnabled) defaultProfileUid.clear();
-    if (themePreset.empty()) themePreset = "Default Dark";
+    if (themePreset.empty()) themePreset = "Default Light";
 
     auto clampHSL = [](float& v) { if (v < 0.f) v = -1.f; else if (v > 1.f) v = 1.f; };
     clampHSL(accentH); clampHSL(accentS); clampHSL(accentL);
@@ -92,6 +93,7 @@ bool AppConfig::save() const {
     j["soundPreset"] = soundPreset;
     j["defaultProfileEnabled"] = defaultProfileEnabled;
     j["defaultProfileUid"] = defaultProfileEnabled ? defaultProfileUid : std::string();
+    j["tutorialCompleted"] = tutorialCompleted;
     j["themePreset"] = themePreset;
     j["themeMode"] = themeMode;
 

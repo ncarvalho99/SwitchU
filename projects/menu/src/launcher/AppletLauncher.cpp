@@ -50,16 +50,13 @@ void AppletLauncher::launchMiiEditor() {
 }
 
 void AppletLauncher::launchControllerPairing() {
-    DebugLog::log("[launcher] Controller pairing (direct)");
-    HidLaControllerSupportArg arg;
-    hidLaCreateControllerSupportArg(&arg);
-    arg.hdr.player_count_max = 8;
-    arg.hdr.enable_single_mode = false;
-    Result rc = hidLaShowControllerSupportForSystem(nullptr, &arg, true);
-    if (R_SUCCEEDED(rc))
-        DebugLog::log("[launcher] Controller pairing done");
-    else
-        DebugLog::log("[launcher] Controller direct FAIL: 0x%X", rc);
+    DebugLog::log("[launcher] requesting Controller pairing via daemon");
+    Result rc = switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::LaunchControllers);
+    DebugLog::log("[launcher] Controller pairing rc=0x%X", rc);
+    if (R_SUCCEEDED(rc)) {
+        if (m_cb.playSfxModalHide) m_cb.playSfxModalHide();
+        if (m_cb.requestExit)      m_cb.requestExit();
+    }
 }
 
 void AppletLauncher::launchNetConnect() {

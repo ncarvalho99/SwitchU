@@ -34,6 +34,9 @@ void AudioManager::shutdown() {
     m_tracks.clear();
     for (auto& [id, chunk] : m_sfx) Mix_FreeChunk(chunk);
     m_sfx.clear();
+    for (auto& [id, chunk] : m_namedSfx) Mix_FreeChunk(chunk);
+    m_namedSfx.clear();
+    m_namedSfxVolumeScales.clear();
 }
 
 void AudioManager::loadTrack(const std::string& path) {
@@ -113,6 +116,9 @@ void AudioManager::clearSfx() {
     Mix_HaltChannel(-1);
     for (auto& [id, chunk] : m_sfx) Mix_FreeChunk(chunk);
     m_sfx.clear();
+    for (auto& [id, chunk] : m_namedSfx) Mix_FreeChunk(chunk);
+    m_namedSfx.clear();
+    m_namedSfxVolumeScales.clear();
 }
 
 void AudioManager::playSfx(Sfx id) {
@@ -123,11 +129,43 @@ void AudioManager::playSfx(Sfx id) {
     }
 }
 
+void AudioManager::loadNamedSfx(const std::string& id, const std::string& path, float volumeScale) {
+    Mix_Chunk* chunk = Mix_LoadWAV(path.c_str());
+    if (!chunk) {
+        std::fprintf(stderr, "[Audio] Failed to load named SFX %s: %s\n", path.c_str(), Mix_GetError());
+        return;
+    }
+    Mix_VolumeChunk(chunk, (int)(m_sfxVolume * volumeScale * MIX_MAX_VOLUME));
+    std::lock_guard<std::mutex> lk(m_sfxMutex);
+    auto it = m_namedSfx.find(id);
+    if (it != m_namedSfx.end()) {
+        Mix_FreeChunk(it->second);
+        it->second = chunk;
+    } else {
+        m_namedSfx[id] = chunk;
+    }
+    m_namedSfxVolumeScales[id] = volumeScale;
+}
+
+void AudioManager::playNamedSfx(const std::string& id) {
+    std::lock_guard<std::mutex> lk(m_sfxMutex);
+    auto it = m_namedSfx.find(id);
+    if (it != m_namedSfx.end()) {
+        Mix_PlayChannel(-1, it->second, 0);
+    }
+}
+
 void AudioManager::setSfxVolume(float vol) {
     std::lock_guard<std::mutex> lk(m_sfxMutex);
     m_sfxVolume = vol;
     for (auto& [id, chunk] : m_sfx) {
         Mix_VolumeChunk(chunk, (int)(vol * MIX_MAX_VOLUME));
     }
+    for (auto& [id, chunk] : m_namedSfx) {
+        float scale = 1.f;
+        auto it = m_namedSfxVolumeScales.find(id);
+        if (it != m_namedSfxVolumeScales.end())
+            scale = it->second;
+        Mix_VolumeChunk(chunk, (int)(vol * scale * MIX_MAX_VOLUME));
+    }
 }
-

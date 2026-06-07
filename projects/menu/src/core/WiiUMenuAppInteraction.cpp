@@ -158,6 +158,7 @@ bool WiiUMenuApp::commitEditModePlacement() {
         m_iconStreamer.swapIndices(from, target);
         m_grid->swapSlots(from, target);
         m_editSourceIndex = target;
+        m_iconStreamer.setPinnedIndex(m_editSourceIndex);
         m_layoutDirty = true;
     }
 
@@ -168,6 +169,10 @@ bool WiiUMenuApp::commitEditModePlacement() {
         m_iconStreamer.onPageChanged(newPage, m_grid->iconsPerPage(),
                                      app().gpu(), app().renderer(),
                                      m_grid->allIcons());
+    }
+    for (auto* icon : m_grid->pageIcons()) {
+        if (icon)
+            icon->forceVisible();
     }
 
     if (auto* cur = m_grid->focusManager().current())
@@ -246,12 +251,17 @@ bool WiiUMenuApp::moveFocusedIcon(nxui::FocusDirection dir) {
     m_iconStreamer.swapIndices(from, target);
     m_grid->swapSlots(from, target);
     m_editSourceIndex = target;
+    m_iconStreamer.setPinnedIndex(m_editSourceIndex);
     m_grid->focusGlobalIndex(target);
 
     int newPage = m_grid->currentPage();
     m_iconStreamer.onPageChanged(newPage, m_grid->iconsPerPage(),
                                  app().gpu(), app().renderer(),
                                  m_grid->allIcons());
+    for (auto* icon : m_grid->pageIcons()) {
+        if (icon)
+            icon->forceVisible();
+    }
 
     if (auto* cur = m_grid->focusManager().current())
         focusManager().setFocus(cur);

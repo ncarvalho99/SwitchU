@@ -18,6 +18,30 @@ void Application::setActivity(std::unique_ptr<Activity> activity) {
     if (m_activity) m_activity->m_app = this;
 }
 
+void Application::requestActivity(std::unique_ptr<Activity> activity) {
+    m_pendingActivity = std::move(activity);
+    if (m_pendingActivity)
+        m_pendingActivity->m_app = this;
+}
+
+bool Application::applyPendingActivity() {
+    if (!m_pendingActivity)
+        return true;
+
+    AnimationManager::instance().clear();
+    if (m_activity)
+        m_activity->onDestroy();
+
+    m_activity = std::move(m_pendingActivity);
+    m_navDebounce = 0;
+
+    if (m_activity) {
+        m_activity->m_rootBox->setRect({0, 0, (float)m_gpu.width(), (float)m_gpu.height()});
+        return m_activity->onCreate();
+    }
+    return true;
+}
+
 bool Application::initialize() {
     if (!m_gpu.initialize()) return false;
 
@@ -158,6 +182,10 @@ void Application::run() {
 
         if (m_activity) {
             m_activity->onUpdate(dt);
+            if (!applyPendingActivity()) {
+                m_running = false;
+                break;
+            }
             m_activity->m_rootBox->update(dt);
 
             if (m_renderEnabled) {
@@ -186,6 +214,7 @@ void Application::shutdown() {
         m_activity->onDestroy();
         m_activity.reset();
     }
+    m_pendingActivity.reset();
     m_renderer.reset();
     m_gpu.shutdown();
 }

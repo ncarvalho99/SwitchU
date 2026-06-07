@@ -238,7 +238,7 @@ std::string sourceLabel(ThemePresetSource source) {
 }
 
 std::string defaultThemeRef() {
-    return "builtin:Default Dark";
+    return "builtin:Default Light";
 }
 
 } // namespace
@@ -1226,7 +1226,7 @@ void WiiUMenuApp::deletePreset(const std::string& presetId) {
 
         ThemePreset* fallback = findPresetPtr(defaultThemeRef());
         if (!fallback)
-            fallback = findPresetPtr("Default Dark");
+            fallback = findPresetPtr("Default Light");
         if (fallback) {
             m_activePresetName = fallback->id.empty() ? fallback->name : fallback->id;
             m_config.themePreset = m_activePresetName;

@@ -11,8 +11,9 @@ struct AppConfig {
     std::string soundPreset = "wiiu";
     bool  defaultProfileEnabled = false;
     std::string defaultProfileUid;
+    bool  tutorialCompleted = false;
 
-    std::string themePreset = "Default Dark";
+    std::string themePreset = "Default Light";
     std::string themeMode = "";
     float accentH = -1.f, accentS = -1.f, accentL = -1.f;
     float bgH     = -1.f, bgS     = -1.f, bgL     = -1.f;

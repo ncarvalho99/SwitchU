@@ -109,6 +109,7 @@ extern "C" void __appExit(void) {
 static std::atomic<bool> g_running{true};
 static std::atomic<bool> g_eventRefreshPending{false};
 static std::atomic<bool> g_eventGcMountFailure{false};
+static std::atomic<bool> g_batteryRefreshPending{true};
 static std::atomic<Result> g_eventGcMountRc{0};
 static bool g_initialEventSkipped = false;
 static int  g_eventPollCountdown  = 0;
@@ -138,6 +139,7 @@ enum class ActionType : uint32_t {
     ResumeApplication,
     OpenAlbum,
     OpenMiiEditor,
+    OpenControllers,
     OpenNetConnect,
     OpenUserPage,
 };
@@ -151,6 +153,9 @@ struct Action {
 static std::vector<Action> g_actionQueue;
 static bool g_foregroundAppletActive = false;
 static bool g_pendingForegroundAppletHome = false;
+static uint8_t g_lastBatteryPercent = 0xFF;
+static PsmChargerType g_lastChargerType = (PsmChargerType)0xFF;
+static int g_batteryPollCountdown = 0;
 
 static bool shouldDeferViewPolling() {
     return daemon::app::isRunning() &&
@@ -366,6 +371,50 @@ static void pushNotification(smi::MenuMessage msg,
     } else {
         switchu::FileLog::log("[notify] push FAIL (alloc) msg=%u", (unsigned)msg);
     }
+}
+
+static bool queryBatteryStatus(uint8_t& percent, PsmChargerType& chargerType) {
+    u32 charge = 100;
+    Result chargeRc = psmGetBatteryChargePercentage(&charge);
+    if (R_FAILED(chargeRc)) {
+        switchu::FileLog::log("[battery] psmGetBatteryChargePercentage FAIL: 0x%X", chargeRc);
+        return false;
+    }
+
+    PsmChargerType ct = PsmChargerType_Unconnected;
+    Result chargerRc = psmGetChargerType(&ct);
+    if (R_FAILED(chargerRc)) {
+        switchu::FileLog::log("[battery] psmGetChargerType FAIL: 0x%X", chargerRc);
+        ct = PsmChargerType_Unconnected;
+    }
+
+    if (charge > 100)
+        charge = 100;
+    percent = static_cast<uint8_t>(charge);
+    chargerType = ct;
+    return true;
+}
+
+static void pushBatteryStatusNotification(bool force) {
+    if (!daemon::menu_la::isActive())
+        return;
+
+    uint8_t percent = 0;
+    PsmChargerType chargerType = PsmChargerType_Unconnected;
+    if (!queryBatteryStatus(percent, chargerType))
+        return;
+
+    if (!force && percent == g_lastBatteryPercent && chargerType == g_lastChargerType)
+        return;
+
+    g_lastBatteryPercent = percent;
+    g_lastChargerType = chargerType;
+
+    const uint32_t payload = smi::makeBatteryPayload(percent, static_cast<uint32_t>(chargerType));
+    switchu::FileLog::log("[battery] notify percent=%u charger=%u",
+                          (unsigned)percent,
+                          (unsigned)chargerType);
+    pushNotification(smi::MenuMessage::BatteryStatusChanged, 0, payload);
 }
 
 static void logHomeState(const char* source, const char* stage) {
@@ -586,6 +635,7 @@ static void handleAppletMessages() {
 
         case 26:
         switchu::FileLog::log("[ae] -> Wakeup");
+        g_batteryRefreshPending.store(true);
         if (daemon::app::isRunning() && !daemon::menu_la::isActive()) {
             Result rc = daemon::app::resume();
             if (R_FAILED(rc)) {
@@ -787,8 +837,12 @@ static void handleMenuCommand() {
     }
 
     case smi::SystemMessage::LaunchControllers:
-        switchu::FileLog::log("[smi] LaunchControllers ignored while menu active");
-        result = MAKERESULT(Module_Libnx, 0xFC);
+        {
+            Action action{};
+            action.type = ActionType::OpenControllers;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued Controller launch (actions=%zu)", g_actionQueue.size());
         break;
 
     case smi::SystemMessage::EnterSleep:
@@ -826,6 +880,7 @@ static void handleMenuCommand() {
 
     case smi::SystemMessage::MenuReady:
         switchu::FileLog::log("[smi] menu ready");
+        g_batteryRefreshPending.store(true);
         break;
 
     case smi::SystemMessage::MenuClosing:
@@ -891,6 +946,15 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] Mii Editor FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after Mii Editor");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+
+        case ActionType::OpenControllers: {
+            Result rc = launchControllerPairing();
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] Controllers FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after Controllers");
             daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
             return true;
         }
@@ -988,6 +1052,17 @@ static void mainLoop() {
                              (uint32_t)g_eventGcMountRc.load());
         }
     }
+    if (g_batteryRefreshPending.exchange(false)) {
+        pushBatteryStatusNotification(true);
+        g_batteryPollCountdown = 50;
+    } else if (daemon::menu_la::isActive()) {
+        if (g_batteryPollCountdown > 0)
+            --g_batteryPollCountdown;
+        if (g_batteryPollCountdown <= 0) {
+            pushBatteryStatusNotification(false);
+            g_batteryPollCountdown = 50;
+        }
+    }
 
     if (daemon::menu_la::checkFinished()) {
         switchu::FileLog::log("[main] menu exited (reason=%d)",
@@ -1045,13 +1120,32 @@ static void eventManagerThreadFunc(void* arg) {
         switchu::FileLog::log("[event] GameCardMountFailureEvent not supported on this firmware");
     }
 
+    PsmSession psmSession{};
+    bool hasPsmEvent = false;
+    rc = psmBindStateChangeEvent(&psmSession, true, true, true);
+    if (R_SUCCEEDED(rc)) {
+        hasPsmEvent = true;
+        switchu::FileLog::log("[event] registered PSM state change event");
+    } else {
+        switchu::FileLog::log("[event] psmBindStateChangeEvent FAIL: 0x%X", rc);
+    }
+
     while (g_eventRunning.load()) {
         s32 evIdx = -1;
         Result waitRc;
-        if (hasGcEvent) {
-                waitRc = waitMulti(&evIdx, 1'000'000'000ULL,
+        if (hasGcEvent && hasPsmEvent) {
+            waitRc = waitMulti(&evIdx, 1'000'000'000ULL,
+                waiterForEvent(&recordEvent),
+                waiterForEvent(&gcMountFailEvent),
+                waiterForEvent(&psmSession.StateChangeEvent));
+        } else if (hasGcEvent) {
+            waitRc = waitMulti(&evIdx, 1'000'000'000ULL,
                 waiterForEvent(&recordEvent),
                 waiterForEvent(&gcMountFailEvent));
+        } else if (hasPsmEvent) {
+            waitRc = waitMulti(&evIdx, 1'000'000'000ULL,
+                waiterForEvent(&recordEvent),
+                waiterForEvent(&psmSession.StateChangeEvent));
         } else {
             waitRc = waitMulti(&evIdx, 1'000'000'000ULL,
                 waiterForEvent(&recordEvent));
@@ -1074,6 +1168,11 @@ static void eventManagerThreadFunc(void* arg) {
 
             g_eventGcMountRc.store(failRc);
             g_eventGcMountFailure.store(true);
+        } else if ((hasGcEvent && hasPsmEvent && evIdx == 2) ||
+                   (!hasGcEvent && hasPsmEvent && evIdx == 1)) {
+            eventClear(&psmSession.StateChangeEvent);
+            switchu::FileLog::log("[event] PSM state change fired");
+            g_batteryRefreshPending.store(true);
         }
 
         svcSleepThread(100'000ULL);
@@ -1081,6 +1180,7 @@ static void eventManagerThreadFunc(void* arg) {
 
     eventClose(&recordEvent);
     if (hasGcEvent) eventClose(&gcMountFailEvent);
+    if (hasPsmEvent) psmUnbindStateChangeEvent(&psmSession);
     switchu::FileLog::log("[event] thread exiting");
 }
 

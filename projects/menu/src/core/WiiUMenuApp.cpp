@@ -220,6 +220,10 @@ WiiUMenuApp::~WiiUMenuApp() {
     rootBox().clearChildren();
 }
 
+void WiiUMenuApp::setTutorialStartupFade(bool enabled) {
+    m_tutorialStartupFade = enabled;
+}
+
 #ifdef SWITCHU_MENU
 void WiiUMenuApp::setStartupStatus(uint64_t suspendedTitleId, bool appRunning) {
     m_launcher.setStartupStatus(suspendedTitleId, appRunning);
@@ -844,11 +848,11 @@ void WiiUMenuApp::buildGrid() {
     m_activePresetName = m_config.themePreset;
     ThemePreset* preset = findPresetPtr(m_activePresetName);
     if (!preset) {
-        m_activePresetName = "builtin:Default Dark";
+        m_activePresetName = "builtin:Default Light";
         preset = findPresetPtr(m_activePresetName);
     }
     if (!preset) {
-        m_activePresetName = "Default Dark";
+        m_activePresetName = "Default Light";
         preset = findPresetPtr(m_activePresetName);
     }
 
@@ -985,6 +989,8 @@ void WiiUMenuApp::buildGrid() {
     } else {
         m_grid->startAppearAnimation();
     }
+    if (m_tutorialStartupFade)
+        m_tutorialStartupFadeTimer = kTutorialStartupFadeDur;
 
     SidebarManager::Actions sidebarActions;
 #ifdef SWITCHU_MENU
@@ -1407,6 +1413,8 @@ void WiiUMenuApp::onUpdate(float dt) {
 
     if (m_returnFadeTimer > 0.f)
         m_returnFadeTimer = std::max(0.f, m_returnFadeTimer - dt);
+    if (m_tutorialStartupFadeTimer > 0.f)
+        m_tutorialStartupFadeTimer = std::max(0.f, m_tutorialStartupFadeTimer - dt);
 
     syncThemePackageTransfer();
 
@@ -1505,6 +1513,16 @@ void WiiUMenuApp::onUpdate(float dt) {
                 }
                 break;
             }
+            case switchu::smi::MenuMessage::BatteryStatusChanged:
+                if (m_battery) {
+                    const uint32_t percent = switchu::smi::batteryPayloadPercentage(notif.payload);
+                    const bool charging = switchu::smi::batteryPayloadCharging(notif.payload);
+                    m_battery->setBatteryStatus(percent, charging);
+                    DebugLog::log("[battery] daemon status percent=%u charging=%d",
+                                  (unsigned)percent,
+                                  charging ? 1 : 0);
+                }
+                break;
             default:
                 break;
             }
@@ -1813,6 +1831,11 @@ void WiiUMenuApp::onRender(nxui::Renderer& ren) {
     if (m_returnFadeTimer > 0.f) {
         float alpha = m_returnFadeTimer / kReturnFadeInDur;
         ren.drawRect({0, 0, 1280, 720}, nxui::Color(0, 0, 0, alpha));
+    }
+    if (m_tutorialStartupFadeTimer > 0.f) {
+        float t = std::clamp(m_tutorialStartupFadeTimer / kTutorialStartupFadeDur, 0.f, 1.f);
+        float alpha = nxui::Easing::outCubic(t);
+        ren.drawRect({0, 0, 1280, 720}, nxui::Color(1.f, 1.f, 1.f, alpha));
     }
 
     if (m_touchHitIndex >= 0 && !m_touchOnFocused && app().input().isTouching()) {

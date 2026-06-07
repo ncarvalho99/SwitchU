@@ -56,6 +56,8 @@ public:
     WiiUMenuApp();
     ~WiiUMenuApp();
 
+    void setTutorialStartupFade(bool enabled);
+
 #ifdef SWITCHU_MENU
     void setStartupStatus(uint64_t suspendedTitleId, bool appRunning);
 #endif
@@ -143,9 +145,9 @@ private:
     GridModel    m_model;
     nxui::Theme  m_theme;
 
-    std::string              m_activePresetName = "Default Dark";
+    std::string              m_activePresetName = "Default Light";
     ThemeColorSet            m_activeColors;
-    nxui::ThemeMode          m_activeMode = nxui::ThemeMode::Dark;
+    nxui::ThemeMode          m_activeMode = nxui::ThemeMode::Light;
     std::vector<ThemePreset> m_allPresets;
     ThemePreset              m_effectivePreset;
 
@@ -246,10 +248,13 @@ private:
     int m_themeRenderDebugFrames = 0;
 
     float m_returnFadeTimer = 0.f;
+    float m_tutorialStartupFadeTimer = 0.f;
+    bool  m_tutorialStartupFade = false;
     bool m_hintPanelInitialized = false;
     nxui::AnimatedFloat m_hintPanelW{0.f};
     nxui::AnimatedFloat m_hintPanelH{0.f};
     nxui::AnimatedFloat m_hintContentReveal{1.f};
     std::string m_hintSignature;
     static constexpr float kReturnFadeInDur = 0.22f;
+    static constexpr float kTutorialStartupFadeDur = 0.34f;
 };

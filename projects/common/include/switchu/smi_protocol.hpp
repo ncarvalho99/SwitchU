@@ -20,6 +20,7 @@ enum class MenuMessage : uint32_t {
     WakeUp                =  7,
     GameCardMountFailure  =  8,
     AppViewFlagsUpdate    =  9,
+    BatteryStatusChanged  = 10,
 };
 
 enum class SystemMessage : uint32_t {
@@ -111,6 +112,29 @@ struct DaemonNotification {
     uint32_t  payload;
     uint32_t  _pad;
 };
+
+static constexpr uint32_t kBatteryPercentMask  = 0xFF;
+static constexpr uint32_t kBatteryChargerShift = 8;
+static constexpr uint32_t kBatteryChargerMask  = 0xFF << kBatteryChargerShift;
+
+inline uint32_t makeBatteryPayload(uint32_t percentage, uint32_t chargerType) {
+    if (percentage > 100)
+        percentage = 100;
+    return (percentage & kBatteryPercentMask)
+        | ((chargerType & 0xFF) << kBatteryChargerShift);
+}
+
+inline uint32_t batteryPayloadPercentage(uint32_t payload) {
+    return payload & kBatteryPercentMask;
+}
+
+inline uint32_t batteryPayloadChargerType(uint32_t payload) {
+    return (payload & kBatteryChargerMask) >> kBatteryChargerShift;
+}
+
+inline bool batteryPayloadCharging(uint32_t payload) {
+    return batteryPayloadChargerType(payload) != 0;
+}
 
 enum class PrivateServiceCmd : uint32_t {
     Initialize     = 0,

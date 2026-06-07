@@ -25,6 +25,9 @@ public:
     /// Attach the main activity. Must be called before initialize().
     void setActivity(std::unique_ptr<Activity> activity);
 
+    /// Queue an activity change from inside the main loop.
+    void requestActivity(std::unique_ptr<Activity> activity);
+
     /// Initialise GPU, Renderer, Input, then call activity->onCreate().
     bool initialize();
 
@@ -50,12 +53,14 @@ public:
 
 private:
     void dispatchInput();
+    bool applyPendingActivity();
 
     GpuDevice  m_gpu;
     std::unique_ptr<Renderer> m_renderer;
     Input      m_input;
 
     std::unique_ptr<Activity> m_activity;
+    std::unique_ptr<Activity> m_pendingActivity;
     bool m_running = true;
     bool m_renderEnabled = true;
     int  m_navDebounce = 0;
