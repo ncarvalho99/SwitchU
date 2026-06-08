@@ -9,14 +9,15 @@
 #include <switchu/ns_ext.hpp>
 #include <switchu/file_log.hpp>
 #include "app_manager.hpp"
+#include "ecs.hpp"
 #include "menu_launcher.hpp"
-#include "ipc_server.hpp"
 #include <cstring>
 #include <atomic>
 #include <vector>
 #include <string>
 #include <utility>
 #include <algorithm>
+#include <cstdint>
 #include <sys/stat.h>
 
 using namespace switchu;
@@ -32,6 +33,7 @@ extern "C" void __appInit(void) {
     Result rc;
 
     svcOutputDebugString("[SwitchU-daemon] __appInit start", 34);
+    daemon::initializeExternalContentAllocator();
 
     rc = smInitialize();
     if (R_FAILED(rc)) {
@@ -114,6 +116,8 @@ static std::atomic<Result> g_eventGcMountRc{0};
 static bool g_initialEventSkipped = false;
 static int  g_eventPollCountdown  = 0;
 static int  g_eventPollsRemaining = 0;
+static int  g_menuRelaunchCooldown = 0;
+static int  g_menuFastExitCount = 0;
 static s32      g_lastRecordCount = 0;
 static uint64_t g_lastRecordTids[1024] = {};
 static uint32_t g_lastViewFlags[1024]  = {};
@@ -125,6 +129,7 @@ struct DaemonAppCatalogEntry {
     uint8_t startupUserAccount = 1;
     uint8_t startupUserAccountOption = 0;
     std::string name;
+    std::vector<uint8_t> icon;
 };
 
 static std::vector<DaemonAppCatalogEntry> g_appCatalog;
@@ -180,8 +185,18 @@ static bool getCatalogNameFromControlData(const NacpStruct& nacp, std::string& o
     if (!langEntry || langEntry->name[0] == '\0')
         return false;
 
-    outName = langEntry->name;
+    const size_t len = strnlen(langEntry->name, sizeof(langEntry->name));
+    if (len == 0)
+        return false;
+    outName.assign(langEntry->name, len);
     return true;
+}
+
+static bool assignCString(std::string& out, const char* value) {
+    if (!value || value[0] == '\0')
+        return false;
+    out.assign(value, strnlen(value, 0x400));
+    return !out.empty();
 }
 
 static bool writeAppCatalogFile() {
@@ -202,7 +217,7 @@ static bool writeAppCatalogFile() {
         smi::AppEntryHeader eh{};
         eh.title_id = ent.titleId;
         eh.name_len = static_cast<uint32_t>(ent.name.size());
-        eh.icon_data_len = 0;
+        eh.icon_data_len = static_cast<uint32_t>(ent.icon.size());
         eh.view_flags = ent.viewFlags;
         eh.startup_user_account = ent.startupUserAccount;
         eh.startup_user_account_option = ent.startupUserAccountOption;
@@ -211,6 +226,8 @@ static bool writeAppCatalogFile() {
         ok = std::fwrite(&eh, sizeof(eh), 1, f) == 1;
         if (ok && eh.name_len > 0)
             ok = std::fwrite(ent.name.data(), 1, eh.name_len, f) == eh.name_len;
+        if (ok && eh.icon_data_len > 0)
+            ok = std::fwrite(ent.icon.data(), 1, eh.icon_data_len, f) == eh.icon_data_len;
     }
 
     std::fclose(f);
@@ -268,8 +285,7 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
 
         NxTitleCacheApplicationMetadata* meta = nxtcGetApplicationMetadataEntryById(tid);
         if (meta) {
-            if (meta->name && meta->name[0] != '\0')
-                ent.name = meta->name;
+            assignCString(ent.name, meta->name);
             nxtcFreeApplicationMetadata(&meta);
         }
 
@@ -278,7 +294,7 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
                                                        tid, &g_catalogControlData,
                                                        sizeof(g_catalogControlData),
                                                        &controlSize);
-        if (R_SUCCEEDED(controlRc)) {
+        if (R_SUCCEEDED(controlRc) && controlSize >= sizeof(NacpStruct)) {
             ent.startupUserKnown = true;
             ent.startupUserAccount = g_catalogControlData.nacp.startup_user_account;
             ent.startupUserAccountOption = g_catalogControlData.nacp.startup_user_account_option;
@@ -288,12 +304,13 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
 
             if (controlSize > sizeof(NacpStruct)) {
                 const size_t iconSize = controlSize - sizeof(NacpStruct);
-                nxtcAddEntry(tid, &g_catalogControlData.nacp, iconSize,
-                             iconSize > 0 ? g_catalogControlData.icon : nullptr, false);
+                ent.icon.assign(g_catalogControlData.icon,
+                                g_catalogControlData.icon + iconSize);
             }
+
         } else {
-            switchu::FileLog::log("[catalog] control data unavailable tid=0x%016lX rc=0x%X",
-                                  tid, controlRc);
+            switchu::FileLog::log("[catalog] control data unavailable tid=0x%016lX rc=0x%X size=%zu",
+                                  tid, controlRc, controlSize);
         }
 
         if (!ent.name.empty())
@@ -988,7 +1005,6 @@ static bool consumeOneAction() {
     if (g_actionQueue.empty())
         return false;
 
-    switchu::FileLog::log("[action] queue has %zu actions", g_actionQueue.size());
     for (size_t i = 0; i < g_actionQueue.size(); ++i) {
         if (handleAction(g_actionQueue[i])) {
             g_actionQueue.erase(g_actionQueue.begin() + i);
@@ -1064,9 +1080,18 @@ static void mainLoop() {
         }
     }
 
+    if (g_menuRelaunchCooldown > 0)
+        --g_menuRelaunchCooldown;
+
     if (daemon::menu_la::checkFinished()) {
         switchu::FileLog::log("[main] menu exited (reason=%d)",
             (int)daemon::menu_la::exitReason());
+        ++g_menuFastExitCount;
+        if (g_menuFastExitCount >= 3) {
+            g_menuRelaunchCooldown = 500;
+            switchu::FileLog::log("[main] menu fast-exit guard active count=%d cooldown=%d",
+                                  g_menuFastExitCount, g_menuRelaunchCooldown);
+        }
         didWork = true;
     }
 
@@ -1082,7 +1107,7 @@ static void mainLoop() {
         didWork = true;
     }
 
-    if (!didWork && g_actionQueue.empty() &&
+    if (!didWork && g_menuRelaunchCooldown <= 0 && g_actionQueue.empty() &&
         !daemon::app::isRunning() && !daemon::menu_la::hasHolder() &&
         !g_foregroundAppletActive) {
         switchu::FileLog::log("[main] no app/menu active; relaunching menu");
@@ -1219,11 +1244,7 @@ int main(int argc, char* argv[]) {
 
     rebuildAppCatalog("boot");
 
-    Result rc = daemon::ipc::startServer();
-    if (R_FAILED(rc))
-        switchu::FileLog::log("[daemon] IPC server failed: 0x%X", rc);
-
-    rc = startEventManager();
+    Result rc = startEventManager();
     if (R_FAILED(rc))
         switchu::FileLog::log("[daemon] event manager failed: 0x%X (non-fatal)", rc);
 
@@ -1240,7 +1261,6 @@ int main(int argc, char* argv[]) {
     stopEventManager();
     daemon::menu_la::terminate();
     daemon::app::cleanup();
-    daemon::ipc::stopServer();
     nxtcExit();
 
     switchu::FileLog::log("[daemon] shutdown complete");

@@ -13,6 +13,13 @@ void IconGrid::setup(std::vector<std::shared_ptr<GlossyIcon>> icons,
                      float padX, float padY)
 {
     m_allIcons = std::move(icons);
+    reconfigureLayout(cols, rows, cellW, cellH, padX, padY);
+}
+
+void IconGrid::reconfigureLayout(int cols, int rows,
+                                 float cellW, float cellH,
+                                 float padX, float padY)
+{
     m_cols  = cols;  m_rows = rows;
     m_cellW = cellW; m_cellH = cellH;
     m_padX  = padX;  m_padY  = padY;
@@ -25,7 +32,7 @@ void IconGrid::setup(std::vector<std::shared_ptr<GlossyIcon>> icons,
     m_originX = (m_rect.width  - gridW) * 0.5f + m_rect.x;
     m_originY = (m_rect.height - gridH) * 0.5f + m_rect.y;
 
-    setPage(0);
+    setPage(m_page);
 }
 
 void IconGrid::setPage(int page) {
@@ -200,4 +207,3 @@ void IconGrid::render(nxui::Renderer& ren) {
 
 void IconGrid::onRender(nxui::Renderer&) {
 }
-

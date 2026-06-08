@@ -14,3 +14,6 @@ build_nro/
 .DS_Store
 Thumbs.db
 compile_commands.json
+
+# Keep the local ulaunch checkout out of this repository.
+/ulaunch/

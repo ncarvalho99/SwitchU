@@ -86,7 +86,9 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         m_rightButtons.push_back(std::move(themeShop));
     }
 
-    loadAssets(gpu, ren, assetsBase, {});
+    (void)gpu;
+    (void)ren;
+    (void)assetsBase;
 }
 
 void SidebarManager::reloadAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren,

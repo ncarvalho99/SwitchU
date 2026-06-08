@@ -1,9 +1,5 @@
 #include "Config.hpp"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <sys/stat.h>
-#include <string>
 #include <fstream>
 #include <algorithm>
 #include <nlohmann/json.hpp>
@@ -45,19 +41,6 @@ bool AppConfig::load() {
     readJsonOpt(j, "defaultProfileUid", defaultProfileUid);
     readJsonOpt(j, "tutorialCompleted", tutorialCompleted);
     readJsonOpt(j, "themePreset", themePreset);
-    readJsonOpt(j, "themeMode", themeMode);
-    readJsonOpt(j, "accentH", accentH);
-    readJsonOpt(j, "accentS", accentS);
-    readJsonOpt(j, "accentL", accentL);
-    readJsonOpt(j, "bgH", bgH);
-    readJsonOpt(j, "bgS", bgS);
-    readJsonOpt(j, "bgL", bgL);
-    readJsonOpt(j, "bgAccH", bgAccH);
-    readJsonOpt(j, "bgAccS", bgAccS);
-    readJsonOpt(j, "bgAccL", bgAccL);
-    readJsonOpt(j, "shapeH", shapeH);
-    readJsonOpt(j, "shapeS", shapeS);
-    readJsonOpt(j, "shapeL", shapeL);
 
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
@@ -69,12 +52,6 @@ bool AppConfig::load() {
     if (soundPreset.empty()) soundPreset = "wiiu";
     if (!defaultProfileEnabled) defaultProfileUid.clear();
     if (themePreset.empty()) themePreset = "Default Light";
-
-    auto clampHSL = [](float& v) { if (v < 0.f) v = -1.f; else if (v > 1.f) v = 1.f; };
-    clampHSL(accentH); clampHSL(accentS); clampHSL(accentL);
-    clampHSL(bgH);     clampHSL(bgS);     clampHSL(bgL);
-    clampHSL(bgAccH);  clampHSL(bgAccS);  clampHSL(bgAccL);
-    clampHSL(shapeH);  clampHSL(shapeS);  clampHSL(shapeL);
 
     return true;
 }
@@ -95,20 +72,6 @@ bool AppConfig::save() const {
     j["defaultProfileUid"] = defaultProfileEnabled ? defaultProfileUid : std::string();
     j["tutorialCompleted"] = tutorialCompleted;
     j["themePreset"] = themePreset;
-    j["themeMode"] = themeMode;
-
-    j["accentH"] = accentH;
-    j["accentS"] = accentS;
-    j["accentL"] = accentL;
-    j["bgH"] = bgH;
-    j["bgS"] = bgS;
-    j["bgL"] = bgL;
-    j["bgAccH"] = bgAccH;
-    j["bgAccS"] = bgAccS;
-    j["bgAccL"] = bgAccL;
-    j["shapeH"] = shapeH;
-    j["shapeS"] = shapeS;
-    j["shapeL"] = shapeL;
 
     std::ofstream f(kConfigPath, std::ios::trunc);
     if (!f.is_open()) return false;

@@ -21,7 +21,7 @@ end
 option("homebrew")
     set_default(false)
     set_showmenu(true)
-    set_description("Build .nro homebrew instead of .nsp for LayeredFS")
+    set_description("Build a standalone .nro homebrew for testing")
 option_end()
 
 option("backend")
@@ -91,6 +91,16 @@ target("nxtc")
     end
 target_end()
 
+target("atmosphere-stratosphere")
+    set_kind("phony")
+    set_default(false)
+    if not is_plat("cross") then return end
+
+    on_build(function (target)
+        os.execv("make", {"-C", "lib/Atmosphere-libs/libstratosphere", "nx_release"})
+    end)
+target_end()
+
 target("SwitchU")
     set_kind("binary")
     if not is_plat("cross") then return end
@@ -140,11 +150,11 @@ target("SwitchU")
         set_values("switch.author",  "PoloNX")
         set_values("switch.version", version)
         set_values("switch.romfs",   "romfs")
-        set_values("switch.tid",     "010000000000100B")
         set_values("switch.json",    "projects/menu/menu.json")
         set_values("switch.format",  "nsp")
+        set_values("switch.install_contents", false)
         set_values("switch.assets_dir", "SwitchU")
-        set_values("switch.raw_exefs_dir", "switch/SwitchU/bin/uMenu")
+        set_values("switch.raw_exefs_dir", "switch/SwitchU/bin/menu")
     end
 target_end()
 
@@ -157,15 +167,28 @@ target("switchu-daemon")
     set_languages("c++20")
     add_rules("switch")
 
-    add_deps("nxtc")
+    add_deps("nxtc", "atmosphere-stratosphere")
 
     add_files("projects/daemon/src/**.cpp")
 
     add_includedirs("projects/common/include", {public = false})
     add_includedirs("lib/libnxtc/include")
+    add_includedirs("lib/Atmosphere-libs/libstratosphere/include")
+    add_includedirs("lib/Atmosphere-libs/libvapours/include")
 
-    add_cxxflags("-fno-rtti", "-fexceptions", {force = true})
+    add_defines(
+        "ATMOSPHERE",
+        "ATMOSPHERE_IS_STRATOSPHERE",
+        "ATMOSPHERE_OS_HORIZON",
+        "ATMOSPHERE_BOARD_NINTENDO_NX",
+        "ATMOSPHERE_ARCH_ARM64",
+        "ATMOSPHERE_ARCH_ARM_V8A",
+        "_GNU_SOURCE"
+    )
+    add_cxxflags("-fno-rtti", "-fexceptions", "-std=gnu++23", {force = true})
     add_packages("zlib")
+    add_linkdirs("lib/Atmosphere-libs/libstratosphere/lib/nintendo_nx_arm64_armv8a/release")
+    add_links("stratosphere")
     add_syslinks("nx")
 
     if is_mode("release") then

@@ -17,6 +17,9 @@ public:
                int cols, int rows,
                float cellW, float cellH,
                float padX, float padY);
+    void reconfigureLayout(int cols, int rows,
+                           float cellW, float cellH,
+                           float padX, float padY);
 
     void setPage(int page);
     int  currentPage()  const { return m_page; }
@@ -70,4 +73,3 @@ private:
 
     std::function<void()> m_onPageSwitched;
 };
-

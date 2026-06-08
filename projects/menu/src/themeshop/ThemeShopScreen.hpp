@@ -113,6 +113,7 @@ private:
         std::mutex mutex;
         PreviewPhase phase = PreviewPhase::Idle;
         int failureCount = 0;
+        bool cancelled = false;
         std::string url;
         std::vector<std::uint8_t> bytes;
         std::future<void> future;

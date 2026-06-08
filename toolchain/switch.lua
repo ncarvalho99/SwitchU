@@ -1,4 +1,4 @@
--- ── Helper: resolve a devkitPro tool by name ─────────────────────────────────
+-- Helper: resolve a devkitPro tool by name
 local function dkp_tool(name)
     local DEVKITPRO = os.getenv("DEVKITPRO") or "/opt/devkitpro"
     local full = path.join(DEVKITPRO, "tools", "bin", name)
@@ -7,10 +7,10 @@ local function dkp_tool(name)
     return name
 end
 
--- ── Rule: switch ─────────────────────────────────────────────────────────────
+-- Rule: switch
 rule("switch")
 
-    -- ── Shaders: compile GLSL → DKSH via uam before linking ──────────────
+    -- Shaders: compile GLSL -> DKSH via uam before linking 
     before_build(function(target)
         local shaderdir = path.join(os.projectdir(), "shaders")
         if not os.isdir(shaderdir) then return end
@@ -45,7 +45,7 @@ rule("switch")
         end
     end)
 
-    -- ── After build: produce NRO or NSP from the ELF ─────────────────────
+    -- After build: produce NRO or NSP from the ELF 
     after_build(function(target)
         if target:kind() ~= "binary" then return end
 
@@ -57,7 +57,7 @@ rule("switch")
         local outdir  = target:targetdir()
 
         if format == "nro" then
-            -- ── NRO ──────────────────────────────────────────────────────
+            -- NRO 
             local nacpfile = path.join(outdir, name .. ".nacp")
             cprint("${color.build.target}generating${clear} %s", path.filename(nacpfile))
             os.vrunv(dkp_tool("nacptool"),
@@ -89,7 +89,7 @@ rule("switch")
             os.vrunv(dkp_tool("elf2nro"), args)
 
         elseif format == "nsp" then
-            -- ── NSP ──────────────────────────────────────────────────────
+            -- NSP 
             local exefsdir = path.join(outdir, "exefs", name)
             os.mkdir(exefsdir)
 
@@ -113,7 +113,7 @@ rule("switch")
         end
     end)
 
-    -- ── Install: create SD-card directory layout ─────────────────────────
+    -- Install: create SD-card directory layout
     on_install(function(target)
         local installdir = target:installdir()
         local format     = target:values("switch.format") or "nro"
@@ -130,15 +130,20 @@ rule("switch")
             cprint("${bright green}installed${clear} NRO → %s", dest)
 
         else
-            -- atmosphere/contents/<tid>/exefs.nsp
-            local tid         = target:values("switch.tid") or "0000000000000000"
-            local contentsdir = path.join(installdir, "atmosphere", "contents", tid)
-            os.mkdir(contentsdir)
-
             if format == "nsp" then
-                -- NSP as ExeFS override via Atmosphère LayeredFS
-                os.cp(path.join(outdir, name .. ".nsp"), path.join(contentsdir, "exefs.nsp"))
-                cprint("${bright green}installed${clear} NSP → %s", contentsdir)
+                local install_contents = target:values("switch.install_contents")
+                if install_contents == nil then
+                    install_contents = true
+                end
+
+                if install_contents then
+                    -- NSP as ExeFS override via Atmosphère LayeredFS.
+                    local tid         = target:values("switch.tid") or "0000000000000000"
+                    local contentsdir = path.join(installdir, "atmosphere", "contents", tid)
+                    os.mkdir(contentsdir)
+                    os.cp(path.join(outdir, name .. ".nsp"), path.join(contentsdir, "exefs.nsp"))
+                    cprint("${bright green}installed${clear} NSP → %s", contentsdir)
+                end
 
                 local raw_exefs_dir = target:values("switch.raw_exefs_dir")
                 if raw_exefs_dir and raw_exefs_dir ~= "" then
@@ -168,7 +173,7 @@ rule("switch")
         end
     end)
 
-    -- ── Run: launch NRO via emulator or nxlink ───────────────────────────
+    -- Run: launch NRO via emulator or nxlink
     on_run(function(target)
         local format = target:values("switch.format") or "nro"
         if format ~= "nro" then

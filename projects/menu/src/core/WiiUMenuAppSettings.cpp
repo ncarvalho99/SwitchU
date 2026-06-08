@@ -823,11 +823,6 @@ void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSoun
     m_activeColors = preset->colors;
     m_activeMode = preset->mode;
     m_config.themePreset = m_activePresetName;
-    m_config.themeMode = "";
-    m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
-    m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
-    m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
-    m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
 
     DebugLog::log("[theme-apply] rebuildThemeFromColors start: preset=%s", presetRef.c_str());
     rebuildThemeFromColors();
@@ -1219,10 +1214,6 @@ void WiiUMenuApp::deletePreset(const std::string& presetId) {
     if (deletingActive) {
         m_activePresetName = defaultThemeRef();
         m_config.themePreset = defaultThemeRef();
-        m_config.accentH = m_config.accentS = m_config.accentL = -1.f;
-        m_config.bgH     = m_config.bgS     = m_config.bgL     = -1.f;
-        m_config.bgAccH  = m_config.bgAccS  = m_config.bgAccL  = -1.f;
-        m_config.shapeH  = m_config.shapeS  = m_config.shapeL  = -1.f;
 
         ThemePreset* fallback = findPresetPtr(defaultThemeRef());
         if (!fallback)
@@ -1232,7 +1223,6 @@ void WiiUMenuApp::deletePreset(const std::string& presetId) {
             m_config.themePreset = m_activePresetName;
             m_activeColors = fallback->colors;
             m_activeMode = fallback->mode;
-            m_config.themeMode = "";
         }
         rebuildThemeFromColors();
     }

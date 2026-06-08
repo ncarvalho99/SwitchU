@@ -241,6 +241,7 @@ private:
     bool m_suppressNextNavigateSfx    = false;
     bool m_pendingNetConnect          = false;
     int  m_deferredBluetoothInitFrames = 0;
+    int  m_deferredInitialAssetFrames = 0;
     std::future<void> m_themePackageTransferFuture;
     std::shared_ptr<ThemePackageTransferShared> m_themePackageTransfer;
     std::uint64_t m_themePackageTransferUiRevision = 0;

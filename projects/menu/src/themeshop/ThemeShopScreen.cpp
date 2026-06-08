@@ -25,8 +25,11 @@
 
 namespace {
 
+constexpr int kCommunityPreviewGridCols = 2;
+constexpr int kCommunityPreviewVisibleRows = 2;
+constexpr int kCommunityPreviewEntriesPerPage = kCommunityPreviewGridCols * kCommunityPreviewVisibleRows;
 constexpr int kMaxPreviewUploadsPerFrame = 1;
-constexpr int kMaxPreviewDownloadsInFlight = 2;
+constexpr int kMaxPreviewDownloadsInFlight = kCommunityPreviewEntriesPerPage;
 constexpr int kCommunityPreviewMaxSide = 960;
 
 bool startsWith(const std::string& value, const std::string& prefix) {
@@ -135,6 +138,11 @@ void ThemeShopScreen::setPackageTransferState(const ThemeTransferState& state,
     m_packageTransferState = state;
     m_packageTransferThemeId = std::move(themeId);
     m_packageTransferInstallMode = installMode;
+
+    if (m_packageTransferState.isRunning()) {
+        clearCommunityPreviewCache();
+        m_lastPreviewPrimeKey.clear();
+    }
 }
 
 const ThemeShopScreen::ThemeShopEntry* ThemeShopScreen::selectedThemeShopEntry() const {
@@ -449,10 +457,13 @@ void ThemeShopScreen::primeCommunityPreview(const std::string& previewPath) {
         if (slot->url != url) {
             slot->phase = PreviewPhase::Idle;
             slot->failureCount = 0;
+            slot->cancelled = false;
             slot->url = url;
             slot->bytes.clear();
             slot->future = std::future<void>();
             slot->texture = nxui::Texture();
+        } else {
+            slot->cancelled = false;
         }
 
         if (slot->phase == PreviewPhase::Idle
@@ -494,8 +505,18 @@ void ThemeShopScreen::primeCommunityPreview(const std::string& previewPath) {
     m_hasPendingCommunityPreviewWork = true;
     slot->future = m_threadPool->submit([slot, url]() {
         try {
+            {
+                std::lock_guard<std::mutex> lk(slot->mutex);
+                if (slot->cancelled)
+                    return;
+            }
+
             std::vector<std::uint8_t> bytes = themeshop::http::getBytes(url);
             std::lock_guard<std::mutex> lk(slot->mutex);
+            if (slot->cancelled) {
+                slot->bytes.clear();
+                return;
+            }
             slot->bytes = std::move(bytes);
             if (slot->bytes.empty()) {
                 slot->failureCount += 1;
@@ -506,12 +527,16 @@ void ThemeShopScreen::primeCommunityPreview(const std::string& previewPath) {
             }
         } catch (const std::exception& ex) {
             std::lock_guard<std::mutex> lk(slot->mutex);
+            if (slot->cancelled)
+                return;
             slot->bytes.clear();
             slot->failureCount += 1;
             slot->phase = PreviewPhase::Failed;
             DebugLog::log("[themeshop] preview fetch failed: %s", ex.what());
         } catch (...) {
             std::lock_guard<std::mutex> lk(slot->mutex);
+            if (slot->cancelled)
+                return;
             slot->bytes.clear();
             slot->failureCount += 1;
             slot->phase = PreviewPhase::Failed;
@@ -549,8 +574,8 @@ void ThemeShopScreen::primeVisibleCommunityPreviews() {
     }
 
     int scrollRow = m_communityScrollRow;
-    int start = scrollRow * 2;
-    int end = std::min((int)m_communityEntries.size(), start + 4);
+    int start = scrollRow * kCommunityPreviewGridCols;
+    int end = std::min((int)m_communityEntries.size(), start + kCommunityPreviewEntriesPerPage);
     for (int i = start; i < end; ++i)
         queuePreview(m_communityEntries[(size_t)i].cover);
 }
@@ -628,6 +653,17 @@ void ThemeShopScreen::clearCommunityPreviewCache() {
     if (m_gpu)
         m_gpu->waitIdle();
 
+    for (auto& entry : m_communityPreviewCache) {
+        auto& state = entry.second;
+        if (!state)
+            continue;
+
+        std::lock_guard<std::mutex> lk(state->mutex);
+        state->cancelled = true;
+        state->bytes.clear();
+        state->texture = nxui::Texture();
+    }
+
     m_communityPreviewCache.clear();
     m_hasPendingCommunityPreviewWork = false;
 }
@@ -648,8 +684,8 @@ void ThemeShopScreen::trimCommunityPreviewCache() {
             retainedUrls.insert(std::move(url));
     };
 
-    int start = m_communityScrollRow * 2;
-    int end = std::min((int)m_communityEntries.size(), start + 4);
+    int start = m_communityScrollRow * kCommunityPreviewGridCols;
+    int end = std::min((int)m_communityEntries.size(), start + kCommunityPreviewEntriesPerPage);
     for (int i = start; i < end; ++i)
         retainPreview(m_communityEntries[(size_t)i].cover);
 
@@ -660,11 +696,38 @@ void ThemeShopScreen::trimCommunityPreviewCache() {
             retainPreview(currentDetailCommunityPreviewPath());
     }
 
+    bool willErase = false;
     for (auto it = m_communityPreviewCache.begin(); it != m_communityPreviewCache.end();) {
-        if (retainedUrls.find(it->first) == retainedUrls.end())
+        if (retainedUrls.find(it->first) == retainedUrls.end()) {
+            willErase = true;
+            break;
+        }
+        ++it;
+    }
+
+    if (willErase && m_gpu)
+        m_gpu->waitIdle();
+
+    int erased = 0;
+    for (auto it = m_communityPreviewCache.begin(); it != m_communityPreviewCache.end();) {
+        if (retainedUrls.find(it->first) == retainedUrls.end()) {
+            if (it->second) {
+                std::lock_guard<std::mutex> lk(it->second->mutex);
+                it->second->cancelled = true;
+                it->second->bytes.clear();
+                it->second->texture = nxui::Texture();
+            }
             it = m_communityPreviewCache.erase(it);
-        else
+            ++erased;
+        } else {
             ++it;
+        }
+    }
+
+    if (erased > 0) {
+        DebugLog::log("[themeshop] preview cache trimmed: erased=%d retained=%zu",
+                      erased,
+                      m_communityPreviewCache.size());
     }
 }
 

@@ -10,9 +10,8 @@
 class GlossyIcon;
 
 // Streams icon textures on demand based on the currently visible page.
-// Only icons in the visible range (current page +- kPageMargin) are uploaded
-// to the GPU. Compressed JPEG/PNG data is fetched on demand so startup does
-// not copy every title icon into the menu process.
+// Loaded textures are kept for a small window around the current page, so
+// nearby navigation is instant without letting GPU memory grow unbounded.
 class IconStreamer {
 public:
     using IconDataLoader = std::function<std::vector<uint8_t>(uint64_t titleId)>;
@@ -22,6 +21,7 @@ public:
     void setIconDataLoader(IconDataLoader loader);
     void setTitleId(int appIndex, uint64_t titleId);
     void setIconData(int appIndex, std::vector<uint8_t> compressed);
+    void resize(int appCount);
     void setPinnedIndex(int appIndex);
     void clearPinnedIndex();
 
@@ -81,7 +81,6 @@ private:
     int m_lastIconsPerPage = -1;
     int m_pinnedIndex = -1;
 
-    // How many pages around the current one to keep loaded.
-    static constexpr int kPageMargin = 0;
-    static constexpr int kIconSize   = 160;
+    static constexpr int kPageCacheRadius = 2;
+    static constexpr int kIconSize        = 160;
 };

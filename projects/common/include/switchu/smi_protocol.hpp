@@ -91,18 +91,6 @@ struct AppEntryHeader {
 };
 static_assert(sizeof(AppEntryHeader) == 24);
 
-static constexpr const char* kPrivateServiceName = "swu:m";
-
-struct MenuMessageContext {
-    MenuMessage msg;
-    union {
-        uint64_t  app_id;
-        struct { uint32_t mount_rc; } gc_mount_failure;
-        uint32_t  raw[16];
-    };
-};
-static_assert(sizeof(MenuMessageContext) <= 72);
-
 static constexpr uint32_t kNotifyMagic = 0x53574E54;
 
 struct DaemonNotification {
@@ -136,11 +124,7 @@ inline bool batteryPayloadCharging(uint32_t payload) {
     return batteryPayloadChargerType(payload) != 0;
 }
 
-enum class PrivateServiceCmd : uint32_t {
-    Initialize     = 0,
-    TryPopMessage  = 1,
-};
-static constexpr uint64_t kMenuTakeoverProgramId = 0x010000000000100BULL;
+static constexpr uint64_t kMenuTakeoverProgramId = 0x010000000000100DULL;
 static constexpr uint64_t kMenuProcessProgramId  = 0x010000000000FFFFULL;
 static constexpr uint32_t kLdrAtmosRegisterExternalCode   = 65000;
 static constexpr uint32_t kLdrAtmosUnregisterExternalCode = 65001;

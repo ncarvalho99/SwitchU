@@ -323,12 +323,15 @@ void WiiUMenuApp::onDestroy() {
 
 void WiiUMenuApp::loadResources() {
     std::string fontPath = std::string(SD_ASSETS) + "/fonts/DejaVuSans.ttf";
-    m_fontNormal.load(app().gpu(), app().renderer(), fontPath, 24);
-    m_fontSmall.load(app().gpu(), app().renderer(), fontPath, 18);
+    if (m_fontNormal.load(app().gpu(), app().renderer(), fontPath, 24))
+        m_loadedRegularFontPath = fontPath;
+    if (m_fontSmall.load(app().gpu(), app().renderer(), fontPath, 18))
+        m_loadedSmallFontPath = fontPath;
     m_fontIcons.load(app().gpu(), app().renderer(), std::string(SD_ASSETS) + "/fonts/switch_icons.ttf", 24);
 
     std::string gameCardPath = std::string(SD_ASSETS) + "/icons/gamecard.png";
-    m_gameCardTex.loadFromFile(app().gpu(), app().renderer(), gameCardPath);
+    if (m_gameCardTex.loadFromFile(app().gpu(), app().renderer(), gameCardPath))
+        m_loadedGameCardPath = gameCardPath;
 
 #ifdef SWITCHU_MENU
     m_appLoader.setFastStartupUserInfo(m_launcher.suspendedTitleId() != 0);
@@ -501,21 +504,26 @@ void WiiUMenuApp::reflowHomeGrid() {
             rebuiltModel.addEntry(AppEntry{});
     }
 
-    app().gpu().waitIdle();
+    std::vector<std::shared_ptr<GlossyIcon>> icons;
+    icons.reserve((size_t)std::max(0, rebuiltModel.count()));
+    const auto& oldIcons = m_grid->allIcons();
+    for (int i = 0; i < rebuiltModel.count(); ++i) {
+        if (i < (int)oldIcons.size() && oldIcons[i] &&
+            i < m_model.count() &&
+            m_model.at(i).titleId == rebuiltModel.at(i).titleId) {
+            icons.push_back(oldIcons[i]);
+        } else {
+            auto icon = makeIcon(rebuiltModel.at(i));
+            icon->setBaseColor(m_theme.iconDefault);
+            icons.push_back(std::move(icon));
+        }
+    }
+
     m_model = std::move(rebuiltModel);
-    m_iconStreamer.clear();
-    m_iconStreamer.init(m_model.count());
+    m_iconStreamer.resize(m_model.count());
     m_iconStreamer.setIconDataLoader(AppListLoader::loadIconData);
     for (int i = 0; i < m_model.count(); ++i)
         m_iconStreamer.setTitleId(i, m_model.at(i).titleId);
-
-    std::vector<std::shared_ptr<GlossyIcon>> icons;
-    icons.reserve((size_t)std::max(0, m_model.count()));
-    for (int i = 0; i < m_model.count(); ++i) {
-        auto icon = makeIcon(m_model.at(i));
-        icon->setBaseColor(m_theme.iconDefault);
-        icons.push_back(std::move(icon));
-    }
 
     GridLayoutMetrics gridMetrics = computeGridLayoutMetrics();
     m_grid->setup(std::move(icons), cols, rows,
@@ -860,25 +868,7 @@ void WiiUMenuApp::buildGrid() {
         m_activePresetName = preset->id.empty() ? preset->name : preset->id;
 
     m_activeColors = preset->colors;
-    if (m_config.accentH >= 0.f) m_activeColors.accentH = m_config.accentH;
-    if (m_config.accentS >= 0.f) m_activeColors.accentS = m_config.accentS;
-    if (m_config.accentL >= 0.f) m_activeColors.accentL = m_config.accentL;
-    if (m_config.bgH     >= 0.f) m_activeColors.bgH     = m_config.bgH;
-    if (m_config.bgS     >= 0.f) m_activeColors.bgS     = m_config.bgS;
-    if (m_config.bgL     >= 0.f) m_activeColors.bgL     = m_config.bgL;
-    if (m_config.bgAccH  >= 0.f) m_activeColors.bgAccH  = m_config.bgAccH;
-    if (m_config.bgAccS  >= 0.f) m_activeColors.bgAccS  = m_config.bgAccS;
-    if (m_config.bgAccL  >= 0.f) m_activeColors.bgAccL  = m_config.bgAccL;
-    if (m_config.shapeH  >= 0.f) m_activeColors.shapeH  = m_config.shapeH;
-    if (m_config.shapeS  >= 0.f) m_activeColors.shapeS  = m_config.shapeS;
-    if (m_config.shapeL  >= 0.f) m_activeColors.shapeL  = m_config.shapeL;
-
-    if (m_config.themeMode == "dark")
-        m_activeMode = nxui::ThemeMode::Dark;
-    else if (m_config.themeMode == "light")
-        m_activeMode = nxui::ThemeMode::Light;
-    else
-        m_activeMode = preset->mode;
+    m_activeMode = preset->mode;
 
     m_effectivePreset = buildEffectiveThemePreset();
     m_theme = m_effectivePreset.toTheme();
@@ -976,12 +966,28 @@ void WiiUMenuApp::buildGrid() {
         updateCursor();
     });
 
-    // Load textures for the initial page (page 0).
-    m_iconStreamer.onPageChanged(0, m_grid->iconsPerPage(),
-                                 app().gpu(), app().renderer(),
-                                 m_grid->allIcons());
+    int initialPage = 0;
+#ifdef SWITCHU_MENU
+    if (m_launcher.suspendedTitleId() != 0) {
+        int suspendedIndex = findTitleIndex(m_launcher.suspendedTitleId());
+        if (suspendedIndex >= 0 && m_grid->iconsPerPage() > 0)
+            initialPage = suspendedIndex / m_grid->iconsPerPage();
+        if (initialPage > 0)
+            m_grid->setPage(initialPage);
+    }
+#endif
 
     const bool returningFromSuspendedApp = m_launcher.suspendedTitleId() != 0;
+    if (returningFromSuspendedApp) {
+        m_deferredInitialAssetFrames = 1;
+        DebugLog::log("[init] return path: deferring initial icon/sidebar uploads");
+    } else {
+        // Load textures for the initial visible page.
+        m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                     app().gpu(), app().renderer(),
+                                     m_grid->allIcons());
+    }
+
     if (returningFromSuspendedApp) {
         for (auto& icon : m_grid->allIcons())
             icon->forceVisible();
@@ -1065,8 +1071,10 @@ void WiiUMenuApp::buildGrid() {
     };
 
     m_sidebar.build(app().gpu(), app().renderer(), SD_ASSETS, sidebarActions);
-    m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS,
-                           resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath));
+    if (!returningFromSuspendedApp) {
+        m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS,
+                               resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath));
+    }
 
     wireGlobalActions();
     applyTheme();
@@ -1417,6 +1425,22 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_tutorialStartupFadeTimer = std::max(0.f, m_tutorialStartupFadeTimer - dt);
 
     syncThemePackageTransfer();
+
+    if (m_deferredInitialAssetFrames > 0) {
+        --m_deferredInitialAssetFrames;
+        if (m_deferredInitialAssetFrames == 0) {
+            DebugLog::log("[init] deferred initial icon/sidebar uploads start");
+            if (m_grid) {
+                m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                             app().gpu(), app().renderer(),
+                                             m_grid->allIcons());
+            }
+            m_sidebar.reloadAssets(app().gpu(), app().renderer(), SD_ASSETS,
+                                   resolveThemeAssetPath(m_effectivePreset,
+                                                         m_effectivePreset.icons.basePath));
+            DebugLog::log("[init] deferred initial icon/sidebar uploads done");
+        }
+    }
 
     if (m_deferredBluetoothInitFrames > 0) {
         --m_deferredBluetoothInitFrames;

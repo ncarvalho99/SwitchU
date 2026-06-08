@@ -9,7 +9,7 @@ toolchain("devkita64")
         local bin      = path.join(DKA64, "bin")
         local pre      = "aarch64-none-elf-"
 
-        -- ── Compiler tools ───────────────────────────────
+        -- Compiler tools
         toolchain:set("toolset", "cc",     path.join(bin, pre .. "gcc"))
         toolchain:set("toolset", "cxx",    path.join(bin, pre .. "g++"))
         toolchain:set("toolset", "ld",     path.join(bin, pre .. "g++"))
@@ -19,7 +19,7 @@ toolchain("devkita64")
         toolchain:set("toolset", "strip",  path.join(bin, pre .. "strip"))
         toolchain:set("toolset", "as",     path.join(bin, pre .. "gcc"))
 
-        -- ── Architecture flags ───────────────────────────
+        -- Architecture flags
         toolchain:add("cxflags",
             "-march=armv8-a+crc+crypto", "-mtune=cortex-a57",
             "-mtp=soft", "-fPIE",
@@ -39,10 +39,10 @@ toolchain("devkita64")
             "-Wl,--gc-sections",
             {force = true})
 
-        -- ── Defines ──────────────────────────────────────
+        -- Defines
         toolchain:add("defines", "__SWITCH__")
 
-        -- ── libnx (always needed for switch.specs / <switch.h>) ──
+        -- libnx (always needed for switch.specs / <switch.h>)
         toolchain:add("includedirs", path.join(LIBNX, "include"))
         toolchain:add("linkdirs", path.join(LIBNX, "lib"))
     end)

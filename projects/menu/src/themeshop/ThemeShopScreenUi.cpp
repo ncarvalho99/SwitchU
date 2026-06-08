@@ -634,6 +634,9 @@ void ThemeShopScreen::closeDetail() {
         m_packageTransferState.reset();
         m_packageTransferThemeId.clear();
         m_packageTransferInstallMode = false;
+    } else if (isCommunityTab()) {
+        clearCommunityPreviewCache();
+        m_lastPreviewPrimeKey.clear();
     }
 }
 
@@ -663,6 +666,8 @@ void ThemeShopScreen::activateDetailButton(int buttonIndex) {
         }
 
         std::string themeId = entry->id;
+        clearCommunityPreviewCache();
+        m_lastPreviewPrimeKey.clear();
         if (buttonIndex == 0) {
             if (m_themeShopDownloadCb) {
                 m_themeShopDownloadCb(themeId);
@@ -739,7 +744,7 @@ void ThemeShopScreen::updateCustomContent(float dt) {
 
     ensureSelectionVisible();
 
-    if (isCommunityTab()) {
+    if (isCommunityTab() && !m_packageTransferState.isRunning()) {
         clampDetailScreenshotIndex();
         int previewButtonCount = detailScreenshotCount() > 0 ? 1 : 0;
         if (previewButtonCount <= 0) {
@@ -756,8 +761,12 @@ void ThemeShopScreen::updateCustomContent(float dt) {
             + "|" + std::to_string(m_detailScreenshotIndex);
         if (primeKey != m_lastPreviewPrimeKey) {
             m_lastPreviewPrimeKey = std::move(primeKey);
+            trimCommunityPreviewCache();
             primeVisibleCommunityPreviews();
         }
+    } else if (isCommunityTab()) {
+        clearCommunityPreviewCache();
+        m_lastPreviewPrimeKey.clear();
     }
 }
 
@@ -945,10 +954,6 @@ bool ThemeShopScreen::handleCustomNavDown() {
     } else {
         m_contentFocusArea = ContentFocusArea::Pager;
         m_pageButtonIndex = std::clamp(selected % kGridCols, 0, 1);
-        if (currentPage() == 0)
-            m_pageButtonIndex = 1;
-        else if (currentPage() + 1 >= pageCount())
-            m_pageButtonIndex = 0;
         if (m_navSfxCb) m_navSfxCb();
     }
     return true;

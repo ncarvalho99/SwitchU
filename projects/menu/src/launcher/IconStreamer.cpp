@@ -28,6 +28,24 @@ void IconStreamer::setIconData(int appIndex, std::vector<uint8_t> compressed) {
         m_compressed[appIndex] = std::move(compressed);
 }
 
+void IconStreamer::resize(int appCount) {
+    if (appCount < 0)
+        appCount = 0;
+
+    for (auto& slot : m_pool) {
+        if (slot && slot->appIndex >= appCount)
+            slot->appIndex = -1;
+    }
+
+    m_compressed.resize(appCount);
+    m_titleIds.resize(appCount, 0);
+    m_appToSlot.resize(appCount, -1);
+    if (m_pinnedIndex >= appCount)
+        m_pinnedIndex = -1;
+    m_lastPage = -1;
+    m_lastIconsPerPage = -1;
+}
+
 void IconStreamer::setPinnedIndex(int appIndex) {
     m_pinnedIndex = (appIndex >= 0 && appIndex < (int)m_appToSlot.size()) ? appIndex : -1;
 }
@@ -161,25 +179,34 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         return;
     }
 
+    int totalPages = (totalApps + iconsPerPage - 1) / iconsPerPage;
+    currentPage = std::clamp(currentPage, 0, totalPages - 1);
+
     m_lastPage = currentPage;
     m_lastIconsPerPage = iconsPerPage;
 
-    int totalPages = (totalApps + iconsPerPage - 1) / iconsPerPage;
+    int visibleStartApp = currentPage * iconsPerPage;
+    int visibleEndApp   = std::min(totalApps, visibleStartApp + iconsPerPage);
+    int cacheStartPage  = std::max(0, currentPage - kPageCacheRadius);
+    int cacheEndPage    = std::min(totalPages - 1, currentPage + kPageCacheRadius);
+    int cacheStartApp   = cacheStartPage * iconsPerPage;
+    int cacheEndApp     = std::min(totalApps, (cacheEndPage + 1) * iconsPerPage);
 
-    int startPage = std::max(0, currentPage - kPageMargin);
-    int endPage   = std::min(totalPages - 1, currentPage + kPageMargin);
-    int startApp  = startPage * iconsPerPage;
-    int endApp    = std::min(totalApps, (endPage + 1) * iconsPerPage);
-
-    // 1. Evict textures outside the new visible range.
+    // 1. Evict textures outside the local page window. This keeps GPU memory
+    //    bounded while preserving quick navigation to nearby pages.
     for (int i = 0; i < (int)m_pool.size(); ++i) {
-        int app = m_pool[i]->appIndex;
-        if (app == m_pinnedIndex)
+        if (!m_pool[i])
             continue;
-        if (app >= 0 && (app < startApp || app >= endApp)) {
+
+        int app = m_pool[i]->appIndex;
+        if (app < 0 || app == m_pinnedIndex)
+            continue;
+
+        if (app < cacheStartApp || app >= cacheEndApp) {
             if (app < (int)allIcons.size())
                 allIcons[app]->setTexture(nullptr);
-            m_appToSlot[app] = -1;
+            if (app < (int)m_appToSlot.size())
+                m_appToSlot[app] = -1;
             m_pool[i]->appIndex = -1;
             m_freeSlots.push_back(i);
         }
@@ -188,7 +215,7 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     // 2. Re-attach already-loaded slots to the current widget order. This is
     //    needed after grid relayouts and swaps where the GlossyIcon objects
     //    may have moved while the GPU texture pool stayed valid.
-    for (int i = startApp; i < endApp; ++i) {
+    for (int i = visibleStartApp; i < visibleEndApp; ++i) {
         int slotIdx = m_appToSlot[i];
         if (slotIdx < 0)
             continue;
@@ -207,9 +234,10 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         }
     }
 
-    // 3. Collect apps that need loading.
+    // 3. Collect only visible apps that need loading. Neighbor pages are kept
+    //    when already loaded, but not decoded eagerly on this frame.
     std::vector<int> toLoad;
-    for (int i = startApp; i < endApp; ++i) {
+    for (int i = visibleStartApp; i < visibleEndApp; ++i) {
         if (m_appToSlot[i] < 0 && hasData(i))
             toLoad.push_back(i);
     }
@@ -226,7 +254,7 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     for (int appIndex : toLoad) {
         std::vector<uint8_t> compressed;
         if (appIndex < (int)m_compressed.size() && !m_compressed[appIndex].empty()) {
-            compressed = std::move(m_compressed[appIndex]);
+            compressed = m_compressed[appIndex];
         } else if (appIndex < (int)m_titleIds.size() && m_titleIds[appIndex] != 0 && m_iconLoader) {
             compressed = m_iconLoader(m_titleIds[appIndex]);
         }
@@ -238,9 +266,9 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     if (pending.empty()) return;
 
     DebugLog::log("[streamer] page %d: loading %d icons [%d..%d)",
-                  currentPage, (int)pending.size(), startApp, endApp);
+                  currentPage, (int)pending.size(), visibleStartApp, visibleEndApp);
 
-    // 4. Decode icons in parallel (CPU-bound work).
+    // 4. Decode icons.
     struct Decoded {
         int appIndex;
         uint8_t* rgba = nullptr;

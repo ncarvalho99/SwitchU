@@ -28,10 +28,12 @@
 
 - `switchu-daemon` (System Applet, title ID `0x0100000000001000`)
   - Replaces qlaunch
-  - Handles lifecycle, HOME/suspend-resume flow, sleep/reboot and IPC
-- `switchu-menu` (Library Applet, title ID `0x010000000000100B`)
+  - Handles lifecycle, HOME/suspend-resume flow, sleep/reboot and menu launch
+- `switchu-menu`
   - Renders the full UI
-  - Communicates with daemon through AppletStorage + `swu:m` notifications
+  - Stored as raw ExeFS under `sdmc:/switch/SwitchU/bin/menu`
+  - Registered by the daemon as external content for the Album library applet takeover
+  - Communicates with the daemon through AppletStorage
 - `SwitchU` (Homebrew mode)
   - Monolithic `.nro` target for standalone usage/testing
 
@@ -63,7 +65,7 @@ git clone --recursive https://github.com/PoloNX/SwitchU
 cd SwitchU
 ```
 
-### Build (production two-applet mode)
+### Build (production daemon + external menu mode)
 
 ```bash
 xmake f -p cross --toolchain=devkita64
@@ -100,11 +102,12 @@ Build outputs are generated under `build/cross/aarch64/<mode>/`.
 
 ## SD card layout
 
-- `sdmc:/config/SwitchU/config.ini`: user settings
+- `sdmc:/config/SwitchU/config.json`: user settings
 - `sdmc:/config/SwitchU/applist.bin`: app metadata cache
 - `sdmc:/config/SwitchU/menu.log` and `sdmc:/config/SwitchU/daemon.log`: current runtime logs
 - `sdmc:/config/SwitchU/menu-*.log` and `sdmc:/config/SwitchU/daemon-*.log`: previous sessions kept on rotation
-- `sdmc:/switch/SwitchU/`: assets in non-homebrew mode
+- `sdmc:/switch/SwitchU/bin/menu/`: menu raw ExeFS (`main`, `main.npdm`)
+- `sdmc:/switch/SwitchU/`: menu assets in non-homebrew mode
 
 ## Help me
 

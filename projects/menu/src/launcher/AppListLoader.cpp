@@ -45,7 +45,7 @@ StartupUserInfo queryStartupUserInfoImpl(uint64_t tid, StartupUserInfo fallback 
 bool fetchDaemonCatalog(std::vector<PendingApp>& out) {
 #ifdef SWITCHU_MENU
     std::vector<switchu::menu::smi_cmd::AppEntry> catalog;
-    Result rc = switchu::menu::smi_cmd::getAppList(catalog, false);
+    Result rc = switchu::menu::smi_cmd::getAppList(catalog, true);
     if (R_FAILED(rc) || catalog.empty()) {
         DebugLog::log("[loader] daemon catalog unavailable rc=0x%X count=%d",
                       rc, (int)catalog.size());
@@ -179,6 +179,11 @@ void AppListLoader::fetchApps() {
                       (int)m_pending.size());
         return;
     }
+
+#ifdef SWITCHU_MENU
+    DebugLog::log("[loader] daemon catalog required; skipping menu-side app scan");
+    return;
+#endif
 
     NsApplicationRecord records[1024] = {};
     s32 recordCount = 0;
