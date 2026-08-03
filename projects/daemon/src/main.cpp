@@ -313,14 +313,14 @@ static bool queryApplicationViews(const std::vector<switchu::ns::ExtApplicationR
     return true;
 }
 
-static void enqueueControlCacheRecords(const std::vector<switchu::ns::ExtApplicationRecord>& records) {
+static void enqueueControlCacheTitles(const std::vector<uint64_t>& titleIds) {
     std::lock_guard<std::mutex> lock(g_controlCacheQueueMutex);
-    for (const auto& record : records) {
-        if (record.id == 0 || switchu::control_cache::hasMeta(record.id))
+    for (uint64_t titleId : titleIds) {
+        if (titleId == 0)
             continue;
-        if (std::find(g_controlCacheQueue.begin(), g_controlCacheQueue.end(), record.id) ==
+        if (std::find(g_controlCacheQueue.begin(), g_controlCacheQueue.end(), titleId) ==
             g_controlCacheQueue.end()) {
-            g_controlCacheQueue.push_back(record.id);
+            g_controlCacheQueue.push_back(titleId);
         }
     }
 }
@@ -396,12 +396,15 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
 
     std::vector<switchu::ns::ExtApplicationView> views;
     queryApplicationViews(records, views, "catalog");
-    enqueueControlCacheRecords(records);
 
     const s32 count = static_cast<s32>(records.size());
     g_appCatalog.clear();
     g_appCatalog.reserve(count);
 
+    // Resolve display name and startup-user policy here, on the daemon, so the
+    // menu can build its grid straight from applist.bin. Otherwise every menu
+    // cold start reopens one .meta file per installed title.
+    std::vector<uint64_t> missingMeta;
     for (s32 i = 0; i < count; ++i) {
         const uint64_t tid = records[i].id;
         DaemonAppCatalogEntry ent;
@@ -411,8 +414,21 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
         std::snprintf(fallbackName, sizeof(fallbackName), "%016lX",
                       static_cast<unsigned long>(tid));
         ent.name = fallbackName;
+
+        switchu::control_cache::Meta meta{};
+        if (tid != 0 && switchu::control_cache::readMeta(tid, meta)) {
+            if (meta.name[0] != '\0')
+                ent.name = meta.name;
+            ent.startupUserKnown = true;
+            ent.startupUserAccount = meta.startup_user_account;
+            ent.startupUserAccountOption = meta.startup_user_account_option;
+        } else if (tid != 0) {
+            missingMeta.push_back(tid);
+        }
+
         g_appCatalog.push_back(std::move(ent));
     }
+    enqueueControlCacheTitles(missingMeta);
 
     const s32 prevCount = g_lastRecordCount;
     bool changed = prevCount != count;
@@ -1138,6 +1154,10 @@ static void mainLoop() {
     if (g_controlCacheRefreshPending.load() && g_controlCacheRefreshDelay.load() > 0) {
         --g_controlCacheRefreshDelay;
     } else if (g_controlCacheRefreshPending.exchange(false)) {
+        // Freshly cached control data supplies the real title name and
+        // startup-user policy, both of which live in the catalog now — rewrite
+        // it before asking the menu to reload.
+        rebuildAppCatalog("control-cache");
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
         didWork = true;
