@@ -2,9 +2,12 @@
 #include "widgets/GlossyIcon.hpp"
 #include "core/DebugLog.hpp"
 #include <nxui/third_party/stb/stb_image.h>
+#include <switch.h>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <future>
+#include <utility>
 
 
 void IconStreamer::init(int appCount) {
@@ -244,12 +247,24 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
 
     if (toLoad.empty()) return;
 
+    const uint64_t tickFetchStart = armGetSystemTick();
+
     struct PendingIcon {
-        int appIndex;
+        int appIndex = -1;
         std::vector<uint8_t> compressed;
+        DecodedIcon decoded{};
     };
-    std::vector<PendingIcon> pending;
-    pending.reserve(toLoad.size());
+    // Fixed size up front: the decode jobs below hold pointers into this.
+    std::vector<PendingIcon> pending(toLoad.size());
+    size_t pendingCount = 0;
+
+    // Read the compressed bytes on this thread. The menu applet runs with
+    // __nx_fs_num_sessions = 1, so concurrent SD reads would just serialize
+    // on the single fs session anyway. Each decode is handed to the pool the
+    // moment its bytes land, so decoding overlaps the following reads.
+    std::vector<std::future<void>> decodeJobs;
+    if (m_threadPool)
+        decodeJobs.reserve(toLoad.size());
 
     for (int appIndex : toLoad) {
         std::vector<uint8_t> compressed;
@@ -259,28 +274,41 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
             compressed = m_iconLoader(m_titleIds[appIndex]);
         }
 
-        if (!compressed.empty())
-            pending.push_back({appIndex, std::move(compressed)});
+        if (compressed.empty())
+            continue;
+
+        PendingIcon* job = &pending[pendingCount++];
+        job->appIndex = appIndex;
+        job->compressed = std::move(compressed);
+
+        if (m_threadPool) {
+            // decodeAndScale is const and touches nothing shared, and each job
+            // owns its own bytes and output buffer.
+            decodeJobs.push_back(m_threadPool->submit([this, job]() {
+                job->decoded = decodeAndScale(job->compressed);
+            }));
+        }
     }
 
-    if (pending.empty()) return;
+    if (pendingCount == 0) return;
 
-    DebugLog::log("[streamer] page %d: loading %d icons [%d..%d)",
-                  currentPage, (int)pending.size(), visibleStartApp, visibleEndApp);
-
-    // 4. Decode icons.
-    struct Decoded {
-        int appIndex;
-        uint8_t* rgba = nullptr;
-        int w = 0, h = 0;
-        bool scaledWithMalloc = false;
-    };
-    std::vector<Decoded> decoded(pending.size());
-    for (int idx = 0; idx < (int)pending.size(); ++idx) {
-        auto result = decodeAndScale(pending[idx].compressed);
-        decoded[idx] = {pending[idx].appIndex, result.rgba, result.w, result.h, result.scaledWithMalloc};
+    // 4. Finish decoding. wait() rather than get(): ThreadPool captures any
+    //    exception into the future, and a job that failed simply leaves
+    //    decoded.rgba null, which the upload loop already skips.
+    const uint64_t tickDecodeStart = armGetSystemTick();
+    if (m_threadPool) {
+        for (auto& job : decodeJobs)
+            job.wait();
+    } else {
+        for (size_t i = 0; i < pendingCount; ++i)
+            pending[i].decoded = decodeAndScale(pending[i].compressed);
     }
-    pending.clear();
+
+    // Compressed bytes are dead once decoded; release before the uploads.
+    for (size_t i = 0; i < pendingCount; ++i)
+        std::vector<uint8_t>().swap(pending[i].compressed);
+
+    const uint64_t tickUploadStart = armGetSystemTick();
 
     // 5. Upload to GPU (must happen on the main/render thread) and
     //    wire the texture pointers on the corresponding GlossyIcons.
@@ -291,15 +319,16 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     {
         int newSlots = 0;
         int freeAvail = (int)m_freeSlots.size();
-        for (auto& d : decoded) {
-            if (!d.rgba) continue;
+        for (size_t i = 0; i < pendingCount; ++i) {
+            if (!pending[i].decoded.rgba) continue;
             if (freeAvail > 0) --freeAvail;
             else ++newSlots;
         }
         m_pool.reserve(m_pool.size() + newSlots);
     }
 
-    for (auto& d : decoded) {
+    for (size_t i = 0; i < pendingCount; ++i) {
+        auto& d = pending[i].decoded;
         if (!d.rgba) continue;
 
         // Acquire a pool slot.
@@ -314,15 +343,32 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
 
         auto& slot = *m_pool[poolIdx];
         if (slot.texture.loadFromPixels(gpu, ren, d.rgba, d.w, d.h)) {
-            slot.appIndex = d.appIndex;
-            m_appToSlot[d.appIndex] = poolIdx;
-            if (d.appIndex < (int)allIcons.size())
-                allIcons[d.appIndex]->setTexture(&slot.texture);
+            slot.appIndex = pending[i].appIndex;
+            m_appToSlot[pending[i].appIndex] = poolIdx;
+            if (pending[i].appIndex < (int)allIcons.size())
+                allIcons[pending[i].appIndex]->setTexture(&slot.texture);
         }
 
         if (d.scaledWithMalloc) std::free(d.rgba);
         else stbi_image_free(d.rgba);
+        d.rgba = nullptr;
     }
+
+    // Timing breakdown so the split between SD reads, JPEG decoding and GPU
+    // uploads is visible in menu.log. upload is the interesting one: every
+    // texture currently costs a full queue waitIdle inside GpuDevice.
+    const uint64_t tickEnd = armGetSystemTick();
+    auto elapsedMs = [](uint64_t from, uint64_t to) -> unsigned {
+        return static_cast<unsigned>(armTicksToNs(to - from) / 1000000ULL);
+    };
+    DebugLog::log("[streamer] page %d: %d icons [%d..%d) "
+                  "fetch=%ums decode_wait=%ums upload=%ums total=%ums (%s)",
+                  currentPage, (int)pendingCount, visibleStartApp, visibleEndApp,
+                  elapsedMs(tickFetchStart, tickDecodeStart),
+                  elapsedMs(tickDecodeStart, tickUploadStart),
+                  elapsedMs(tickUploadStart, tickEnd),
+                  elapsedMs(tickFetchStart, tickEnd),
+                  m_threadPool ? "threaded" : "serial");
 }
 
 void IconStreamer::forceReload(int currentPage, int iconsPerPage,
