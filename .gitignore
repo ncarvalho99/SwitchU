@@ -17,3 +17,8 @@ compile_commands.json
 
 # Keep the local ulaunch checkout out of this repository.
 /ulaunch/
+
+# Local reference builds kept side by side for comparison, and saved CI logs.
+/.compilado_autor/
+/.compilado_fork/
+/.logs/
