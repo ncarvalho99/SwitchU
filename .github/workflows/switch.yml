@@ -25,7 +25,7 @@ jobs:
       matrix:
         mode:
           - debug
-#          - release
+          - release
         variant:
           - homebrew
           - sysmodule
@@ -36,7 +36,7 @@ jobs:
         run: echo "key=$(date +'%W')" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
@@ -98,7 +98,7 @@ jobs:
 
       - name: Upload homebrew artifact
         if: matrix.variant == 'homebrew'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SwitchU-homebrew-${{ matrix.mode }}
           if-no-files-found: error
@@ -108,8 +108,22 @@ jobs:
 
       - name: Upload sysmodule artifact
         if: matrix.variant == 'sysmodule'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: SwitchU-sysmodule-${{ matrix.mode }}
           if-no-files-found: error
           path: artifacts/SwitchU-sysmodule-${{ matrix.mode }}.zip
+
+      # Linked ELFs, kept out of the install payload above. ns_debug.sh needs
+      # one of these to resolve addresses in an atmosphere/crash_reports log:
+      #   ./ns_debug.sh local SwitchU 0169...log
+      # The .nso/.nro the console actually runs is generated from these, so
+      # they must come from the same run as the build being debugged.
+      - name: Upload ELF symbols
+        uses: actions/upload-artifact@v5
+        with:
+          name: SwitchU-symbols-${{ matrix.variant }}-${{ matrix.mode }}
+          if-no-files-found: warn
+          path: |
+            build/cross/aarch64/${{ matrix.mode }}/SwitchU
+            build/cross/aarch64/${{ matrix.mode }}/switchu-daemon
