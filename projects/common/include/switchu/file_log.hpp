@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdio>
 #include <cstdarg>
-#include <fstream>
 #include <mutex>
+#include <string>
 #include <switchu/log_utils.hpp>
 
 namespace switchu {
@@ -25,12 +25,12 @@ public:
 
         char path[256];
         log_detail::build_current_log_path(path, sizeof(path), LOG_DIR, tag, LOG_EXTENSION);
-        self.m_file.open(path, can_truncate ? std::ios::out | std::ios::trunc : std::ios::out | std::ios::app);
-        if (self.m_file.is_open()) {
+        self.m_sink.open(path, can_truncate);
+        if (self.m_sink.is_open()) {
             char timestamp[32];
             log_detail::format_line_timestamp(timestamp, sizeof(timestamp));
-            self.m_file << '[' << timestamp << "] === " << tag << " log start ===\n";
-            self.m_file.flush();
+            self.m_sink.append(std::string("[") + timestamp + "] === " + tag + " log start ===");
+            self.m_sink.flush();
         }
     }
 
@@ -38,6 +38,22 @@ public:
         auto& self = inst();
         std::lock_guard<std::mutex> lock(self.m_mutex);
         close_current_file(self);
+    }
+
+    // Forces buffered lines out to the SD card. Call before anything that may
+    // terminate the process without unwinding.
+    static void flush() {
+        auto& self = inst();
+        std::lock_guard<std::mutex> lock(self.m_mutex);
+        self.m_sink.flush();
+    }
+
+    // Drains lines that have been buffered for a while. Intended for processes
+    // that run indefinitely and never reach close().
+    static void flushIfStale(int maxAgeSeconds = 2) {
+        auto& self = inst();
+        std::lock_guard<std::mutex> lock(self.m_mutex);
+        self.m_sink.flush_if_stale(maxAgeSeconds);
     }
 
     static void log(const char* fmt, ...) {
@@ -54,27 +70,24 @@ public:
         std::lock_guard<std::mutex> lock(self.m_mutex);
 
         std::fprintf(stderr, "[%s] %s\n", timestamp, buf);
-        if (self.m_file.is_open()) {
-            self.m_file << '[' << timestamp << "] " << buf << '\n';
-            self.m_file.flush();
-        }
+        self.m_sink.append(std::string("[") + timestamp + "] " + buf);
     }
 
 private:
     static FileLog& inst() { static FileLog s; return s; }
 
     static void close_current_file(FileLog& self) {
-        if (!self.m_file.is_open())
+        if (!self.m_sink.is_open())
             return;
 
         char timestamp[32];
         log_detail::format_line_timestamp(timestamp, sizeof(timestamp));
-        self.m_file << '[' << timestamp << "] === log end ===\n";
-        self.m_file.close();
+        self.m_sink.append(std::string("[") + timestamp + "] === log end ===");
+        self.m_sink.close();
     }
 
     std::mutex m_mutex;
-    std::ofstream m_file;
+    log_detail::buffered_sink m_sink;
 };
 
 }
