@@ -1468,6 +1468,8 @@ int main(int argc, char* argv[]) {
 
     while (g_running.load()) {
         mainLoop();
+        // The daemon never closes its log, so drain the write buffer on a timer.
+        switchu::FileLog::flushIfStale();
         svcSleepThread(10'000'000ULL);
     }
 
