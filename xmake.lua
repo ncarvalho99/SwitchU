@@ -180,6 +180,14 @@ target("SwitchU")
     if is_mode("release") then
         add_cxflags("-O3", "-flto=auto", "-ffast-math", {force = true})
         add_ldflags("-flto=auto", {force = true})
+        -- Keep the linked ELF symbolizable so ns_debug.sh can resolve
+        -- addresses from atmosphere/crash_reports. mode.release would strip
+        -- it, and it only applies its defaults when the target hasn't set
+        -- them. The .nso the console runs is generated from this ELF and
+        -- carries no symbol or DWARF sections, so this costs nothing at
+        -- runtime.
+        set_symbols("debug")
+        set_strip("none")
     end
 
     add_defines(version_define)
@@ -276,6 +284,10 @@ target("switchu-daemon")
     if is_mode("release") then
         add_cxflags("-O3", "-flto=auto", "-ffast-math", {force = true})
         add_ldflags("-flto=auto", {force = true})
+        -- See the note on the SwitchU target: keep the ELF symbolizable for
+        -- crash report resolution without affecting the generated .nso.
+        set_symbols("debug")
+        set_strip("none")
     end
 
     set_values("switch.name",    "switchu-daemon")
