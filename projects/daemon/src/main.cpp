@@ -212,8 +212,9 @@ struct DaemonAppCatalogEntry {
 static std::vector<DaemonAppCatalogEntry> g_appCatalog;
 static std::atomic<bool> g_appCatalogRefreshPending{false};
 static int g_appCatalogRefreshDelay = 0;
-static constexpr const char* kAppCatalogPath = "sdmc:/config/SwitchU/applist.bin";
-static constexpr const char* kAppCatalogTmpPath = "sdmc:/config/SwitchU/applist.tmp";
+static constexpr const char* kAppCatalogPath = smi::kAppCatalogPath;
+static constexpr const char* kAppCatalogTmpPath = smi::kAppCatalogTmpPath;
+static constexpr const char* kAppCatalogBakPath = smi::kAppCatalogBakPath;
 static std::mutex g_controlCacheQueueMutex;
 static std::vector<uint64_t> g_controlCacheQueue;
 static std::atomic<bool> g_controlCacheRefreshPending{false};
@@ -375,17 +376,41 @@ static bool writeAppCatalogFile() {
         return false;
     }
 
+    // fsdev's rename cannot overwrite an existing file, so the live catalog has
+    // to be moved out of the way first. Park it at the .bak path instead of
+    // deleting it: readers that land inside the swap window fall back to it,
+    // and if the swap fails we can put it back rather than leaving the menu
+    // with no catalog at all.
     fsEc.clear();
-    std::filesystem::remove(kAppCatalogPath, fsEc);
+    std::filesystem::remove(kAppCatalogBakPath, fsEc);
+
+    bool parked = false;
+    fsEc.clear();
+    if (std::filesystem::exists(kAppCatalogPath, fsEc)) {
+        fsEc.clear();
+        std::filesystem::rename(kAppCatalogPath, kAppCatalogBakPath, fsEc);
+        parked = !fsEc;
+        if (!parked) {
+            // Couldn't park it; remove in place so the swap below can proceed.
+            fsEc.clear();
+            std::filesystem::remove(kAppCatalogPath, fsEc);
+        }
+    }
+
     fsEc.clear();
     std::filesystem::rename(kAppCatalogTmpPath, kAppCatalogPath, fsEc);
     if (fsEc) {
-        fsEc.clear();
-        std::filesystem::remove(kAppCatalogTmpPath, fsEc);
         switchu::FileLog::log("[catalog] rename FAIL");
+        std::error_code recoverEc;
+        if (parked)
+            std::filesystem::rename(kAppCatalogBakPath, kAppCatalogPath, recoverEc);
+        recoverEc.clear();
+        std::filesystem::remove(kAppCatalogTmpPath, recoverEc);
         return false;
     }
 
+    fsEc.clear();
+    std::filesystem::remove(kAppCatalogBakPath, fsEc);
     return true;
 }
 
