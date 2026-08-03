@@ -2,6 +2,7 @@
 #include <nxui/core/Texture.hpp>
 #include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
+#include <nxui/core/ThreadPool.hpp>
 #include <vector>
 #include <memory>
 #include <cstdint>
@@ -19,6 +20,11 @@ public:
     // Prepare icon metadata for all apps after the app list has been fetched.
     void init(int appCount);
     void setIconDataLoader(IconDataLoader loader);
+
+    // Optional. When set, JPEG decoding is spread across the pool instead of
+    // running inline on the calling thread. Uploads always stay on the caller,
+    // which must be the render thread.
+    void setThreadPool(nxui::ThreadPool* pool) { m_threadPool = pool; }
     void setTitleId(int appIndex, uint64_t titleId);
     void setIconData(int appIndex, std::vector<uint8_t> compressed);
     void resize(int appCount);
@@ -63,6 +69,7 @@ private:
     std::vector<std::vector<uint8_t>> m_compressed;
     std::vector<uint64_t> m_titleIds;
     IconDataLoader m_iconLoader;
+    nxui::ThreadPool* m_threadPool = nullptr;
 
     // Pool of reusable GPU textures.
     struct TexSlot {
