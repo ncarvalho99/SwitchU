@@ -212,8 +212,9 @@ struct DaemonAppCatalogEntry {
 static std::vector<DaemonAppCatalogEntry> g_appCatalog;
 static std::atomic<bool> g_appCatalogRefreshPending{false};
 static int g_appCatalogRefreshDelay = 0;
-static constexpr const char* kAppCatalogPath = "sdmc:/config/SwitchU/applist.bin";
-static constexpr const char* kAppCatalogTmpPath = "sdmc:/config/SwitchU/applist.tmp";
+static constexpr const char* kAppCatalogPath = smi::kAppCatalogPath;
+static constexpr const char* kAppCatalogTmpPath = smi::kAppCatalogTmpPath;
+static constexpr const char* kAppCatalogBakPath = smi::kAppCatalogBakPath;
 static std::mutex g_controlCacheQueueMutex;
 static std::vector<uint64_t> g_controlCacheQueue;
 static std::atomic<bool> g_controlCacheRefreshPending{false};
@@ -313,14 +314,14 @@ static bool queryApplicationViews(const std::vector<switchu::ns::ExtApplicationR
     return true;
 }
 
-static void enqueueControlCacheRecords(const std::vector<switchu::ns::ExtApplicationRecord>& records) {
+static void enqueueControlCacheTitles(const std::vector<uint64_t>& titleIds) {
     std::lock_guard<std::mutex> lock(g_controlCacheQueueMutex);
-    for (const auto& record : records) {
-        if (record.id == 0 || switchu::control_cache::hasMeta(record.id))
+    for (uint64_t titleId : titleIds) {
+        if (titleId == 0)
             continue;
-        if (std::find(g_controlCacheQueue.begin(), g_controlCacheQueue.end(), record.id) ==
+        if (std::find(g_controlCacheQueue.begin(), g_controlCacheQueue.end(), titleId) ==
             g_controlCacheQueue.end()) {
-            g_controlCacheQueue.push_back(record.id);
+            g_controlCacheQueue.push_back(titleId);
         }
     }
 }
@@ -375,17 +376,41 @@ static bool writeAppCatalogFile() {
         return false;
     }
 
+    // fsdev's rename cannot overwrite an existing file, so the live catalog has
+    // to be moved out of the way first. Park it at the .bak path instead of
+    // deleting it: readers that land inside the swap window fall back to it,
+    // and if the swap fails we can put it back rather than leaving the menu
+    // with no catalog at all.
     fsEc.clear();
-    std::filesystem::remove(kAppCatalogPath, fsEc);
+    std::filesystem::remove(kAppCatalogBakPath, fsEc);
+
+    bool parked = false;
+    fsEc.clear();
+    if (std::filesystem::exists(kAppCatalogPath, fsEc)) {
+        fsEc.clear();
+        std::filesystem::rename(kAppCatalogPath, kAppCatalogBakPath, fsEc);
+        parked = !fsEc;
+        if (!parked) {
+            // Couldn't park it; remove in place so the swap below can proceed.
+            fsEc.clear();
+            std::filesystem::remove(kAppCatalogPath, fsEc);
+        }
+    }
+
     fsEc.clear();
     std::filesystem::rename(kAppCatalogTmpPath, kAppCatalogPath, fsEc);
     if (fsEc) {
-        fsEc.clear();
-        std::filesystem::remove(kAppCatalogTmpPath, fsEc);
         switchu::FileLog::log("[catalog] rename FAIL");
+        std::error_code recoverEc;
+        if (parked)
+            std::filesystem::rename(kAppCatalogBakPath, kAppCatalogPath, recoverEc);
+        recoverEc.clear();
+        std::filesystem::remove(kAppCatalogTmpPath, recoverEc);
         return false;
     }
 
+    fsEc.clear();
+    std::filesystem::remove(kAppCatalogBakPath, fsEc);
     return true;
 }
 
@@ -396,12 +421,15 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
 
     std::vector<switchu::ns::ExtApplicationView> views;
     queryApplicationViews(records, views, "catalog");
-    enqueueControlCacheRecords(records);
 
     const s32 count = static_cast<s32>(records.size());
     g_appCatalog.clear();
     g_appCatalog.reserve(count);
 
+    // Resolve display name and startup-user policy here, on the daemon, so the
+    // menu can build its grid straight from applist.bin. Otherwise every menu
+    // cold start reopens one .meta file per installed title.
+    std::vector<uint64_t> missingMeta;
     for (s32 i = 0; i < count; ++i) {
         const uint64_t tid = records[i].id;
         DaemonAppCatalogEntry ent;
@@ -411,8 +439,21 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
         std::snprintf(fallbackName, sizeof(fallbackName), "%016lX",
                       static_cast<unsigned long>(tid));
         ent.name = fallbackName;
+
+        switchu::control_cache::Meta meta{};
+        if (tid != 0 && switchu::control_cache::readMeta(tid, meta)) {
+            if (meta.name[0] != '\0')
+                ent.name = meta.name;
+            ent.startupUserKnown = true;
+            ent.startupUserAccount = meta.startup_user_account;
+            ent.startupUserAccountOption = meta.startup_user_account_option;
+        } else if (tid != 0) {
+            missingMeta.push_back(tid);
+        }
+
         g_appCatalog.push_back(std::move(ent));
     }
+    enqueueControlCacheTitles(missingMeta);
 
     const s32 prevCount = g_lastRecordCount;
     bool changed = prevCount != count;
@@ -1138,6 +1179,10 @@ static void mainLoop() {
     if (g_controlCacheRefreshPending.load() && g_controlCacheRefreshDelay.load() > 0) {
         --g_controlCacheRefreshDelay;
     } else if (g_controlCacheRefreshPending.exchange(false)) {
+        // Freshly cached control data supplies the real title name and
+        // startup-user policy, both of which live in the catalog now — rewrite
+        // it before asking the menu to reload.
+        rebuildAppCatalog("control-cache");
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
         didWork = true;
@@ -1448,6 +1493,8 @@ int main(int argc, char* argv[]) {
 
     while (g_running.load()) {
         mainLoop();
+        // The daemon never closes its log, so drain the write buffer on a timer.
+        switchu::FileLog::flushIfStale();
         svcSleepThread(10'000'000ULL);
     }
 
