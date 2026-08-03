@@ -234,6 +234,7 @@ void WiiUMenuApp::setStartupStatus(uint64_t suspendedTitleId, bool appRunning) {
 
 bool WiiUMenuApp::onCreate() {
     DebugLog::log("[init] onCreate enter");
+    m_iconStreamer.setThreadPool(&m_threadPool);
     m_config.load();
     loadMenuLayout();
     m_appLoader.setPendingTransform([this](std::vector<PendingApp>& apps) {
@@ -1400,6 +1401,9 @@ void WiiUMenuApp::finalizeRefresh() {
 
     GridModel refreshedModel;
     IconStreamer refreshedStreamer;
+    // This streamer is move-assigned over m_iconStreamer below, so it needs
+    // the pool too or the assignment would drop it.
+    refreshedStreamer.setThreadPool(&m_threadPool);
     m_appLoader.finalize(refreshedModel, refreshedStreamer);
     DebugLog::log("[refresh] found %d apps", refreshedModel.count());
 
