@@ -1466,6 +1466,14 @@ void WiiUMenuApp::finalizeRefresh() {
 #endif
 
 void WiiUMenuApp::onUpdate(float dt) {
+#ifdef SWITCHU_MENU
+    // The menu only flushes its log when the 4 KB buffer fills or on a clean
+    // exit, so a hard power-off loses whatever came after the last flush —
+    // which is exactly the tail you need when diagnosing a freeze. Drain it
+    // on a timer, same as the daemon does.
+    switchu::FileLog::flushIfStale();
+#endif
+
 #ifdef SWITCHU_DEBUG_UI
     if (m_debugOverlay) {
         m_debugOverlay->setDeltaTime(dt);

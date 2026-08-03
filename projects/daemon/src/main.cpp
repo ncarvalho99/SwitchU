@@ -771,6 +771,27 @@ static void handleAppletMessages() {
         openMenuFromHome("ae");
         break;
 
+        case 30:
+        case 31: {
+            // OperationModeChanged / PerformanceModeChanged — dock or undock.
+            // Nothing acted on these before, and an undock while the menu was
+            // up has been observed to wedge the whole console. The framebuffer
+            // is a fixed 1280x720 in both modes so there is no swapchain to
+            // rebuild here; this records the mode and confirms whether the
+            // daemon loop is still alive on the other side of the transition.
+            const u8 opMode   = appletGetOperationMode();
+            const u32 perfMode = appletGetPerformanceMode();
+            switchu::FileLog::log("[ae] -> %s mode: operation=%u performance=%u menuActive=%d appRunning=%d",
+                                  msg == 30 ? "OperationModeChanged" : "PerformanceModeChanged",
+                                  (unsigned)opMode, (unsigned)perfMode,
+                                  daemon::menu_la::isActive() ? 1 : 0,
+                                  daemon::app::isRunning() ? 1 : 0);
+            // Flush immediately: if the console wedges right after this, the
+            // buffered tail would never reach the SD card.
+            switchu::FileLog::flush();
+            break;
+        }
+
         case 22:
         case 29:
         case 32:
