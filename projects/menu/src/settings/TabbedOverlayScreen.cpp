@@ -239,9 +239,15 @@ void TabbedOverlayScreen::setTheme(const nxui::Theme* t) {
 
 void TabbedOverlayScreen::show() {
     if (m_active) return;
-    DebugLog::log("[settings] show()");
-    if (m_tabs.empty())
+    // Opening settings stutters the same way returning from a game did.
+    // Time the phases rather than guess which one costs: warmup() builds every
+    // tab's widgets, and rebuildContentItems() creates the labels whose text
+    // textures each cost a GPU upload.
+    const uint64_t tickShowStart = armGetSystemTick();
+    const bool coldWarmup = m_tabs.empty();
+    if (coldWarmup)
         warmup();
+    const uint64_t tickAfterWarmup = armGetSystemTick();
     m_active    = true;
     m_animating = true;
     m_showing   = true;
@@ -266,8 +272,22 @@ void TabbedOverlayScreen::show() {
     m_contentSlideAnim.setImmediate(1.f);
     m_tabAccentW.setImmediate(3.f);
     if (m_tabBar) rebuildTabBar();
+    const uint64_t tickAfterTabBar = armGetSystemTick();
     if (m_tabContent) rebuildContentItems();
     invalidateBackdropCache();
+
+    {
+        const uint64_t tickEnd = armGetSystemTick();
+        auto elapsedMs = [](uint64_t from, uint64_t to) -> unsigned {
+            return static_cast<unsigned>(armTicksToNs(to - from) / 1000000ULL);
+        };
+        DebugLog::log("[settings] show() warmup=%ums(%s) tabbar=%ums content=%ums total=%ums",
+                      elapsedMs(tickShowStart, tickAfterWarmup),
+                      coldWarmup ? "cold" : "cached",
+                      elapsedMs(tickAfterWarmup, tickAfterTabBar),
+                      elapsedMs(tickAfterTabBar, tickEnd),
+                      elapsedMs(tickShowStart, tickEnd));
+    }
 
     setVisible(true);
     syncPanelState(0.f);
