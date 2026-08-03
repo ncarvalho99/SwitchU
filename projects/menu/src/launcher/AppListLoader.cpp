@@ -109,18 +109,25 @@ bool fetchDaemonCatalog(std::vector<PendingApp>& out) {
         a.userRequired = !ent.startupUserKnown ||
                          requiresInteractiveUserSelection(a.startupUserAccount,
                                                           a.startupUserAccountOption);
+        // Icon bytes deliberately stay on disk here. IconStreamer pulls them
+        // through AppListLoader::loadIconData for the visible page only —
+        // reading every title's JPEG up front cost several MB of SD I/O on the
+        // main thread before the first frame could be drawn.
         a.iconData = std::move(ent.icon);
 
-        switchu::control_cache::Meta meta{};
-        if (switchu::control_cache::readMeta(ent.titleId, meta)) {
-            if (meta.name[0] != '\0')
-                a.title = meta.name;
-            a.startupUserKnown = true;
-            a.startupUserAccount = meta.startup_user_account;
-            a.startupUserAccountOption = meta.startup_user_account_option;
-            a.userRequired = requiresInteractiveUserSelection(a.startupUserAccount,
-                                                              a.startupUserAccountOption);
-            a.iconData = switchu::control_cache::readIcon(ent.titleId);
+        if (!a.startupUserKnown) {
+            // The daemon resolves name and startup-user policy into the
+            // catalog. Only titles it hasn't cached yet need a .meta read.
+            switchu::control_cache::Meta meta{};
+            if (switchu::control_cache::readMeta(ent.titleId, meta)) {
+                if (meta.name[0] != '\0')
+                    a.title = meta.name;
+                a.startupUserKnown = true;
+                a.startupUserAccount = meta.startup_user_account;
+                a.startupUserAccountOption = meta.startup_user_account_option;
+                a.userRequired = requiresInteractiveUserSelection(a.startupUserAccount,
+                                                                  a.startupUserAccountOption);
+            }
         }
 
         out.push_back(std::move(a));
