@@ -497,8 +497,8 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         };
     };
 
-    const int segs = cornerSegsFor(rad);
-    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
+    constexpr int segs = kCornerSegs;
+    constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct { float cx, cy; float a0; } corners[4] = {
@@ -509,17 +509,16 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
     };
 
     Vec2 pts[maxPts];
-    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = -std::sin(a);
-            nrm[ptCount] = {ca, sa};
-            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
+            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
+                              cn.cy - std::sin(a) * rad};
         }
     }
 
+    reserveVertices((uint32_t)ptCount * 3);
     Vec2 cuv = toUV(cx, cy);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
@@ -531,10 +530,7 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
 
-    // Deliberately not feathered. This path draws the frosted backdrop behind
-    // roughly thirty settings widgets, so skirting it was a large share of the
-    // arena. Its source is an already-blurred half-resolution capture, so its
-    // edge is soft to begin with and has the least to gain.
+
     flush();
     useShader(ShaderProgram::Basic);
 }
@@ -593,12 +589,7 @@ void Renderer::drawLiquidGlass(int target, const Rect& panelRect, float radius,
     fs.extra[24] = (float)m_gpu.width();
     fs.extra[25] = (float)m_gpu.height();
     fs.extra[26] = clamp01(shade);
-    // Corner radius in pixels. This parameter has been accepted by this
-    // function since it was written and never reached the shader, which built
-    // its corner from powerFactor alone — a superellipse exponent. At the
-    // settings overlay's powerFactor of 20 that is very nearly a sharp
-    // rectangle, which is the roundness that "isn't linear".
-    fs.extra[27] = std::max(0.0f, radius);
+    fs.extra[27] = 0.0f;
 
     pushFsUniforms(fs);
     bindTexture(m_offDescSlot[target]);
@@ -671,12 +662,27 @@ void Renderer::applyWave(float time, float amplitude, float frequency) {
 
 // Geometry emission
 
+// addQuad already flushes when a quad would not fit, but the rounded shapes
+// emit their triangles one vertex at a time through addVertex, which drops
+// silently instead. A frame that ran out mid-shape lost every remaining vertex
+// without a trace: the menu rendered partially and flickered, since which
+// shapes survived depended on how many the animated background emitted first.
+// Callers reserve their run up front instead.
+void Renderer::reserveVertices(uint32_t count) {
+    if (count > GpuDevice::MAX_VERTICES)
+        return;   // Cannot be satisfied by flushing; let it truncate.
+    if (m_vtxCount + count > GpuDevice::MAX_VERTICES)
+        flush();
+}
+
 void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount >= GpuDevice::MAX_VERTICES) {
-        // Silent truncation here is what produced the flickering menu: the
-        // arena filled mid-shape and every remaining vertex vanished, with
-        // which survived varying per frame. stdout goes nowhere on the
-        // console, so count it and surface it through the perf line instead.
+        // Kept from the reverted antialiasing work, which is the only thing
+        // that ever filled this arena. The printf goes nowhere on the console,
+        // so a full arena dropped geometry invisibly — shapes flickering in
+        // and out, and later an edge treatment that appeared not to work
+        // because its vertices were being truncated. Counted and reported
+        // through the perf line instead.
         ++m_frameVertsDropped;
         return;
     }
@@ -730,48 +736,6 @@ void Renderer::drawGradientRect(const Rect& r, const Color& top, const Color& bo
     addQuadGrad(r.x, r.y, r.right(), r.bottom(), 0, 0, 1, 1, top, bottom);
 }
 
-// Edge antialiasing for the geometry paths, without MSAA or a shader change.
-// The rounded shapes are triangle fans, so their outline is a hard polygon
-// boundary that stair-steps against whatever is behind it. A one pixel band
-// fading to alpha 0 around the perimeter gives the edge a gradient to resolve
-// across. Same shader, same batch; costs 6 extra vertices per perimeter
-// segment, which is why MAX_VERTICES was doubled when this came back.
-//
-// uvSrc maps positions to texture coordinates when a texture is bound; pass
-// nullptr for solid fills. The outer vertices reuse their inner neighbour's UV
-// since their alpha is zero anyway.
-void Renderer::emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
-                               const Color& c, const Rect* uvSrc) {
-    if (count < 2 || c.a <= 0.f) return;
-
-    const Color outer = c.withAlpha(0.f);
-    auto uvOf = [uvSrc](const Vec2& p) -> Vec2 {
-        if (!uvSrc) return {0.f, 0.f};
-        return {(p.x - uvSrc->x) / uvSrc->width, (p.y - uvSrc->y) / uvSrc->height};
-    };
-
-    for (int i = 0; i < count; ++i) {
-        const Vec2& p0 = pts[i];
-        const Vec2& p1 = pts[(i + 1) % count];
-        const Vec2& n0 = normals[i];
-        const Vec2& n1 = normals[(i + 1) % count];
-
-        const Vec2 o0{p0.x + n0.x * kEdgeFeatherPx, p0.y + n0.y * kEdgeFeatherPx};
-        const Vec2 o1{p1.x + n1.x * kEdgeFeatherPx, p1.y + n1.y * kEdgeFeatherPx};
-
-        const Vec2 uv0 = uvOf(p0);
-        const Vec2 uv1 = uvOf(p1);
-
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
-        addVertex(p1.x, p1.y, uv1.x, uv1.y, c);
-        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
-
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
-        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
-        addVertex(o0.x, o0.y, uv0.x, uv0.y, outer);
-    }
-}
-
 void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     if (radius <= 0.f) { drawRect(r, c); return; }
     float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
@@ -781,8 +745,8 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     auto cx = r.x + r.width * 0.5f;
     auto cy = r.y + r.height * 0.5f;
 
-    const int segs = cornerSegsFor(rad);
-    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
+    constexpr int segs = kCornerSegs;
+    constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct {float cx, cy; float a0;} corners[4] = {
@@ -792,22 +756,21 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
         {r.right() - rad, r.bottom() - rad,   pi2*3},
     };
 
-    // Outward unit normal kept alongside each perimeter point so the feather
-    // ring knows which way to push. On the arcs it is the direction that
-    // placed the point; at arc endpoints it is axis aligned, which is also
-    // correct for the straight edges between corners.
+    // Outward unit normal is kept alongside each perimeter point so the
+    // feather ring below knows which way to push. On the arcs it is the same
+    // direction that placed the point; at the arc endpoints it is axis
+    // aligned, which is also correct for the straight edges between corners.
     Vec2 pts[maxPts];
-    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = -std::sin(a);
-            nrm[ptCount] = {ca, sa};
-            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
+            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
+                              cn.cy - std::sin(a) * rad};
         }
     }
 
+    reserveVertices((uint32_t)ptCount * 3);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
         auto& p1 = pts[(i + 1) % ptCount];
@@ -816,7 +779,6 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
         addVertex(p1.x, p1.y, 0, 0, c);
     }
 
-    emitFeatherRing(pts, nrm, ptCount, c);
 }
 
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
@@ -825,8 +787,8 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
 
     bindTexture(-1);
 
-    const int segs = cornerSegsFor(rad);
-    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
+    constexpr int segs = kCornerSegs;
+    constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct {float cx, cy; float a0;} corners[4] = {
@@ -858,13 +820,6 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
         addVertex(inner[j].x, inner[j].y, 0, 0, c);
         addVertex(outer[j].x, outer[j].y, 0, 0, c);
     }
-
-    // Deliberately not feathered. Two rings on a strip is the single most
-    // expensive shape in the UI, and with a glass panel drawing a highlight
-    // and a border outline each, it was the bulk of the 98853 vertex peak that
-    // forced the arena over its limit. Higher segment counts carry the
-    // roundness here; the residual aliasing on a 1px stroke is far less
-    // visible than the faceting was.
 }
 
 void Renderer::drawCircle(const Vec2& center, float radius, const Color& c, int segments) {
@@ -931,8 +886,8 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
                 (py - dest.y) / dest.height};
     };
 
-    const int segs = cornerSegsFor(rad);
-    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
+    constexpr int segs = kCornerSegs;
+    constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct { float cx, cy; float a0; } corners[4] = {
@@ -943,17 +898,16 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
     };
 
     Vec2 pts[maxPts];
-    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = -std::sin(a);
-            nrm[ptCount] = {ca, sa};
-            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
+            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
+                              cn.cy - std::sin(a) * rad};
         }
     }
 
+    reserveVertices((uint32_t)ptCount * 3);
     Vec2 cuv = toUV(fcx, fcy);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
@@ -965,7 +919,6 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
 
-    emitFeatherRing(pts, nrm, ptCount, tint, &dest);
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,

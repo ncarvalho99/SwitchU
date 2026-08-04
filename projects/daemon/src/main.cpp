@@ -613,11 +613,25 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
 
     // Writes through fsdev are not durable until the device is committed:
     // fsdevCommitDevice maps to fsFsCommit, which is what actually flushes FAT
-    // metadata. Nothing in this project ever called it, while the daemon writes
-    // continuously — daemon.log, applist.bin and its rename dance, and the
-    // control cache. Rebooting on top of that dirty metadata corrupted the SD
-    // card three times, each needing the firmware files restored.
-    switchu::FileLog::log("[%s] power sequence %u, closing log and committing sd", source, (unsigned)action);
+    // metadata. The daemon writes continuously — daemon.log, applist.bin and
+    // its rename dance, and the control cache.
+    //
+    // A commit only covers the calling process's own fs session, though, and
+    // the menu applet has its own. It writes config.json and layout.json, and
+    // a settings change queues one moments before the user picks Reboot from
+    // the power menu. It now commits before sending the request, but it is
+    // still a live process with the file open, so give it a moment to exit
+    // before cutting power. Without this the SD card kept corrupting on
+    // reboot even with the daemon-side commit in place.
+    switchu::FileLog::log("[%s] power sequence %u, waiting for menu then committing sd",
+                          source, (unsigned)action);
+    for (int i = 0; i < 50 && daemon::menu_la::isActive(); ++i) {
+        if (daemon::menu_la::checkFinished())
+            break;
+        svcSleepThread(20'000'000ULL);   // 20ms, so at most 1s total
+    }
+    switchu::FileLog::log("[%s] menu active=%d after wait", source,
+                          daemon::menu_la::isActive() ? 1 : 0);
     switchu::FileLog::close();
     switchu::commitSdCard("power-sequence");
 

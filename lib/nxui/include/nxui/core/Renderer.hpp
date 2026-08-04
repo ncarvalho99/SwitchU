@@ -184,24 +184,8 @@ public:
 
 private:
     // Emit geometry helpers
-    // Segments per 90-degree corner, chosen from the radius. A fixed 8 was
-    // fine on the small icon corners but visibly polygonal on the larger radii
-    // of settings cards and dialog buttons — reported as roundness that "isn't
-    // linear", which is faceting, not aliasing, and no amount of edge feather
-    // fixes it. Roughly one segment per 2px of arc, bounded at both ends.
-    static constexpr int kMinCornerSegs = 6;
-    static constexpr int kMaxCornerSegs = 20;
-    static int cornerSegsFor(float radius) {
-        int s = (int)(radius * 0.5f) + 1;
-        return s < kMinCornerSegs ? kMinCornerSegs
-             : (s > kMaxCornerSegs ? kMaxCornerSegs : s);
-    }
-
-    // Width, in pixels, of the alpha ramp skirting rounded geometry.
-    static constexpr float kEdgeFeatherPx = 1.0f;
-
-    void emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
-                         const Color& c, const Rect* uvSrc = nullptr);
+    // Segments per 90-degree corner on rounded geometry.
+    static constexpr int kCornerSegs = 8;
 
     uint32_t m_frameDrawCalls = 0;
     uint32_t m_framePipelineBinds = 0;
@@ -217,6 +201,10 @@ private:
     uint32_t m_lastFrameVertsDropped = 0;
     bool     m_holdOffscreenCapture = false;
 
+    // Flushes the current batch if `count` more vertices would not fit.
+    // addVertex silently drops past the buffer end, so shapes that emit a run
+    // of vertices have to make room before starting one.
+    void reserveVertices(uint32_t count);
     void addVertex(float x, float y, float u, float v, const Color& c);
     void addQuad(float x0, float y0, float x1, float y1,
                  float u0, float v0, float u1, float v1, const Color& c);

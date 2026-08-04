@@ -6,19 +6,9 @@
 namespace {
 
 // Vertices held back from the background so the foreground UI always fits in
-// the 65536 vertex arena.
-//
-// Sized from measurement, not estimate. With 40960 reserved the arena still
-// filled and dropped 1898 vertices: the background was taking up to 24576,
-// leaving 24576 for a UI that demanded ~43000 once every rounded fill carried
-// an antialiasing skirt. Geometry is emitted in draw order, so the overflow
-// landed on the icons — drawn last — and their skirts were the part that
-// vanished, which read as the aliasing coming back.
-//
-// 49152 leaves the UI comfortably above its measured demand. The background
-// draws circles and triangles, which are never skirted, so its cost per shape
-// is unchanged; it simply clamps to fewer of them.
-constexpr int kBackgroundRenderReserveVertices = 49152;
+// the 65536 vertex buffer. Back to the original value now that the
+// antialiasing skirt is gone and a rounded rect costs ~108 vertices again.
+constexpr int kBackgroundRenderReserveVertices = 13312;
 constexpr int kWorstCaseShapeVertices = 36;
 constexpr int kGlassShapeLayers = 3;
 constexpr int kGridRenderedShapeBudget = 448;

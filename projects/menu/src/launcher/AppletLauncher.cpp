@@ -3,6 +3,7 @@
 #ifdef SWITCHU_MENU
 #include "smi_commands.hpp"
 #include <switchu/smi_protocol.hpp>
+#include <switchu/sd_commit.hpp>
 #endif
 #include <switch.h>
 
@@ -79,18 +80,31 @@ void AppletLauncher::launchUserPage(AccountUid uid) {
     }
 }
 
+// The daemon commits the SD card before starting a power sequence, but a
+// commit only flushes the calling process's own fs session. This menu writes
+// config.json and layout.json — a settings change queues one moments before
+// the user picks Reboot — and those writes live in a different session
+// entirely. The daemon then reboots without waiting for this applet to exit,
+// so they were still dirty when power dropped. That is the SD corruption that
+// kept returning after a reboot from the power menu.
+static void commitBeforePowerAction(const char* what) {
+    DebugLog::log("[launcher] requesting %s, committing sd first", what);
+    switchu::FileLog::flush();
+    switchu::commitSdCard("menu-power-request");
+}
+
 void AppletLauncher::enterSleep() {
-    DebugLog::log("[launcher] requesting sleep");
+    commitBeforePowerAction("sleep");
     switchu::menu::smi_cmd::enterSleep();
 }
 
 void AppletLauncher::shutdown() {
-    DebugLog::log("[launcher] requesting shutdown");
+    commitBeforePowerAction("shutdown");
     switchu::menu::smi_cmd::shutdown();
 }
 
 void AppletLauncher::reboot() {
-    DebugLog::log("[launcher] requesting reboot");
+    commitBeforePowerAction("reboot");
     switchu::menu::smi_cmd::reboot();
 }
 
