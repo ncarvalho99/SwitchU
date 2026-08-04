@@ -474,7 +474,10 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         };
     };
 
-    constexpr int segs = 8;
+    // 8 segments per 90-degree corner faceted visibly at typical radii,
+    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
+    // vertex count of a rounded rect, which is a few dozen vertices.
+    constexpr int segs = 16;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -699,7 +702,10 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     auto cx = r.x + r.width * 0.5f;
     auto cy = r.y + r.height * 0.5f;
 
-    constexpr int segs = 8;
+    // 8 segments per 90-degree corner faceted visibly at typical radii,
+    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
+    // vertex count of a rounded rect, which is a few dozen vertices.
+    constexpr int segs = 16;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -734,7 +740,10 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
 
     bindTexture(-1);
 
-    constexpr int segs = 8;
+    // 8 segments per 90-degree corner faceted visibly at typical radii,
+    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
+    // vertex count of a rounded rect, which is a few dozen vertices.
+    constexpr int segs = 16;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -833,7 +842,10 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
                 (py - dest.y) / dest.height};
     };
 
-    constexpr int segs = 8;
+    // 8 segments per 90-degree corner faceted visibly at typical radii,
+    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
+    // vertex count of a rounded rect, which is a few dozen vertices.
+    constexpr int segs = 16;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 

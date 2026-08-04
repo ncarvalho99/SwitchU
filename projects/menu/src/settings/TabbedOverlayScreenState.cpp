@@ -1,5 +1,6 @@
 #include "TabbedOverlayScreen.hpp"
 #include "core/DebugLog.hpp"
+#include <switch.h>
 
 #include <algorithm>
 
@@ -86,7 +87,14 @@ void TabbedOverlayScreen::warmup() {
     float oldScrollTarget = m_scrollTarget;
     float oldScrollY = m_scrollY;
 
+    // warmup() measured at 1615ms cold, but it does two very different things:
+    // buildTabs() gathers the item data, which for Storage, System, Bluetooth
+    // and Network means blocking service queries, and the loop below builds
+    // widgets for every tab to warm the caches. Time them apart before
+    // deciding which one to move.
+    const uint64_t tickWarmupStart = armGetSystemTick();
     buildTabs();
+    const uint64_t tickAfterBuildTabs = armGetSystemTick();
 
     if (m_tabs.empty()) {
         m_tabIndex = 0;
@@ -109,11 +117,17 @@ void TabbedOverlayScreen::warmup() {
 
     if (!usesCustomContentLayout()) {
         for (int tabIndex = 0; tabIndex < (int)m_tabs.size(); ++tabIndex) {
+            const uint64_t tickTab = armGetSystemTick();
             m_tabIndex = tabIndex;
             m_contentIdx = 0;
             m_scrollTarget = 0.f;
             m_scrollY = 0.f;
             rebuildContentItems();
+            DebugLog::log("[settings] warmup tab %d '%s' items=%d build=%ums",
+                          tabIndex,
+                          m_tabs[tabIndex].name.c_str(),
+                          (int)m_tabs[tabIndex].items.size(),
+                          (unsigned)(armTicksToNs(armGetSystemTick() - tickTab) / 1000000ULL));
         }
 
         m_tabIndex = std::clamp(oldTab, 0, (int)m_tabs.size() - 1);
@@ -127,6 +141,12 @@ void TabbedOverlayScreen::warmup() {
     }
 
     rebuildContentItems();
+
+    DebugLog::log("[settings] warmup buildTabs=%ums tabWidgets=%ums tabs=%d total=%ums",
+                  (unsigned)(armTicksToNs(tickAfterBuildTabs - tickWarmupStart) / 1000000ULL),
+                  (unsigned)(armTicksToNs(armGetSystemTick() - tickAfterBuildTabs) / 1000000ULL),
+                  (int)m_tabs.size(),
+                  (unsigned)(armTicksToNs(armGetSystemTick() - tickWarmupStart) / 1000000ULL));
 }
 
 bool TabbedOverlayScreen::itemFocusable(const SettingItem& item) const {

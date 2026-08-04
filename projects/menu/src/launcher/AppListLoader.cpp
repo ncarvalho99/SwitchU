@@ -39,15 +39,23 @@ bool isValidUtf8(const std::string& s) {
     return true;
 }
 
-void logSuspiciousTitle(uint64_t titleId, const std::string& name) {
+// Last line of defence. The daemon now refuses to cache an unrenderable NACP
+// name, but a catalog written before that is still on disk, so replace anything
+// that can't be drawn with the title ID rather than showing noise.
+void sanitizeTitle(uint64_t titleId, std::string& name) {
     if (isValidUtf8(name))
         return;
+
     char hex[3 * 32 + 1] = {};
     const size_t shown = name.size() < 32 ? name.size() : 32;
     for (size_t i = 0; i < shown; ++i)
         std::snprintf(hex + i * 3, 4, "%02X ", (unsigned char)name[i]);
-    DebugLog::log("[loader] title 0x%016lX has non-UTF8 name len=%zu bytes: %s",
+    DebugLog::log("[loader] title 0x%016lX has non-UTF8 name len=%zu, replacing. bytes: %s",
                   (unsigned long)titleId, name.size(), hex);
+
+    char tidBuf[17];
+    std::snprintf(tidBuf, sizeof(tidBuf), "%016lX", (unsigned long)titleId);
+    name = tidBuf;
 }
 
 #ifdef SWITCHU_MENU
@@ -164,7 +172,7 @@ bool fetchDaemonCatalog(std::vector<PendingApp>& out) {
             }
         }
 
-        logSuspiciousTitle(a.titleId, a.title);
+        sanitizeTitle(a.titleId, a.title);
         out.push_back(std::move(a));
     }
 

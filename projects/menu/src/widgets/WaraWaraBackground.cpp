@@ -5,7 +5,11 @@
 
 namespace {
 
-constexpr int kBackgroundRenderReserveVertices = 13312;
+// Vertices held back from the background so the foreground UI always fits in
+// the 65536 vertex buffer. Doubled along with the corner tessellation in
+// Renderer.cpp: a rounded rect went from 8 to 16 segments per corner, so the
+// UI's share roughly doubled and the old reserve could have been overrun.
+constexpr int kBackgroundRenderReserveVertices = 26624;
 constexpr int kWorstCaseShapeVertices = 36;
 constexpr int kGlassShapeLayers = 3;
 constexpr int kGridRenderedShapeBudget = 448;
