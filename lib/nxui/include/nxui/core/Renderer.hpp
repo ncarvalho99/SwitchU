@@ -157,6 +157,16 @@ public:
 
 private:
     // Emit geometry helpers
+    // Segments per 90-degree corner on rounded geometry. Edge smoothness comes
+    // from emitFeatherRing rather than from tessellation, so this only needs to
+    // be high enough that the curve doesn't read as faceted.
+    static constexpr int kCornerSegs = 8;
+
+    // Width, in pixels, of the alpha ramp skirting rounded shapes.
+    static constexpr float kEdgeFeatherPx = 1.0f;
+
+    void emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
+                         const Color& c, const Rect* uvSrc = nullptr);
     void addVertex(float x, float y, float u, float v, const Color& c);
     void addQuad(float x0, float y0, float x1, float y1,
                  float u0, float v0, float u1, float v1, const Color& c);

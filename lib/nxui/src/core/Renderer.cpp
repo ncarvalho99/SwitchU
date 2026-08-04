@@ -474,10 +474,7 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         };
     };
 
-    // 8 segments per 90-degree corner faceted visibly at typical radii,
-    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
-    // vertex count of a rounded rect, which is a few dozen vertices.
-    constexpr int segs = 16;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -693,6 +690,49 @@ void Renderer::drawGradientRect(const Rect& r, const Color& top, const Color& bo
     addQuadGrad(r.x, r.y, r.right(), r.bottom(), 0, 0, 1, 1, top, bottom);
 }
 
+// Edge antialiasing without MSAA or a shader change.
+//
+// The rounded shapes are triangle fans, so their outline is a hard polygon
+// boundary and stair-steps against whatever is behind it. Raising the segment
+// count only reduces faceting; it does nothing for the aliasing. Instead, skirt
+// the perimeter with a one pixel band that fades to alpha 0, which gives the
+// edge a gradient to resolve against. Costs geometry only: same shader, same
+// vertex format, still one batched draw.
+// uvSrc maps positions to texture coordinates when a texture is bound; pass
+// nullptr for solid fills. The outer vertices reuse their inner neighbour's UV
+// since their alpha is zero anyway.
+void Renderer::emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
+                               const Color& c, const Rect* uvSrc) {
+    if (count < 2 || c.a <= 0.f) return;
+
+    const Color outer = c.withAlpha(0.f);
+    auto uvOf = [uvSrc](const Vec2& p) -> Vec2 {
+        if (!uvSrc) return {0.f, 0.f};
+        return {(p.x - uvSrc->x) / uvSrc->width, (p.y - uvSrc->y) / uvSrc->height};
+    };
+
+    for (int i = 0; i < count; ++i) {
+        const Vec2& p0 = pts[i];
+        const Vec2& p1 = pts[(i + 1) % count];
+        const Vec2& n0 = normals[i];
+        const Vec2& n1 = normals[(i + 1) % count];
+
+        const Vec2 o0{p0.x + n0.x * kEdgeFeatherPx, p0.y + n0.y * kEdgeFeatherPx};
+        const Vec2 o1{p1.x + n1.x * kEdgeFeatherPx, p1.y + n1.y * kEdgeFeatherPx};
+
+        const Vec2 uv0 = uvOf(p0);
+        const Vec2 uv1 = uvOf(p1);
+
+        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
+        addVertex(p1.x, p1.y, uv1.x, uv1.y, c);
+        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
+
+        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
+        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
+        addVertex(o0.x, o0.y, uv0.x, uv0.y, outer);
+    }
+}
+
 void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     if (radius <= 0.f) { drawRect(r, c); return; }
     float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
@@ -702,10 +742,7 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     auto cx = r.x + r.width * 0.5f;
     auto cy = r.y + r.height * 0.5f;
 
-    // 8 segments per 90-degree corner faceted visibly at typical radii,
-    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
-    // vertex count of a rounded rect, which is a few dozen vertices.
-    constexpr int segs = 16;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -716,12 +753,19 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
         {r.right() - rad, r.bottom() - rad,   pi2*3},
     };
 
+    // Outward unit normal is kept alongside each perimeter point so the
+    // feather ring below knows which way to push. On the arcs it is the same
+    // direction that placed the point; at the arc endpoints it is axis
+    // aligned, which is also correct for the straight edges between corners.
     Vec2 pts[maxPts];
+    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad, cn.cy - std::sin(a) * rad};
+            float ca = std::cos(a), sa = -std::sin(a);
+            nrm[ptCount] = {ca, sa};
+            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
         }
     }
 
@@ -732,6 +776,8 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
         addVertex(p0.x, p0.y, 0, 0, c);
         addVertex(p1.x, p1.y, 0, 0, c);
     }
+
+    emitFeatherRing(pts, nrm, ptCount, c);
 }
 
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
@@ -740,10 +786,7 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
 
     bindTexture(-1);
 
-    // 8 segments per 90-degree corner faceted visibly at typical radii,
-    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
-    // vertex count of a rounded rect, which is a few dozen vertices.
-    constexpr int segs = 16;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -842,10 +885,7 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
                 (py - dest.y) / dest.height};
     };
 
-    // 8 segments per 90-degree corner faceted visibly at typical radii,
-    // and there is no MSAA or analytic edge AA to hide it. 16 doubles the
-    // vertex count of a rounded rect, which is a few dozen vertices.
-    constexpr int segs = 16;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -857,12 +897,14 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
     };
 
     Vec2 pts[maxPts];
+    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
+            float ca = std::cos(a), sa = -std::sin(a);
+            nrm[ptCount] = {ca, sa};
+            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
         }
     }
 
@@ -876,6 +918,8 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
         addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
+
+    emitFeatherRing(pts, nrm, ptCount, tint, &dest);
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,
