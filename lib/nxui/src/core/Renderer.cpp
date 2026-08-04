@@ -531,11 +531,10 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
 
-    // Screen-space UVs, matching toUV above, so the skirt samples the
-    // offscreen exactly as the fan does.
-    const Rect uvRect{0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()};
-    emitFeatherRing(pts, nrm, ptCount, tint, &uvRect);
-
+    // Deliberately not feathered. This path draws the frosted backdrop behind
+    // roughly thirty settings widgets, so skirting it was a large share of the
+    // arena. Its source is an already-blurred half-resolution capture, so its
+    // edge is soft to begin with and has the least to gain.
     flush();
     useShader(ShaderProgram::Basic);
 }
