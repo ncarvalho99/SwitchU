@@ -144,10 +144,22 @@ void main() {
 
     float d = sdSuperellipse(p, panelAspect, powerFactor);
 
-    if (d > 0.0)
+    // Antialias the panel outline. d is a signed distance, so fading across
+    // one pixel's width in that field — which fwidth gives directly — is all
+    // the edge needs. The hard discard on d > 0 made every pixel fully in or
+    // fully out, which with no MSAA on the framebuffer is exactly the
+    // stair-stepped corners reported on the home icons.
+    //
+    // This is a re-application: the same change was reverted while isolating
+    // a flickering menu, whose actual cause turned out to be a vertex buffer
+    // overflow elsewhere. The shader itself already ran on hardware without
+    // incident.
+    float edgeWidth = max(fwidth(d), 1e-5);
+    float coverage = 1.0 - smoothstep(-edgeWidth, edgeWidth, d);
+    if (coverage <= 0.0)
         discard;
 
-    float dist = -d;
+    float dist = max(-d, 0.0);
 
     // refractionCurve is a pow per pixel; mix() then scales its effect by
     // refrIntensity, which is 0.035 here. Below a threshold the displacement is
@@ -225,7 +237,9 @@ void main() {
         color.rgb = mix(color.rgb, desaturated * veilColor, unavailableShade * 0.32);
     }
 
-    color.a = 1.0;
+    // Edge coverage rather than a flat 1.0; fragColor still carries the
+    // panel's own opacity and multiplies in below.
+    color.a = coverage;
 
     outColor = color * fragColor;
 }
