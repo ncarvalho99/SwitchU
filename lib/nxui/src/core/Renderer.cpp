@@ -234,9 +234,13 @@ void Renderer::beginFrame() {
     m_lastFrameDrawCalls = m_frameDrawCalls;
     m_lastFramePipelineBinds = m_framePipelineBinds;
     m_lastFrameVertices = m_peakVtxCount;
+    m_lastFrameBlurPasses = m_frameBlurPasses;
+    m_lastFrameCaptures = m_frameCaptures;
     m_frameDrawCalls = 0;
     m_framePipelineBinds = 0;
     m_peakVtxCount = 0;
+    m_frameBlurPasses = 0;
+    m_frameCaptures = 0;
     m_gpu.resetFsUboRing(slot);
     m_curTexSlot = -1;
     m_texturing  = false;
@@ -396,6 +400,7 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     }
 
     flush();
+    ++m_frameCaptures;
     auto cmd = m_gpu.cmdBuf();
     int slot = m_gpu.slot();
 
@@ -597,6 +602,7 @@ void Renderer::applyBlur(float radius, int passes) {
     if (!m_gpu.offscreenReady()) return;
 
     m_reusableOffscreenCaptureValid = false;
+    m_frameBlurPasses += passes * 2;
 
     constexpr float offW = (float)(GpuDevice::FB_WIDTH / 2);
     constexpr float offH = (float)(GpuDevice::FB_HEIGHT / 2);

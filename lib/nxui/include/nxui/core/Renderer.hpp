@@ -97,6 +97,14 @@ public:
     uint32_t lastFramePipelineBinds() const { return m_lastFramePipelineBinds; }
     uint32_t lastFrameVertices()      const { return m_lastFrameVertices; }
 
+    // Fullscreen work that does not scale with draw count. GPU time sits near
+    // 30ms whether the frame submits 119 draws or 144, which is the signature
+    // of a fixed cost. applyBlur runs 15 iterations of two fullscreen passes
+    // in this overlay, and captureToOffscreen blits the framebuffer — counting
+    // them says whether the cache that is supposed to stop them is working.
+    uint32_t lastFrameBlurPasses() const { return m_lastFrameBlurPasses; }
+    uint32_t lastFrameCaptures()   const { return m_lastFrameCaptures; }
+
     // Keep the offscreen backdrop capture across frames. Only set this while
     // whatever the glass samples is genuinely static, or the refraction will
     // show a stale scene.
@@ -181,6 +189,10 @@ private:
     uint32_t m_lastFrameDrawCalls = 0;
     uint32_t m_lastFramePipelineBinds = 0;
     uint32_t m_lastFrameVertices = 0;
+    uint32_t m_frameBlurPasses = 0;
+    uint32_t m_frameCaptures = 0;
+    uint32_t m_lastFrameBlurPasses = 0;
+    uint32_t m_lastFrameCaptures = 0;
     bool     m_holdOffscreenCapture = false;
 
     // Flushes the current batch if `count` more vertices would not fit.
