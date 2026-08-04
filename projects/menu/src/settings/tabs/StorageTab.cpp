@@ -1,9 +1,11 @@
 #include "TabBuilders.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
+// sd_commit is outside the guard: saveApplicationSizeCache() is compiled in
+// both variants even though only the menu one populates it.
+#include <switchu/sd_commit.hpp>
 #ifdef SWITCHU_MENU
 #include <switchu/control_cache.hpp>
-#include <switchu/sd_commit.hpp>
 #endif
 #include <algorithm>
 #include <cmath>
