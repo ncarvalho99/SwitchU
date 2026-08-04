@@ -1514,7 +1514,7 @@ void WiiUMenuApp::onUpdate(float dt) {
                       ren.lastFramePipelineBinds(),
                       ren.lastFrameVertices(),
                       (m_settings && m_settings->isActive())
-                          ? (m_settings->m_glassProbeSkippedPanel ? 2 : 1) : 0,
+                          ? (m_settings->glassProbeSkippedPanel() ? 2 : 1) : 0,
                       (m_themeShop && m_themeShop->isActive()) ? 1 : 0);
         m_perfAccumDt = 0.f;
         m_perfFrames = 0;
