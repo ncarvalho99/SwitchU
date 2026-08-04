@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include <switchu/sd_commit.hpp>
 #include <fstream>
 #include <algorithm>
 #include <filesystem>
@@ -92,5 +93,7 @@ bool AppConfig::save() const {
     std::ofstream f(kConfigPath, std::ios::trunc);
     if (!f.is_open()) return false;
     f << j.dump(2);
+    f.close();
+    switchu::commitSdCard("config");
     return true;
 }

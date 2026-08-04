@@ -27,7 +27,7 @@ bool GpuDevice::initialize() {
         dataSize += VTX_BUF_SIZE + 256;
         dataSize += IDX_BUF_SIZE + 256;
         dataSize += VS_UBO_SIZE + 256;
-        dataSize += FS_UBO_SIZE + 256;
+        dataSize += FS_UBO_SIZE * FS_UBO_RING + 256;
     }
     dataSize += MAX_TEXTURES * sizeof(DkImageDescriptor) + DK_IMAGE_DESCRIPTOR_ALIGNMENT;
     dataSize += MAX_SAMPLERS * sizeof(DkSamplerDescriptor) + DK_SAMPLER_DESCRIPTOR_ALIGNMENT;
@@ -38,7 +38,7 @@ bool GpuDevice::initialize() {
         m_vtxOff[i]   = m_dataPool.alloc(VTX_BUF_SIZE, 256);
         m_idxOff[i]   = m_dataPool.alloc(IDX_BUF_SIZE, 256);
         m_vsUboOff[i] = m_dataPool.alloc(VS_UBO_SIZE, DK_UNIFORM_BUF_ALIGNMENT);
-        m_fsUboOff[i] = m_dataPool.alloc(FS_UBO_SIZE, DK_UNIFORM_BUF_ALIGNMENT);
+        m_fsUboOff[i] = m_dataPool.alloc(FS_UBO_SIZE * FS_UBO_RING, DK_UNIFORM_BUF_ALIGNMENT);
     }
     m_imgDescOff = m_dataPool.alloc(MAX_TEXTURES * sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT);
     m_samDescOff = m_dataPool.alloc(MAX_SAMPLERS * sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT);
@@ -127,11 +127,27 @@ void GpuDevice::createOffscreenTargets() {
 }
 
 int GpuDevice::beginFrame() {
+    // These two waits mean different things and have to be told apart.
+    //
+    // acquireImage blocks until the display releases a buffer, so it absorbs
+    // vsync: a frame with time to spare waits here. The fence blocks until the
+    // GPU has finished the previous frame in this slot, so it only grows when
+    // the GPU is genuinely behind.
+    //
+    // Wall-clock frame time cannot distinguish them. The settings overlay
+    // reports exactly 33.3ms, which is two refresh periods, and says only that
+    // something exceeded 16.67ms — not what, and not by how much. Four fixes
+    // guessed from reading the render path all missed.
+    const uint64_t tAcquire = armGetSystemTick();
     m_slot = m_queue.acquireImage(m_swapchain);
-
-    // Wait for the GPU to finish the PREVIOUS frame that used this slot's
-    // command memory / vertex buffer before we overwrite them.
+    const uint64_t tFence = armGetSystemTick();
     m_frameFences[m_slot].wait();
+    const uint64_t tDone = armGetSystemTick();
+
+    m_lastAcquireNs = armTicksToNs(tFence - tAcquire);
+    m_lastFenceWaitNs = armTicksToNs(tDone - tFence);
+    m_lastFrameUploads = m_frameUploads;
+    m_frameUploads = 0;
 
     // Reset command buffer and re-feed its memory (clear invalidates memory
     // tracking — following the deko3d sample framework pattern).
@@ -258,6 +274,7 @@ bool GpuDevice::uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
 
     m_queue.submitCommands(m_uploadCmdbuf.finishList());
     m_queue.waitIdle();
+    ++m_frameUploads;
     return true;
 }
 

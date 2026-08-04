@@ -87,6 +87,29 @@ public:
 
     // Frame scope
     void beginFrame();
+
+    // Per-frame GPU submission counters, sampled at the previous beginFrame.
+    // The settings overlay drops to 10-15 fps and the cause is not obvious from
+    // reading the code — every glass panel forces a flush and a pipeline
+    // rebind, but so does the cheaper frosted path, so the two guesses I made
+    // from structure alone were both wrong. These make it measurable.
+    uint32_t lastFrameDrawCalls()     const { return m_lastFrameDrawCalls; }
+    uint32_t lastFramePipelineBinds() const { return m_lastFramePipelineBinds; }
+    uint32_t lastFrameVertices()      const { return m_lastFrameVertices; }
+
+    // Fullscreen work that does not scale with draw count. GPU time sits near
+    // 30ms whether the frame submits 119 draws or 144, which is the signature
+    // of a fixed cost. applyBlur runs 15 iterations of two fullscreen passes
+    // in this overlay, and captureToOffscreen blits the framebuffer — counting
+    // them says whether the cache that is supposed to stop them is working.
+    uint32_t lastFrameBlurPasses() const { return m_lastFrameBlurPasses; }
+    uint32_t lastFrameCaptures()   const { return m_lastFrameCaptures; }
+
+    // Keep the offscreen backdrop capture across frames. Only set this while
+    // whatever the glass samples is genuinely static, or the refraction will
+    // show a stale scene.
+    void setHoldOffscreenCapture(bool hold) { m_holdOffscreenCapture = hold; }
+    bool holdOffscreenCapture() const       { return m_holdOffscreenCapture; }
     void endFrame();
 
     // 2D drawing
@@ -157,6 +180,25 @@ public:
 
 private:
     // Emit geometry helpers
+    // Segments per 90-degree corner on rounded geometry.
+    static constexpr int kCornerSegs = 8;
+
+    uint32_t m_frameDrawCalls = 0;
+    uint32_t m_framePipelineBinds = 0;
+    uint32_t m_peakVtxCount = 0;
+    uint32_t m_lastFrameDrawCalls = 0;
+    uint32_t m_lastFramePipelineBinds = 0;
+    uint32_t m_lastFrameVertices = 0;
+    uint32_t m_frameBlurPasses = 0;
+    uint32_t m_frameCaptures = 0;
+    uint32_t m_lastFrameBlurPasses = 0;
+    uint32_t m_lastFrameCaptures = 0;
+    bool     m_holdOffscreenCapture = false;
+
+    // Flushes the current batch if `count` more vertices would not fit.
+    // addVertex silently drops past the buffer end, so shapes that emit a run
+    // of vertices have to make room before starting one.
+    void reserveVertices(uint32_t count);
     void addVertex(float x, float y, float u, float v, const Color& c);
     void addQuad(float x0, float y0, float x1, float y1,
                  float u0, float v0, float u1, float v1, const Color& c);

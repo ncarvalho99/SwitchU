@@ -63,6 +63,16 @@ public:
     static constexpr int IDX_BUF_SIZE   = 256;
     static constexpr int VS_UBO_SIZE    = 256;
     static constexpr int FS_UBO_SIZE    = 256;
+
+    // Fragment uniforms are written per draw call. With a single buffer every
+    // pushConstants overwrote memory the previous draw was still reading, so
+    // the GPU had to finish each draw before the next could be set up — no
+    // pipelining at all. Measured at roughly 0.9ms per draw call on the
+    // settings overlay, which is what put it at 31ms a frame.
+    //
+    // A ring of slots lets consecutive draws use distinct memory. 512 covers
+    // the busiest measured frame (137 draws) with room to spare, at 128 KB.
+    static constexpr int FS_UBO_RING    = 512;
     static constexpr int CMD_BUF_SIZE   = 256 * 1024;
     static constexpr int CODE_POOL_SIZE = 256 * 1024;
 
@@ -72,6 +82,23 @@ public:
     int  beginFrame();
     void endFrame();
     void waitIdle();
+
+    // Split of the two blocking waits in beginFrame, in nanoseconds.
+    // Large acquire with small fence means the GPU is keeping up and we are
+    // simply waiting on the display. Large fence means the GPU is the
+    // bottleneck, and the cost is in what we submit.
+    uint64_t lastAcquireNs()   const { return m_lastAcquireNs; }
+    uint64_t lastFenceWaitNs() const { return m_lastFenceWaitNs; }
+
+    // uploadTexture calls a full device waitIdle unconditionally, on every
+    // call, regardless of how small the texture is — already the cause of one
+    // stall bug fixed for icons this session. The draw/vert/blur/capture
+    // counters above account for GPU submission almost completely except this
+    // path, which none of them see. If something is missing a font glyph cache
+    // hit every frame — the cache is 384 entries, shared by the whole app,
+    // and the settings overlay alone can push 150+ distinct label strings
+    // through it during warmup — this is where that would show up.
+    uint32_t lastFrameUploads() const { return m_lastFrameUploads; }
 
     int  width()  const { return FB_WIDTH; }
     int  height() const { return FB_HEIGHT; }
@@ -100,6 +127,16 @@ public:
     void*     vsUboCpuAddr(int frame) const { return m_dataPool.cpuAddr(m_vsUboOff[frame]); }
     DkGpuAddr fsUboGpuAddr(int frame) const { return m_dataPool.gpuAddr(m_fsUboOff[frame]); }
     void*     fsUboCpuAddr(int frame) const { return m_dataPool.cpuAddr(m_fsUboOff[frame]); }
+
+    // Next free slot in this frame's fragment-uniform ring. Wraps rather than
+    // overflowing; a frame busy enough to wrap simply reintroduces the old
+    // aliasing for its tail instead of corrupting memory.
+    DkGpuAddr nextFsUboGpuAddr(int frame) {
+        const uint32_t idx = m_fsUboRingPos[frame];
+        m_fsUboRingPos[frame] = (idx + 1u) % FS_UBO_RING;
+        return m_dataPool.gpuAddr(m_fsUboOff[frame] + idx * FS_UBO_SIZE);
+    }
+    void resetFsUboRing(int frame) { m_fsUboRingPos[frame] = 0; }
 
     struct ImageAlloc {
         dk::MemBlock block;
@@ -173,6 +210,7 @@ private:
     uint32_t m_idxOff[NUM_FB] {};
     uint32_t m_vsUboOff[NUM_FB] {};
     uint32_t m_fsUboOff[NUM_FB] {};
+    uint32_t m_fsUboRingPos[NUM_FB] {};
     uint32_t m_imgDescOff = 0;
     uint32_t m_samDescOff = 0;
 
@@ -191,6 +229,10 @@ private:
     SDL_Renderer* m_sdlRenderer = nullptr;
 #endif
     int m_slot = -1;
+    uint32_t m_frameUploads = 0;
+    uint32_t m_lastFrameUploads = 0;
+    uint64_t m_lastAcquireNs = 0;
+    uint64_t m_lastFenceWaitNs = 0;
 };
 
 } // namespace nxui

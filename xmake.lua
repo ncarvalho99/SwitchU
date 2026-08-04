@@ -148,7 +148,14 @@ target("atmosphere-stratosphere")
     if not is_plat("cross") then return end
 
     on_build(function (target)
-        os.execv("make", {"-C", "lib/Atmosphere-libs/libstratosphere", "nx_release"})
+        -- libstratosphere is by far the longest step in a sysmodule build:
+        -- ~20 minutes of a 21 minute CI run, against ~90 seconds for this
+        -- project's own sources. It was being made serially, so hand make the
+        -- core count.
+        import("core.base.option")
+        local jobs = option.get("jobs") or os.cpuinfo("ncpu") or 4
+        os.execv("make", {"-C", "lib/Atmosphere-libs/libstratosphere",
+                          "-j" .. tostring(jobs), "nx_release"})
     end)
 target_end()
 

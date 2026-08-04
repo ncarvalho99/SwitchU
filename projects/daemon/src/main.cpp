@@ -7,6 +7,7 @@
 #include <switchu/control_cache.hpp>
 #include <switchu/ns_ext.hpp>
 #include <switchu/file_log.hpp>
+#include <switchu/sd_commit.hpp>
 #include "app_manager.hpp"
 #include "ecs.hpp"
 #include "menu_launcher.hpp"
@@ -411,6 +412,11 @@ static bool writeAppCatalogFile() {
 
     fsEc.clear();
     std::filesystem::remove(kAppCatalogBakPath, fsEc);
+
+    // The catalog is the menu's source of truth for the grid, and the rename
+    // dance above leaves several directory entries dirty. Commit so a reboot
+    // cannot strand them.
+    switchu::commitSdCard("catalog");
     return true;
 }
 
@@ -605,6 +611,16 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
 
+    // Writes through fsdev are not durable until the device is committed:
+    // fsdevCommitDevice maps to fsFsCommit, which is what actually flushes FAT
+    // metadata. Nothing in this project ever called it, while the daemon writes
+    // continuously — daemon.log, applist.bin and its rename dance, and the
+    // control cache. Rebooting on top of that dirty metadata corrupted the SD
+    // card three times, each needing the firmware files restored.
+    switchu::FileLog::log("[%s] power sequence %u, closing log and committing sd", source, (unsigned)action);
+    switchu::FileLog::close();
+    switchu::commitSdCard("power-sequence");
+
     switch (action) {
         case smi::SystemMessage::EnterSleep:
             appletStartSleepSequence(true);
@@ -770,6 +786,27 @@ static void handleAppletMessages() {
         case 20:
         openMenuFromHome("ae");
         break;
+
+        case 30:
+        case 31: {
+            // OperationModeChanged / PerformanceModeChanged — dock or undock.
+            // Nothing acted on these before, and an undock while the menu was
+            // up has been observed to wedge the whole console. The framebuffer
+            // is a fixed 1280x720 in both modes so there is no swapchain to
+            // rebuild here; this records the mode and confirms whether the
+            // daemon loop is still alive on the other side of the transition.
+            const u8 opMode   = appletGetOperationMode();
+            const u32 perfMode = appletGetPerformanceMode();
+            switchu::FileLog::log("[ae] -> %s mode: operation=%u performance=%u menuActive=%d appRunning=%d",
+                                  msg == 30 ? "OperationModeChanged" : "PerformanceModeChanged",
+                                  (unsigned)opMode, (unsigned)perfMode,
+                                  daemon::menu_la::isActive() ? 1 : 0,
+                                  daemon::app::isRunning() ? 1 : 0);
+            // Flush immediately: if the console wedges right after this, the
+            // buffered tail would never reach the SD card.
+            switchu::FileLog::flush();
+            break;
+        }
 
         case 22:
         case 29:

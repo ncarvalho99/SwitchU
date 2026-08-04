@@ -209,6 +209,7 @@ void Renderer::bindTexture(int slot) {
 
 void Renderer::useShader(ShaderProgram prog) {
     if (prog == m_curShader) return;
+    ++m_framePipelineBinds;
     flush();
     m_curShader = prog;
     int idx = (int)prog;
@@ -220,7 +221,7 @@ void Renderer::pushFsUniforms(const FsUniforms& fs) {
     flush();
     int slot = m_gpu.slot();
     auto cmd = m_gpu.cmdBuf();
-    auto fsUboAddr = m_gpu.fsUboGpuAddr(slot);
+    auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
     cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE, 0, sizeof(fs), &fs);
     cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
 }
@@ -230,11 +231,29 @@ void Renderer::beginFrame() {
     m_vtxBase  = static_cast<Vertex2D*>(m_gpu.vtxCpuAddr(slot));
     m_vtxCount = 0;
     m_vtxBatchStart = 0;
+    m_lastFrameDrawCalls = m_frameDrawCalls;
+    m_lastFramePipelineBinds = m_framePipelineBinds;
+    m_lastFrameVertices = m_peakVtxCount;
+    m_lastFrameBlurPasses = m_frameBlurPasses;
+    m_lastFrameCaptures = m_frameCaptures;
+    m_frameDrawCalls = 0;
+    m_framePipelineBinds = 0;
+    m_peakVtxCount = 0;
+    m_frameBlurPasses = 0;
+    m_frameCaptures = 0;
+    m_gpu.resetFsUboRing(slot);
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
     m_clipStack.clear();
-    m_reusableOffscreenCaptureValid = false;
+    // Normally the capture cannot outlive a frame: the framebuffer it copies is
+    // redrawn every frame. An overlay that knows nothing behind it has changed
+    // can hold it, which skips a 1280x720 to 640x360 blit and two full pipeline
+    // barriers per frame — a fixed cost that matters because vsync makes this a
+    // cliff, not a slope. The settings overlay measured exactly 30.0 fps, so the
+    // frame is only just over the 16.67ms budget.
+    if (!m_holdOffscreenCapture)
+        m_reusableOffscreenCaptureValid = false;
 
     auto cmd = m_gpu.cmdBuf();
 
@@ -300,6 +319,7 @@ void Renderer::updateProjection() {
 void Renderer::flush() {
     uint32_t batchVerts = m_vtxCount - m_vtxBatchStart;
     if (batchVerts == 0) return;
+    ++m_frameDrawCalls;
 
     auto cmd = m_gpu.cmdBuf();
     int slot = m_gpu.slot();
@@ -315,7 +335,7 @@ void Renderer::flush() {
     if (m_curShader == ShaderProgram::Basic) {
         FsUniforms fs = {};
         fs.useTexture = m_texturing ? 1 : 0;
-        auto fsUboAddr = m_gpu.fsUboGpuAddr(slot);
+        auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
         cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE,
                           0, sizeof(int32_t) * 4, &fs);
         cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
@@ -380,6 +400,7 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     }
 
     flush();
+    ++m_frameCaptures;
     auto cmd = m_gpu.cmdBuf();
     int slot = m_gpu.slot();
 
@@ -474,7 +495,7 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         };
     };
 
-    constexpr int segs = 8;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -495,6 +516,7 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         }
     }
 
+    reserveVertices((uint32_t)ptCount * 3);
     Vec2 cuv = toUV(cx, cy);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
@@ -505,6 +527,7 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
+
 
     flush();
     useShader(ShaderProgram::Basic);
@@ -579,6 +602,7 @@ void Renderer::applyBlur(float radius, int passes) {
     if (!m_gpu.offscreenReady()) return;
 
     m_reusableOffscreenCaptureValid = false;
+    m_frameBlurPasses += passes * 2;
 
     constexpr float offW = (float)(GpuDevice::FB_WIDTH / 2);
     constexpr float offH = (float)(GpuDevice::FB_HEIGHT / 2);
@@ -636,12 +660,26 @@ void Renderer::applyWave(float time, float amplitude, float frequency) {
 
 // Geometry emission
 
+// addQuad already flushes when a quad would not fit, but the rounded shapes
+// emit their triangles one vertex at a time through addVertex, which drops
+// silently instead. A frame that ran out mid-shape lost every remaining vertex
+// without a trace: the menu rendered partially and flickered, since which
+// shapes survived depended on how many the animated background emitted first.
+// Callers reserve their run up front instead.
+void Renderer::reserveVertices(uint32_t count) {
+    if (count > GpuDevice::MAX_VERTICES)
+        return;   // Cannot be satisfied by flushing; let it truncate.
+    if (m_vtxCount + count > GpuDevice::MAX_VERTICES)
+        flush();
+}
+
 void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount >= GpuDevice::MAX_VERTICES) {
         std::printf("[Renderer] WARN: vertex buffer full (%u)\n", m_vtxCount);
         return;
     }
     auto& vtx  = m_vtxBase[m_vtxCount++];
+    if (m_vtxCount > m_peakVtxCount) m_peakVtxCount = m_vtxCount;
     vtx.x = x; vtx.y = y;
     vtx.u = u; vtx.v = v;
     vtx.r = c.r; vtx.g = c.g; vtx.b = c.b; vtx.a = c.a;
@@ -699,7 +737,7 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     auto cx = r.x + r.width * 0.5f;
     auto cy = r.y + r.height * 0.5f;
 
-    constexpr int segs = 8;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -710,15 +748,21 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
         {r.right() - rad, r.bottom() - rad,   pi2*3},
     };
 
+    // Outward unit normal is kept alongside each perimeter point so the
+    // feather ring below knows which way to push. On the arcs it is the same
+    // direction that placed the point; at the arc endpoints it is axis
+    // aligned, which is also correct for the straight edges between corners.
     Vec2 pts[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad, cn.cy - std::sin(a) * rad};
+            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
+                              cn.cy - std::sin(a) * rad};
         }
     }
 
+    reserveVertices((uint32_t)ptCount * 3);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
         auto& p1 = pts[(i + 1) % ptCount];
@@ -726,6 +770,7 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
         addVertex(p0.x, p0.y, 0, 0, c);
         addVertex(p1.x, p1.y, 0, 0, c);
     }
+
 }
 
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
@@ -734,7 +779,7 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
 
     bindTexture(-1);
 
-    constexpr int segs = 8;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -833,7 +878,7 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
                 (py - dest.y) / dest.height};
     };
 
-    constexpr int segs = 8;
+    constexpr int segs = kCornerSegs;
     constexpr int maxPts = (segs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
@@ -854,6 +899,7 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
         }
     }
 
+    reserveVertices((uint32_t)ptCount * 3);
     Vec2 cuv = toUV(fcx, fcy);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
@@ -864,6 +910,7 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
         addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
+
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,

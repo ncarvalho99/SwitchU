@@ -26,11 +26,14 @@ rule("switch")
             local base = path.basename(src)
             local out  = path.join(outdir, base .. ".dksh")
 
-            -- skip if up-to-date
-            if os.isfile(out) and os.mtime(out) >= os.mtime(src) then
-                goto continue
-            end
-
+            -- Always compile. This used to skip when
+            -- os.mtime(out) >= os.mtime(src), but the .dksh files are
+            -- committed under romfs/shaders and a fresh clone stamps every
+            -- file with the checkout time, so the stale committed binary won
+            -- and the edited .glsl was silently ignored. That shipped the
+            -- liquid glass antialiasing as a no-op: the packaged
+            -- liquid_glass_fsh.dksh was byte identical before and after.
+            -- uam on a dozen small shaders is not worth risking that again.
             local stage
             if base:endswith("_vsh") then stage = "vert"
             elseif base:endswith("_fsh") then stage = "frag"
@@ -40,8 +43,6 @@ rule("switch")
 
             cprint("${color.build.target}compiling shader${clear} %s", path.filename(src))
             os.vrunv(uam, {"-s", stage, "-o", out, src})
-
-            ::continue::
         end
     end)
 

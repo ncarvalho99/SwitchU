@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include <switchu/sd_commit.hpp>
 #include "widgets/GlossyIcon.hpp"
 #include "themeshop/ThemeHttp.hpp"
 #include <nxui/core/Animation.hpp>
@@ -630,6 +631,8 @@ void WiiUMenuApp::saveMenuLayout() {
     if (!f.is_open())
         return;
     f << j.dump(2);
+    f.close();
+    switchu::commitSdCard("layout");
     m_layoutDirty = false;
 }
 
@@ -1466,6 +1469,85 @@ void WiiUMenuApp::finalizeRefresh() {
 #endif
 
 void WiiUMenuApp::onUpdate(float dt) {
+#ifdef SWITCHU_MENU
+    // Stay unbuffered for the first few seconds of the run loop, not just up to
+    // the first frame. The deferred icon and sidebar uploads run on frame one,
+    // and a menu that hangs there would otherwise leave no trace: the previous
+    // attempt switched to buffered before writing its own marker, so the marker
+    // went into the buffer and died with the process, proving nothing.
+    if (m_logImmediateFrames > 0) {
+        // Numbering the first frames pins down whether the loop ran at all and
+        // how far it got, which "app.run..." as a last line could not say.
+        if (m_logImmediateFrames > 296)
+            DebugLog::log("[menu] frame %d", 301 - m_logImmediateFrames);
+        if (--m_logImmediateFrames == 0) {
+            DebugLog::log("[menu] run loop healthy, log buffering enabled");
+            switchu::FileLog::setImmediate(false);
+        }
+    }
+    // A hard power-off still loses whatever came after the last flush, so
+    // drain on a timer as the daemon does.
+    switchu::FileLog::flushIfStale();
+
+    // Skip rendering the home scene while the settings overlay is settled.
+    // The A/B probe measured it: with the occluded scene rendered the frame
+    // costs ~31ms of GPU; with it hidden, ~14-15ms — inside the 16.7ms
+    // budget. The scene under the panel was ~16ms a frame spent on pixels
+    // the panel covers. The glass widgets sample the held offscreen capture,
+    // not the live framebuffer, so their appearance does not change, and the
+    // overlay draws the frozen blurred backdrop as its base so the margin
+    // around the panel still shows the scene.
+    //
+    // Gated on the renderer actually holding the capture, which the overlay
+    // only sets while open, not animating, not scrolling and with no
+    // dropdown up; any interaction releases it and the scene renders again
+    // the next frame.
+    {
+        const bool hideScene = m_settings && m_settings->isFullyVisible() &&
+                               app().renderer().holdOffscreenCapture();
+        m_probeSceneHidden = hideScene;
+        if (m_settings)
+            m_settings->setSceneHidden(hideScene);
+        if (m_bgLayer) m_bgLayer->setVisible(!hideScene);
+        if (m_contentLayer) m_contentLayer->setVisible(!hideScene);
+    }
+
+    // Frame cost sampled once a second, tagged with whether an overlay is up.
+    // Comparing the home grid against the settings overlay says whether its
+    // 10-15 fps comes from submission count or from fragment shading, which
+    // reading the render path did not settle.
+    m_perfAccumDt += dt;
+    ++m_perfFrames;
+    m_perfWorstDt = std::max(m_perfWorstDt, dt);
+    if (m_perfAccumDt >= 1.0f) {
+        const auto& ren = app().renderer();
+        // fps alone cannot show the margin: vsync pins anything between 16.7ms
+        // and 33ms to exactly 30fps, which is what the settings overlay
+        // measured. Milliseconds say how far over budget a frame actually is,
+        // and therefore how much has to be saved to get back to 60.
+        const float avgMs = (m_perfAccumDt / m_perfFrames) * 1000.f;
+        const auto& gpu = app().gpu();
+        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u blur=%u caps=%u uploads=%u  settings=%d(1=fullScene,2=sceneHidden) themeshop=%d",
+                      m_perfFrames / m_perfAccumDt,
+                      avgMs,
+                      m_perfWorstDt * 1000.f,
+                      gpu.lastAcquireNs() / 1000000.0,
+                      gpu.lastFenceWaitNs() / 1000000.0,
+                      ren.lastFrameDrawCalls(),
+                      ren.lastFramePipelineBinds(),
+                      ren.lastFrameVertices(),
+                      ren.lastFrameBlurPasses(),
+                      ren.lastFrameCaptures(),
+                      gpu.lastFrameUploads(),
+                      (m_settings && m_settings->isActive())
+                          ? (m_probeSceneHidden ? 2 : 1) : 0,
+                      (m_themeShop && m_themeShop->isActive()) ? 1 : 0);
+        m_perfAccumDt = 0.f;
+        m_perfFrames = 0;
+        m_perfWorstDt = 0.f;
+    }
+#endif
+
 #ifdef SWITCHU_DEBUG_UI
     if (m_debugOverlay) {
         m_debugOverlay->setDeltaTime(dt);
