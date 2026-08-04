@@ -1470,10 +1470,17 @@ void WiiUMenuApp::finalizeRefresh() {
 
 void WiiUMenuApp::onUpdate(float dt) {
 #ifdef SWITCHU_MENU
-    // The menu only flushes its log when the 4 KB buffer fills or on a clean
-    // exit, so a hard power-off loses whatever came after the last flush —
-    // which is exactly the tail you need when diagnosing a freeze. Drain it
-    // on a timer, same as the daemon does.
+    // Reaching onUpdate means startup completed, so the log can go back to
+    // buffered writes. Anything before this point stays unbuffered: a menu that
+    // hung during init left a log containing only its header, with the trace
+    // that would have explained it still sitting in RAM.
+    if (!m_logBufferingEnabled) {
+        m_logBufferingEnabled = true;
+        switchu::FileLog::setImmediate(false);
+        DebugLog::log("[menu] startup complete, log buffering enabled");
+    }
+    // A hard power-off still loses whatever came after the last flush, so
+    // drain on a timer as the daemon does.
     switchu::FileLog::flushIfStale();
 #endif
 
