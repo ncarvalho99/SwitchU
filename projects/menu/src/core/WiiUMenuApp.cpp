@@ -1489,6 +1489,33 @@ void WiiUMenuApp::onUpdate(float dt) {
     // drain on a timer as the daemon does.
     switchu::FileLog::flushIfStale();
 
+    // Scene-skip probe. Every counted GPU submission path is now null while
+    // the overlay sits at 30fps: blur=0, caps=0, uploads=0, and draw count
+    // barely differs from the home grid. What the settings frame uniquely
+    // does is render the ENTIRE home scene — background shapes, icon grid,
+    // HUD — underneath a panel that covers nearly all of it, and then the
+    // overlay on top. The home scene alone fits the 16.7ms budget; both
+    // together do not, and NUM_FB=2 means anything over budget locks to 30.
+    //
+    // Alternate hiding the occluded scene layers each second while the
+    // overlay is settled. The glass widgets sample the held offscreen
+    // capture, not the live framebuffer, so what they show does not change.
+    // If the hidden second runs at 60fps the cause is proven and the fix is
+    // to keep the occluded scene hidden; if it stays at 30 the overlay's own
+    // widgets are the cost.
+    m_probeSceneHidden = false;
+    if (m_settings && m_settings->isFullyVisible() &&
+        app().renderer().holdOffscreenCapture()) {
+        const bool hideScene =
+            (static_cast<int>(armTicksToNs(armGetSystemTick()) / 1000000000ULL) & 1) != 0;
+        m_probeSceneHidden = hideScene;
+        m_bgLayer->setVisible(!hideScene);
+        m_contentLayer->setVisible(!hideScene);
+    } else {
+        if (m_bgLayer) m_bgLayer->setVisible(true);
+        if (m_contentLayer) m_contentLayer->setVisible(true);
+    }
+
     // Frame cost sampled once a second, tagged with whether an overlay is up.
     // Comparing the home grid against the settings overlay says whether its
     // 10-15 fps comes from submission count or from fragment shading, which
@@ -1504,7 +1531,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         // and therefore how much has to be saved to get back to 60.
         const float avgMs = (m_perfAccumDt / m_perfFrames) * 1000.f;
         const auto& gpu = app().gpu();
-        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u blur=%u caps=%u uploads=%u  settings=%d(1=panelGlass,2=panelPlain) themeshop=%d",
+        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u blur=%u caps=%u uploads=%u  settings=%d(1=fullScene,2=sceneHidden) themeshop=%d",
                       m_perfFrames / m_perfAccumDt,
                       avgMs,
                       m_perfWorstDt * 1000.f,
@@ -1517,7 +1544,7 @@ void WiiUMenuApp::onUpdate(float dt) {
                       ren.lastFrameCaptures(),
                       gpu.lastFrameUploads(),
                       (m_settings && m_settings->isActive())
-                          ? (m_settings->glassProbeSkippedPanel() ? 2 : 1) : 0,
+                          ? (m_probeSceneHidden ? 2 : 1) : 0,
                       (m_themeShop && m_themeShop->isActive()) ? 1 : 0);
         m_perfAccumDt = 0.f;
         m_perfFrames = 0;
