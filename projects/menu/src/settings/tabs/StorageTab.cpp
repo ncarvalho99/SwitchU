@@ -3,6 +3,7 @@
 #include <switch.h>
 #ifdef SWITCHU_MENU
 #include <switchu/control_cache.hpp>
+#include <switchu/sd_commit.hpp>
 #endif
 #include <algorithm>
 #include <cmath>
@@ -110,6 +111,8 @@ void saveApplicationSizeCache() {
         f.write(reinterpret_cast<const char*>(&tid), sizeof(tid));
         f.write(reinterpret_cast<const char*>(&size), sizeof(size));
     }
+    f.close();
+    switchu::commitSdCard("appsize");
 }
 
 uint64_t queryApplicationSize(uint64_t titleId) {

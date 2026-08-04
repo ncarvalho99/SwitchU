@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include <switchu/sd_commit.hpp>
 #include "widgets/GlossyIcon.hpp"
 #include "themeshop/ThemeHttp.hpp"
 #include <nxui/core/Animation.hpp>
@@ -630,6 +631,8 @@ void WiiUMenuApp::saveMenuLayout() {
     if (!f.is_open())
         return;
     f << j.dump(2);
+    f.close();
+    switchu::commitSdCard("layout");
     m_layoutDirty = false;
 }
 
