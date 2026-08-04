@@ -27,7 +27,7 @@ bool GpuDevice::initialize() {
         dataSize += VTX_BUF_SIZE + 256;
         dataSize += IDX_BUF_SIZE + 256;
         dataSize += VS_UBO_SIZE + 256;
-        dataSize += FS_UBO_SIZE + 256;
+        dataSize += FS_UBO_SIZE * FS_UBO_RING + 256;
     }
     dataSize += MAX_TEXTURES * sizeof(DkImageDescriptor) + DK_IMAGE_DESCRIPTOR_ALIGNMENT;
     dataSize += MAX_SAMPLERS * sizeof(DkSamplerDescriptor) + DK_SAMPLER_DESCRIPTOR_ALIGNMENT;
@@ -38,7 +38,7 @@ bool GpuDevice::initialize() {
         m_vtxOff[i]   = m_dataPool.alloc(VTX_BUF_SIZE, 256);
         m_idxOff[i]   = m_dataPool.alloc(IDX_BUF_SIZE, 256);
         m_vsUboOff[i] = m_dataPool.alloc(VS_UBO_SIZE, DK_UNIFORM_BUF_ALIGNMENT);
-        m_fsUboOff[i] = m_dataPool.alloc(FS_UBO_SIZE, DK_UNIFORM_BUF_ALIGNMENT);
+        m_fsUboOff[i] = m_dataPool.alloc(FS_UBO_SIZE * FS_UBO_RING, DK_UNIFORM_BUF_ALIGNMENT);
     }
     m_imgDescOff = m_dataPool.alloc(MAX_TEXTURES * sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT);
     m_samDescOff = m_dataPool.alloc(MAX_SAMPLERS * sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT);
