@@ -1495,10 +1495,18 @@ void WiiUMenuApp::onUpdate(float dt) {
     // reading the render path did not settle.
     m_perfAccumDt += dt;
     ++m_perfFrames;
+    m_perfWorstDt = std::max(m_perfWorstDt, dt);
     if (m_perfAccumDt >= 1.0f) {
         const auto& ren = app().renderer();
-        DebugLog::log("[perf] %.1f fps  draws=%u binds=%u verts=%u  settings=%d themeshop=%d",
+        // fps alone cannot show the margin: vsync pins anything between 16.7ms
+        // and 33ms to exactly 30fps, which is what the settings overlay
+        // measured. Milliseconds say how far over budget a frame actually is,
+        // and therefore how much has to be saved to get back to 60.
+        const float avgMs = (m_perfAccumDt / m_perfFrames) * 1000.f;
+        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  draws=%u binds=%u verts=%u  settings=%d themeshop=%d",
                       m_perfFrames / m_perfAccumDt,
+                      avgMs,
+                      m_perfWorstDt * 1000.f,
                       ren.lastFrameDrawCalls(),
                       ren.lastFramePipelineBinds(),
                       ren.lastFrameVertices(),
@@ -1506,6 +1514,7 @@ void WiiUMenuApp::onUpdate(float dt) {
                       (m_themeShop && m_themeShop->isActive()) ? 1 : 0);
         m_perfAccumDt = 0.f;
         m_perfFrames = 0;
+        m_perfWorstDt = 0.f;
     }
 #endif
 

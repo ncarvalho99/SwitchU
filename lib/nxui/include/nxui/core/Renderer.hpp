@@ -96,6 +96,12 @@ public:
     uint32_t lastFrameDrawCalls()     const { return m_lastFrameDrawCalls; }
     uint32_t lastFramePipelineBinds() const { return m_lastFramePipelineBinds; }
     uint32_t lastFrameVertices()      const { return m_lastFrameVertices; }
+
+    // Keep the offscreen backdrop capture across frames. Only set this while
+    // whatever the glass samples is genuinely static, or the refraction will
+    // show a stale scene.
+    void setHoldOffscreenCapture(bool hold) { m_holdOffscreenCapture = hold; }
+    bool holdOffscreenCapture() const       { return m_holdOffscreenCapture; }
     void endFrame();
 
     // 2D drawing
@@ -175,6 +181,7 @@ private:
     uint32_t m_lastFrameDrawCalls = 0;
     uint32_t m_lastFramePipelineBinds = 0;
     uint32_t m_lastFrameVertices = 0;
+    bool     m_holdOffscreenCapture = false;
 
     // Flushes the current batch if `count` more vertices would not fit.
     // addVertex silently drops past the buffer end, so shapes that emit a run

@@ -229,6 +229,7 @@ private:
     int m_logImmediateFrames = 300;
     float m_perfAccumDt = 0.f;
     int   m_perfFrames = 0;
+    float m_perfWorstDt = 0.f;
 
     int  m_touchHitIndex     = -1;
     bool m_touchOnFocused    = false;

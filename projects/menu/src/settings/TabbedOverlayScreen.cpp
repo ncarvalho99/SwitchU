@@ -412,8 +412,13 @@ std::shared_ptr<nxui::Box> TabbedOverlayScreen::makeItemWidget(SettingItem& item
     return std::make_shared<SettingsItemCard>(item, content);
 }
 void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
-    if (!m_active && !m_animating)
+    if (!m_active && !m_animating) {
+        // Must release here, not in hide(): this early return is the only path
+        // taken once the overlay is fully closed, so leaving the hold set would
+        // freeze the backdrop capture for the whole menu.
+        ren.setHoldOffscreenCapture(false);
         return;
+    }
 
     float opacity = visibilityProgress();
     nxui::Rect p = panelRect(scale());
@@ -442,6 +447,19 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
             m_cachedBlurIterations = tuning.blurIterations;
         }
     }
+
+    // Once the overlay is fully open and settled, nothing it samples through
+    // the glass changes: the blurred backdrop is already cached, and the panel
+    // behind the item cards is static. Holding the capture skips a fullscreen
+    // blit and two full pipeline barriers every frame. Any motion — the
+    // open/close animation, scrolling, an open dropdown — releases it, so the
+    // refraction never shows a stale scene.
+    const bool sceneSettled = m_active
+        && !m_animating
+        && !m_dropdownOpen
+        && !m_dropdownClosing
+        && std::abs(m_scrollY - m_scrollTarget) < 0.5f;
+    ren.setHoldOffscreenCapture(sceneSettled);
 
     drawBackground(ren, p, opacity * 0.72f);
 
