@@ -127,11 +127,25 @@ void GpuDevice::createOffscreenTargets() {
 }
 
 int GpuDevice::beginFrame() {
+    // These two waits mean different things and have to be told apart.
+    //
+    // acquireImage blocks until the display releases a buffer, so it absorbs
+    // vsync: a frame with time to spare waits here. The fence blocks until the
+    // GPU has finished the previous frame in this slot, so it only grows when
+    // the GPU is genuinely behind.
+    //
+    // Wall-clock frame time cannot distinguish them. The settings overlay
+    // reports exactly 33.3ms, which is two refresh periods, and says only that
+    // something exceeded 16.67ms — not what, and not by how much. Four fixes
+    // guessed from reading the render path all missed.
+    const uint64_t tAcquire = armGetSystemTick();
     m_slot = m_queue.acquireImage(m_swapchain);
-
-    // Wait for the GPU to finish the PREVIOUS frame that used this slot's
-    // command memory / vertex buffer before we overwrite them.
+    const uint64_t tFence = armGetSystemTick();
     m_frameFences[m_slot].wait();
+    const uint64_t tDone = armGetSystemTick();
+
+    m_lastAcquireNs = armTicksToNs(tFence - tAcquire);
+    m_lastFenceWaitNs = armTicksToNs(tDone - tFence);
 
     // Reset command buffer and re-feed its memory (clear invalidates memory
     // tracking — following the deko3d sample framework pattern).
