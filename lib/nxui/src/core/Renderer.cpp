@@ -236,11 +236,13 @@ void Renderer::beginFrame() {
     m_lastFrameVertices = m_peakVtxCount;
     m_lastFrameBlurPasses = m_frameBlurPasses;
     m_lastFrameCaptures = m_frameCaptures;
+    m_lastFrameVertsDropped = m_frameVertsDropped;
     m_frameDrawCalls = 0;
     m_framePipelineBinds = 0;
     m_peakVtxCount = 0;
     m_frameBlurPasses = 0;
     m_frameCaptures = 0;
+    m_frameVertsDropped = 0;
     m_gpu.resetFsUboRing(slot);
     m_curTexSlot = -1;
     m_texturing  = false;
@@ -495,8 +497,8 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         };
     };
 
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
+    const int segs = cornerSegsFor(rad);
+    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct { float cx, cy; float a0; } corners[4] = {
@@ -667,7 +669,11 @@ void Renderer::applyWave(float time, float amplitude, float frequency) {
 
 void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount >= GpuDevice::MAX_VERTICES) {
-        std::printf("[Renderer] WARN: vertex buffer full (%u)\n", m_vtxCount);
+        // Silent truncation here is what produced the flickering menu: the
+        // arena filled mid-shape and every remaining vertex vanished, with
+        // which survived varying per frame. stdout goes nowhere on the
+        // console, so count it and surface it through the perf line instead.
+        ++m_frameVertsDropped;
         return;
     }
     auto& vtx  = m_vtxBase[m_vtxCount++];
@@ -771,8 +777,8 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     auto cx = r.x + r.width * 0.5f;
     auto cy = r.y + r.height * 0.5f;
 
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
+    const int segs = cornerSegsFor(rad);
+    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct {float cx, cy; float a0;} corners[4] = {
@@ -815,8 +821,8 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
 
     bindTexture(-1);
 
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
+    const int segs = cornerSegsFor(rad);
+    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct {float cx, cy; float a0;} corners[4] = {
@@ -849,23 +855,12 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
         addVertex(outer[j].x, outer[j].y, 0, 0, c);
     }
 
-    // Feather both edges of the strip. A 1-2px focus ring is the most visible
-    // stair-stepping in the UI: at that thickness the aliased curve reads as
-    // broken segments. Outward normals for the outer edge, inverted for the
-    // inner edge.
-    Vec2 nrmOut[maxPts], nrmIn[maxPts];
-    int k = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = -std::sin(a);
-            nrmOut[k] = {ca, sa};
-            nrmIn[k]  = {-ca, -sa};
-            ++k;
-        }
-    }
-    emitFeatherRing(outer, nrmOut, ptCount, c);
-    emitFeatherRing(inner, nrmIn, ptCount, c);
+    // Deliberately not feathered. Two rings on a strip is the single most
+    // expensive shape in the UI, and with a glass panel drawing a highlight
+    // and a border outline each, it was the bulk of the 98853 vertex peak that
+    // forced the arena over its limit. Higher segment counts carry the
+    // roundness here; the residual aliasing on a 1px stroke is far less
+    // visible than the faceting was.
 }
 
 void Renderer::drawCircle(const Vec2& center, float radius, const Color& c, int segments) {
@@ -932,8 +927,8 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
                 (py - dest.y) / dest.height};
     };
 
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
+    const int segs = cornerSegsFor(rad);
+    constexpr int maxPts = (kMaxCornerSegs + 1) * 4;
     const float pi2 = 3.14159265f * 0.5f;
 
     struct { float cx, cy; float a0; } corners[4] = {

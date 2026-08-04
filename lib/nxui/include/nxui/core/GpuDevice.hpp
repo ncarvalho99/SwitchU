@@ -61,12 +61,14 @@ public:
     // Per-frame vertex arena. This is not a ring: flush() starts a new batch
     // at the current offset but never reclaims space, because the GPU reads
     // every batch's data when the frame's command list executes. Overflow
-    // silently drops geometry — the cause of the flickering menu when the
-    // antialiasing skirt first shipped against the old 65536 limit. The skirt
-    // adds 6 vertices per perimeter segment on every rounded shape, so the
-    // arena is doubled: 131072 * 32 B = 4 MB per swapchain slot. Peak measured
-    // before the skirt was ~36k; tripling every rounded fan stays well under.
-    static constexpr int MAX_VERTICES   = 131072;
+    // silently drops geometry.
+    //
+    // Doubling this to 131072 to make room for the antialiasing skirt put the
+    // menu into a relaunch loop, dying on frame 3 — the first frame that
+    // reuses swapchain slot 0 and so the first that touches the second copy
+    // of this arena. 131072 * 32 B is 4 MB per slot, 8.25 MB of data pool
+    // across both, against 4.25 MB before. Back to a size known to work.
+    static constexpr int MAX_VERTICES   = 65536;
     static constexpr int VTX_BUF_SIZE   = MAX_VERTICES * 32;
     static constexpr int IDX_BUF_SIZE   = 256;
     static constexpr int VS_UBO_SIZE    = 256;

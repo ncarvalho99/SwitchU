@@ -105,6 +105,10 @@ public:
     uint32_t lastFrameBlurPasses() const { return m_lastFrameBlurPasses; }
     uint32_t lastFrameCaptures()   const { return m_lastFrameCaptures; }
 
+    // Non-zero means the vertex arena filled and geometry was thrown away.
+    // Never acceptable: it shows up as shapes flickering in and out.
+    uint32_t lastFrameVertsDropped() const { return m_lastFrameVertsDropped; }
+
     // Keep the offscreen backdrop capture across frames. Only set this while
     // whatever the glass samples is genuinely static, or the refraction will
     // show a stale scene.
@@ -180,10 +184,18 @@ public:
 
 private:
     // Emit geometry helpers
-    // Segments per 90-degree corner on rounded geometry. Edge smoothness
-    // comes from emitFeatherRing, so this only needs to be high enough that
-    // the curve does not read as faceted.
-    static constexpr int kCornerSegs = 8;
+    // Segments per 90-degree corner, chosen from the radius. A fixed 8 was
+    // fine on the small icon corners but visibly polygonal on the larger radii
+    // of settings cards and dialog buttons — reported as roundness that "isn't
+    // linear", which is faceting, not aliasing, and no amount of edge feather
+    // fixes it. Roughly one segment per 2px of arc, bounded at both ends.
+    static constexpr int kMinCornerSegs = 6;
+    static constexpr int kMaxCornerSegs = 20;
+    static int cornerSegsFor(float radius) {
+        int s = (int)(radius * 0.5f) + 1;
+        return s < kMinCornerSegs ? kMinCornerSegs
+             : (s > kMaxCornerSegs ? kMaxCornerSegs : s);
+    }
 
     // Width, in pixels, of the alpha ramp skirting rounded geometry.
     static constexpr float kEdgeFeatherPx = 1.0f;
@@ -201,6 +213,8 @@ private:
     uint32_t m_frameCaptures = 0;
     uint32_t m_lastFrameBlurPasses = 0;
     uint32_t m_lastFrameCaptures = 0;
+    uint32_t m_frameVertsDropped = 0;
+    uint32_t m_lastFrameVertsDropped = 0;
     bool     m_holdOffscreenCapture = false;
 
     void addVertex(float x, float y, float u, float v, const Color& c);

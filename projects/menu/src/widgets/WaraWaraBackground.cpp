@@ -6,11 +6,11 @@
 namespace {
 
 // Vertices held back from the background so the foreground UI always fits in
-// the vertex arena. The antialiasing skirt takes a rounded rect from ~108
-// vertices to ~324, so the UI share is reserved at three times the original
-// 13312. The background itself is unaffected — it draws circles and
-// triangles, which are not skirted — and the arena grew to 131072, so its
-// own budget still comes out far larger than before.
+// the 65536 vertex arena. The antialiasing skirt roughly triples a rounded
+// fill, so the UI share is reserved at three times the original 13312. The
+// background draws circles and triangles, which are not skirted, so its own
+// cost is unchanged — it simply gets a smaller cap, and the shape count
+// clamps accordingly.
 constexpr int kBackgroundRenderReserveVertices = 40960;
 constexpr int kWorstCaseShapeVertices = 36;
 constexpr int kGlassShapeLayers = 3;
