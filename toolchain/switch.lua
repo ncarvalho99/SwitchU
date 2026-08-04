@@ -12,6 +12,8 @@ rule("switch")
 
     -- Shaders: compile GLSL -> DKSH via uam before linking 
     before_build(function(target)
+        import("core.base.hash")
+
         local shaderdir = path.join(os.projectdir(), "shaders")
         if not os.isdir(shaderdir) then return end
 
@@ -21,13 +23,26 @@ rule("switch")
         local outdir = path.join(romfs, "shaders")
         os.mkdir(outdir)
 
+        local stampdir = path.join(os.projectdir(), "build", "shaderstamp")
+        os.mkdir(stampdir)
+
         local uam = dkp_tool("uam")
         for _, src in ipairs(os.files(path.join(shaderdir, "*.glsl"))) do
             local base = path.basename(src)
             local out  = path.join(outdir, base .. ".dksh")
 
-            -- skip if up-to-date
-            if os.isfile(out) and os.mtime(out) >= os.mtime(src) then
+            -- Staleness is decided by source content, not by mtime. The .dksh
+            -- files are committed under romfs/shaders, and a fresh clone gives
+            -- every file the checkout time, so an mtime comparison let the
+            -- stale committed binary win and the .glsl was never compiled --
+            -- silently shipping whatever was last committed.
+            --
+            -- The stamp lives under build/, not next to the output, so it is
+            -- never swept into the packaged romfs.
+            local stampfile = path.join(stampdir, base .. ".hash")
+            local srchash = hash.sha256(src)
+            if os.isfile(out) and os.isfile(stampfile) and
+               io.readfile(stampfile) == srchash then
                 goto continue
             end
 
@@ -40,6 +55,7 @@ rule("switch")
 
             cprint("${color.build.target}compiling shader${clear} %s", path.filename(src))
             os.vrunv(uam, {"-s", stage, "-o", out, src})
+            io.writefile(stampfile, srchash)
 
             ::continue::
         end
