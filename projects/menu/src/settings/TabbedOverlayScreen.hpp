@@ -45,6 +45,13 @@ public:
     bool isActive() const { return m_active || m_animating; }
     bool isFullyVisible() const { return m_active && !m_animating; }
 
+    // The app hides the occluded home scene while this overlay is settled —
+    // measured at ~16ms of GPU per frame spent on content the panel covers.
+    // When set, onRender draws the frozen blurred backdrop as the base so the
+    // margin around the panel shows the scene instead of stale framebuffer.
+    void setSceneHidden(bool hidden) { m_sceneHidden = hidden; }
+    bool sceneHidden() const         { return m_sceneHidden; }
+
     void rebuildCurrentTab();
     void handleTouch(nxui::Input& input);
     void warmup();
@@ -167,6 +174,7 @@ protected:
 
     bool  m_active    = false;
     bool  m_animating = false;
+    bool  m_sceneHidden = false;
     bool  m_showing   = false;
     float m_animT     = 0.f;
 

@@ -461,6 +461,15 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
         && std::abs(m_scrollY - m_scrollTarget) < 0.5f;
     ren.setHoldOffscreenCapture(sceneSettled);
 
+    // With the underlying scene hidden, nothing painted the framebuffer this
+    // frame. Draw the frozen blurred capture (the same one the panel glass
+    // samples) as the base, so the margin around the panel shows a frosted
+    // version of the scene rather than stale swapchain contents.
+    if (m_sceneHidden && opacity > 0.01f) {
+        ren.drawOffscreen(kSettingsBackdropCacheTarget,
+                          {0.f, 0.f, (float)ren.width(), (float)ren.height()});
+    }
+
     drawBackground(ren, p, opacity * 0.72f);
 
     if (opacity > 0.01f) {
