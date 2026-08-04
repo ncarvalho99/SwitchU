@@ -54,6 +54,23 @@ jobs:
       - name: Set xmake env
         run: echo "XMAKE_GLOBALDIR=${{ runner.workspace }}/xmake-global" >> "$GITHUB_ENV"
 
+      # libstratosphere accounts for ~20 of the ~21 minutes a sysmodule job
+      # takes, and it is rebuilt from scratch every run because the submodule is
+      # checked out fresh. Its output only changes when the submodule moves, so
+      # key the cache on that commit.
+      - name: Resolve libstratosphere revision
+        if: matrix.variant == 'sysmodule'
+        id: strat
+        shell: bash
+        run: echo "sha=$(git -C lib/Atmosphere-libs rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache libstratosphere
+        if: matrix.variant == 'sysmodule'
+        uses: actions/cache@v4
+        with:
+          path: lib/Atmosphere-libs/libstratosphere/lib
+          key: stratosphere-${{ steps.strat.outputs.sha }}-${{ matrix.mode }}
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
         with:

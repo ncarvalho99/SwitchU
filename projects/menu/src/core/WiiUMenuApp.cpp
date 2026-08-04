@@ -1470,14 +1470,20 @@ void WiiUMenuApp::finalizeRefresh() {
 
 void WiiUMenuApp::onUpdate(float dt) {
 #ifdef SWITCHU_MENU
-    // Reaching onUpdate means startup completed, so the log can go back to
-    // buffered writes. Anything before this point stays unbuffered: a menu that
-    // hung during init left a log containing only its header, with the trace
-    // that would have explained it still sitting in RAM.
-    if (!m_logBufferingEnabled) {
-        m_logBufferingEnabled = true;
-        switchu::FileLog::setImmediate(false);
-        DebugLog::log("[menu] startup complete, log buffering enabled");
+    // Stay unbuffered for the first few seconds of the run loop, not just up to
+    // the first frame. The deferred icon and sidebar uploads run on frame one,
+    // and a menu that hangs there would otherwise leave no trace: the previous
+    // attempt switched to buffered before writing its own marker, so the marker
+    // went into the buffer and died with the process, proving nothing.
+    if (m_logImmediateFrames > 0) {
+        // Numbering the first frames pins down whether the loop ran at all and
+        // how far it got, which "app.run..." as a last line could not say.
+        if (m_logImmediateFrames > 296)
+            DebugLog::log("[menu] frame %d", 301 - m_logImmediateFrames);
+        if (--m_logImmediateFrames == 0) {
+            DebugLog::log("[menu] run loop healthy, log buffering enabled");
+            switchu::FileLog::setImmediate(false);
+        }
     }
     // A hard power-off still loses whatever came after the last flush, so
     // drain on a timer as the daemon does.

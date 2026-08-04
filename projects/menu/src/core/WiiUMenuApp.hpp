@@ -224,7 +224,9 @@ private:
     float m_editGhostPulse = 0.f;
     std::vector<uint64_t> m_layoutSlots;
     bool m_layoutDirty = false;
-    bool m_logBufferingEnabled = false;
+    // Frames the log stays unbuffered for after the run loop starts, so a hang
+    // in early-frame work (deferred asset uploads) still reaches the SD card.
+    int m_logImmediateFrames = 300;
 
     int  m_touchHitIndex     = -1;
     bool m_touchOnFocused    = false;
