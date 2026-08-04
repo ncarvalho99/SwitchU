@@ -241,7 +241,14 @@ void Renderer::beginFrame() {
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
     m_clipStack.clear();
-    m_reusableOffscreenCaptureValid = false;
+    // Normally the capture cannot outlive a frame: the framebuffer it copies is
+    // redrawn every frame. An overlay that knows nothing behind it has changed
+    // can hold it, which skips a 1280x720 to 640x360 blit and two full pipeline
+    // barriers per frame — a fixed cost that matters because vsync makes this a
+    // cliff, not a slope. The settings overlay measured exactly 30.0 fps, so the
+    // frame is only just over the 16.67ms budget.
+    if (!m_holdOffscreenCapture)
+        m_reusableOffscreenCaptureValid = false;
 
     auto cmd = m_gpu.cmdBuf();
 
