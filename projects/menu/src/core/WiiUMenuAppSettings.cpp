@@ -409,7 +409,10 @@ void WiiUMenuApp::createSettings() {
         focusManager().setFocus(m_dialog.get());
     });
     m_settings->onClosed([this]() {
-        m_threadPool.submit([cfg = m_config]() {
+        // Tracked, not fire-and-forget: a power request has to be able to
+        // wait for it. Writing config.json on a worker and then rebooting
+        // before it lands is what kept corrupting the SD card.
+        m_configSaveFuture = m_threadPool.submit([cfg = m_config]() {
             cfg.save();
         });
         DebugLog::log("[config] save queued");
@@ -634,7 +637,7 @@ void WiiUMenuApp::createThemeShop() {
         focusManager().setFocus(m_dialog.get());
     });
     m_themeShop->onClosed([this, clearCompletedThemeTransferState]() {
-        m_threadPool.submit([cfg = m_config]() {
+        m_configSaveFuture = m_threadPool.submit([cfg = m_config]() {
             cfg.save();
         });
         DebugLog::log("[config] save queued");

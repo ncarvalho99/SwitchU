@@ -87,25 +87,36 @@ void AppletLauncher::launchUserPage(AccountUid uid) {
 // entirely. The daemon then reboots without waiting for this applet to exit,
 // so they were still dirty when power dropped. That is the SD corruption that
 // kept returning after a reboot from the power menu.
-static void commitBeforePowerAction(const char* what) {
-    DebugLog::log("[launcher] requesting %s, committing sd first", what);
+void AppletLauncher::flushBeforePowerAction(const char* what) {
+    // Order matters. The config save runs on a worker thread, so committing
+    // without waiting for it commits nothing — the daemon log showed the
+    // commit running and the card corrupting anyway.
+    if (m_cb.flushPendingWrites)
+        m_cb.flushPendingWrites();
     switchu::FileLog::flush();
-    switchu::commitSdCard("menu-power-request");
+    const bool ok = switchu::commitSdCard("menu-power-request");
+    DebugLog::log("[launcher] requesting %s, pending writes flushed, sd commit=%d",
+                  what, ok ? 1 : 0);
 }
 
 void AppletLauncher::enterSleep() {
-    commitBeforePowerAction("sleep");
+    flushBeforePowerAction("sleep");
     switchu::menu::smi_cmd::enterSleep();
 }
 
 void AppletLauncher::shutdown() {
-    commitBeforePowerAction("shutdown");
+    flushBeforePowerAction("shutdown");
     switchu::menu::smi_cmd::shutdown();
+    // Exit so the applet's own fs session closes before power drops. Without
+    // this the menu stayed alive and the daemon's wait timed out every time,
+    // logging "menu active=1 after wait".
+    if (m_cb.requestExit) m_cb.requestExit();
 }
 
 void AppletLauncher::reboot() {
-    commitBeforePowerAction("reboot");
+    flushBeforePowerAction("reboot");
     switchu::menu::smi_cmd::reboot();
+    if (m_cb.requestExit) m_cb.requestExit();
 }
 
 void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid) {

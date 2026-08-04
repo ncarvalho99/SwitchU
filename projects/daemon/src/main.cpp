@@ -625,7 +625,10 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
     // reboot even with the daemon-side commit in place.
     switchu::FileLog::log("[%s] power sequence %u, waiting for menu then committing sd",
                           source, (unsigned)action);
-    for (int i = 0; i < 50 && daemon::menu_la::isActive(); ++i) {
+    // 3s, not 1s. The menu now exits on a power request, but it still has to
+    // finish its frame, run onDestroy and unmount; the first attempt at this
+    // logged "menu active=1 after wait" every time and cut power anyway.
+    for (int i = 0; i < 150 && daemon::menu_la::isActive(); ++i) {
         if (daemon::menu_la::checkFinished())
             break;
         svcSleepThread(20'000'000ULL);   // 20ms, so at most 1s total

@@ -124,6 +124,7 @@ private:
     std::vector<std::string> scanAvailablePresets();
     void loadMenuLayout();
     void saveMenuLayout();
+    void flushPendingWrites();
     void applyMenuLayoutToPending(std::vector<PendingApp>& apps);
     void startEditGhost(GlossyIcon* sourceIcon);
     void stopEditGhost();
@@ -187,6 +188,10 @@ private:
     AudioManager m_audio;
     AccessibilityManager m_accessibility;
     std::future<void>    m_audioFuture;
+    // Pending async config.json write. A power request has to wait on this:
+    // the save runs on a worker, and rebooting before it lands is what kept
+    // corrupting the SD card.
+    std::future<void>    m_configSaveFuture;
     bool                 m_audioStarted = false;
     std::vector<std::string> m_availablePresets;
     bool                 m_presetChangePending = false;

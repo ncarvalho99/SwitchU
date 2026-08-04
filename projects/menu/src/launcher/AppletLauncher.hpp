@@ -8,9 +8,15 @@ public:
     struct Callbacks {
         std::function<void()>     playSfxModalHide;
         std::function<void()>     requestExit;
+        // Blocks until every queued disk write has landed. Power requests
+        // call it before handing off to the daemon: config.json is saved on
+        // a worker thread, and the reboot used to race that write.
+        std::function<void()>     flushPendingWrites;
     };
 
     void init(Callbacks cbs);
+
+    void flushBeforePowerAction(const char* what);
 
     void launchAlbum();
     void launchMiiEditor();

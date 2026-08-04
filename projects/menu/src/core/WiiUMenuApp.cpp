@@ -279,6 +279,7 @@ bool WiiUMenuApp::onCreate() {
     m_launcher.init({
         .playSfxModalHide = [this]() { m_audio.playSfx(Sfx::ModalHide); },
         .requestExit = [this]() { app().requestExit(); },
+        .flushPendingWrites = [this]() { flushPendingWrites(); },
     });
 
 
@@ -305,6 +306,17 @@ bool WiiUMenuApp::onCreate() {
 
     DebugLog::log("[init] DONE");
     return true;
+}
+
+// Waits for every queued disk write to land. Config saves run on the thread
+// pool, so a power request that only committed the fs session committed an
+// empty set of changes and the SD card corrupted on the next reboot.
+void WiiUMenuApp::flushPendingWrites() {
+    if (m_configSaveFuture.valid())
+        m_configSaveFuture.get();
+    if (m_layoutDirty)
+        saveMenuLayout();
+    DebugLog::log("[menu] pending writes flushed");
 }
 
 void WiiUMenuApp::onDestroy() {
