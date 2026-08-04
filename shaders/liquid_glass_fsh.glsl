@@ -32,13 +32,8 @@ const float M_E = 2.718281828459045;
 const float M_PI = 3.14159265359;
 
 // pow() compiles to exp2(n * log2(x)) here — two transcendental ops per call.
-// powerFactor is a uniform, so this branch is uniform across the draw and the
-// cost is a compare, not divergence.
-// Exponentiation by squaring, for any integer n up to 32. The previous version
-// only special-cased 2, 4, 6 and 8, which covered the home screen icons at the
-// default powerFactor of 6 but missed the settings overlay entirely — it uses
-// 20, so it fell through to pow() and the optimisation did nothing for the one
-// screen that was slow.
+// Exponentiation by squaring instead, for any integer n up to 32. powerFactor
+// is a uniform, so the loop unrolls and every pixel takes the same path.
 float powN(float x, float n) {
     int e = int(n + 0.5);
     if (abs(n - float(e)) > 0.001 || e < 1 || e > 32)
@@ -57,14 +52,8 @@ float powN(float x, float n) {
     return result;
 }
 
-// Measured: the settings overlay costs ~12ms a frame more than the home grid
-// (60fps to 35fps) while adding only 50 draw calls and 2 pipeline binds, so the
-// cost is per-pixel, not per-submission. This ran four pow() per pixel over a
-// ~660k pixel panel.
-//
-// Two of them are gone entirely: q^(n-1) is just q^n / q, and q^n is already
-// computed for the numerator. The remaining two take the integer fast path for
-// the default powerFactor of 6. Same result, no transcendentals.
+// Ran four pow() per pixel. Two are gone by algebra: q^(n-1) is q^n / q, and
+// q^n is already computed for the numerator. The other two go through powN.
 float sdSuperellipse(vec2 p, vec2 r, float n) {
     vec2 pa = abs(p);
     vec2 safeR = max(r, vec2(0.00001));
@@ -160,17 +149,25 @@ void main() {
 
     float dist = -d;
 
-    // fPower defaults to 1.0, where pow() is the identity. Uniform branch.
-    float refBase = refractionCurve(dist);
-    float refScale = (abs(fPower - 1.0) < 0.001) ? refBase : pow(refBase, fPower);
-    vec2 sampleP = p * mix(1.0, refScale, refrIntensity);
+    // refractionCurve is a pow per pixel; mix() then scales its effect by
+    // refrIntensity, which is 0.035 here. Below a threshold the displacement is
+    // under a pixel, so the sample lands on the same texel either way.
+    vec2 sampleP = p;
+    if (refrIntensity > 0.002) {
+        float refBase = refractionCurve(dist);
+        float refScale = (abs(fPower - 1.0) < 0.001) ? refBase : pow(refBase, fPower);
+        sampleP = p * mix(1.0, refScale, refrIntensity);
+    }
 
+    // A sin and a cos per pixel, scaled by roughness * 0.05. The settings
+    // overlay uses 0.004, giving a displacement of 2e-4 — far below a texel.
     float waveTime = time * animSpeed;
-    vec2 roughOffset = vec2(
-        sin((p.y + waveTime) * 14.0),
-        cos((p.x - waveTime) * 12.0)
-    ) * roughness * 0.05;
-    sampleP += roughOffset;
+    if (roughness > 0.02) {
+        sampleP += vec2(
+            sin((p.y + waveTime) * 14.0),
+            cos((p.x - waveTime) * 12.0)
+        ) * roughness * 0.05;
+    }
 
     vec2 localUV = (sampleP / panelAspect) * 0.5 + 0.5;
 
@@ -181,18 +178,32 @@ void main() {
 
     screenUV = clamp(screenUV, 0.0, 1.0);
 
-    vec2 texelSize = 1.0 / max(lg_screenSize.xy, vec2(1.0));
-    vec4 original = texture(tex, screenUV);
-    vec4 blurred = sampleBlurred(screenUV, texelSize, blurIntensity);
+    // With blurIntensity 0, which is what every preset ships, blurMix is 0 and
+    // the mix returns `original` — but both samples were still being fetched.
+    vec4 color = texture(tex, screenUV);
     float blurMix = clamp(blurIntensity / 10.0, 0.0, 1.0);
-    vec4 color = mix(original, blurred, blurMix);
+    if (blurMix > 0.001) {
+        vec2 texelSize = 1.0 / max(lg_screenSize.xy, vec2(1.0));
+        color = mix(color, sampleBlurred(screenUV, texelSize, blurIntensity), blurMix);
+    }
 
-    float n = (rand((gl_FragCoord.xy + waveTime * 61.0) * 1e-3) - 0.5) * noiseIntensity;
-    color.rgb += vec3(n);
+    // rand() costs a sin per pixel and noiseIntensity is 0 in every preset
+    // shipped, so the result was being multiplied away. Uniform branch.
+    if (noiseIntensity > 0.001) {
+        float n = (rand((gl_FragCoord.xy + waveTime * 61.0) * 1e-3) - 0.5) * noiseIntensity;
+        color.rgb += vec3(n);
+    }
 
-    float glow = computeGlow(fragUV);
-    float glowMask = smoothstep(glowEdge0, glowEdge1, dist);
-    float glowMul = glow * glowWeight * glowIntensity * glowMask + 1.0 + glowBias;
+    // computeGlow costs an atan plus a sin per pixel. Its contribution is
+    // scaled by glowWeight * glowIntensity, which the settings overlay leaves
+    // at 0.14 * 0.14, about 2% — below what is visible, but paid in full over
+    // ~875k pixels. Skipped when the combined weight cannot show up.
+    float glowMul = 1.0 + glowBias;
+    if (glowWeight * glowIntensity > 0.004) {
+        float glow = computeGlow(fragUV);
+        float glowMask = smoothstep(glowEdge0, glowEdge1, dist);
+        glowMul += glow * glowWeight * glowIntensity * glowMask;
+    }
     color.rgb *= glowMul;
 
     float edgeReflection = 1.0 - smoothstep(0.0, 0.32, dist);
