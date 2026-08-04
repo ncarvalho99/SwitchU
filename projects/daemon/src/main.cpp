@@ -605,6 +605,15 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
 
+    // The daemon holds daemon.log open for its whole lifetime and appends to it
+    // continuously. Rebooting with buffered writes outstanding and the handle
+    // still open leaves the filesystem to commit whatever it had in flight.
+    // Two SD corruptions were reported after reboots, so close the log here.
+    // This is not a proven cause, but an open append handle across a reboot is
+    // a plausible one and closing it costs nothing.
+    switchu::FileLog::log("[%s] power sequence %u, closing log", source, (unsigned)action);
+    switchu::FileLog::close();
+
     switch (action) {
         case smi::SystemMessage::EnterSleep:
             appletStartSleepSequence(true);
