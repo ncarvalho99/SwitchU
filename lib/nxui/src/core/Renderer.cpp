@@ -209,6 +209,7 @@ void Renderer::bindTexture(int slot) {
 
 void Renderer::useShader(ShaderProgram prog) {
     if (prog == m_curShader) return;
+    ++m_framePipelineBinds;
     flush();
     m_curShader = prog;
     int idx = (int)prog;
@@ -230,6 +231,12 @@ void Renderer::beginFrame() {
     m_vtxBase  = static_cast<Vertex2D*>(m_gpu.vtxCpuAddr(slot));
     m_vtxCount = 0;
     m_vtxBatchStart = 0;
+    m_lastFrameDrawCalls = m_frameDrawCalls;
+    m_lastFramePipelineBinds = m_framePipelineBinds;
+    m_lastFrameVertices = m_peakVtxCount;
+    m_frameDrawCalls = 0;
+    m_framePipelineBinds = 0;
+    m_peakVtxCount = 0;
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
@@ -300,6 +307,7 @@ void Renderer::updateProjection() {
 void Renderer::flush() {
     uint32_t batchVerts = m_vtxCount - m_vtxBatchStart;
     if (batchVerts == 0) return;
+    ++m_frameDrawCalls;
 
     auto cmd = m_gpu.cmdBuf();
     int slot = m_gpu.slot();
@@ -657,6 +665,7 @@ void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
         return;
     }
     auto& vtx  = m_vtxBase[m_vtxCount++];
+    if (m_vtxCount > m_peakVtxCount) m_peakVtxCount = m_vtxCount;
     vtx.x = x; vtx.y = y;
     vtx.u = u; vtx.v = v;
     vtx.r = c.r; vtx.g = c.g; vtx.b = c.b; vtx.a = c.a;
