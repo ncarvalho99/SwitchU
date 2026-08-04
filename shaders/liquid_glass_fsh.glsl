@@ -31,14 +31,38 @@ layout (location = 0) out vec4 outColor;
 const float M_E = 2.718281828459045;
 const float M_PI = 3.14159265359;
 
+// pow() compiles to exp2(n * log2(x)) here — two transcendental ops per call.
+// powerFactor is a uniform, so this branch is uniform across the draw and the
+// cost is a compare, not divergence.
+float powN(float x, float n) {
+    if (abs(n - 6.0) < 0.001) { float x2 = x * x; return x2 * x2 * x2; }
+    if (abs(n - 4.0) < 0.001) { float x2 = x * x; return x2 * x2; }
+    if (abs(n - 8.0) < 0.001) { float x2 = x * x, x4 = x2 * x2; return x4 * x4; }
+    if (abs(n - 2.0) < 0.001) { return x * x; }
+    return pow(x, n);
+}
+
+// Measured: the settings overlay costs ~12ms a frame more than the home grid
+// (60fps to 35fps) while adding only 50 draw calls and 2 pipeline binds, so the
+// cost is per-pixel, not per-submission. This ran four pow() per pixel over a
+// ~660k pixel panel.
+//
+// Two of them are gone entirely: q^(n-1) is just q^n / q, and q^n is already
+// computed for the numerator. The remaining two take the integer fast path for
+// the default powerFactor of 6. Same result, no transcendentals.
 float sdSuperellipse(vec2 p, vec2 r, float n) {
     vec2 pa = abs(p);
     vec2 safeR = max(r, vec2(0.00001));
     vec2 q = pa / safeR;
-    float num = pow(q.x, n) + pow(q.y, n) - 1.0;
+
+    float qxn = powN(q.x, n);
+    float qyn = powN(q.y, n);
+    float num = qxn + qyn - 1.0;
+
+    vec2 qSafe = max(q, vec2(0.00001));
     vec2 grad = vec2(
-        n * pow(max(q.x, 0.00001), n - 1.0) / safeR.x,
-        n * pow(max(q.y, 0.00001), n - 1.0) / safeR.y
+        n * (qxn / qSafe.x) / safeR.x,
+        n * (qyn / qSafe.y) / safeR.y
     );
     float den = length(grad) + 0.00001;
     return num / den;
@@ -121,7 +145,9 @@ void main() {
 
     float dist = -d;
 
-    float refScale = pow(refractionCurve(dist), fPower);
+    // fPower defaults to 1.0, where pow() is the identity. Uniform branch.
+    float refBase = refractionCurve(dist);
+    float refScale = (abs(fPower - 1.0) < 0.001) ? refBase : pow(refBase, fPower);
     vec2 sampleP = p * mix(1.0, refScale, refrIntensity);
 
     float waveTime = time * animSpeed;
