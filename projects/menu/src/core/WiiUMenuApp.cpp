@@ -1489,31 +1489,27 @@ void WiiUMenuApp::onUpdate(float dt) {
     // drain on a timer as the daemon does.
     switchu::FileLog::flushIfStale();
 
-    // Scene-skip probe. Every counted GPU submission path is now null while
-    // the overlay sits at 30fps: blur=0, caps=0, uploads=0, and draw count
-    // barely differs from the home grid. What the settings frame uniquely
-    // does is render the ENTIRE home scene — background shapes, icon grid,
-    // HUD — underneath a panel that covers nearly all of it, and then the
-    // overlay on top. The home scene alone fits the 16.7ms budget; both
-    // together do not, and NUM_FB=2 means anything over budget locks to 30.
+    // Skip rendering the home scene while the settings overlay is settled.
+    // The A/B probe measured it: with the occluded scene rendered the frame
+    // costs ~31ms of GPU; with it hidden, ~14-15ms — inside the 16.7ms
+    // budget. The scene under the panel was ~16ms a frame spent on pixels
+    // the panel covers. The glass widgets sample the held offscreen capture,
+    // not the live framebuffer, so their appearance does not change, and the
+    // overlay draws the frozen blurred backdrop as its base so the margin
+    // around the panel still shows the scene.
     //
-    // Alternate hiding the occluded scene layers each second while the
-    // overlay is settled. The glass widgets sample the held offscreen
-    // capture, not the live framebuffer, so what they show does not change.
-    // If the hidden second runs at 60fps the cause is proven and the fix is
-    // to keep the occluded scene hidden; if it stays at 30 the overlay's own
-    // widgets are the cost.
-    m_probeSceneHidden = false;
-    if (m_settings && m_settings->isFullyVisible() &&
-        app().renderer().holdOffscreenCapture()) {
-        const bool hideScene =
-            (static_cast<int>(armTicksToNs(armGetSystemTick()) / 1000000000ULL) & 1) != 0;
+    // Gated on the renderer actually holding the capture, which the overlay
+    // only sets while open, not animating, not scrolling and with no
+    // dropdown up; any interaction releases it and the scene renders again
+    // the next frame.
+    {
+        const bool hideScene = m_settings && m_settings->isFullyVisible() &&
+                               app().renderer().holdOffscreenCapture();
         m_probeSceneHidden = hideScene;
-        m_bgLayer->setVisible(!hideScene);
-        m_contentLayer->setVisible(!hideScene);
-    } else {
-        if (m_bgLayer) m_bgLayer->setVisible(true);
-        if (m_contentLayer) m_contentLayer->setVisible(true);
+        if (m_settings)
+            m_settings->setSceneHidden(hideScene);
+        if (m_bgLayer) m_bgLayer->setVisible(!hideScene);
+        if (m_contentLayer) m_contentLayer->setVisible(!hideScene);
     }
 
     // Frame cost sampled once a second, tagged with whether an overlay is up.
