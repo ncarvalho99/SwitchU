@@ -230,6 +230,7 @@ private:
     float m_perfAccumDt = 0.f;
     int   m_perfFrames = 0;
     float m_perfWorstDt = 0.f;
+    bool  m_probeSceneHidden = false;
 
     int  m_touchHitIndex     = -1;
     bool m_touchOnFocused    = false;

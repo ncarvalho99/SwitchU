@@ -44,8 +44,6 @@ public:
     void hide();
     bool isActive() const { return m_active || m_animating; }
     bool isFullyVisible() const { return m_active && !m_animating; }
-    // Which branch the temporary glass A/B probe took on the last frame.
-    bool glassProbeSkippedPanel() const { return m_glassProbeSkippedPanel; }
 
     void rebuildCurrentTab();
     void handleTouch(nxui::Input& input);
@@ -169,8 +167,6 @@ protected:
 
     bool  m_active    = false;
     bool  m_animating = false;
-    // Set by the A/B probe in onRender; read by the perf log.
-    bool  m_glassProbeSkippedPanel = false;
     bool  m_showing   = false;
     float m_animT     = 0.f;
 
