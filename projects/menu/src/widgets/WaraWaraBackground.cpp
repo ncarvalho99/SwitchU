@@ -6,9 +6,12 @@
 namespace {
 
 // Vertices held back from the background so the foreground UI always fits in
-// the 65536 vertex buffer. Back to the original value now that the
-// antialiasing skirt is gone and a rounded rect costs ~108 vertices again.
-constexpr int kBackgroundRenderReserveVertices = 13312;
+// the vertex arena. The antialiasing skirt takes a rounded rect from ~108
+// vertices to ~324, so the UI share is reserved at three times the original
+// 13312. The background itself is unaffected — it draws circles and
+// triangles, which are not skirted — and the arena grew to 131072, so its
+// own budget still comes out far larger than before.
+constexpr int kBackgroundRenderReserveVertices = 40960;
 constexpr int kWorstCaseShapeVertices = 36;
 constexpr int kGlassShapeLayers = 3;
 constexpr int kGridRenderedShapeBudget = 448;
