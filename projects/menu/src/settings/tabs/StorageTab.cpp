@@ -8,6 +8,10 @@
 #include <cmath>
 #include <cstring>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <system_error>
+#include <unordered_map>
 #include <fmt/format.h>
 
 namespace {
@@ -47,6 +51,67 @@ bool queryStorageSize(NcmStorageId storageId, uint64_t& total, uint64_t& freeSpa
 #endif
 }
 
+// nsCalculateApplicationOccupiedSize walks a title's content to add up its
+// size, and StorageTab called it once per installed title while building. With
+// 28 titles that measured at ~1.5s, and because buildTabs() builds every tab's
+// data up front it was the entire cost of opening settings — the other nine
+// tabs together came to 0ms and widget construction to 1ms.
+//
+// Results are cached on disk, not just in memory: the menu is a library applet
+// that is torn down and rebuilt on every HOME press, so a process-lifetime
+// cache would be empty every time you came back from a game. A title's size
+// only changes when it is installed, updated or deleted.
+constexpr uint32_t kSizeCacheMagic   = 0x5355415A;  // 'SUAZ'
+constexpr uint32_t kSizeCacheVersion = 1;
+constexpr const char* kSizeCachePath = "sdmc:/config/SwitchU/appsize.bin";
+
+std::unordered_map<uint64_t, uint64_t>& applicationSizeCache() {
+    static std::unordered_map<uint64_t, uint64_t> cache;
+    static bool loaded = false;
+    if (!loaded) {
+        loaded = true;
+        std::ifstream f(kSizeCachePath, std::ios::binary);
+        uint32_t magic = 0, version = 0, count = 0;
+        if (f.is_open() &&
+            f.read(reinterpret_cast<char*>(&magic), sizeof(magic)) &&
+            f.read(reinterpret_cast<char*>(&version), sizeof(version)) &&
+            f.read(reinterpret_cast<char*>(&count), sizeof(count)) &&
+            magic == kSizeCacheMagic && version == kSizeCacheVersion) {
+            for (uint32_t i = 0; i < count; ++i) {
+                uint64_t tid = 0, size = 0;
+                if (!f.read(reinterpret_cast<char*>(&tid), sizeof(tid)) ||
+                    !f.read(reinterpret_cast<char*>(&size), sizeof(size)))
+                    break;
+                cache.emplace(tid, size);
+            }
+        }
+    }
+    return cache;
+}
+
+void saveApplicationSizeCache() {
+    const auto& cache = applicationSizeCache();
+    std::error_code ec;
+    std::filesystem::create_directory("sdmc:/config", ec);
+    ec.clear();
+    std::filesystem::create_directory("sdmc:/config/SwitchU", ec);
+
+    std::ofstream f(kSizeCachePath, std::ios::binary | std::ios::trunc);
+    if (!f.is_open())
+        return;
+
+    const uint32_t magic = kSizeCacheMagic;
+    const uint32_t version = kSizeCacheVersion;
+    const uint32_t count = static_cast<uint32_t>(cache.size());
+    f.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+    f.write(reinterpret_cast<const char*>(&version), sizeof(version));
+    f.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    for (const auto& [tid, size] : cache) {
+        f.write(reinterpret_cast<const char*>(&tid), sizeof(tid));
+        f.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    }
+}
+
 uint64_t queryApplicationSize(uint64_t titleId) {
 #ifdef SWITCHU_HOMEBREW
     (void)titleId;
@@ -55,9 +120,15 @@ uint64_t queryApplicationSize(uint64_t titleId) {
     if (titleId == 0)
         return 0;
 
+    auto& cache = applicationSizeCache();
+    if (auto it = cache.find(titleId); it != cache.end())
+        return it->second;
+
     NsApplicationOccupiedSize occ{};
-    if (R_FAILED(nsCalculateApplicationOccupiedSize(titleId, &occ)))
+    if (R_FAILED(nsCalculateApplicationOccupiedSize(titleId, &occ))) {
+        cache.emplace(titleId, 0);
         return 0;
+    }
 
     uint64_t bestSize = 0;
     for (size_t offset = 0; offset + sizeof(uint64_t) <= sizeof(occ.unk_x0); offset += sizeof(uint64_t)) {
@@ -68,6 +139,7 @@ uint64_t queryApplicationSize(uint64_t titleId) {
         }
     }
 
+    cache.emplace(titleId, bestSize);
     return bestSize;
 #endif
 }
@@ -336,6 +408,9 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
             }
             apps.push_back(std::move(app));
         }
+        // Persist whatever this pass had to compute so the next menu process
+        // reads it back instead of walking every title again.
+        saveApplicationSizeCache();
     }
 #endif
 
