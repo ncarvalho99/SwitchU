@@ -90,6 +90,16 @@ public:
     uint64_t lastAcquireNs()   const { return m_lastAcquireNs; }
     uint64_t lastFenceWaitNs() const { return m_lastFenceWaitNs; }
 
+    // uploadTexture calls a full device waitIdle unconditionally, on every
+    // call, regardless of how small the texture is — already the cause of one
+    // stall bug fixed for icons this session. The draw/vert/blur/capture
+    // counters above account for GPU submission almost completely except this
+    // path, which none of them see. If something is missing a font glyph cache
+    // hit every frame — the cache is 384 entries, shared by the whole app,
+    // and the settings overlay alone can push 150+ distinct label strings
+    // through it during warmup — this is where that would show up.
+    uint32_t lastFrameUploads() const { return m_lastFrameUploads; }
+
     int  width()  const { return FB_WIDTH; }
     int  height() const { return FB_HEIGHT; }
 
@@ -219,6 +229,8 @@ private:
     SDL_Renderer* m_sdlRenderer = nullptr;
 #endif
     int m_slot = -1;
+    uint32_t m_frameUploads = 0;
+    uint32_t m_lastFrameUploads = 0;
     uint64_t m_lastAcquireNs = 0;
     uint64_t m_lastFenceWaitNs = 0;
 };

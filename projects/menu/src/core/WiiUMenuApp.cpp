@@ -1504,7 +1504,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         // and therefore how much has to be saved to get back to 60.
         const float avgMs = (m_perfAccumDt / m_perfFrames) * 1000.f;
         const auto& gpu = app().gpu();
-        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u blur=%u caps=%u  settings=%d(1=panelGlass,2=panelPlain) themeshop=%d",
+        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u blur=%u caps=%u uploads=%u  settings=%d(1=panelGlass,2=panelPlain) themeshop=%d",
                       m_perfFrames / m_perfAccumDt,
                       avgMs,
                       m_perfWorstDt * 1000.f,
@@ -1515,6 +1515,7 @@ void WiiUMenuApp::onUpdate(float dt) {
                       ren.lastFrameVertices(),
                       ren.lastFrameBlurPasses(),
                       ren.lastFrameCaptures(),
+                      gpu.lastFrameUploads(),
                       (m_settings && m_settings->isActive())
                           ? (m_settings->glassProbeSkippedPanel() ? 2 : 1) : 0,
                       (m_themeShop && m_themeShop->isActive()) ? 1 : 0);
