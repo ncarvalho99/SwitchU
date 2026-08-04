@@ -1503,10 +1503,13 @@ void WiiUMenuApp::onUpdate(float dt) {
         // measured. Milliseconds say how far over budget a frame actually is,
         // and therefore how much has to be saved to get back to 60.
         const float avgMs = (m_perfAccumDt / m_perfFrames) * 1000.f;
-        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  draws=%u binds=%u verts=%u  settings=%d themeshop=%d",
+        const auto& gpu = app().gpu();
+        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u  settings=%d themeshop=%d",
                       m_perfFrames / m_perfAccumDt,
                       avgMs,
                       m_perfWorstDt * 1000.f,
+                      gpu.lastAcquireNs() / 1000000.0,
+                      gpu.lastFenceWaitNs() / 1000000.0,
                       ren.lastFrameDrawCalls(),
                       ren.lastFramePipelineBinds(),
                       ren.lastFrameVertices(),

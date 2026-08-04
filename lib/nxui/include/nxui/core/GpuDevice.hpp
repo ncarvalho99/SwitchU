@@ -73,6 +73,13 @@ public:
     void endFrame();
     void waitIdle();
 
+    // Split of the two blocking waits in beginFrame, in nanoseconds.
+    // Large acquire with small fence means the GPU is keeping up and we are
+    // simply waiting on the display. Large fence means the GPU is the
+    // bottleneck, and the cost is in what we submit.
+    uint64_t lastAcquireNs()   const { return m_lastAcquireNs; }
+    uint64_t lastFenceWaitNs() const { return m_lastFenceWaitNs; }
+
     int  width()  const { return FB_WIDTH; }
     int  height() const { return FB_HEIGHT; }
 
@@ -191,6 +198,8 @@ private:
     SDL_Renderer* m_sdlRenderer = nullptr;
 #endif
     int m_slot = -1;
+    uint64_t m_lastAcquireNs = 0;
+    uint64_t m_lastFenceWaitNs = 0;
 };
 
 } // namespace nxui
