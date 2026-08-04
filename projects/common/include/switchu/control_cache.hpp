@@ -14,7 +14,9 @@ namespace switchu::control_cache {
 
 inline constexpr const char* kCacheDir = "sdmc:/config/SwitchU/control_cache";
 inline constexpr uint32_t kMetaMagic = 0x53554343;
-inline constexpr uint32_t kMetaVersion = 1;
+// v2 rejects NACP names that aren't valid UTF-8. Bumping the version
+// invalidates caches written by v1, which may hold such a name.
+inline constexpr uint32_t kMetaVersion = 2;
 
 struct Meta {
     uint32_t magic = kMetaMagic;
@@ -125,6 +127,31 @@ inline void copyString(char* dst, size_t dstSize, const char* src, size_t srcSiz
     dst[len] = '\0';
 }
 
+// Titles are drawn with TTF_RenderUTF8_Blended, which renders noise for byte
+// sequences that aren't valid UTF-8. At least one repacked title ships a NACP
+// whose name field holds 309 bytes of binary data, so entries are validated
+// before being accepted rather than trusting the NACP.
+inline bool isValidUtf8(const char* s, size_t maxLen) {
+    const auto* p = reinterpret_cast<const unsigned char*>(s);
+    size_t n = 0;
+    while (n < maxLen && p[n] != '\0')
+        ++n;
+    for (size_t i = 0; i < n;) {
+        const unsigned char c = p[i];
+        size_t extra;
+        if (c < 0x80)                extra = 0;
+        else if ((c & 0xE0) == 0xC0) extra = 1;
+        else if ((c & 0xF0) == 0xE0) extra = 2;
+        else if ((c & 0xF8) == 0xF0) extra = 3;
+        else return false;
+        if (i + extra >= n && extra > 0) return false;
+        for (size_t k = 1; k <= extra; ++k)
+            if ((p[i + k] & 0xC0) != 0x80) return false;
+        i += extra + 1;
+    }
+    return true;
+}
+
 inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControlData& controlData,
                                     Meta& out) {
     Meta meta{};
@@ -141,13 +168,19 @@ inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControl
     meta.cache_storage_journal_size = controlData.nacp.cache_storage_journal_size;
     meta.bcat_delivery_cache_storage_size = controlData.nacp.bcat_delivery_cache_storage_size;
 
+    auto usableName = [](const NacpLanguageEntry* e) {
+        return e && e->name[0] != '\0' && isValidUtf8(e->name, sizeof(e->name));
+    };
+
     NacpLanguageEntry* langEntry = nullptr;
     if (R_FAILED(nacpGetLanguageEntry(const_cast<NacpStruct*>(&controlData.nacp), &langEntry)) ||
-        !langEntry || langEntry->name[0] == '\0') {
+        !usableName(langEntry)) {
+        // Preferred entry missing or unrenderable — take the first language
+        // entry that is actually valid UTF-8.
         langEntry = nullptr;
         for (int i = 0; i < 16; ++i) {
             auto* candidate = const_cast<NacpLanguageEntry*>(&controlData.nacp.lang[i]);
-            if (candidate->name[0] != '\0') {
+            if (usableName(candidate)) {
                 langEntry = candidate;
                 break;
             }
