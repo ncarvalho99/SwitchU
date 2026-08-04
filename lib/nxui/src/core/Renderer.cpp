@@ -486,12 +486,14 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
     };
 
     Vec2 pts[maxPts];
+    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
+            float ca = std::cos(a), sa = -std::sin(a);
+            nrm[ptCount] = {ca, sa};
+            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
         }
     }
 
@@ -505,6 +507,11 @@ void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, 
         addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
+
+    // Screen-space UVs here, so the skirt samples the offscreen the same way
+    // the fan does.
+    const Rect uvRect{0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()};
+    emitFeatherRing(pts, nrm, ptCount, tint, &uvRect);
 
     flush();
     useShader(ShaderProgram::Basic);
