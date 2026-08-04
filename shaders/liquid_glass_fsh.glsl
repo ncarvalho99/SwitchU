@@ -116,10 +116,17 @@ void main() {
 
     float d = sdSuperellipse(p, panelAspect, powerFactor);
 
-    if (d > 0.0)
+    // Antialias the panel outline. d is already a signed distance, so the edge
+    // only needs the width of one pixel in that field to fade across, which
+    // fwidth gives directly. Discarding on d > 0 made every pixel fully in or
+    // fully out, which is what made the rounded corners stair-step: there is
+    // no MSAA on the framebuffer to cover for it.
+    float edgeWidth = max(fwidth(d), 1e-5);
+    float coverage = 1.0 - smoothstep(-edgeWidth, edgeWidth, d);
+    if (coverage <= 0.0)
         discard;
 
-    float dist = -d;
+    float dist = max(-d, 0.0);
 
     float refScale = pow(refractionCurve(dist), fPower);
     vec2 sampleP = p * mix(1.0, refScale, refrIntensity);
@@ -173,7 +180,9 @@ void main() {
         color.rgb = mix(color.rgb, desaturated * veilColor, unavailableShade * 0.32);
     }
 
-    color.a = 1.0;
+    // Edge coverage rather than a flat 1.0; fragColor still carries the
+    // panel's own opacity and multiplies in below.
+    color.a = coverage;
 
     outColor = color * fragColor;
 }
