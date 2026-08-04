@@ -215,7 +215,6 @@ static std::atomic<bool> g_appCatalogRefreshPending{false};
 static int g_appCatalogRefreshDelay = 0;
 static constexpr const char* kAppCatalogPath = smi::kAppCatalogPath;
 static constexpr const char* kAppCatalogTmpPath = smi::kAppCatalogTmpPath;
-static constexpr const char* kAppCatalogBakPath = smi::kAppCatalogBakPath;
 static std::mutex g_controlCacheQueueMutex;
 static std::vector<uint64_t> g_controlCacheQueue;
 static std::atomic<bool> g_controlCacheRefreshPending{false};
@@ -377,46 +376,22 @@ static bool writeAppCatalogFile() {
         return false;
     }
 
-    // fsdev's rename cannot overwrite an existing file, so the live catalog has
-    // to be moved out of the way first. Park it at the .bak path instead of
-    // deleting it: readers that land inside the swap window fall back to it,
-    // and if the swap fails we can put it back rather than leaving the menu
-    // with no catalog at all.
+    // Back to the author's swap: one remove, one rename. The .bak parking
+    // dance I added tripled the directory operations per rebuild, and the
+    // author's build — which does not corrupt — never did any of it. The
+    // window it was closing (a reader finding no catalog mid-swap) costs a
+    // retry in getAppList; corrupting the card costs a reflash.
     fsEc.clear();
-    std::filesystem::remove(kAppCatalogBakPath, fsEc);
-
-    bool parked = false;
-    fsEc.clear();
-    if (std::filesystem::exists(kAppCatalogPath, fsEc)) {
-        fsEc.clear();
-        std::filesystem::rename(kAppCatalogPath, kAppCatalogBakPath, fsEc);
-        parked = !fsEc;
-        if (!parked) {
-            // Couldn't park it; remove in place so the swap below can proceed.
-            fsEc.clear();
-            std::filesystem::remove(kAppCatalogPath, fsEc);
-        }
-    }
-
+    std::filesystem::remove(kAppCatalogPath, fsEc);
     fsEc.clear();
     std::filesystem::rename(kAppCatalogTmpPath, kAppCatalogPath, fsEc);
     if (fsEc) {
+        fsEc.clear();
+        std::filesystem::remove(kAppCatalogTmpPath, fsEc);
         switchu::FileLog::log("[catalog] rename FAIL");
-        std::error_code recoverEc;
-        if (parked)
-            std::filesystem::rename(kAppCatalogBakPath, kAppCatalogPath, recoverEc);
-        recoverEc.clear();
-        std::filesystem::remove(kAppCatalogTmpPath, recoverEc);
         return false;
     }
 
-    fsEc.clear();
-    std::filesystem::remove(kAppCatalogBakPath, fsEc);
-
-    // The catalog is the menu's source of truth for the grid, and the rename
-    // dance above leaves several directory entries dirty. Commit so a reboot
-    // cannot strand them.
-    switchu::commitSdCard("catalog");
     return true;
 }
 
@@ -1216,10 +1191,12 @@ static void mainLoop() {
     if (g_controlCacheRefreshPending.load() && g_controlCacheRefreshDelay.load() > 0) {
         --g_controlCacheRefreshDelay;
     } else if (g_controlCacheRefreshPending.exchange(false)) {
-        // Freshly cached control data supplies the real title name and
-        // startup-user policy, both of which live in the catalog now — rewrite
-        // it before asking the menu to reload.
-        rebuildAppCatalog("control-cache");
+        // No rebuild here. Rewriting the catalog once per cached title turned
+        // one write at boot into dozens, each with its own directory churn.
+        // The menu falls back to reading the .meta directly for any title the
+        // catalog still names in hex, so this costs a file open per unnamed
+        // title on the next load and nothing after the catalog is rebuilt for
+        // another reason.
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
         didWork = true;

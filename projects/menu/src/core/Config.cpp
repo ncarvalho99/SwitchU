@@ -1,5 +1,4 @@
 #include "Config.hpp"
-#include <switchu/sd_commit.hpp>
 #include <fstream>
 #include <algorithm>
 #include <filesystem>
@@ -94,6 +93,9 @@ bool AppConfig::save() const {
     if (!f.is_open()) return false;
     f << j.dump(2);
     f.close();
-    switchu::commitSdCard("config");
+    // No commit here: save() is submitted to the thread pool, so this ran on a
+    // worker while the main thread was also writing. Committing an fs session
+    // from two threads at once is its own hazard, and the author's build —
+    // which does not corrupt — commits nowhere.
     return true;
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include <switch.h>
-#include <switchu/sd_commit.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -222,8 +221,6 @@ inline bool writeFromControlData(uint64_t titleId, const NsApplicationControlDat
         const size_t iconSize = controlSize - sizeof(NacpStruct);
         iconOk = writeIcon(titleId, controlData.icon, iconSize);
     }
-    // Two new files per title. Commit so they survive a reboot.
-    commitSdCard("control-cache");
     return metaOk && iconOk;
 }
 
