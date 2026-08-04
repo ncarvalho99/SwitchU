@@ -7,6 +7,7 @@
 #include <switchu/control_cache.hpp>
 #include <switchu/ns_ext.hpp>
 #include <switchu/file_log.hpp>
+#include <switchu/sd_commit.hpp>
 #include "app_manager.hpp"
 #include "ecs.hpp"
 #include "menu_launcher.hpp"
@@ -411,6 +412,11 @@ static bool writeAppCatalogFile() {
 
     fsEc.clear();
     std::filesystem::remove(kAppCatalogBakPath, fsEc);
+
+    // The catalog is the menu's source of truth for the grid, and the rename
+    // dance above leaves several directory entries dirty. Commit so a reboot
+    // cannot strand them.
+    switchu::commitSdCard("catalog");
     return true;
 }
 
@@ -605,14 +611,15 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
 
-    // The daemon holds daemon.log open for its whole lifetime and appends to it
-    // continuously. Rebooting with buffered writes outstanding and the handle
-    // still open leaves the filesystem to commit whatever it had in flight.
-    // Two SD corruptions were reported after reboots, so close the log here.
-    // This is not a proven cause, but an open append handle across a reboot is
-    // a plausible one and closing it costs nothing.
-    switchu::FileLog::log("[%s] power sequence %u, closing log", source, (unsigned)action);
+    // Writes through fsdev are not durable until the device is committed:
+    // fsdevCommitDevice maps to fsFsCommit, which is what actually flushes FAT
+    // metadata. Nothing in this project ever called it, while the daemon writes
+    // continuously — daemon.log, applist.bin and its rename dance, and the
+    // control cache. Rebooting on top of that dirty metadata corrupted the SD
+    // card three times, each needing the firmware files restored.
+    switchu::FileLog::log("[%s] power sequence %u, closing log and committing sd", source, (unsigned)action);
     switchu::FileLog::close();
+    switchu::commitSdCard("power-sequence");
 
     switch (action) {
         case smi::SystemMessage::EnterSleep:
