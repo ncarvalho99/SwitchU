@@ -146,6 +146,8 @@ int GpuDevice::beginFrame() {
 
     m_lastAcquireNs = armTicksToNs(tFence - tAcquire);
     m_lastFenceWaitNs = armTicksToNs(tDone - tFence);
+    m_lastFrameUploads = m_frameUploads;
+    m_frameUploads = 0;
 
     // Reset command buffer and re-feed its memory (clear invalidates memory
     // tracking — following the deko3d sample framework pattern).
@@ -272,6 +274,7 @@ bool GpuDevice::uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
 
     m_queue.submitCommands(m_uploadCmdbuf.finishList());
     m_queue.waitIdle();
+    ++m_frameUploads;
     return true;
 }
 
