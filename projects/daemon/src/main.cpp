@@ -582,19 +582,29 @@ static bool takeForegroundFromRunningApp(const char* source) {
     return true;
 }
 
+// Set once a power sequence has been handed to the system. The daemon keeps
+// running until it is killed, so without this the main loop carries on writing
+// — flushIfStale alone puts the log on the card every couple of seconds — while
+// the console is shutting down underneath it.
+static std::atomic<bool> g_powerSequenceStarted{false};
+
 static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
+    g_powerSequenceStarted.store(true);
 
-    // Writes through fsdev are not durable until the device is committed:
-    // fsdevCommitDevice maps to fsFsCommit, which is what actually flushes FAT
-    // metadata. Nothing in this project ever called it, while the daemon writes
-    // continuously — daemon.log, applist.bin and its rename dance, and the
-    // control cache. Rebooting on top of that dirty metadata corrupted the SD
-    // card three times, each needing the firmware files restored.
-    switchu::FileLog::log("[%s] power sequence %u, closing log and committing sd", source, (unsigned)action);
-    switchu::FileLog::close();
-    switchu::commitSdCard("power-sequence");
+    // Nothing touches the filesystem here, matching the author's build, which
+    // is the only version that does not corrupt the card on reboot.
+    //
+    // This is now the last remaining difference at this point in the sequence.
+    // I had been logging (which writes a buffered chunk), closing the log file
+    // and committing the fs session immediately before appletStartRebootSequence.
+    // Reverting the writes elsewhere did not help, so the write itself is the
+    // suspect: an interrupted commit leaves worse FAT state than no commit at
+    // all, and this one runs in the last moments before power is cut.
+    //
+    // The cost is that the daemon's buffered log tail is lost on a reboot
+    // through this path. That is a diagnostic loss, not a data loss.
 
     switch (action) {
         case smi::SystemMessage::EnterSleep:
@@ -1506,6 +1516,13 @@ int main(int argc, char* argv[]) {
         switchu::FileLog::log("[daemon] menu launch failed: 0x%X", rc);
 
     while (g_running.load()) {
+        if (g_powerSequenceStarted.load()) {
+            // Idle until the system kills us. No filesystem access from here
+            // on: the card is the thing being corrupted, and every write
+            // issued during a shutdown is a chance to be interrupted midway.
+            svcSleepThread(50'000'000ULL);
+            continue;
+        }
         mainLoop();
         // The daemon never closes its log, so drain the write buffer on a timer.
         switchu::FileLog::flushIfStale();
