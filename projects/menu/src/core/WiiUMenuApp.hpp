@@ -224,6 +224,7 @@ private:
     float m_editGhostPulse = 0.f;
     std::vector<uint64_t> m_layoutSlots;
     bool m_layoutDirty = false;
+    bool m_logBufferingEnabled = false;
 
     int  m_touchHitIndex     = -1;
     bool m_touchOnFocused    = false;

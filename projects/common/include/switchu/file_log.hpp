@@ -56,6 +56,21 @@ public:
         self.m_sink.flush_if_stale(maxAgeSeconds);
     }
 
+    // Write every line straight through instead of buffering.
+    //
+    // Buffering is the right default once a process is running, but it hides
+    // exactly the startup traces you need when one hangs before its main loop:
+    // a menu that wedged during init left behind a log holding nothing but the
+    // header, with everything after it still in RAM. Startup runs immediate,
+    // and the main loop turns buffering back on.
+    static void setImmediate(bool immediate) {
+        auto& self = inst();
+        std::lock_guard<std::mutex> lock(self.m_mutex);
+        self.m_immediate = immediate;
+        if (immediate)
+            self.m_sink.flush();
+    }
+
     static void log(const char* fmt, ...) {
         char buf[512];
         va_list args;
@@ -71,6 +86,8 @@ public:
 
         std::fprintf(stderr, "[%s] %s\n", timestamp, buf);
         self.m_sink.append(std::string("[") + timestamp + "] " + buf);
+        if (self.m_immediate)
+            self.m_sink.flush();
     }
 
 private:
@@ -88,6 +105,8 @@ private:
 
     std::mutex m_mutex;
     log_detail::buffered_sink m_sink;
+    // Startup is unbuffered; the main loop relaxes this once it is running.
+    bool m_immediate = true;
 };
 
 }
