@@ -221,7 +221,7 @@ void Renderer::pushFsUniforms(const FsUniforms& fs) {
     flush();
     int slot = m_gpu.slot();
     auto cmd = m_gpu.cmdBuf();
-    auto fsUboAddr = m_gpu.fsUboGpuAddr(slot);
+    auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
     cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE, 0, sizeof(fs), &fs);
     cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
 }
@@ -237,6 +237,7 @@ void Renderer::beginFrame() {
     m_frameDrawCalls = 0;
     m_framePipelineBinds = 0;
     m_peakVtxCount = 0;
+    m_gpu.resetFsUboRing(slot);
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
@@ -330,7 +331,7 @@ void Renderer::flush() {
     if (m_curShader == ShaderProgram::Basic) {
         FsUniforms fs = {};
         fs.useTexture = m_texturing ? 1 : 0;
-        auto fsUboAddr = m_gpu.fsUboGpuAddr(slot);
+        auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
         cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE,
                           0, sizeof(int32_t) * 4, &fs);
         cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);

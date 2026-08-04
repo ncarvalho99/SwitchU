@@ -63,6 +63,16 @@ public:
     static constexpr int IDX_BUF_SIZE   = 256;
     static constexpr int VS_UBO_SIZE    = 256;
     static constexpr int FS_UBO_SIZE    = 256;
+
+    // Fragment uniforms are written per draw call. With a single buffer every
+    // pushConstants overwrote memory the previous draw was still reading, so
+    // the GPU had to finish each draw before the next could be set up — no
+    // pipelining at all. Measured at roughly 0.9ms per draw call on the
+    // settings overlay, which is what put it at 31ms a frame.
+    //
+    // A ring of slots lets consecutive draws use distinct memory. 512 covers
+    // the busiest measured frame (137 draws) with room to spare, at 128 KB.
+    static constexpr int FS_UBO_RING    = 512;
     static constexpr int CMD_BUF_SIZE   = 256 * 1024;
     static constexpr int CODE_POOL_SIZE = 256 * 1024;
 
@@ -107,6 +117,16 @@ public:
     void*     vsUboCpuAddr(int frame) const { return m_dataPool.cpuAddr(m_vsUboOff[frame]); }
     DkGpuAddr fsUboGpuAddr(int frame) const { return m_dataPool.gpuAddr(m_fsUboOff[frame]); }
     void*     fsUboCpuAddr(int frame) const { return m_dataPool.cpuAddr(m_fsUboOff[frame]); }
+
+    // Next free slot in this frame's fragment-uniform ring. Wraps rather than
+    // overflowing; a frame busy enough to wrap simply reintroduces the old
+    // aliasing for its tail instead of corrupting memory.
+    DkGpuAddr nextFsUboGpuAddr(int frame) {
+        const uint32_t idx = m_fsUboRingPos[frame];
+        m_fsUboRingPos[frame] = (idx + 1u) % FS_UBO_RING;
+        return m_dataPool.gpuAddr(m_fsUboOff[frame] + idx * FS_UBO_SIZE);
+    }
+    void resetFsUboRing(int frame) { m_fsUboRingPos[frame] = 0; }
 
     struct ImageAlloc {
         dk::MemBlock block;
@@ -180,6 +200,7 @@ private:
     uint32_t m_idxOff[NUM_FB] {};
     uint32_t m_vsUboOff[NUM_FB] {};
     uint32_t m_fsUboOff[NUM_FB] {};
+    uint32_t m_fsUboRingPos[NUM_FB] {};
     uint32_t m_imgDescOff = 0;
     uint32_t m_samDescOff = 0;
 
