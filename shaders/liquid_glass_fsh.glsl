@@ -23,7 +23,7 @@ layout (std140, binding = 1) uniform FsUniforms {
     vec4  lg_pack3;   // x=glowWeight, y=glowBias, z=glowEdge0, w=glowEdge1
     vec4  lg_tintColor;      // rgba tint
     vec4  lg_panelRect;      // x, y, width, height in screen pixels
-    vec4  lg_screenSize;     // x=screenW, y=screenH, z=shadeAmount, w=0
+    vec4  lg_screenSize;     // x=screenW, y=screenH, z=shadeAmount, w=cornerRadiusPx
 };
 
 layout (location = 0) out vec4 outColor;
@@ -70,6 +70,14 @@ float sdSuperellipse(vec2 p, vec2 r, float n) {
     );
     float den = length(grad) + 0.00001;
     return num / den;
+}
+
+// Exact signed distance to a rounded rectangle: the shape drawRoundedRect
+// produces, so a glass panel and the fills inside it now agree.
+float sdRoundedBox(vec2 p, vec2 halfExtent, float radius) {
+    float r = min(radius, min(halfExtent.x, halfExtent.y));
+    vec2 q = abs(p) - (halfExtent - vec2(r));
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
 float refractionCurve(float x) {
@@ -142,7 +150,21 @@ void main() {
     vec2 center = vec2(0.5);
     vec2 p = (fragUV - center) * 2.0 * panelAspect;
 
-    float d = sdSuperellipse(p, panelAspect, powerFactor);
+    // Prefer a true rounded box when the caller supplied a radius. The
+    // superellipse was the only option before because the radius never
+    // reached here, and its shape does not match what the rest of the UI
+    // draws with drawRoundedRect — panels and the fills inside them had
+    // visibly different corners.
+    float cornerRadiusPx = lg_screenSize.w;
+    float d;
+    if (cornerRadiusPx > 0.5) {
+        // Work in the same normalised space as p, where the panel's shorter
+        // half-extent is 1.0.
+        float rNorm = cornerRadiusPx * 2.0 / panelMinSide;
+        d = sdRoundedBox(p, panelAspect, rNorm);
+    } else {
+        d = sdSuperellipse(p, panelAspect, powerFactor);
+    }
 
     // Antialias the panel outline. d is a signed distance, so fading across
     // one pixel's width in that field — which fwidth gives directly — is all
