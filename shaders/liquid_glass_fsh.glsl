@@ -34,12 +34,27 @@ const float M_PI = 3.14159265359;
 // pow() compiles to exp2(n * log2(x)) here — two transcendental ops per call.
 // powerFactor is a uniform, so this branch is uniform across the draw and the
 // cost is a compare, not divergence.
+// Exponentiation by squaring, for any integer n up to 32. The previous version
+// only special-cased 2, 4, 6 and 8, which covered the home screen icons at the
+// default powerFactor of 6 but missed the settings overlay entirely — it uses
+// 20, so it fell through to pow() and the optimisation did nothing for the one
+// screen that was slow.
 float powN(float x, float n) {
-    if (abs(n - 6.0) < 0.001) { float x2 = x * x; return x2 * x2 * x2; }
-    if (abs(n - 4.0) < 0.001) { float x2 = x * x; return x2 * x2; }
-    if (abs(n - 8.0) < 0.001) { float x2 = x * x, x4 = x2 * x2; return x4 * x4; }
-    if (abs(n - 2.0) < 0.001) { return x * x; }
-    return pow(x, n);
+    int e = int(n + 0.5);
+    if (abs(n - float(e)) > 0.001 || e < 1 || e > 32)
+        return pow(x, n);
+
+    float result = 1.0;
+    float base = x;
+    // 6 iterations covers exponents up to 63; the loop bound is a constant so
+    // it unrolls, and e is a uniform so every pixel takes the same path.
+    for (int i = 0; i < 6; ++i) {
+        if ((e & 1) != 0) result *= base;
+        e >>= 1;
+        if (e == 0) break;
+        base *= base;
+    }
+    return result;
 }
 
 // Measured: the settings overlay costs ~12ms a frame more than the home grid
