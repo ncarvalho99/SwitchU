@@ -239,9 +239,15 @@ void TabbedOverlayScreen::setTheme(const nxui::Theme* t) {
 
 void TabbedOverlayScreen::show() {
     if (m_active) return;
-    DebugLog::log("[settings] show()");
-    if (m_tabs.empty())
+    // Opening settings stutters the same way returning from a game did.
+    // Time the phases rather than guess which one costs: warmup() builds every
+    // tab's widgets, and rebuildContentItems() creates the labels whose text
+    // textures each cost a GPU upload.
+    const uint64_t tickShowStart = armGetSystemTick();
+    const bool coldWarmup = m_tabs.empty();
+    if (coldWarmup)
         warmup();
+    const uint64_t tickAfterWarmup = armGetSystemTick();
     m_active    = true;
     m_animating = true;
     m_showing   = true;
@@ -266,8 +272,22 @@ void TabbedOverlayScreen::show() {
     m_contentSlideAnim.setImmediate(1.f);
     m_tabAccentW.setImmediate(3.f);
     if (m_tabBar) rebuildTabBar();
+    const uint64_t tickAfterTabBar = armGetSystemTick();
     if (m_tabContent) rebuildContentItems();
     invalidateBackdropCache();
+
+    {
+        const uint64_t tickEnd = armGetSystemTick();
+        auto elapsedMs = [](uint64_t from, uint64_t to) -> unsigned {
+            return static_cast<unsigned>(armTicksToNs(to - from) / 1000000ULL);
+        };
+        DebugLog::log("[settings] show() warmup=%ums(%s) tabbar=%ums content=%ums total=%ums",
+                      elapsedMs(tickShowStart, tickAfterWarmup),
+                      coldWarmup ? "cold" : "cached",
+                      elapsedMs(tickAfterWarmup, tickAfterTabBar),
+                      elapsedMs(tickAfterTabBar, tickEnd),
+                      elapsedMs(tickShowStart, tickEnd));
+    }
 
     setVisible(true);
     syncPanelState(0.f);
@@ -392,8 +412,13 @@ std::shared_ptr<nxui::Box> TabbedOverlayScreen::makeItemWidget(SettingItem& item
     return std::make_shared<SettingsItemCard>(item, content);
 }
 void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
-    if (!m_active && !m_animating)
+    if (!m_active && !m_animating) {
+        // Must release here, not in hide(): this early return is the only path
+        // taken once the overlay is fully closed, so leaving the hold set would
+        // freeze the backdrop capture for the whole menu.
+        ren.setHoldOffscreenCapture(false);
         return;
+    }
 
     float opacity = visibilityProgress();
     nxui::Rect p = panelRect(scale());
@@ -421,6 +446,28 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
             m_cachedPreBlurRadius = tuning.preBlurRadius;
             m_cachedBlurIterations = tuning.blurIterations;
         }
+    }
+
+    // Once the overlay is fully open and settled, nothing it samples through
+    // the glass changes: the blurred backdrop is already cached, and the panel
+    // behind the item cards is static. Holding the capture skips a fullscreen
+    // blit and two full pipeline barriers every frame. Any motion — the
+    // open/close animation, scrolling, an open dropdown — releases it, so the
+    // refraction never shows a stale scene.
+    const bool sceneSettled = m_active
+        && !m_animating
+        && !m_dropdownOpen
+        && !m_dropdownClosing
+        && std::abs(m_scrollY - m_scrollTarget) < 0.5f;
+    ren.setHoldOffscreenCapture(sceneSettled);
+
+    // With the underlying scene hidden, nothing painted the framebuffer this
+    // frame. Draw the frozen blurred capture (the same one the panel glass
+    // samples) as the base, so the margin around the panel shows a frosted
+    // version of the scene rather than stale swapchain contents.
+    if (m_sceneHidden && opacity > 0.01f) {
+        ren.drawOffscreen(kSettingsBackdropCacheTarget,
+                          {0.f, 0.f, (float)ren.width(), (float)ren.height()});
     }
 
     drawBackground(ren, p, opacity * 0.72f);

@@ -16,6 +16,48 @@ bool requiresInteractiveUserSelection(uint8_t account, uint8_t option) {
     return account == 1 && option == 0;
 }
 
+// Titles are drawn with TTF_RenderUTF8_Blended, which produces garbage glyphs
+// for bytes that aren't valid UTF-8. One title rendering as noise while every
+// other one is fine points at its NACP name rather than at the renderer, so
+// dump the offending bytes instead of guessing at the cause.
+bool isValidUtf8(const std::string& s) {
+    const auto* p = reinterpret_cast<const unsigned char*>(s.data());
+    const size_t n = s.size();
+    for (size_t i = 0; i < n;) {
+        const unsigned char c = p[i];
+        size_t extra;
+        if (c < 0x80)                    extra = 0;
+        else if ((c & 0xE0) == 0xC0)     extra = 1;
+        else if ((c & 0xF0) == 0xE0)     extra = 2;
+        else if ((c & 0xF8) == 0xF0)     extra = 3;
+        else return false;
+        if (i + extra >= n && extra > 0) return false;
+        for (size_t k = 1; k <= extra; ++k)
+            if ((p[i + k] & 0xC0) != 0x80) return false;
+        i += extra + 1;
+    }
+    return true;
+}
+
+// Last line of defence. The daemon now refuses to cache an unrenderable NACP
+// name, but a catalog written before that is still on disk, so replace anything
+// that can't be drawn with the title ID rather than showing noise.
+void sanitizeTitle(uint64_t titleId, std::string& name) {
+    if (isValidUtf8(name))
+        return;
+
+    char hex[3 * 32 + 1] = {};
+    const size_t shown = name.size() < 32 ? name.size() : 32;
+    for (size_t i = 0; i < shown; ++i)
+        std::snprintf(hex + i * 3, 4, "%02X ", (unsigned char)name[i]);
+    DebugLog::log("[loader] title 0x%016lX has non-UTF8 name len=%zu, replacing. bytes: %s",
+                  (unsigned long)titleId, name.size(), hex);
+
+    char tidBuf[17];
+    std::snprintf(tidBuf, sizeof(tidBuf), "%016lX", (unsigned long)titleId);
+    name = tidBuf;
+}
+
 #ifdef SWITCHU_MENU
 static constexpr s32 kMaxTrackedApplicationRecords = 1024;
 static constexpr s32 kApplicationRecordChunkCount = 30;
@@ -130,6 +172,7 @@ bool fetchDaemonCatalog(std::vector<PendingApp>& out) {
             }
         }
 
+        sanitizeTitle(a.titleId, a.title);
         out.push_back(std::move(a));
     }
 

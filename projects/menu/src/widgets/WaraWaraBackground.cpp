@@ -5,6 +5,9 @@
 
 namespace {
 
+// Vertices held back from the background so the foreground UI always fits in
+// the 65536 vertex buffer. Back to the original value now that the
+// antialiasing skirt is gone and a rounded rect costs ~108 vertices again.
 constexpr int kBackgroundRenderReserveVertices = 13312;
 constexpr int kWorstCaseShapeVertices = 36;
 constexpr int kGlassShapeLayers = 3;

@@ -31,14 +31,42 @@ layout (location = 0) out vec4 outColor;
 const float M_E = 2.718281828459045;
 const float M_PI = 3.14159265359;
 
+// pow() compiles to exp2(n * log2(x)) here — two transcendental ops per call.
+// Exponentiation by squaring instead, for any integer n up to 32. powerFactor
+// is a uniform, so the loop unrolls and every pixel takes the same path.
+float powN(float x, float n) {
+    int e = int(n + 0.5);
+    if (abs(n - float(e)) > 0.001 || e < 1 || e > 32)
+        return pow(x, n);
+
+    float result = 1.0;
+    float base = x;
+    // 6 iterations covers exponents up to 63; the loop bound is a constant so
+    // it unrolls, and e is a uniform so every pixel takes the same path.
+    for (int i = 0; i < 6; ++i) {
+        if ((e & 1) != 0) result *= base;
+        e >>= 1;
+        if (e == 0) break;
+        base *= base;
+    }
+    return result;
+}
+
+// Ran four pow() per pixel. Two are gone by algebra: q^(n-1) is q^n / q, and
+// q^n is already computed for the numerator. The other two go through powN.
 float sdSuperellipse(vec2 p, vec2 r, float n) {
     vec2 pa = abs(p);
     vec2 safeR = max(r, vec2(0.00001));
     vec2 q = pa / safeR;
-    float num = pow(q.x, n) + pow(q.y, n) - 1.0;
+
+    float qxn = powN(q.x, n);
+    float qyn = powN(q.y, n);
+    float num = qxn + qyn - 1.0;
+
+    vec2 qSafe = max(q, vec2(0.00001));
     vec2 grad = vec2(
-        n * pow(max(q.x, 0.00001), n - 1.0) / safeR.x,
-        n * pow(max(q.y, 0.00001), n - 1.0) / safeR.y
+        n * (qxn / qSafe.x) / safeR.x,
+        n * (qyn / qSafe.y) / safeR.y
     );
     float den = length(grad) + 0.00001;
     return num / den;
@@ -121,15 +149,25 @@ void main() {
 
     float dist = -d;
 
-    float refScale = pow(refractionCurve(dist), fPower);
-    vec2 sampleP = p * mix(1.0, refScale, refrIntensity);
+    // refractionCurve is a pow per pixel; mix() then scales its effect by
+    // refrIntensity, which is 0.035 here. Below a threshold the displacement is
+    // under a pixel, so the sample lands on the same texel either way.
+    vec2 sampleP = p;
+    if (refrIntensity > 0.002) {
+        float refBase = refractionCurve(dist);
+        float refScale = (abs(fPower - 1.0) < 0.001) ? refBase : pow(refBase, fPower);
+        sampleP = p * mix(1.0, refScale, refrIntensity);
+    }
 
+    // A sin and a cos per pixel, scaled by roughness * 0.05. The settings
+    // overlay uses 0.004, giving a displacement of 2e-4 — far below a texel.
     float waveTime = time * animSpeed;
-    vec2 roughOffset = vec2(
-        sin((p.y + waveTime) * 14.0),
-        cos((p.x - waveTime) * 12.0)
-    ) * roughness * 0.05;
-    sampleP += roughOffset;
+    if (roughness > 0.02) {
+        sampleP += vec2(
+            sin((p.y + waveTime) * 14.0),
+            cos((p.x - waveTime) * 12.0)
+        ) * roughness * 0.05;
+    }
 
     vec2 localUV = (sampleP / panelAspect) * 0.5 + 0.5;
 
@@ -140,18 +178,32 @@ void main() {
 
     screenUV = clamp(screenUV, 0.0, 1.0);
 
-    vec2 texelSize = 1.0 / max(lg_screenSize.xy, vec2(1.0));
-    vec4 original = texture(tex, screenUV);
-    vec4 blurred = sampleBlurred(screenUV, texelSize, blurIntensity);
+    // With blurIntensity 0, which is what every preset ships, blurMix is 0 and
+    // the mix returns `original` — but both samples were still being fetched.
+    vec4 color = texture(tex, screenUV);
     float blurMix = clamp(blurIntensity / 10.0, 0.0, 1.0);
-    vec4 color = mix(original, blurred, blurMix);
+    if (blurMix > 0.001) {
+        vec2 texelSize = 1.0 / max(lg_screenSize.xy, vec2(1.0));
+        color = mix(color, sampleBlurred(screenUV, texelSize, blurIntensity), blurMix);
+    }
 
-    float n = (rand((gl_FragCoord.xy + waveTime * 61.0) * 1e-3) - 0.5) * noiseIntensity;
-    color.rgb += vec3(n);
+    // rand() costs a sin per pixel and noiseIntensity is 0 in every preset
+    // shipped, so the result was being multiplied away. Uniform branch.
+    if (noiseIntensity > 0.001) {
+        float n = (rand((gl_FragCoord.xy + waveTime * 61.0) * 1e-3) - 0.5) * noiseIntensity;
+        color.rgb += vec3(n);
+    }
 
-    float glow = computeGlow(fragUV);
-    float glowMask = smoothstep(glowEdge0, glowEdge1, dist);
-    float glowMul = glow * glowWeight * glowIntensity * glowMask + 1.0 + glowBias;
+    // computeGlow costs an atan plus a sin per pixel. Its contribution is
+    // scaled by glowWeight * glowIntensity, which the settings overlay leaves
+    // at 0.14 * 0.14, about 2% — below what is visible, but paid in full over
+    // ~875k pixels. Skipped when the combined weight cannot show up.
+    float glowMul = 1.0 + glowBias;
+    if (glowWeight * glowIntensity > 0.004) {
+        float glow = computeGlow(fragUV);
+        float glowMask = smoothstep(glowEdge0, glowEdge1, dist);
+        glowMul += glow * glowWeight * glowIntensity * glowMask;
+    }
     color.rgb *= glowMul;
 
     float edgeReflection = 1.0 - smoothstep(0.0, 0.32, dist);
