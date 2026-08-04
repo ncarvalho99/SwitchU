@@ -167,6 +167,10 @@ protected:
 
     bool  m_active    = false;
     bool  m_animating = false;
+    // Set by the A/B probe in onRender; read by the perf log.
+public:
+    bool  m_glassProbeSkippedPanel = false;
+private:
     bool  m_showing   = false;
     float m_animT     = 0.f;
 

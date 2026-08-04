@@ -483,8 +483,22 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
         nxui::Rect glassRect = p.shrunk(std::max(0.0f, tuning.inset));
         float glassRadius = std::max(12.0f, kPanelRadius - std::max(0.0f, tuning.inset) * 0.5f);
 
-        ren.drawLiquidGlass(kSettingsBackdropCacheTarget, glassRect, glassRadius, glassTint, opacity,
-                            std::clamp(tuning.shade, 0.0f, 1.0f));
+        // A/B probe. Five shader-level optimisations left gpu= unchanged at
+        // ~30ms, which says the arithmetic in this shader is not the cost. The
+        // remaining candidates are this one large panel versus the ~30 glass
+        // widgets layered on top of it, and reading the code has not settled
+        // which. Alternate every second and let the perf line report both, so
+        // one session on the console answers it instead of another round trip.
+        const bool probeSkipPanel =
+            (static_cast<int>(armTicksToNs(armGetSystemTick()) / 1000000000ULL) & 1) != 0;
+        m_glassProbeSkippedPanel = probeSkipPanel;
+        if (!probeSkipPanel) {
+            ren.drawLiquidGlass(kSettingsBackdropCacheTarget, glassRect, glassRadius, glassTint, opacity,
+                                std::clamp(tuning.shade, 0.0f, 1.0f));
+        } else {
+            ren.drawOffscreenRounded(kSettingsBackdropCacheTarget, glassRect, glassRadius,
+                                     nxui::Color::white().withAlpha(opacity));
+        }
 
         ren.liquidGlassSettings() = savedGlass;
     }
