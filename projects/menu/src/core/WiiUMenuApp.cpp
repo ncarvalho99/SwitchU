@@ -1488,6 +1488,25 @@ void WiiUMenuApp::onUpdate(float dt) {
     // A hard power-off still loses whatever came after the last flush, so
     // drain on a timer as the daemon does.
     switchu::FileLog::flushIfStale();
+
+    // Frame cost sampled once a second, tagged with whether an overlay is up.
+    // Comparing the home grid against the settings overlay says whether its
+    // 10-15 fps comes from submission count or from fragment shading, which
+    // reading the render path did not settle.
+    m_perfAccumDt += dt;
+    ++m_perfFrames;
+    if (m_perfAccumDt >= 1.0f) {
+        const auto& ren = app().renderer();
+        DebugLog::log("[perf] %.1f fps  draws=%u binds=%u verts=%u  settings=%d themeshop=%d",
+                      m_perfFrames / m_perfAccumDt,
+                      ren.lastFrameDrawCalls(),
+                      ren.lastFramePipelineBinds(),
+                      ren.lastFrameVertices(),
+                      (m_settings && m_settings->isActive()) ? 1 : 0,
+                      (m_themeShop && m_themeShop->isActive()) ? 1 : 0);
+        m_perfAccumDt = 0.f;
+        m_perfFrames = 0;
+    }
 #endif
 
 #ifdef SWITCHU_DEBUG_UI

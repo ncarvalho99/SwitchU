@@ -87,6 +87,15 @@ public:
 
     // Frame scope
     void beginFrame();
+
+    // Per-frame GPU submission counters, sampled at the previous beginFrame.
+    // The settings overlay drops to 10-15 fps and the cause is not obvious from
+    // reading the code — every glass panel forces a flush and a pipeline
+    // rebind, but so does the cheaper frosted path, so the two guesses I made
+    // from structure alone were both wrong. These make it measurable.
+    uint32_t lastFrameDrawCalls()     const { return m_lastFrameDrawCalls; }
+    uint32_t lastFramePipelineBinds() const { return m_lastFramePipelineBinds; }
+    uint32_t lastFrameVertices()      const { return m_lastFrameVertices; }
     void endFrame();
 
     // 2D drawing
@@ -159,6 +168,13 @@ private:
     // Emit geometry helpers
     // Segments per 90-degree corner on rounded geometry.
     static constexpr int kCornerSegs = 8;
+
+    uint32_t m_frameDrawCalls = 0;
+    uint32_t m_framePipelineBinds = 0;
+    uint32_t m_peakVtxCount = 0;
+    uint32_t m_lastFrameDrawCalls = 0;
+    uint32_t m_lastFramePipelineBinds = 0;
+    uint32_t m_lastFrameVertices = 0;
 
     // Flushes the current batch if `count` more vertices would not fit.
     // addVertex silently drops past the buffer end, so shapes that emit a run
