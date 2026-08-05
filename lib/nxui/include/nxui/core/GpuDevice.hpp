@@ -159,17 +159,27 @@ public:
 
     bool uploadTexture(dk::Image& dst, const void* pixels, uint32_t size, uint32_t width, uint32_t height);
 
-    static constexpr int NUM_OFFSCREEN = 3;
+    // Two classes of offscreen target, because the two users want opposite
+    // things. The icon and sidebar glass recapture the scene every single
+    // frame, so that capture has to be cheap and does not need detail — it is
+    // sampled through a small refracting panel. Settings, the power menu and
+    // the account dialog capture once per open and cache it, and they stretch
+    // what they captured across the screen, where half resolution is plainly
+    // visible as softness no blur tuning can remove.
+    //
+    // Making them all full resolution cost the home screen 1.8ms a frame and
+    // 60 fps became 54. So the per-frame one stays half.
+    static constexpr int NUM_OFFSCREEN = 5;
 
-    // The offscreen chain is what every glass panel samples: settings, the
-    // power menu and the account dialog all capture the scene here, blur it,
-    // and read it back through the panel. At half resolution that is a
-    // 640x360 image stretched over the screen, and no amount of blur tuning
-    // hides that the source is soft. Full resolution costs 3.69 MB a target
-    // against a 224 MB applet heap, and the blur runs once per open rather
-    // than per frame, since the result is cached until the scene moves.
-    static constexpr int OFF_WIDTH  = FB_WIDTH;
-    static constexpr int OFF_HEIGHT = FB_HEIGHT;
+    static constexpr int OFF_SCENE    = 0;   // half res, captured every frame
+    static constexpr int OFF_DIALOG   = 1;   // full res, dialog backdrop cache
+    static constexpr int OFF_SETTINGS = 2;   // full res, settings backdrop cache
+    static constexpr int OFF_SHARP_A  = 3;   // full res, sharp capture and blur
+    static constexpr int OFF_SHARP_B  = 4;   // full res, blur scratch
+
+    static constexpr bool offscreenIsFullRes(int i) { return i != OFF_SCENE; }
+    static constexpr int  offscreenWidth(int i)  { return offscreenIsFullRes(i) ? FB_WIDTH  : FB_WIDTH  / 2; }
+    static constexpr int  offscreenHeight(int i) { return offscreenIsFullRes(i) ? FB_HEIGHT : FB_HEIGHT / 2; }
 
     dk::Image&       offscreenImage(int i)       { return m_offImages[i]; }
     const dk::Image& offscreenImage(int i) const { return m_offImages[i]; }
@@ -187,7 +197,7 @@ public:
 
     // Stubs for pool-based allocation (SDL2 uses SDL_CreateTexture directly)
     void resetImagePool() {}
-    static constexpr int NUM_OFFSCREEN = 3;
+    static constexpr int NUM_OFFSCREEN = 5;
     bool offscreenReady() const { return false; }
 #endif
 

@@ -437,11 +437,11 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
 
     if (opacity > 0.01f) {
         if (needsBackdropRefresh) {
-            ren.captureToOffscreen(false);
+            ren.captureToOffscreenSharp();
             if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
                 ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
             }
-            ren.copyOffscreen(0, kSettingsBackdropCacheTarget);
+            ren.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, kSettingsBackdropCacheTarget);
             m_backdropCacheValid = true;
             m_cachedPreBlurRadius = tuning.preBlurRadius;
             m_cachedBlurIterations = tuning.blurIterations;
