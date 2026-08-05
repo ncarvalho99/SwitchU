@@ -198,6 +198,7 @@ protected:
     int rawIndexFromFocusable(int focIdx) const;
     int focusableCount() const;
     bool itemFocusable(const SettingItem& item) const;
+    bool tabIsTextOnly() const;
     void clampContentIdx();
     float visibilityProgress() const;
     void syncPanelState(float eased);
