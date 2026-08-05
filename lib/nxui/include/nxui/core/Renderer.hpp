@@ -183,6 +183,12 @@ private:
     // Segments per 90-degree corner on rounded geometry.
     static constexpr int kCornerSegs = 8;
 
+    // Width, in pixels, of the alpha ramp skirting a textured rounded fill.
+    static constexpr float kEdgeFeatherPx = 1.0f;
+
+    void emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
+                         const Color& c, const Rect& uvSrc);
+
     uint32_t m_frameDrawCalls = 0;
     uint32_t m_framePipelineBinds = 0;
     uint32_t m_peakVtxCount = 0;

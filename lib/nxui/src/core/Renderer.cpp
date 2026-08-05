@@ -868,6 +868,49 @@ void Renderer::drawTextureSub(const Texture* tex, const Rect& src, const Rect& d
     addQuad(dest.x, dest.y, dest.right(), dest.bottom(), u0, v0, u1, v1, tint);
 }
 
+// A one pixel band around the perimeter, fading to alpha 0, so the edge has a
+// gradient to resolve against. The rounded shapes are triangle fans, whose
+// outline is a hard polygon boundary with no MSAA behind it.
+//
+// Applied only to textured fills for now. An earlier attempt put it on every
+// rounded path at once and overflowed the vertex arena, which silently dropped
+// geometry and made the menu flicker. One path costs 6 vertices per perimeter
+// segment: 216 per icon, ~3.2k across a full page, against roughly 35k of
+// headroom.
+//
+// uvSrc maps positions to texture coordinates. Outer vertices reuse their
+// inner neighbour's UV, since their alpha is zero anyway.
+void Renderer::emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
+                               const Color& c, const Rect& uvSrc) {
+    if (count < 2 || c.a <= 0.f) return;
+
+    const Color outer = c.withAlpha(0.f);
+    auto uvOf = [&uvSrc](const Vec2& p) -> Vec2 {
+        return {(p.x - uvSrc.x) / uvSrc.width, (p.y - uvSrc.y) / uvSrc.height};
+    };
+
+    for (int i = 0; i < count; ++i) {
+        const Vec2& p0 = pts[i];
+        const Vec2& p1 = pts[(i + 1) % count];
+        const Vec2& n0 = normals[i];
+        const Vec2& n1 = normals[(i + 1) % count];
+
+        const Vec2 o0{p0.x + n0.x * kEdgeFeatherPx, p0.y + n0.y * kEdgeFeatherPx};
+        const Vec2 o1{p1.x + n1.x * kEdgeFeatherPx, p1.y + n1.y * kEdgeFeatherPx};
+
+        const Vec2 uv0 = uvOf(p0);
+        const Vec2 uv1 = uvOf(p1);
+
+        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
+        addVertex(p1.x, p1.y, uv1.x, uv1.y, c);
+        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
+
+        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
+        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
+        addVertex(o0.x, o0.y, uv0.x, uv0.y, outer);
+    }
+}
+
 void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint) {
     if (!tex) { return; }
     if (radius <= 0) { drawTexture(tex, dest, tint); return; }
@@ -895,16 +938,18 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
     };
 
     Vec2 pts[maxPts];
+    Vec2 nrm[maxPts];
     int ptCount = 0;
     for (auto& cn : corners) {
         for (int i = 0; i <= segs; ++i) {
             float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
+            float ca = std::cos(a), sa = -std::sin(a);
+            nrm[ptCount] = {ca, sa};
+            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
         }
     }
 
-    reserveVertices((uint32_t)ptCount * 3);
+    reserveVertices((uint32_t)ptCount * 9);
     Vec2 cuv = toUV(fcx, fcy);
     for (int i = 0; i < ptCount; ++i) {
         auto& p0 = pts[i];
@@ -916,6 +961,7 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
         addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
     }
 
+    emitFeatherRing(pts, nrm, ptCount, tint, dest);
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,
