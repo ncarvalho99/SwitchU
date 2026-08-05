@@ -183,11 +183,18 @@ private:
     // Segments per 90-degree corner on rounded geometry.
     static constexpr int kCornerSegs = 8;
 
-    // Width, in pixels, of the alpha ramp skirting a textured rounded fill.
-    static constexpr float kEdgeFeatherPx = 1.0f;
+    // Rounded fills are a single quad masked by the fragment shader. These
+    // describe the shape to it: extent in pixels, and the UV window the quad
+    // spans so the shader can normalise fragUV onto the shape. Zero radius
+    // means no mask, which is the state every other draw runs in.
+    float m_roundRadius = 0.f;
+    Vec2  m_roundSize {0.f, 0.f};
+    Vec2  m_roundUvMin {0.f, 0.f};
+    Vec2  m_roundUvScale {1.f, 1.f};
 
-    void emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
-                         const Color& c, const Rect& uvSrc);
+    // Emits `quad` with the corner mask active, then clears it.
+    void drawRoundedMasked(const Rect& dest, float radius, const Color& c,
+                           const Rect& uv);
 
     uint32_t m_frameDrawCalls = 0;
     uint32_t m_framePipelineBinds = 0;

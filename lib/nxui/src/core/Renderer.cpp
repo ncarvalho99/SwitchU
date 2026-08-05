@@ -245,6 +245,7 @@ void Renderer::beginFrame() {
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
+    m_roundRadius = 0.f;
     m_clipStack.clear();
     // Normally the capture cannot outlive a frame: the framebuffer it copies is
     // redrawn every frame. An overlay that knows nothing behind it has changed
@@ -332,12 +333,21 @@ void Renderer::flush() {
         m_descDirty = false;
     }
 
-    if (m_curShader == ShaderProgram::Basic) {
+    // Backdrop shares the block so that offscreen captures get the same corner
+    // mask as everything else. The other programs push their own uniforms.
+    if (m_curShader == ShaderProgram::Basic || m_curShader == ShaderProgram::Backdrop) {
         FsUniforms fs = {};
         fs.useTexture = m_texturing ? 1 : 0;
+        fs.param1 = m_roundRadius;
+        fs.param2 = m_roundSize.x;
+        fs.param3 = m_roundSize.y;
+        fs.extra[0] = m_roundUvMin.x;
+        fs.extra[1] = m_roundUvMin.y;
+        fs.extra[2] = m_roundUvScale.x;
+        fs.extra[3] = m_roundUvScale.y;
         auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
         cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE,
-                          0, sizeof(int32_t) * 4, &fs);
+                          0, sizeof(int32_t) * 8, &fs);
         cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
     }
 
@@ -470,66 +480,22 @@ void Renderer::drawOffscreen(int target, const Rect& dest, const Color& tint) {
 void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, const Color& tint) {
     if (target < 0 || target >= GpuDevice::NUM_OFFSCREEN) return;
     useShader(ShaderProgram::Backdrop);
+
+    // The capture is screen sized, so the quad samples the sub-rect it covers.
+    const float u0 = dest.x / (float)m_gpu.width();
+    const float v0 = dest.y / (float)m_gpu.height();
+    const float u1 = dest.right() / (float)m_gpu.width();
+    const float v1 = dest.bottom() / (float)m_gpu.height();
+    const Rect uv{u0, v0, u1 - u0, v1 - v0};
+
+    bindTexture(m_offDescSlot[target]);
     if (radius <= 0.f) {
-        float u0 = dest.x / (float)m_gpu.width();
-        float v0 = dest.y / (float)m_gpu.height();
-        float u1 = dest.right() / (float)m_gpu.width();
-        float v1 = dest.bottom() / (float)m_gpu.height();
-        bindTexture(m_offDescSlot[target]);
         addQuad(dest.x, dest.y, dest.right(), dest.bottom(), u0, v0, u1, v1, tint);
         flush();
-        useShader(ShaderProgram::Basic);
-        return;
+    } else {
+        drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
+                          tint, uv);
     }
-
-    float rad = std::min(radius, std::min(dest.width, dest.height) * 0.5f);
-    bindTexture(m_offDescSlot[target]);
-
-    float cx = dest.x + dest.width * 0.5f;
-    float cy = dest.y + dest.height * 0.5f;
-
-    auto toUV = [&](float px, float py) -> Vec2 {
-        return {
-            px / (float)m_gpu.width(),
-            py / (float)m_gpu.height(),
-        };
-    };
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct { float cx, cy; float a0; } corners[4] = {
-        {dest.right() - rad, dest.y + rad,          0},
-        {dest.x + rad,       dest.y + rad,          pi2},
-        {dest.x + rad,       dest.bottom() - rad,   pi2 * 2},
-        {dest.right() - rad, dest.bottom() - rad,   pi2 * 3},
-    };
-
-    Vec2 pts[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
-        }
-    }
-
-    reserveVertices((uint32_t)ptCount * 3);
-    Vec2 cuv = toUV(cx, cy);
-    for (int i = 0; i < ptCount; ++i) {
-        auto& p0 = pts[i];
-        auto& p1 = pts[(i + 1) % ptCount];
-        Vec2 uv0 = toUV(p0.x, p0.y);
-        Vec2 uv1 = toUV(p1.x, p1.y);
-        addVertex(cx,  cy,  cuv.x, cuv.y, tint);
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
-        addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
-    }
-
-
-    flush();
     useShader(ShaderProgram::Basic);
 }
 
@@ -735,47 +701,9 @@ void Renderer::drawGradientRect(const Rect& r, const Color& top, const Color& bo
 
 void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     if (radius <= 0.f) { drawRect(r, c); return; }
-    float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
-
     bindTexture(-1);
-
-    auto cx = r.x + r.width * 0.5f;
-    auto cy = r.y + r.height * 0.5f;
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct {float cx, cy; float a0;} corners[4] = {
-        {r.right() - rad, r.y + rad,          0},
-        {r.x + rad,       r.y + rad,          pi2},
-        {r.x + rad,       r.bottom() - rad,   pi2*2},
-        {r.right() - rad, r.bottom() - rad,   pi2*3},
-    };
-
-    // Outward unit normal is kept alongside each perimeter point so the
-    // feather ring below knows which way to push. On the arcs it is the same
-    // direction that placed the point; at the arc endpoints it is axis
-    // aligned, which is also correct for the straight edges between corners.
-    Vec2 pts[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
-        }
-    }
-
-    reserveVertices((uint32_t)ptCount * 3);
-    for (int i = 0; i < ptCount; ++i) {
-        auto& p0 = pts[i];
-        auto& p1 = pts[(i + 1) % ptCount];
-        addVertex(cx, cy, 0, 0, c);
-        addVertex(p0.x, p0.y, 0, 0, c);
-        addVertex(p1.x, p1.y, 0, 0, c);
-    }
-
+    drawRoundedMasked(r, std::min(radius, std::min(r.width, r.height) * 0.5f),
+                      c, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
@@ -868,100 +796,31 @@ void Renderer::drawTextureSub(const Texture* tex, const Rect& src, const Rect& d
     addQuad(dest.x, dest.y, dest.right(), dest.bottom(), u0, v0, u1, v1, tint);
 }
 
-// A one pixel band around the perimeter, fading to alpha 0, so the edge has a
-// gradient to resolve against. The rounded shapes are triangle fans, whose
-// outline is a hard polygon boundary with no MSAA behind it.
-//
-// Applied only to textured fills for now. An earlier attempt put it on every
-// rounded path at once and overflowed the vertex arena, which silently dropped
-// geometry and made the menu flicker. One path costs 6 vertices per perimeter
-// segment: 216 per icon, ~3.2k across a full page, against roughly 35k of
-// headroom.
-//
-// uvSrc maps positions to texture coordinates. Outer vertices reuse their
-// inner neighbour's UV, since their alpha is zero anyway.
-void Renderer::emitFeatherRing(const Vec2* pts, const Vec2* normals, int count,
-                               const Color& c, const Rect& uvSrc) {
-    if (count < 2 || c.a <= 0.f) return;
+// A rounded fill is one quad; the fragment shader cuts the corner. The mask
+// state is per shape, so the batch is closed on both sides of it and cleared
+// afterwards, leaving every other draw in the unmasked state.
+void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
+                                 const Rect& uv) {
+    flush();
+    m_roundRadius  = radius;
+    m_roundSize    = {dest.width, dest.height};
+    m_roundUvMin   = {uv.x, uv.y};
+    m_roundUvScale = {uv.width  != 0.f ? 1.f / uv.width  : 0.f,
+                      uv.height != 0.f ? 1.f / uv.height : 0.f};
 
-    const Color outer = c.withAlpha(0.f);
-    auto uvOf = [&uvSrc](const Vec2& p) -> Vec2 {
-        return {(p.x - uvSrc.x) / uvSrc.width, (p.y - uvSrc.y) / uvSrc.height};
-    };
+    addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
+            uv.x, uv.y, uv.right(), uv.bottom(), c);
 
-    for (int i = 0; i < count; ++i) {
-        const Vec2& p0 = pts[i];
-        const Vec2& p1 = pts[(i + 1) % count];
-        const Vec2& n0 = normals[i];
-        const Vec2& n1 = normals[(i + 1) % count];
-
-        const Vec2 o0{p0.x + n0.x * kEdgeFeatherPx, p0.y + n0.y * kEdgeFeatherPx};
-        const Vec2 o1{p1.x + n1.x * kEdgeFeatherPx, p1.y + n1.y * kEdgeFeatherPx};
-
-        const Vec2 uv0 = uvOf(p0);
-        const Vec2 uv1 = uvOf(p1);
-
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
-        addVertex(p1.x, p1.y, uv1.x, uv1.y, c);
-        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
-
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, c);
-        addVertex(o1.x, o1.y, uv1.x, uv1.y, outer);
-        addVertex(o0.x, o0.y, uv0.x, uv0.y, outer);
-    }
+    flush();
+    m_roundRadius = 0.f;
 }
 
 void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint) {
     if (!tex) { return; }
     if (radius <= 0) { drawTexture(tex, dest, tint); return; }
-    float rad = std::min(radius, std::min(dest.width, dest.height) * 0.5f);
-
     bindTexture(tex->descriptorSlot());
-
-    float fcx = dest.x + dest.width * 0.5f;
-    float fcy = dest.y + dest.height * 0.5f;
-
-    auto toUV = [&](float px, float py) -> Vec2 {
-        return {(px - dest.x) / dest.width,
-                (py - dest.y) / dest.height};
-    };
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct { float cx, cy; float a0; } corners[4] = {
-        {dest.right() - rad, dest.y + rad,          0},
-        {dest.x + rad,       dest.y + rad,          pi2},
-        {dest.x + rad,       dest.bottom() - rad,   pi2 * 2},
-        {dest.right() - rad, dest.bottom() - rad,   pi2 * 3},
-    };
-
-    Vec2 pts[maxPts];
-    Vec2 nrm[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = -std::sin(a);
-            nrm[ptCount] = {ca, sa};
-            pts[ptCount++] = {cn.cx + ca * rad, cn.cy + sa * rad};
-        }
-    }
-
-    reserveVertices((uint32_t)ptCount * 9);
-    Vec2 cuv = toUV(fcx, fcy);
-    for (int i = 0; i < ptCount; ++i) {
-        auto& p0 = pts[i];
-        auto& p1 = pts[(i + 1) % ptCount];
-        Vec2 uv0 = toUV(p0.x, p0.y);
-        Vec2 uv1 = toUV(p1.x, p1.y);
-        addVertex(fcx,  fcy,  cuv.x, cuv.y, tint);
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
-        addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
-    }
-
-    emitFeatherRing(pts, nrm, ptCount, tint, dest);
+    drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
+                      tint, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,
