@@ -5,24 +5,23 @@
 layout (location = 0) in vec2 fragUV;
 layout (location = 1) in vec4 fragColor;
 
+// Rounded corners are cut here rather than approximated by a triangle fan. The
+// fan quantised every corner into eight straight segments, which is what made
+// icon and card edges look stepped, and widening it into an antialiased skirt
+// cost hundreds of vertices per shape and faulted the GPU. A signed distance
+// field gives exact coverage per pixel for six vertices.
+//
+// The shape arrives on the vertex rather than in the uniform block, so a run of
+// rounded shapes still batches into one draw. Half extent and radius are
+// constant across a quad; only the position varies.
+layout (location = 2) in vec2 fragShapePos;
+layout (location = 3) in vec2 fragShapeHalf;
+layout (location = 4) in vec2 fragShapeRound;
+
 layout (binding = 0) uniform sampler2D tex;
 
-// Rounded corners are cut here rather than approximated by a triangle fan.
-// The fan quantised every corner into eight straight segments, which is what
-// made icon and card edges look stepped, and widening it into an antialiased
-// skirt cost hundreds of vertices per shape and faulted the GPU. A signed
-// distance field gives exact per-pixel coverage for six vertices and one draw.
-//
-// roundUvMin/roundUvScale remap fragUV onto 0..1 across the shape, so one mask
-// serves quads whose UVs span a whole texture and quads that sample an
-// arbitrary sub-rect of a screen-space capture.
 layout (std140, binding = 1) uniform FsUniforms {
-    int   useTexture;    // 0 = color only, 1 = texture × color
-    float roundRadius;   // pixels; 0 disables the mask
-    vec2  roundSize;     // shape extent in pixels
-    vec2  roundUvMin;
-    vec2  roundUvScale;
-    float roundThickness; // >0 strokes a band inside the edge instead of filling
+    int useTexture;   // 0 = color only, 1 = texture x color
 };
 
 layout (location = 0) out vec4 outColor;
@@ -36,20 +35,20 @@ float sdRoundedBox(vec2 p, vec2 halfExtent, float radius) {
 void main() {
     vec4 c = (useTexture != 0) ? texture(tex, fragUV) * fragColor : fragColor;
 
-    if (roundRadius > 0.0) {
-        vec2 t = (fragUV - roundUvMin) * roundUvScale;
-        vec2 halfExtent = roundSize * 0.5;
-        float d = sdRoundedBox((t - vec2(0.5)) * roundSize, halfExtent, roundRadius);
-        // fwidth is |dFdx| + |dFdy|, which overstates the step on a diagonal by
-        // up to 41% against a flat edge. That widened the ramp through the arc
-        // and left a visible seam where the straight edge starts curving. The
-        // gradient length is the real distance one pixel covers.
+    float radius = fragShapeRound.x;
+    if (radius > 0.0) {
+        float d = sdRoundedBox(fragShapePos, fragShapeHalf, radius);
+        // fwidth is |dFdx| + |dFdy|: 1.0 along a flat edge, 1.41 on the
+        // diagonal through a corner, which widened the ramp by 41% exactly
+        // where the rounding starts and left a seam there. The gradient length
+        // is the real per-pixel step and is continuous across the tangent.
         float w = max(length(vec2(dFdx(d), dFdy(d))), 1e-5);
-        if (roundThickness > 0.0) {
+        float thickness = fragShapeRound.y;
+        if (thickness > 0.0) {
             // The stroke sits inside the boundary, so the band is centred on
             // -h. Sub-pixel strokes are widened to one pixel rather than left
-            // to fade out, which is how the selection ring reads as a line.
-            float h = max(roundThickness, 1.0) * 0.5;
+            // to fade, which is how the selection ring reads as a line.
+            float h = max(thickness, 1.0) * 0.5;
             c.a *= 1.0 - smoothstep(-w, w, abs(d + h) - h);
         } else {
             c.a *= 1.0 - smoothstep(-w, w, d);

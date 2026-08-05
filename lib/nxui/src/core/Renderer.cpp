@@ -250,8 +250,8 @@ void Renderer::beginFrame() {
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
-    m_roundRadius = 0.f;
-    m_roundThickness = 0.f;
+    m_shapeRadius = 0.f;
+    m_shapeThickness = 0.f;
     m_fsCacheValid = false;
     m_boundTexSlot = kTexSlotUnset;
     m_vtxBufferBound = false;
@@ -291,10 +291,13 @@ void Renderer::beginFrame() {
     cmd.bindDepthStencilState(dk::DepthStencilState{}.setDepthTestEnable(false));
     cmd.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
 
-    static const std::array<DkVtxAttribState, 3> attribs = {{
+    static const std::array<DkVtxAttribState, 6> attribs = {{
         DkVtxAttribState{0, 0, offsetof(Vertex2D, x), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
         DkVtxAttribState{0, 0, offsetof(Vertex2D, u), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
         DkVtxAttribState{0, 0, offsetof(Vertex2D, r), DkVtxAttribSize_4x32, DkVtxAttribType_Float, 0},
+        DkVtxAttribState{0, 0, offsetof(Vertex2D, sx), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
+        DkVtxAttribState{0, 0, offsetof(Vertex2D, hx), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
+        DkVtxAttribState{0, 0, offsetof(Vertex2D, rad), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
     }};
     static const DkVtxBufferState bufState = {sizeof(Vertex2D), 0};
     cmd.bindVtxAttribState(attribs);
@@ -343,29 +346,18 @@ void Renderer::flush() {
         m_boundTexSlot = kTexSlotUnset;   // the handle may now point elsewhere
     }
 
-    // Every rounded shape carries its own mask parameters, so it closes the
-    // batch, and the draw count on the home screen more than doubled when the
-    // selection rings and circles joined. Redundant state is what makes that
-    // expensive, so nothing below is re-emitted unless it actually changed.
+    // Nothing below is re-emitted unless it actually changed.
 
     // Backdrop shares the block so that offscreen captures get the same corner
     // mask as everything else. The other programs push their own uniforms.
     if (m_curShader == ShaderProgram::Basic || m_curShader == ShaderProgram::Backdrop) {
         FsUniforms fs = {};
         fs.useTexture = m_texturing ? 1 : 0;
-        fs.param1 = m_roundRadius;
-        fs.param2 = m_roundSize.x;
-        fs.param3 = m_roundSize.y;
-        fs.extra[0] = m_roundUvMin.x;
-        fs.extra[1] = m_roundUvMin.y;
-        fs.extra[2] = m_roundUvScale.x;
-        fs.extra[3] = m_roundUvScale.y;
-        fs.extra[4] = m_roundThickness;
 
-        // Consecutive draws usually share these: unmasked geometry differs only
-        // in useTexture, and a run of plain rects or glyphs does not differ at
-        // all. The binding survives from the previous draw, so an identical
-        // block means neither the push nor the rebind has to happen.
+        // Now that the shape rides on the vertex, the block holds one flag, so
+        // consecutive draws almost always match. The binding survives from the
+        // previous draw, so an identical block means neither the push nor the
+        // rebind has to happen.
         if (!m_fsCacheValid || std::memcmp(m_fsCache, &fs, kFsPushBytes) != 0) {
             std::memcpy(m_fsCache, &fs, kFsPushBytes);
             m_fsCacheValid = true;
@@ -677,6 +669,9 @@ void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount > m_peakVtxCount) m_peakVtxCount = m_vtxCount;
     vtx.x = x; vtx.y = y;
     vtx.u = u; vtx.v = v;
+    vtx.sx = x - m_shapeCentre.x; vtx.sy = y - m_shapeCentre.y;
+    vtx.hx = m_shapeHalf.x;       vtx.hy = m_shapeHalf.y;
+    vtx.rad = m_shapeRadius;      vtx.thick = m_shapeThickness;
     vtx.r = c.r; vtx.g = c.g; vtx.b = c.b; vtx.a = c.a;
 }
 
@@ -790,20 +785,16 @@ void Renderer::drawTextureSub(const Texture* tex, const Rect& src, const Rect& d
 // afterwards, leaving every other draw in the unmasked state.
 void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
                                  const Rect& uv, float thickness) {
-    flush();
-    m_roundRadius  = radius;
-    m_roundThickness = thickness;
-    m_roundSize    = {dest.width, dest.height};
-    m_roundUvMin   = {uv.x, uv.y};
-    m_roundUvScale = {uv.width  != 0.f ? 1.f / uv.width  : 0.f,
-                      uv.height != 0.f ? 1.f / uv.height : 0.f};
+    m_shapeCentre    = {dest.x + dest.width * 0.5f, dest.y + dest.height * 0.5f};
+    m_shapeHalf      = {dest.width * 0.5f, dest.height * 0.5f};
+    m_shapeRadius    = radius;
+    m_shapeThickness = thickness;
 
     addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
             uv.x, uv.y, uv.right(), uv.bottom(), c);
 
-    flush();
-    m_roundRadius = 0.f;
-    m_roundThickness = 0.f;
+    m_shapeRadius    = 0.f;
+    m_shapeThickness = 0.f;
 }
 
 void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint) {

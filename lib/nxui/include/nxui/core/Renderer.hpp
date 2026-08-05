@@ -17,8 +17,17 @@ struct Vertex2D {
     float x, y;         // Position
     float u, v;         // Texture coordinate
     float r, g, b, a;   // Color (premultiplied alpha)
+    // Rounded-shape mask, evaluated in the fragment shader. Describing it here
+    // rather than in the fragment uniform block is what lets a run of rounded
+    // shapes share a draw call; when it lived in the block, each shape closed
+    // the batch. Zero radius means the vertex belongs to an unmasked shape,
+    // which is every other draw.
+    float sx, sy;       // Position relative to the shape centre, pixels
+    float hx, hy;       // Shape half extent, pixels
+    float rad;          // Corner radius, pixels
+    float thick;        // Stroke width, pixels; 0 fills
 };
-static_assert(sizeof(Vertex2D) == 32);
+static_assert(sizeof(Vertex2D) == 56);
 
 struct VsUniforms {
     float projection[16];   // Ortho matrix (top-left origin)
@@ -180,20 +189,18 @@ public:
 
 private:
     // Emit geometry helpers
-    // Rounded fills are a single quad masked by the fragment shader. These
-    // describe the shape to it: extent in pixels, and the UV window the quad
-    // spans so the shader can normalise fragUV onto the shape. Zero radius
-    // means no mask, which is the state every other draw runs in.
-    float m_roundRadius = 0.f;
-    Vec2  m_roundSize {0.f, 0.f};
-    Vec2  m_roundUvMin {0.f, 0.f};
-    Vec2  m_roundUvScale {1.f, 1.f};
-    float m_roundThickness = 0.f;
+    // Rounded fills are a single quad masked by the fragment shader. addVertex
+    // stamps this onto every vertex it emits; zero radius means no mask, which
+    // is the state every other draw runs in.
+    Vec2  m_shapeCentre {0.f, 0.f};
+    Vec2  m_shapeHalf {0.f, 0.f};
+    float m_shapeRadius = 0.f;
+    float m_shapeThickness = 0.f;
 
     // Redundant-state suppression for flush(). The command buffer is rebuilt
     // every frame, so all of it resets in beginFrame; nothing here may outlive
     // a frame.
-    static constexpr uint32_t kFsPushBytes = sizeof(int32_t) * 9;
+    static constexpr uint32_t kFsPushBytes = sizeof(int32_t) * 4;
     static constexpr int kTexSlotUnset = -2;   // -1 is the untextured slot
     unsigned char m_fsCache[kFsPushBytes] {};
     bool m_fsCacheValid = false;
