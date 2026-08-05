@@ -19,7 +19,12 @@ namespace {
 static constexpr float kTabRailInset = 14.f;
 static constexpr float kTabCardGap = 10.f;
 static constexpr float kContentCardInsetX = 18.f;
+
 static constexpr float kContentCardInsetY = 8.f;
+
+// A wrapped label needs as many lines as the text takes, so the row cannot use
+// the fixed height the others do. Measured against the same width and scale the
+// row will lay the label out at, so the two cannot disagree.
 static constexpr int kSettingsBackdropCacheTarget = 2;
 
 class SettingsTabWidget final : public nxui::GlassBox {
@@ -217,6 +222,18 @@ TabbedOverlayScreen::~TabbedOverlayScreen() {
     nxui::I18n::instance().removeLanguageChangedListener(m_i18nListenerId);
 }
 
+float TabbedOverlayScreen::itemHeight(const SettingItem& it, float contentWidth) const {
+    if (it.type == ItemType::Section) return kSectionHeight;
+    if (!it.wrapLabel)                return kRowHeight;
+
+    nxui::Label probe(it.label);
+    if (m_font) probe.setFont(m_font);
+    probe.setScale(0.94f);
+    probe.setMultiline(true);
+    const float labelW = std::max(1.f, contentWidth - kContentCardInsetX * 2.f - 20.f);
+    return std::max(kRowHeight, probe.measureWrappedText(labelW).y + 34.f);
+}
+
 void TabbedOverlayScreen::setTheme(const nxui::Theme* t) {
     m_theme = t;
     if (!m_theme)
@@ -386,7 +403,7 @@ void TabbedOverlayScreen::rebuildContentItems() {
 
         float y = 0.f;
         for (int i = 0; i < (int)items.size(); ++i) {
-            float h = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
+            float h = itemHeight(items[i], cr.width);
             float insetY = (items[i].type == ItemType::Section) ? 1.f : kContentCardInsetY;
             float cardH = std::max(0.f, h - (items[i].type == ItemType::Section ? 2.f : 6.f));
             auto itemBox = makeItemWidget(items[i]);
@@ -551,7 +568,7 @@ void TabbedOverlayScreen::syncDebugWireframeRects(const nxui::Rect& panel) {
     float x = cr.x;
     int n = std::min((int)itemChildren.size(), (int)items.size());
     for (int i = 0; i < n; ++i) {
-        float h = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
+        float h = itemHeight(items[i], cr.width);
         float insetY = (items[i].type == ItemType::Section) ? 1.f : kContentCardInsetY;
         float cardH = std::max(0.f, h - (items[i].type == ItemType::Section ? 2.f : 6.f));
         itemChildren[i]->setRect({x + kContentCardInsetX, y + insetY,
@@ -652,7 +669,7 @@ void TabbedOverlayScreen::drawContent(nxui::Renderer& ren, const nxui::Rect& pan
     float x = cr.x;
     int n = std::min((int)itemChildren.size(), (int)items.size());
     for (int i = 0; i < n; ++i) {
-        float h = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
+        float h = itemHeight(items[i], cr.width);
         float insetY = (items[i].type == ItemType::Section) ? 1.f : kContentCardInsetY;
         float cardH = std::max(0.f, h - (items[i].type == ItemType::Section ? 2.f : 6.f));
         nxui::Rect itemRect = {
@@ -718,8 +735,8 @@ void TabbedOverlayScreen::drawDropdown(nxui::Renderer& ren, const nxui::Rect& pa
 
     float y = cr.y + 16.f - m_scrollY;
     for (int i = 0; i < m_dropdownRawIdx; ++i)
-        y += (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
-    float rowH = (item.type == ItemType::Section) ? kSectionHeight : kRowHeight;
+        y += itemHeight(items[i], cr.width);
+    float rowH = itemHeight(item, cr.width);
 
     float ctrlX = cr.x + cr.width * 0.40f;
     float ctrlW = cr.width * 0.60f;
