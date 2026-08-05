@@ -166,17 +166,19 @@ void main() {
         d = sdSuperellipse(p, panelAspect, powerFactor);
     }
 
-    // Antialias the panel outline. d is a signed distance, so fading across
-    // one pixel's width in that field — which fwidth gives directly — is all
-    // the edge needs. The hard discard on d > 0 made every pixel fully in or
-    // fully out, which with no MSAA on the framebuffer is exactly the
-    // stair-stepped corners reported on the home icons.
+    // Antialias the panel outline. d is a signed distance, so fading it across
+    // one pixel's width is all the edge needs. The hard discard on d > 0 made
+    // every pixel fully in or fully out, which with no MSAA on the framebuffer
+    // is exactly the stair-stepped corners reported on the home icons.
     //
-    // This is a re-application: the same change was reverted while isolating
-    // a flickering menu, whose actual cause turned out to be a vertex buffer
-    // overflow elsewhere. The shader itself already ran on hardware without
-    // incident.
-    float edgeWidth = max(fwidth(d), 1e-5);
+    // fwidth would be the obvious way to get that width, but it is
+    // |dFdx| + |dFdy|: 1.0 along a flat edge and 1.41 on the diagonal through
+    // a corner, so the ramp widens by 41% exactly where the rounding starts
+    // and leaves a seam there. The gradient length is the real per-pixel step
+    // and is continuous across the tangent. This shader draws the tile frame,
+    // which is the edge that seam was reported on — basic and backdrop were
+    // corrected first and, on their own, changed nothing visible.
+    float edgeWidth = max(length(vec2(dFdx(d), dFdy(d))), 1e-5);
     float coverage = 1.0 - smoothstep(-edgeWidth, edgeWidth, d);
     if (coverage <= 0.0)
         discard;
