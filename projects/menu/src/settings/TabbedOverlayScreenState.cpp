@@ -257,8 +257,12 @@ nxui::Rect TabbedOverlayScreen::contentRect(const nxui::Rect& panel) const {
 
 float TabbedOverlayScreen::contentTotalHeight() const {
     if (m_tabIndex < 0 || m_tabIndex >= (int)m_tabs.size()) return 0;
+    // Must agree with what rebuildContent lays out, or the scroll stops short
+    // of the bottom: a wrapped row is taller than kRowHeight, and counting it as
+    // kRowHeight left the last line of About half below the panel edge.
+    const float width = contentRect().width;
     float height = 0;
     for (auto& item : m_tabs[m_tabIndex].items)
-        height += (item.type == ItemType::Section ? kSectionHeight : kRowHeight);
+        height += itemHeight(item, width);
     return height;
 }

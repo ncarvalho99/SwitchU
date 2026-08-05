@@ -472,19 +472,22 @@ void TabbedOverlayScreen::scrollToFocused() {
     nxui::Rect cr = contentRect();
     constexpr float kContentTopPad = 16.f;
     float itemY = kContentTopPad;
+    float focusedH = kRowHeight;
     int focusIndex = 0;
     for (auto& item : items) {
-        float height = item.type == ItemType::Section ? kSectionHeight : kRowHeight;
+        const float height = itemHeight(item, cr.width);
         if (itemFocusable(item)) {
-            if (focusIndex == m_contentIdx) break;
+            if (focusIndex == m_contentIdx) { focusedH = height; break; }
             ++focusIndex;
         }
         itemY += height;
     }
     if (itemY - m_scrollTarget < 0)
         m_scrollTarget = itemY;
-    if (itemY + kRowHeight - m_scrollTarget > cr.height)
-        m_scrollTarget = itemY + kRowHeight - cr.height;
+    // The focused row's own height, not a fixed one: scrolling a wrapped row
+    // into view by a single row's worth left its last line under the edge.
+    if (itemY + focusedH - m_scrollTarget > cr.height)
+        m_scrollTarget = itemY + focusedH - cr.height;
     float maxScroll = std::max(0.f, contentTotalHeight() + kContentTopPad - cr.height + 20.f);
     m_scrollTarget = std::clamp(m_scrollTarget, 0.f, maxScroll);
 }
@@ -515,7 +518,7 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
         float y = cr.y + kContentTopPad - m_scrollY;
         int focusIdx = 0;
         for (int i = 0; i < (int)items.size(); ++i) {
-            float height = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
+            float height = itemHeight(items[i], cr.width);
             float insetY = (items[i].type == ItemType::Section) ? 1.f : kCardInsetY;
             float cardH = std::max(0.f, height - (items[i].type == ItemType::Section ? 2.f : 6.f));
             nxui::Rect itemRect = {
@@ -543,7 +546,7 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
         float y = cr.y + kContentTopPad - m_scrollY;
         int currentFocus = 0;
         for (int i = 0; i < (int)items.size(); ++i) {
-            float height = (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
+            float height = itemHeight(items[i], cr.width);
             if (itemFocusable(items[i])) {
                 if (currentFocus == focusIdx) {
                     float insetY = (items[i].type == ItemType::Section) ? 1.f : kCardInsetY;
@@ -656,7 +659,7 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
 
         float y = cr.y + kContentTopPad - m_scrollY;
         for (int i = 0; i < m_dropdownRawIdx; ++i)
-            y += (items[i].type == ItemType::Section) ? kSectionHeight : kRowHeight;
+            y += itemHeight(items[i], cr.width);
 
         float ctrlX = cr.x + cr.width * 0.40f;
         float ctrlW = cr.width * 0.60f;
