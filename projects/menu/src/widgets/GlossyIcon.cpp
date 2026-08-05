@@ -179,5 +179,10 @@ void GlossyIcon::onContentRender(nxui::Renderer& ren) {
         iconTint.g = 0.80f;
         iconTint.b = 0.80f;
     }
-    ren.drawTextureRounded(m_tex, texRect, rad - inset, iconTint);
+    // rad - 3, not rad - inset. Matching the inset would make the bezel a
+    // constant width, but it also drops the artwork to radius 16 against a
+    // selection ring at 26, and the two then read as different shapes. Keeping
+    // the artwork at 21 is the author's proportion and the one that looks
+    // right; the bezel thickening slightly through the corner is the price.
+    ren.drawTextureRounded(m_tex, texRect, rad - 3.f, iconTint);
 }
