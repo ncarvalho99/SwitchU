@@ -279,6 +279,7 @@ bool WiiUMenuApp::onCreate() {
     m_launcher.init({
         .playSfxModalHide = [this]() { m_audio.playSfx(Sfx::ModalHide); },
         .requestExit = [this]() { app().requestExit(); },
+        .quiesceWriters = [this]() { quiesceWritersForPowerAction(); },
     });
 
 
@@ -305,6 +306,21 @@ bool WiiUMenuApp::onCreate() {
 
     DebugLog::log("[init] DONE");
     return true;
+}
+
+// Blocks until this process has no disk write outstanding. Called before a
+// power request is handed to the daemon, so nothing of ours is mid-write when
+// the console goes down. Deliberately does not ask the applet to exit: doing
+// that made the daemon see no menu running and relaunch it into the middle of
+// the reboot, leaving the console black and needing RCM.
+void WiiUMenuApp::quiesceWritersForPowerAction() {
+    if (m_configSaveFuture.valid())
+        m_configSaveFuture.get();
+    if (m_themePackageTransferFuture.valid())
+        m_themePackageTransferFuture.wait();
+    if (m_layoutDirty)
+        saveMenuLayout();
+    DebugLog::log("[menu] writers quiesced for power action");
 }
 
 void WiiUMenuApp::onDestroy() {

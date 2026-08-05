@@ -587,24 +587,28 @@ static bool takeForegroundFromRunningApp(const char* source) {
 // — flushIfStale alone puts the log on the card every couple of seconds — while
 // the console is shutting down underneath it.
 static std::atomic<bool> g_powerSequenceStarted{false};
+static void stopControlCacheWorker();
 
 static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
     g_powerSequenceStarted.store(true);
 
-    // Nothing touches the filesystem here, matching the author's build, which
-    // is the only version that does not corrupt the card on reboot.
+    // The corruption is intermittent — roughly one reboot in three or four —
+    // which rules out anything deterministic and points at a race: the reboot
+    // catching a write in flight. Every "this is fixed" in this investigation,
+    // including ones confirmed over several reboots, was within the odds of
+    // simply not losing that race.
     //
-    // This is now the last remaining difference at this point in the sequence.
-    // I had been logging (which writes a buffered chunk), closing the log file
-    // and committing the fs session immediately before appletStartRebootSequence.
-    // Reverting the writes elsewhere did not help, so the write itself is the
-    // suspect: an interrupted commit leaves worse FAT state than no commit at
-    // all, and this one runs in the last moments before power is cut.
+    // The control cache worker is a background thread that writes a .meta and
+    // a .jpg per title, on its own schedule, with nothing coordinating it with
+    // shutdown. Stop it and join before handing power off, so no write can be
+    // half-finished when the console goes down. The menu quiesces its own
+    // writer before it sends the request.
     //
-    // The cost is that the daemon's buffered log tail is lost on a reboot
-    // through this path. That is a diagnostic loss, not a data loss.
+    // Still nothing else touches the filesystem here: no logging, no commit.
+    // An interrupted commit leaves worse FAT state than no commit at all.
+    stopControlCacheWorker();
 
     switch (action) {
         case smi::SystemMessage::EnterSleep:
@@ -1492,7 +1496,6 @@ static void stopControlCacheWorker() {
     threadWaitForExit(&g_controlCacheThread);
     threadClose(&g_controlCacheThread);
     g_controlCacheStarted = false;
-    switchu::FileLog::log("[control-cache] thread stopped");
 }
 
 int main(int argc, char* argv[]) {
