@@ -37,10 +37,10 @@ struct Theme {
 
     // Radii & sizes
     float iconCornerRadius   = 24.f;
-    // The cursor sits on the icon rect grown by 4, so its arc only shares a
-    // centre with the icon's at iconCornerRadius + 4. At 26 it did not, and the
-    // selection ring visibly disagreed with the tile it was framing.
-    float cursorCornerRadius = 28.f;
+    // 26, not the 28 that would be concentric with the icon rect grown by 4.
+    // Concentric is geometrically right and looked wrong: it rounds the ring
+    // further from the artwork it frames. Symmetry between the two won.
+    float cursorCornerRadius = 26.f;
     float cursorBorderWidth  = 3.f;
     float panelCornerRadius  = 24.f;
     float cellCornerRadius   = 20.f;
