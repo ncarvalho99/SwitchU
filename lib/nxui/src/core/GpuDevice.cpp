@@ -97,9 +97,8 @@ void GpuDevice::createDepthStencil() {
 }
 
 void GpuDevice::createOffscreenTargets() {
-    // Half-resolution offscreen targets for blur (640x360)
-    constexpr uint32_t offW = FB_WIDTH / 2;
-    constexpr uint32_t offH = FB_HEIGHT / 2;
+    constexpr uint32_t offW = OFF_WIDTH;
+    constexpr uint32_t offH = OFF_HEIGHT;
 
     dk::ImageLayout offLayout;
     dk::ImageLayoutMaker{m_dev}

@@ -160,6 +160,17 @@ public:
     bool uploadTexture(dk::Image& dst, const void* pixels, uint32_t size, uint32_t width, uint32_t height);
 
     static constexpr int NUM_OFFSCREEN = 3;
+
+    // The offscreen chain is what every glass panel samples: settings, the
+    // power menu and the account dialog all capture the scene here, blur it,
+    // and read it back through the panel. At half resolution that is a
+    // 640x360 image stretched over the screen, and no amount of blur tuning
+    // hides that the source is soft. Full resolution costs 3.69 MB a target
+    // against a 224 MB applet heap, and the blur runs once per open rather
+    // than per frame, since the result is cached until the scene moves.
+    static constexpr int OFF_WIDTH  = FB_WIDTH;
+    static constexpr int OFF_HEIGHT = FB_HEIGHT;
+
     dk::Image&       offscreenImage(int i)       { return m_offImages[i]; }
     const dk::Image& offscreenImage(int i) const { return m_offImages[i]; }
     bool offscreenReady() const { return m_offscreenReady; }

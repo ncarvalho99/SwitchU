@@ -393,8 +393,8 @@ void Renderer::bindRenderTarget(int offscreenIdx) {
     dk::ImageView colorTarget{m_gpu.offscreenImage(offscreenIdx)};
     cmd.bindRenderTargets(&colorTarget);
 
-    constexpr uint32_t offW = GpuDevice::FB_WIDTH / 2;
-    constexpr uint32_t offH = GpuDevice::FB_HEIGHT / 2;
+    constexpr uint32_t offW = GpuDevice::OFF_WIDTH;
+    constexpr uint32_t offH = GpuDevice::OFF_HEIGHT;
     cmd.setViewports(0, DkViewport{0.f, 0.f, (float)offW, (float)offH, 0.f, 1.f});
     cmd.setScissors(0, DkScissor{0, 0, offW, offH});
 
@@ -455,8 +455,8 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
         0,
         0,
         0,
-        (uint32_t)m_gpu.width() / 2,
-        (uint32_t)m_gpu.height() / 2,
+        (uint32_t)GpuDevice::OFF_WIDTH,
+        (uint32_t)GpuDevice::OFF_HEIGHT,
         1,
     };
     cmd.blitImage(src, srcRect, dst, dstRect, 0);
@@ -484,8 +484,8 @@ void Renderer::copyOffscreen(int srcTarget, int dstTarget) {
         0,
         0,
         0,
-        (uint32_t)m_gpu.width() / 2,
-        (uint32_t)m_gpu.height() / 2,
+        (uint32_t)GpuDevice::OFF_WIDTH,
+        (uint32_t)GpuDevice::OFF_HEIGHT,
         1,
     };
     cmd.blitImage(src, rect, dst, rect, 0);
@@ -598,8 +598,8 @@ void Renderer::applyBlur(float radius, int passes) {
     m_reusableOffscreenCaptureValid = false;
     m_frameBlurPasses += passes * 2;
 
-    constexpr float offW = (float)(GpuDevice::FB_WIDTH / 2);
-    constexpr float offH = (float)(GpuDevice::FB_HEIGHT / 2);
+    constexpr float offW = (float)GpuDevice::OFF_WIDTH;
+    constexpr float offH = (float)GpuDevice::OFF_HEIGHT;
 
     for (int p = 0; p < passes; ++p) {
         // H blur: off0 -> off1
