@@ -208,13 +208,17 @@
     },
     "about": {
       "version": "Versão",
-      "author": "Autor",
+      "based_on": "Baseado em",
+      "author": "Autor original",
       "license": "Licença",
       "license_value": "GPL-2.0",
       "acknowledgements": "Agradecimentos",
       "acknowledgements_desc": "Agradecimentos a xortroll pela ajuda com o projeto uLaunch e pelo apoio e conselhos durante o desenvolvimento.",
-      "source_code": "Código Fonte",
-      "source_code_value": "github.com/PoloNX/SwitchU"
+      "source_code": "Código-fonte (fork)",
+      "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "fork_maintainer": "Fork mantido por",
+      "upstream_source": "Código-fonte (original)",
+      "upstream_source_value": "github.com/PoloNX/SwitchU"
     },
     "accessibility": {
       "voice": "Leitura por voz",

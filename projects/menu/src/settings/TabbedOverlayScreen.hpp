@@ -114,6 +114,11 @@ public:
         std::string              infoText;
         float                    anim01 = 0.f;
 
+        // Draw the label as a wrapped paragraph and give the row whatever
+        // height that needs. Only the value column was ever fitted to width,
+        // so a long label ran straight off the panel.
+        bool                     wrapLabel = false;
+
         std::function<void(SettingItem&)> onChange;
 
         bool focusable() const {
@@ -200,6 +205,9 @@ protected:
 
     static constexpr float kPanelMargin   = 32.f;
     static constexpr float kTabWidth      = 260.f;
+    // Height of a row, which wrapped labels exceed — see itemHeight.
+    float itemHeight(const SettingItem& it, float contentWidth) const;
+
     static constexpr float kRowHeight     = 68.f;
     static constexpr float kSectionHeight = 48.f;
     static constexpr float kTabRowHeight  = 58.f;
