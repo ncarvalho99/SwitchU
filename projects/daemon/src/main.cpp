@@ -589,6 +589,41 @@ static bool takeForegroundFromRunningApp(const char* source) {
 static std::atomic<bool> g_powerSequenceStarted{false};
 static void stopControlCacheWorker();
 
+// Reboot and shutdown go through the Power State Manager rather than the
+// applet path.
+//
+// appletStartRebootSequence asks the system applet to orchestrate an orderly
+// shutdown — and this daemon *is* the system applet, standing in for qlaunch.
+// It is asking itself to perform a coordination step it never implements, so
+// nothing tells the filesystem service to flush and unmount. That matches the
+// symptom exactly: corruption roughly one reboot in three or four, depending
+// on whether anything happened to be dirty, and a card that comes back needing
+// its firmware files replaced rather than being wholly unreadable.
+//
+// spsm is what the Reboot-to-Payload homebrew uses, and the user rebooted with
+// it repeatedly — including after changing settings — with no corruption at
+// all. spsmShutdown drives the real power-down path, which includes telling FS
+// to commit and unmount before power drops.
+//
+// Falls back to the applet call if spsm cannot be reached, so a failure here
+// leaves the previous behaviour rather than a console that will not turn off.
+static void requestPowerStateChange(const char* source, bool reboot) {
+    Result rc = spsmInitialize();
+    if (R_SUCCEEDED(rc)) {
+        rc = spsmShutdown(reboot);
+        spsmExit();
+        if (R_SUCCEEDED(rc))
+            return;
+    }
+
+    svcOutputDebugString("[SwitchU-daemon] spsm power path failed, using applet", 52);
+    (void)source;
+    if (reboot)
+        appletStartRebootSequence();
+    else
+        appletStartShutdownSequence();
+}
+
 static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
@@ -612,13 +647,15 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
 
     switch (action) {
         case smi::SystemMessage::EnterSleep:
+            // Sleep is left on the applet path: it is not a shutdown, the
+            // filesystem stays mounted, and it has never been implicated.
             appletStartSleepSequence(true);
             break;
         case smi::SystemMessage::Shutdown:
-            appletStartShutdownSequence();
+            requestPowerStateChange(source, false);
             break;
         case smi::SystemMessage::Reboot:
-            appletStartRebootSequence();
+            requestPowerStateChange(source, true);
             break;
         default:
             break;
