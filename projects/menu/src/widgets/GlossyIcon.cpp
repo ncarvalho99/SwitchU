@@ -9,14 +9,11 @@ GlossyIcon::GlossyIcon() {
     m_appearOpacity.setImmediate(0.f);
     m_focusScale.setImmediate(1.f);
     m_focusGlow.setImmediate(0.f);
-    // 21 rather than 16 so the artwork below stays exactly as it was while the
-    // bezel becomes a constant width. onContentRender insets the art by 8 and
-    // rounds it by radius - inset, which lands back on the 13 it always used.
-    // The two arcs used to sit on different centres, so the bezel measured 8px
-    // along a straight edge and 10px through the corner — it visibly thickened
-    // right where the rounding started. Every other nested pair in the menu
-    // already pairs shrunk(n) with radius - n; this was the one that did not.
-    setCornerRadius(21.f);
+    // Only a fallback: buildGrid overwrites this from Theme::iconCornerRadius
+    // before anything is drawn, so it must not disagree with that default or it
+    // describes a tile that never exists. Setting it here does not change the
+    // rendered radius — that lives in the theme.
+    setCornerRadius(24.f);
     setPadding(8.f);
     setLiquidGlassEnabled(true);
     setBlurEnabled(false);
