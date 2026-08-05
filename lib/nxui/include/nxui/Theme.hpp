@@ -37,6 +37,9 @@ struct Theme {
 
     // Radii & sizes
     float iconCornerRadius   = 24.f;
+    // 26, not the 28 that would be concentric with the icon rect grown by 4.
+    // Concentric is geometrically right and looked wrong: it rounds the ring
+    // further from the artwork it frames. Symmetry between the two won.
     float cursorCornerRadius = 26.f;
     float cursorBorderWidth  = 3.f;
     float panelCornerRadius  = 24.f;

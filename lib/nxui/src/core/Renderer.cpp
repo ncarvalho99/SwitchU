@@ -211,6 +211,8 @@ void Renderer::useShader(ShaderProgram prog) {
     if (prog == m_curShader) return;
     ++m_framePipelineBinds;
     flush();
+    m_fsCacheValid = false;
+    m_boundTexSlot = kTexSlotUnset;
     m_curShader = prog;
     int idx = (int)prog;
     auto cmd = m_gpu.cmdBuf();
@@ -224,6 +226,9 @@ void Renderer::pushFsUniforms(const FsUniforms& fs) {
     auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
     cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE, 0, sizeof(fs), &fs);
     cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
+    // A caller wrote the whole block behind flush()'s back, so what it thinks
+    // is bound is no longer what is bound.
+    m_fsCacheValid = false;
 }
 
 void Renderer::beginFrame() {
@@ -245,6 +250,11 @@ void Renderer::beginFrame() {
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
+    m_shapeRadius = 0.f;
+    m_shapeThickness = 0.f;
+    m_fsCacheValid = false;
+    m_boundTexSlot = kTexSlotUnset;
+    m_vtxBufferBound = false;
     m_clipStack.clear();
     // Normally the capture cannot outlive a frame: the framebuffer it copies is
     // redrawn every frame. An overlay that knows nothing behind it has changed
@@ -281,10 +291,13 @@ void Renderer::beginFrame() {
     cmd.bindDepthStencilState(dk::DepthStencilState{}.setDepthTestEnable(false));
     cmd.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
 
-    static const std::array<DkVtxAttribState, 3> attribs = {{
+    static const std::array<DkVtxAttribState, 6> attribs = {{
         DkVtxAttribState{0, 0, offsetof(Vertex2D, x), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
         DkVtxAttribState{0, 0, offsetof(Vertex2D, u), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
         DkVtxAttribState{0, 0, offsetof(Vertex2D, r), DkVtxAttribSize_4x32, DkVtxAttribType_Float, 0},
+        DkVtxAttribState{0, 0, offsetof(Vertex2D, sx), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
+        DkVtxAttribState{0, 0, offsetof(Vertex2D, hx), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
+        DkVtxAttribState{0, 0, offsetof(Vertex2D, rad), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0},
     }};
     static const DkVtxBufferState bufState = {sizeof(Vertex2D), 0};
     cmd.bindVtxAttribState(attribs);
@@ -330,24 +343,44 @@ void Renderer::flush() {
     if (m_descDirty) {
         cmd.barrier(DkBarrier_None, DkInvalidateFlags_Descriptors);
         m_descDirty = false;
+        m_boundTexSlot = kTexSlotUnset;   // the handle may now point elsewhere
     }
 
-    if (m_curShader == ShaderProgram::Basic) {
+    // Nothing below is re-emitted unless it actually changed.
+
+    // Backdrop shares the block so that offscreen captures get the same corner
+    // mask as everything else. The other programs push their own uniforms.
+    if (m_curShader == ShaderProgram::Basic || m_curShader == ShaderProgram::Backdrop) {
         FsUniforms fs = {};
         fs.useTexture = m_texturing ? 1 : 0;
-        auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
-        cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE,
-                          0, sizeof(int32_t) * 4, &fs);
-        cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
+
+        // Now that the shape rides on the vertex, the block holds one flag, so
+        // consecutive draws almost always match. The binding survives from the
+        // previous draw, so an identical block means neither the push nor the
+        // rebind has to happen.
+        if (!m_fsCacheValid || std::memcmp(m_fsCache, &fs, kFsPushBytes) != 0) {
+            std::memcpy(m_fsCache, &fs, kFsPushBytes);
+            m_fsCacheValid = true;
+            auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
+            cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE, 0, kFsPushBytes, &fs);
+            cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
+        }
     }
 
     int texSlot = (m_texturing && m_curTexSlot >= 0) ? m_curTexSlot : WHITE_TEX_SLOT;
-    cmd.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(texSlot, 0));
+    if (texSlot != m_boundTexSlot) {
+        cmd.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(texSlot, 0));
+        m_boundTexSlot = texSlot;
+    }
 
-    DkGpuAddr vtxAddr = m_gpu.vtxGpuAddr(slot) + m_vtxBatchStart * sizeof(Vertex2D);
-    cmd.bindVtxBuffer(0, vtxAddr, batchVerts * sizeof(Vertex2D));
+    // The whole arena is bound once per frame and each batch is addressed by
+    // its first vertex, rather than rebinding a window of it per draw.
+    if (!m_vtxBufferBound) {
+        cmd.bindVtxBuffer(0, m_gpu.vtxGpuAddr(slot), GpuDevice::VTX_BUF_SIZE);
+        m_vtxBufferBound = true;
+    }
 
-    cmd.draw(DkPrimitive_Triangles, batchVerts, 1, 0, 0);
+    cmd.draw(DkPrimitive_Triangles, batchVerts, 1, m_vtxBatchStart, 0);
 
     m_vtxBatchStart = m_vtxCount;
 }
@@ -360,8 +393,8 @@ void Renderer::bindRenderTarget(int offscreenIdx) {
     dk::ImageView colorTarget{m_gpu.offscreenImage(offscreenIdx)};
     cmd.bindRenderTargets(&colorTarget);
 
-    constexpr uint32_t offW = GpuDevice::FB_WIDTH / 2;
-    constexpr uint32_t offH = GpuDevice::FB_HEIGHT / 2;
+    const uint32_t offW = (uint32_t)GpuDevice::offscreenWidth(offscreenIdx);
+    const uint32_t offH = (uint32_t)GpuDevice::offscreenHeight(offscreenIdx);
     cmd.setViewports(0, DkViewport{0.f, 0.f, (float)offW, (float)offH, 0.f, 1.f});
     cmd.setScissors(0, DkScissor{0, 0, offW, offH});
 
@@ -409,7 +442,7 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
     dk::ImageView src{m_gpu.fbImage(slot)};
-    dk::ImageView dst{m_gpu.offscreenImage(0)};
+    dk::ImageView dst{m_gpu.offscreenImage(GpuDevice::OFF_SCENE)};
     DkImageRect srcRect{
         0,
         0,
@@ -422,8 +455,8 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
         0,
         0,
         0,
-        (uint32_t)m_gpu.width() / 2,
-        (uint32_t)m_gpu.height() / 2,
+        (uint32_t)GpuDevice::offscreenWidth(GpuDevice::OFF_SCENE),
+        (uint32_t)GpuDevice::offscreenHeight(GpuDevice::OFF_SCENE),
         1,
     };
     cmd.blitImage(src, srcRect, dst, dstRect, 0);
@@ -432,6 +465,29 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
     m_reusableOffscreenCaptureValid = reuseIfValid;
+}
+
+// The panels that cache their backdrop capture it at full resolution, into
+// targets the per-frame scene capture never touches. They pay for it once per
+// open; the scene capture pays every frame and stays half res.
+void Renderer::captureToOffscreenSharp() {
+    flush();
+    ++m_frameCaptures;
+    auto cmd = m_gpu.cmdBuf();
+    int slot = m_gpu.slot();
+
+    cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+
+    dk::ImageView src{m_gpu.fbImage(slot)};
+    dk::ImageView dst{m_gpu.offscreenImage(GpuDevice::OFF_SHARP_A)};
+    DkImageRect rect{
+        0, 0, 0,
+        (uint32_t)m_gpu.width(),
+        (uint32_t)m_gpu.height(),
+        1,
+    };
+    cmd.blitImage(src, rect, dst, rect, 0);
+    cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 }
 
 void Renderer::copyOffscreen(int srcTarget, int dstTarget) {
@@ -451,8 +507,8 @@ void Renderer::copyOffscreen(int srcTarget, int dstTarget) {
         0,
         0,
         0,
-        (uint32_t)m_gpu.width() / 2,
-        (uint32_t)m_gpu.height() / 2,
+        (uint32_t)GpuDevice::offscreenWidth(dstTarget),
+        (uint32_t)GpuDevice::offscreenHeight(dstTarget),
         1,
     };
     cmd.blitImage(src, rect, dst, rect, 0);
@@ -470,66 +526,22 @@ void Renderer::drawOffscreen(int target, const Rect& dest, const Color& tint) {
 void Renderer::drawOffscreenRounded(int target, const Rect& dest, float radius, const Color& tint) {
     if (target < 0 || target >= GpuDevice::NUM_OFFSCREEN) return;
     useShader(ShaderProgram::Backdrop);
+
+    // The capture is screen sized, so the quad samples the sub-rect it covers.
+    const float u0 = dest.x / (float)m_gpu.width();
+    const float v0 = dest.y / (float)m_gpu.height();
+    const float u1 = dest.right() / (float)m_gpu.width();
+    const float v1 = dest.bottom() / (float)m_gpu.height();
+    const Rect uv{u0, v0, u1 - u0, v1 - v0};
+
+    bindTexture(m_offDescSlot[target]);
     if (radius <= 0.f) {
-        float u0 = dest.x / (float)m_gpu.width();
-        float v0 = dest.y / (float)m_gpu.height();
-        float u1 = dest.right() / (float)m_gpu.width();
-        float v1 = dest.bottom() / (float)m_gpu.height();
-        bindTexture(m_offDescSlot[target]);
         addQuad(dest.x, dest.y, dest.right(), dest.bottom(), u0, v0, u1, v1, tint);
         flush();
-        useShader(ShaderProgram::Basic);
-        return;
+    } else {
+        drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
+                          tint, uv);
     }
-
-    float rad = std::min(radius, std::min(dest.width, dest.height) * 0.5f);
-    bindTexture(m_offDescSlot[target]);
-
-    float cx = dest.x + dest.width * 0.5f;
-    float cy = dest.y + dest.height * 0.5f;
-
-    auto toUV = [&](float px, float py) -> Vec2 {
-        return {
-            px / (float)m_gpu.width(),
-            py / (float)m_gpu.height(),
-        };
-    };
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct { float cx, cy; float a0; } corners[4] = {
-        {dest.right() - rad, dest.y + rad,          0},
-        {dest.x + rad,       dest.y + rad,          pi2},
-        {dest.x + rad,       dest.bottom() - rad,   pi2 * 2},
-        {dest.right() - rad, dest.bottom() - rad,   pi2 * 3},
-    };
-
-    Vec2 pts[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
-        }
-    }
-
-    reserveVertices((uint32_t)ptCount * 3);
-    Vec2 cuv = toUV(cx, cy);
-    for (int i = 0; i < ptCount; ++i) {
-        auto& p0 = pts[i];
-        auto& p1 = pts[(i + 1) % ptCount];
-        Vec2 uv0 = toUV(p0.x, p0.y);
-        Vec2 uv1 = toUV(p1.x, p1.y);
-        addVertex(cx,  cy,  cuv.x, cuv.y, tint);
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
-        addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
-    }
-
-
-    flush();
     useShader(ShaderProgram::Basic);
 }
 
@@ -587,7 +599,12 @@ void Renderer::drawLiquidGlass(int target, const Rect& panelRect, float radius,
     fs.extra[24] = (float)m_gpu.width();
     fs.extra[25] = (float)m_gpu.height();
     fs.extra[26] = clamp01(shade);
-    fs.extra[27] = 0.0f;
+    // Corner radius in pixels. This function has accepted a radius since it was
+    // written and never passed it on, so the shader built its corner purely
+    // from powerFactor — a superellipse exponent. The settings overlay sets
+    // that to 20, which is very nearly a sharp rectangle with a kink at the
+    // corner: the roundness reported as "not linear".
+    fs.extra[27] = std::max(0.0f, radius);
 
     pushFsUniforms(fs);
     bindTexture(m_offDescSlot[target]);
@@ -601,15 +618,16 @@ void Renderer::drawLiquidGlass(int target, const Rect& panelRect, float radius,
 void Renderer::applyBlur(float radius, int passes) {
     if (!m_gpu.offscreenReady()) return;
 
-    m_reusableOffscreenCaptureValid = false;
+    // The blur works on the sharp pair now, so the scene capture it used to
+    // clobber survives — no need to make the next frame recapture.
     m_frameBlurPasses += passes * 2;
 
-    constexpr float offW = (float)(GpuDevice::FB_WIDTH / 2);
-    constexpr float offH = (float)(GpuDevice::FB_HEIGHT / 2);
+    constexpr float offW = (float)GpuDevice::offscreenWidth(GpuDevice::OFF_SHARP_A);
+    constexpr float offH = (float)GpuDevice::offscreenHeight(GpuDevice::OFF_SHARP_A);
 
     for (int p = 0; p < passes; ++p) {
-        // H blur: off0 -> off1
-        bindRenderTarget(1);
+        // H blur: sharp A -> sharp B
+        bindRenderTarget(GpuDevice::OFF_SHARP_B);
         m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
         useShader(ShaderProgram::BlurH);
         FsUniforms fs = {};
@@ -618,17 +636,17 @@ void Renderer::applyBlur(float radius, int passes) {
         fs.param2 = 1.f / offW;
         fs.param3 = 1.f / offH;
         pushFsUniforms(fs);
-        bindTexture(m_offDescSlot[0]);
+        bindTexture(m_offDescSlot[GpuDevice::OFF_SHARP_A]);
         addQuad(-1.f, -1.f, 1.f, 1.f, 0, 0, 1, 1, Color::white());
         flush();
         m_gpu.cmdBuf().barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
-        // V blur: off1 -> off0
-        bindRenderTarget(0);
+        // V blur: sharp B -> sharp A
+        bindRenderTarget(GpuDevice::OFF_SHARP_A);
         m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
         useShader(ShaderProgram::BlurV);
         pushFsUniforms(fs);
-        bindTexture(m_offDescSlot[1]);
+        bindTexture(m_offDescSlot[GpuDevice::OFF_SHARP_B]);
         addQuad(-1.f, -1.f, 1.f, 1.f, 0, 0, 1, 1, Color::white());
         flush();
         m_gpu.cmdBuf().barrier(DkBarrier_Full, DkInvalidateFlags_Image);
@@ -660,19 +678,12 @@ void Renderer::applyWave(float time, float amplitude, float frequency) {
 
 // Geometry emission
 
-// addQuad already flushes when a quad would not fit, but the rounded shapes
-// emit their triangles one vertex at a time through addVertex, which drops
-// silently instead. A frame that ran out mid-shape lost every remaining vertex
-// without a trace: the menu rendered partially and flickered, since which
-// shapes survived depended on how many the animated background emitted first.
-// Callers reserve their run up front instead.
-void Renderer::reserveVertices(uint32_t count) {
-    if (count > GpuDevice::MAX_VERTICES)
-        return;   // Cannot be satisfied by flushing; let it truncate.
-    if (m_vtxCount + count > GpuDevice::MAX_VERTICES)
-        flush();
-}
-
+// addQuad flushes when a quad would not fit, but this drops silently, and a
+// frame that ran out mid-shape lost every remaining vertex without a trace:
+// the menu rendered partially and flickered, since which shapes survived
+// depended on how many the animated background had emitted first. printf goes
+// nowhere on a console, so the drop is invisible; watch verts= in the perf log
+// instead, which reports the peak against the 65536 cap.
 void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount >= GpuDevice::MAX_VERTICES) {
         std::printf("[Renderer] WARN: vertex buffer full (%u)\n", m_vtxCount);
@@ -682,6 +693,9 @@ void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount > m_peakVtxCount) m_peakVtxCount = m_vtxCount;
     vtx.x = x; vtx.y = y;
     vtx.u = u; vtx.v = v;
+    vtx.sx = x - m_shapeCentre.x; vtx.sy = y - m_shapeCentre.y;
+    vtx.hx = m_shapeHalf.x;       vtx.hy = m_shapeHalf.y;
+    vtx.rad = m_shapeRadius;      vtx.thick = m_shapeThickness;
     vtx.r = c.r; vtx.g = c.g; vtx.b = c.b; vtx.a = c.a;
 }
 
@@ -730,100 +744,78 @@ void Renderer::drawGradientRect(const Rect& r, const Color& top, const Color& bo
 
 void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
     if (radius <= 0.f) { drawRect(r, c); return; }
-    float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
-
     bindTexture(-1);
-
-    auto cx = r.x + r.width * 0.5f;
-    auto cy = r.y + r.height * 0.5f;
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct {float cx, cy; float a0;} corners[4] = {
-        {r.right() - rad, r.y + rad,          0},
-        {r.x + rad,       r.y + rad,          pi2},
-        {r.x + rad,       r.bottom() - rad,   pi2*2},
-        {r.right() - rad, r.bottom() - rad,   pi2*3},
-    };
-
-    // Outward unit normal is kept alongside each perimeter point so the
-    // feather ring below knows which way to push. On the arcs it is the same
-    // direction that placed the point; at the arc endpoints it is axis
-    // aligned, which is also correct for the straight edges between corners.
-    Vec2 pts[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
-        }
-    }
-
-    reserveVertices((uint32_t)ptCount * 3);
-    for (int i = 0; i < ptCount; ++i) {
-        auto& p0 = pts[i];
-        auto& p1 = pts[(i + 1) % ptCount];
-        addVertex(cx, cy, 0, 0, c);
-        addVertex(p0.x, p0.y, 0, 0, c);
-        addVertex(p1.x, p1.y, 0, 0, c);
-    }
-
+    drawRoundedMasked(r, std::min(radius, std::min(r.width, r.height) * 0.5f),
+                      c, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
+// Shading the whole rect to draw a thin band is what put the frame over
+// budget. The home screen emits about 65 strokes and circles a frame — the
+// draw count went from 105 to 170 when they joined the mask — and at full
+// rect each, together they cover more than the screen: measured 16.7ms a
+// frame before, 19.1ms after, with the draw count itself proven irrelevant
+// (halving it later moved nothing).
+//
+// Only the band is emitted now: four edge strips and four corner boxes. The
+// mask parameters describe the whole shape regardless, so the distance field
+// is unchanged and the sub-quads merely decide which fragments get to run it.
+// One pixel of bleed outward keeps somewhere for the outer half of the
+// antialiasing ramp to land.
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
     if (radius <= 0.f) { drawRectOutline(r, c, t); return; }
-    float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
+    if (t <= 0.f || r.width <= 0.f || r.height <= 0.f) return;
 
+    const float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
     bindTexture(-1);
 
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
+    // The band is the stroke plus a pixel of ramp on each side: the strips
+    // start one pixel outside the edge and reach one past the stroke's inner
+    // face, so neither half of the antialiasing gets clipped off.
+    const float band = t + 2.f;
+    const float cr   = rad + 1.f;       // corner box, same outward bleed
+    const float midW = r.width  - 2.f * rad;
+    const float midH = r.height - 2.f * rad;
 
-    struct {float cx, cy; float a0;} corners[4] = {
-        {r.right() - rad, r.y + rad,          0},
-        {r.x + rad,       r.y + rad,          pi2},
-        {r.x + rad,       r.bottom() - rad,   pi2*2},
-        {r.right() - rad, r.bottom() - rad,   pi2*3},
+    // Degenerate once the band is a sizeable share of the shape: the strips
+    // would overlap and double-blend, so the plain quad is both simpler and no
+    // more expensive at that size.
+    if (band * 2.f >= std::min(r.width, r.height)) {
+        drawRoundedMasked(r, rad, c, Rect{0.f, 0.f, 1.f, 1.f}, t);
+        return;
+    }
+
+    beginShape(r, rad, t);
+
+    const float x0 = r.x - 1.f, y0 = r.y - 1.f;
+    const float x1 = r.right() + 1.f, y1 = r.bottom() + 1.f;
+
+    auto quad = [&](float qx, float qy, float qw, float qh) {
+        if (qw <= 0.f || qh <= 0.f) return;
+        addQuad(qx, qy, qx + qw, qy + qh, 0.f, 0.f, 1.f, 1.f, c);
     };
 
-    Vec2 outer[maxPts], inner[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = std::sin(a);
-            outer[ptCount] = {cn.cx + ca * rad,       cn.cy - sa * rad};
-            inner[ptCount] = {cn.cx + ca * (rad - t), cn.cy - sa * (rad - t)};
-            ptCount++;
-        }
-    }
+    quad(x0,      y0,      cr, cr);     // corners
+    quad(x1 - cr, y0,      cr, cr);
+    quad(x0,      y1 - cr, cr, cr);
+    quad(x1 - cr, y1 - cr, cr, cr);
 
-    for (int i = 0; i < ptCount; ++i) {
-        int j = (i + 1) % ptCount;
-        addVertex(outer[i].x, outer[i].y, 0, 0, c);
-        addVertex(inner[i].x, inner[i].y, 0, 0, c);
-        addVertex(outer[j].x, outer[j].y, 0, 0, c);
+    quad(r.x + rad, y0,        midW, band);   // edges
+    quad(r.x + rad, y1 - band, midW, band);
+    quad(x0,        r.y + rad, band, midH);
+    quad(x1 - band, r.y + rad, band, midH);
 
-        addVertex(inner[i].x, inner[i].y, 0, 0, c);
-        addVertex(inner[j].x, inner[j].y, 0, 0, c);
-        addVertex(outer[j].x, outer[j].y, 0, 0, c);
-    }
+    endShape();
 }
 
+// A circle is the mask with the radius pinned to half the shorter side, so it
+// shares the fill path rather than keeping a fan of its own. The segment count
+// no longer means anything: the edge is exact at any size.
 void Renderer::drawCircle(const Vec2& center, float radius, const Color& c, int segments) {
+    (void)segments;
+    if (radius <= 0.f) return;
     bindTexture(-1);
-    const float pi2 = 3.14159265f * 2.f;
-    for (int i = 0; i < segments; ++i) {
-        float a0 = pi2 * i / segments;
-        float a1 = pi2 * (i + 1) / segments;
-        addVertex(center.x, center.y, 0, 0, c);
-        addVertex(center.x + std::cos(a0) * radius, center.y + std::sin(a0) * radius, 0, 0, c);
-        addVertex(center.x + std::cos(a1) * radius, center.y + std::sin(a1) * radius, 0, 0, c);
-    }
+    const Rect box{center.x - radius, center.y - radius, radius * 2.f, radius * 2.f};
+    drawRoundedMasked(box, radius, c, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
 void Renderer::drawTriangle(const Vec2& p1, const Vec2& p2, const Vec2& p3, const Color& c) {
@@ -863,54 +855,35 @@ void Renderer::drawTextureSub(const Texture* tex, const Rect& src, const Rect& d
     addQuad(dest.x, dest.y, dest.right(), dest.bottom(), u0, v0, u1, v1, tint);
 }
 
+// A rounded fill is one quad; the fragment shader cuts the corner. The mask
+// state is per shape, so the batch is closed on both sides of it and cleared
+// afterwards, leaving every other draw in the unmasked state.
+void Renderer::beginShape(const Rect& dest, float radius, float thickness) {
+    m_shapeCentre    = {dest.x + dest.width * 0.5f, dest.y + dest.height * 0.5f};
+    m_shapeHalf      = {dest.width * 0.5f, dest.height * 0.5f};
+    m_shapeRadius    = radius;
+    m_shapeThickness = thickness;
+}
+
+void Renderer::endShape() {
+    m_shapeRadius    = 0.f;
+    m_shapeThickness = 0.f;
+}
+
+void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
+                                 const Rect& uv, float thickness) {
+    beginShape(dest, radius, thickness);
+    addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
+            uv.x, uv.y, uv.right(), uv.bottom(), c);
+    endShape();
+}
+
 void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint) {
     if (!tex) { return; }
     if (radius <= 0) { drawTexture(tex, dest, tint); return; }
-    float rad = std::min(radius, std::min(dest.width, dest.height) * 0.5f);
-
     bindTexture(tex->descriptorSlot());
-
-    float fcx = dest.x + dest.width * 0.5f;
-    float fcy = dest.y + dest.height * 0.5f;
-
-    auto toUV = [&](float px, float py) -> Vec2 {
-        return {(px - dest.x) / dest.width,
-                (py - dest.y) / dest.height};
-    };
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct { float cx, cy; float a0; } corners[4] = {
-        {dest.right() - rad, dest.y + rad,          0},
-        {dest.x + rad,       dest.y + rad,          pi2},
-        {dest.x + rad,       dest.bottom() - rad,   pi2 * 2},
-        {dest.right() - rad, dest.bottom() - rad,   pi2 * 3},
-    };
-
-    Vec2 pts[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            pts[ptCount++] = {cn.cx + std::cos(a) * rad,
-                              cn.cy - std::sin(a) * rad};
-        }
-    }
-
-    reserveVertices((uint32_t)ptCount * 3);
-    Vec2 cuv = toUV(fcx, fcy);
-    for (int i = 0; i < ptCount; ++i) {
-        auto& p0 = pts[i];
-        auto& p1 = pts[(i + 1) % ptCount];
-        Vec2 uv0 = toUV(p0.x, p0.y);
-        Vec2 uv1 = toUV(p1.x, p1.y);
-        addVertex(fcx,  fcy,  cuv.x, cuv.y, tint);
-        addVertex(p0.x, p0.y, uv0.x, uv0.y, tint);
-        addVertex(p1.x, p1.y, uv1.x, uv1.y, tint);
-    }
-
+    drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
+                      tint, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,

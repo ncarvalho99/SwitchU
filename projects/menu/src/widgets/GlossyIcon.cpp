@@ -9,7 +9,11 @@ GlossyIcon::GlossyIcon() {
     m_appearOpacity.setImmediate(0.f);
     m_focusScale.setImmediate(1.f);
     m_focusGlow.setImmediate(0.f);
-    setCornerRadius(16.f);
+    // Only a fallback: buildGrid overwrites this from Theme::iconCornerRadius
+    // before anything is drawn, so it must not disagree with that default or it
+    // describes a tile that never exists. Setting it here does not change the
+    // rendered radius — that lives in the theme.
+    setCornerRadius(24.f);
     setPadding(8.f);
     setLiquidGlassEnabled(true);
     setBlurEnabled(false);
@@ -175,5 +179,10 @@ void GlossyIcon::onContentRender(nxui::Renderer& ren) {
         iconTint.g = 0.80f;
         iconTint.b = 0.80f;
     }
+    // rad - 3, not rad - inset. Matching the inset would make the bezel a
+    // constant width, but it also drops the artwork to radius 16 against a
+    // selection ring at 26, and the two then read as different shapes. Keeping
+    // the artwork at 21 is the author's proportion and the one that looks
+    // right; the bezel thickening slightly through the corner is the price.
     ren.drawTextureRounded(m_tex, texRect, rad - 3.f, iconTint);
 }

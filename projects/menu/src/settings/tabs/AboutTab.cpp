@@ -5,6 +5,16 @@
 #define SWITCHU_VERSION "unknown"
 #endif
 
+#ifndef SWITCHU_UPSTREAM_VERSION
+#define SWITCHU_UPSTREAM_VERSION "1.1.0"
+#endif
+
+// This build is a fork, and the two extra rows exist for reasons beyond
+// vanity: the source link pointed at the upstream repository, so a bug
+// introduced here would have been reported to someone who never wrote it, and
+// GPL-2.0 section 2(a) asks a modified version to say that it was modified.
+// PoloNX stays named above the fork, which is both correct and the point.
+
 SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& /* screen */) {
     using Tab = SettingsScreen::Tab;
     using SettingItem = SettingsScreen::SettingItem;
@@ -13,40 +23,24 @@ SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& /* screen */
     Tab t;
     t.name = i18n.tr("settings.tabs.about", "About");
 
-    // Application info
-    {
+    auto info = [&](const char* key, const char* fallback, std::string value) {
         SettingItem it;
-        it.label = i18n.tr("settings.about.version", "Version");
-        it.type  = ItemType::Info;
-        it.infoText = "SwitchU " SWITCHU_VERSION;
+        it.label    = i18n.tr(key, fallback);
+        it.type     = ItemType::Info;
+        it.infoText = std::move(value);
         t.items.push_back(std::move(it));
-    }
+    };
 
-    {
-        SettingItem it;
-        it.label = i18n.tr("settings.about.author", "Author");
-        it.type  = ItemType::Info;
-        it.infoText = "PoloNX";
-        t.items.push_back(std::move(it));
-    }
-
-    // License
-    {
-        SettingItem it;
-        it.label = i18n.tr("settings.about.license", "License");
-        it.type  = ItemType::Info;
-        it.infoText = i18n.tr("settings.about.license_value", "GPL-2.0");
-        t.items.push_back(std::move(it));
-    }
-
-    // Source code
-    {
-        SettingItem it;
-        it.label = i18n.tr("settings.about.source_code", "Source Code");
-        it.type  = ItemType::Info;
-        it.infoText = i18n.tr("settings.about.source_code_value", "github.com/PoloNX/SwitchU");
-        t.items.push_back(std::move(it));
-    }
+    info("settings.about.version", "Version", "SwitchU " SWITCHU_VERSION);
+    info("settings.about.based_on", "Based on", "SwitchU " SWITCHU_UPSTREAM_VERSION);
+    info("settings.about.author", "Original author", "PoloNX");
+    info("settings.about.fork_maintainer", "Fork maintained by", "ncarvalho99");
+    info("settings.about.license", "License",
+         i18n.tr("settings.about.license_value", "GPL-2.0"));
+    info("settings.about.source_code", "Source code (fork)",
+         i18n.tr("settings.about.source_code_value", "github.com/ncarvalho99/SwitchU"));
+    info("settings.about.upstream_source", "Source code (upstream)",
+         i18n.tr("settings.about.upstream_source_value", "github.com/PoloNX/SwitchU"));
 
     // Acknowledgements
     {
@@ -59,9 +53,13 @@ SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& /* screen */
     {
         SettingItem it;
         it.label = i18n.tr("settings.about.acknowledgements_desc",
-                           "Special thanks to everyone who contributed to this project.");
+                           "Thanks to xortroll for your help with your project uLaunch "
+                           "and for your support and advice during development.");
         it.type  = ItemType::Info;
         it.infoText = "";
+        // Long enough to run off the panel in all eight translations, and it
+        // did: only the value column was ever fitted to width.
+        it.wrapLabel = true;
         t.items.push_back(std::move(it));
     }
 

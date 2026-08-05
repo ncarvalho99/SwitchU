@@ -208,13 +208,17 @@
     },
     "about": {
       "version": "Versie",
-      "author": "Auteur",
+      "based_on": "Gebaseerd op",
+      "author": "Oorspronkelijke auteur",
       "license": "Licentie",
       "license_value": "GPL-2.0",
       "acknowledgements": "Dankbetuigingen",
       "acknowledgements_desc": "Dank aan xortroll voor de hulp met het uLaunch-project en voor de steun en adviezen tijdens de ontwikkeling.",
-      "source_code": "Broncode",
-      "source_code_value": "github.com/PoloNX/SwitchU"
+      "source_code": "Broncode (fork)",
+      "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "fork_maintainer": "Fork onderhouden door",
+      "upstream_source": "Broncode (origineel)",
+      "upstream_source_value": "github.com/PoloNX/SwitchU"
     },
     "accessibility": {
       "voice": "Spraak",

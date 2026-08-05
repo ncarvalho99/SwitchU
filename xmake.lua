@@ -5,10 +5,19 @@ add_repositories("switch-repo https://github.com/PoloNX/switch-repo.git")
 includes("toolchain/*.lua")
 add_rules("mode.debug", "mode.release")
 
-local version = "1.1.0"
+-- Semver build metadata, deliberately. "1.1.0" is what this is built from and
+-- stays visible; "+fork.N" cannot be mistaken for a release PoloNX made, and
+-- sorts equal to 1.1.0 rather than below it the way a "-fork.N" prerelease
+-- would. Rebasing onto an upstream 1.2.0 makes this 1.2.0+fork.1.
+local upstream_version = "1.1.0"
+local fork_revision = "1"
+local version = upstream_version .. "+fork." .. fork_revision
 local version_define = string.format('SWITCHU_VERSION="%s"', version)
+local upstream_define = string.format('SWITCHU_UPSTREAM_VERSION="%s"', upstream_version)
 
-set_version(version)
+-- set_version feeds the NACP, which rejects build metadata, so it gets the
+-- plain number; the About screen shows the full string.
+set_version(upstream_version)
 
 add_requires("libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp", "nlohmann_json", "fmt", "libcurl", "curlpp", {configs = {toolchains = "devkita64"}})
 if get_config("backend") ~= "sdl2" then
@@ -198,6 +207,7 @@ target("SwitchU")
     end
 
     add_defines(version_define)
+    add_defines(upstream_define)
     add_deps("espeak-ng")
     add_includedirs("lib/espeak-ng/src/include")
     add_syslinks("m")
