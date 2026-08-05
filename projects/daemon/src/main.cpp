@@ -215,7 +215,6 @@ static std::atomic<bool> g_appCatalogRefreshPending{false};
 static int g_appCatalogRefreshDelay = 0;
 static constexpr const char* kAppCatalogPath = smi::kAppCatalogPath;
 static constexpr const char* kAppCatalogTmpPath = smi::kAppCatalogTmpPath;
-static constexpr const char* kAppCatalogBakPath = smi::kAppCatalogBakPath;
 static std::mutex g_controlCacheQueueMutex;
 static std::vector<uint64_t> g_controlCacheQueue;
 static std::atomic<bool> g_controlCacheRefreshPending{false};
@@ -377,46 +376,22 @@ static bool writeAppCatalogFile() {
         return false;
     }
 
-    // fsdev's rename cannot overwrite an existing file, so the live catalog has
-    // to be moved out of the way first. Park it at the .bak path instead of
-    // deleting it: readers that land inside the swap window fall back to it,
-    // and if the swap fails we can put it back rather than leaving the menu
-    // with no catalog at all.
+    // Back to the author's swap: one remove, one rename. The .bak parking
+    // dance I added tripled the directory operations per rebuild, and the
+    // author's build — which does not corrupt — never did any of it. The
+    // window it was closing (a reader finding no catalog mid-swap) costs a
+    // retry in getAppList; corrupting the card costs a reflash.
     fsEc.clear();
-    std::filesystem::remove(kAppCatalogBakPath, fsEc);
-
-    bool parked = false;
-    fsEc.clear();
-    if (std::filesystem::exists(kAppCatalogPath, fsEc)) {
-        fsEc.clear();
-        std::filesystem::rename(kAppCatalogPath, kAppCatalogBakPath, fsEc);
-        parked = !fsEc;
-        if (!parked) {
-            // Couldn't park it; remove in place so the swap below can proceed.
-            fsEc.clear();
-            std::filesystem::remove(kAppCatalogPath, fsEc);
-        }
-    }
-
+    std::filesystem::remove(kAppCatalogPath, fsEc);
     fsEc.clear();
     std::filesystem::rename(kAppCatalogTmpPath, kAppCatalogPath, fsEc);
     if (fsEc) {
+        fsEc.clear();
+        std::filesystem::remove(kAppCatalogTmpPath, fsEc);
         switchu::FileLog::log("[catalog] rename FAIL");
-        std::error_code recoverEc;
-        if (parked)
-            std::filesystem::rename(kAppCatalogBakPath, kAppCatalogPath, recoverEc);
-        recoverEc.clear();
-        std::filesystem::remove(kAppCatalogTmpPath, recoverEc);
         return false;
     }
 
-    fsEc.clear();
-    std::filesystem::remove(kAppCatalogBakPath, fsEc);
-
-    // The catalog is the menu's source of truth for the grid, and the rename
-    // dance above leaves several directory entries dirty. Commit so a reboot
-    // cannot strand them.
-    switchu::commitSdCard("catalog");
     return true;
 }
 
@@ -607,29 +582,80 @@ static bool takeForegroundFromRunningApp(const char* source) {
     return true;
 }
 
+// Set once a power sequence has been handed to the system. The daemon keeps
+// running until it is killed, so without this the main loop carries on writing
+// — flushIfStale alone puts the log on the card every couple of seconds — while
+// the console is shutting down underneath it.
+static std::atomic<bool> g_powerSequenceStarted{false};
+static void stopControlCacheWorker();
+
+// Reboot and shutdown go through the Power State Manager rather than the
+// applet path.
+//
+// appletStartRebootSequence asks the system applet to orchestrate an orderly
+// shutdown — and this daemon *is* the system applet, standing in for qlaunch.
+// It is asking itself to perform a coordination step it never implements, so
+// nothing tells the filesystem service to flush and unmount. That matches the
+// symptom exactly: corruption roughly one reboot in three or four, depending
+// on whether anything happened to be dirty, and a card that comes back needing
+// its firmware files replaced rather than being wholly unreadable.
+//
+// spsm is what the Reboot-to-Payload homebrew uses, and the user rebooted with
+// it repeatedly — including after changing settings — with no corruption at
+// all. spsmShutdown drives the real power-down path, which includes telling FS
+// to commit and unmount before power drops.
+//
+// Falls back to the applet call if spsm cannot be reached, so a failure here
+// leaves the previous behaviour rather than a console that will not turn off.
+static void requestPowerStateChange(const char* source, bool reboot) {
+    Result rc = spsmInitialize();
+    if (R_SUCCEEDED(rc)) {
+        rc = spsmShutdown(reboot);
+        spsmExit();
+        if (R_SUCCEEDED(rc))
+            return;
+    }
+
+    svcOutputDebugString("[SwitchU-daemon] spsm power path failed, using applet", 52);
+    (void)source;
+    if (reboot)
+        appletStartRebootSequence();
+    else
+        appletStartShutdownSequence();
+}
+
 static void startPowerSequence(const char* source, smi::SystemMessage action) {
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
+    g_powerSequenceStarted.store(true);
 
-    // Writes through fsdev are not durable until the device is committed:
-    // fsdevCommitDevice maps to fsFsCommit, which is what actually flushes FAT
-    // metadata. Nothing in this project ever called it, while the daemon writes
-    // continuously — daemon.log, applist.bin and its rename dance, and the
-    // control cache. Rebooting on top of that dirty metadata corrupted the SD
-    // card three times, each needing the firmware files restored.
-    switchu::FileLog::log("[%s] power sequence %u, closing log and committing sd", source, (unsigned)action);
-    switchu::FileLog::close();
-    switchu::commitSdCard("power-sequence");
+    // The corruption is intermittent — roughly one reboot in three or four —
+    // which rules out anything deterministic and points at a race: the reboot
+    // catching a write in flight. Every "this is fixed" in this investigation,
+    // including ones confirmed over several reboots, was within the odds of
+    // simply not losing that race.
+    //
+    // The control cache worker is a background thread that writes a .meta and
+    // a .jpg per title, on its own schedule, with nothing coordinating it with
+    // shutdown. Stop it and join before handing power off, so no write can be
+    // half-finished when the console goes down. The menu quiesces its own
+    // writer before it sends the request.
+    //
+    // Still nothing else touches the filesystem here: no logging, no commit.
+    // An interrupted commit leaves worse FAT state than no commit at all.
+    stopControlCacheWorker();
 
     switch (action) {
         case smi::SystemMessage::EnterSleep:
+            // Sleep is left on the applet path: it is not a shutdown, the
+            // filesystem stays mounted, and it has never been implicated.
             appletStartSleepSequence(true);
             break;
         case smi::SystemMessage::Shutdown:
-            appletStartShutdownSequence();
+            requestPowerStateChange(source, false);
             break;
         case smi::SystemMessage::Reboot:
-            appletStartRebootSequence();
+            requestPowerStateChange(source, true);
             break;
         default:
             break;
@@ -1216,10 +1242,12 @@ static void mainLoop() {
     if (g_controlCacheRefreshPending.load() && g_controlCacheRefreshDelay.load() > 0) {
         --g_controlCacheRefreshDelay;
     } else if (g_controlCacheRefreshPending.exchange(false)) {
-        // Freshly cached control data supplies the real title name and
-        // startup-user policy, both of which live in the catalog now — rewrite
-        // it before asking the menu to reload.
-        rebuildAppCatalog("control-cache");
+        // No rebuild here. Rewriting the catalog once per cached title turned
+        // one write at boot into dozens, each with its own directory churn.
+        // The menu falls back to reading the .meta directly for any title the
+        // catalog still names in hex, so this costs a file open per unnamed
+        // title on the next load and nothing after the catalog is rebuilt for
+        // another reason.
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
         didWork = true;
@@ -1505,7 +1533,6 @@ static void stopControlCacheWorker() {
     threadWaitForExit(&g_controlCacheThread);
     threadClose(&g_controlCacheThread);
     g_controlCacheStarted = false;
-    switchu::FileLog::log("[control-cache] thread stopped");
 }
 
 int main(int argc, char* argv[]) {
@@ -1529,6 +1556,13 @@ int main(int argc, char* argv[]) {
         switchu::FileLog::log("[daemon] menu launch failed: 0x%X", rc);
 
     while (g_running.load()) {
+        if (g_powerSequenceStarted.load()) {
+            // Idle until the system kills us. No filesystem access from here
+            // on: the card is the thing being corrupted, and every write
+            // issued during a shutdown is a chance to be interrupted midway.
+            svcSleepThread(50'000'000ULL);
+            continue;
+        }
         mainLoop();
         // The daemon never closes its log, so drain the write buffer on a timer.
         switchu::FileLog::flushIfStale();
