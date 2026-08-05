@@ -587,7 +587,12 @@ void Renderer::drawLiquidGlass(int target, const Rect& panelRect, float radius,
     fs.extra[24] = (float)m_gpu.width();
     fs.extra[25] = (float)m_gpu.height();
     fs.extra[26] = clamp01(shade);
-    fs.extra[27] = 0.0f;
+    // Corner radius in pixels. This function has accepted a radius since it was
+    // written and never passed it on, so the shader built its corner purely
+    // from powerFactor — a superellipse exponent. The settings overlay sets
+    // that to 20, which is very nearly a sharp rectangle with a kink at the
+    // corner: the roundness reported as "not linear".
+    fs.extra[27] = std::max(0.0f, radius);
 
     pushFsUniforms(fs);
     bindTexture(m_offDescSlot[target]);
