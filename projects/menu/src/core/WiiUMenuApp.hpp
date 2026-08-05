@@ -124,6 +124,7 @@ private:
     std::vector<std::string> scanAvailablePresets();
     void loadMenuLayout();
     void saveMenuLayout();
+    void quiesceWritersForPowerAction();
     void applyMenuLayoutToPending(std::vector<PendingApp>& apps);
     void startEditGhost(GlossyIcon* sourceIcon);
     void stopEditGhost();
@@ -187,6 +188,10 @@ private:
     AudioManager m_audio;
     AccessibilityManager m_accessibility;
     std::future<void>    m_audioFuture;
+    // The config save runs on the thread pool. A power request has to wait on
+    // it: the corruption is intermittent at roughly one reboot in three, which
+    // is what losing a race with an in-flight write looks like.
+    std::future<void>    m_configSaveFuture;
     bool                 m_audioStarted = false;
     std::vector<std::string> m_availablePresets;
     bool                 m_presetChangePending = false;

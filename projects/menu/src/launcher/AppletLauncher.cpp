@@ -79,18 +79,27 @@ void AppletLauncher::launchUserPage(AccountUid uid) {
     }
 }
 
+// Wait for our own writes before the daemon is told to cut power. The menu
+// does not exit here: asking it to made the daemon see no menu running and
+// relaunch it into the middle of the reboot, leaving the console black.
+void AppletLauncher::quiesceForPower(const char* what) {
+    if (m_cb.quiesceWriters)
+        m_cb.quiesceWriters();
+    DebugLog::log("[launcher] requesting %s, writers quiesced", what);
+}
+
 void AppletLauncher::enterSleep() {
-    DebugLog::log("[launcher] requesting sleep");
+    quiesceForPower("sleep");
     switchu::menu::smi_cmd::enterSleep();
 }
 
 void AppletLauncher::shutdown() {
-    DebugLog::log("[launcher] requesting shutdown");
+    quiesceForPower("shutdown");
     switchu::menu::smi_cmd::shutdown();
 }
 
 void AppletLauncher::reboot() {
-    DebugLog::log("[launcher] requesting reboot");
+    quiesceForPower("reboot");
     switchu::menu::smi_cmd::reboot();
 }
 
