@@ -865,11 +865,11 @@ void OverlayDialog::render(nxui::Renderer& ren) {
         || m_cachedBlurIterations != tuning.blurIterations;
 
     if (needsBackdropRefresh) {
-        ren.captureToOffscreen(false);
+        ren.captureToOffscreenSharp();
         if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
             ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
         }
-        ren.copyOffscreen(0, kBackdropCacheTarget);
+        ren.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, kBackdropCacheTarget);
         m_backdropCacheValid = true;
         m_cachedPreBlurRadius = tuning.preBlurRadius;
         m_cachedBlurIterations = tuning.blurIterations;

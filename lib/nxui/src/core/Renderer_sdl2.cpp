@@ -434,6 +434,10 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     // No-op: SDL2 backend has no offscreen render targets.
 }
 
+void Renderer::captureToOffscreenSharp() {
+    // No-op, as above. The menu calls this directly, so it has to link.
+}
+
 void Renderer::copyOffscreen(int srcTarget, int dstTarget) {
     (void)srcTarget;
     (void)dstTarget;

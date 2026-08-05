@@ -393,8 +393,8 @@ void Renderer::bindRenderTarget(int offscreenIdx) {
     dk::ImageView colorTarget{m_gpu.offscreenImage(offscreenIdx)};
     cmd.bindRenderTargets(&colorTarget);
 
-    constexpr uint32_t offW = GpuDevice::OFF_WIDTH;
-    constexpr uint32_t offH = GpuDevice::OFF_HEIGHT;
+    const uint32_t offW = (uint32_t)GpuDevice::offscreenWidth(offscreenIdx);
+    const uint32_t offH = (uint32_t)GpuDevice::offscreenHeight(offscreenIdx);
     cmd.setViewports(0, DkViewport{0.f, 0.f, (float)offW, (float)offH, 0.f, 1.f});
     cmd.setScissors(0, DkScissor{0, 0, offW, offH});
 
@@ -442,7 +442,7 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
     dk::ImageView src{m_gpu.fbImage(slot)};
-    dk::ImageView dst{m_gpu.offscreenImage(0)};
+    dk::ImageView dst{m_gpu.offscreenImage(GpuDevice::OFF_SCENE)};
     DkImageRect srcRect{
         0,
         0,
@@ -455,8 +455,8 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
         0,
         0,
         0,
-        (uint32_t)GpuDevice::OFF_WIDTH,
-        (uint32_t)GpuDevice::OFF_HEIGHT,
+        (uint32_t)GpuDevice::offscreenWidth(GpuDevice::OFF_SCENE),
+        (uint32_t)GpuDevice::offscreenHeight(GpuDevice::OFF_SCENE),
         1,
     };
     cmd.blitImage(src, srcRect, dst, dstRect, 0);
@@ -465,6 +465,29 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
     cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
     m_reusableOffscreenCaptureValid = reuseIfValid;
+}
+
+// The panels that cache their backdrop capture it at full resolution, into
+// targets the per-frame scene capture never touches. They pay for it once per
+// open; the scene capture pays every frame and stays half res.
+void Renderer::captureToOffscreenSharp() {
+    flush();
+    ++m_frameCaptures;
+    auto cmd = m_gpu.cmdBuf();
+    int slot = m_gpu.slot();
+
+    cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+
+    dk::ImageView src{m_gpu.fbImage(slot)};
+    dk::ImageView dst{m_gpu.offscreenImage(GpuDevice::OFF_SHARP_A)};
+    DkImageRect rect{
+        0, 0, 0,
+        (uint32_t)m_gpu.width(),
+        (uint32_t)m_gpu.height(),
+        1,
+    };
+    cmd.blitImage(src, rect, dst, rect, 0);
+    cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 }
 
 void Renderer::copyOffscreen(int srcTarget, int dstTarget) {
@@ -484,8 +507,8 @@ void Renderer::copyOffscreen(int srcTarget, int dstTarget) {
         0,
         0,
         0,
-        (uint32_t)GpuDevice::OFF_WIDTH,
-        (uint32_t)GpuDevice::OFF_HEIGHT,
+        (uint32_t)GpuDevice::offscreenWidth(dstTarget),
+        (uint32_t)GpuDevice::offscreenHeight(dstTarget),
         1,
     };
     cmd.blitImage(src, rect, dst, rect, 0);
@@ -595,15 +618,16 @@ void Renderer::drawLiquidGlass(int target, const Rect& panelRect, float radius,
 void Renderer::applyBlur(float radius, int passes) {
     if (!m_gpu.offscreenReady()) return;
 
-    m_reusableOffscreenCaptureValid = false;
+    // The blur works on the sharp pair now, so the scene capture it used to
+    // clobber survives — no need to make the next frame recapture.
     m_frameBlurPasses += passes * 2;
 
-    constexpr float offW = (float)GpuDevice::OFF_WIDTH;
-    constexpr float offH = (float)GpuDevice::OFF_HEIGHT;
+    constexpr float offW = (float)GpuDevice::offscreenWidth(GpuDevice::OFF_SHARP_A);
+    constexpr float offH = (float)GpuDevice::offscreenHeight(GpuDevice::OFF_SHARP_A);
 
     for (int p = 0; p < passes; ++p) {
-        // H blur: off0 -> off1
-        bindRenderTarget(1);
+        // H blur: sharp A -> sharp B
+        bindRenderTarget(GpuDevice::OFF_SHARP_B);
         m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
         useShader(ShaderProgram::BlurH);
         FsUniforms fs = {};
@@ -612,17 +636,17 @@ void Renderer::applyBlur(float radius, int passes) {
         fs.param2 = 1.f / offW;
         fs.param3 = 1.f / offH;
         pushFsUniforms(fs);
-        bindTexture(m_offDescSlot[0]);
+        bindTexture(m_offDescSlot[GpuDevice::OFF_SHARP_A]);
         addQuad(-1.f, -1.f, 1.f, 1.f, 0, 0, 1, 1, Color::white());
         flush();
         m_gpu.cmdBuf().barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
-        // V blur: off1 -> off0
-        bindRenderTarget(0);
+        // V blur: sharp B -> sharp A
+        bindRenderTarget(GpuDevice::OFF_SHARP_A);
         m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
         useShader(ShaderProgram::BlurV);
         pushFsUniforms(fs);
-        bindTexture(m_offDescSlot[1]);
+        bindTexture(m_offDescSlot[GpuDevice::OFF_SHARP_B]);
         addQuad(-1.f, -1.f, 1.f, 1.f, 0, 0, 1, 1, Color::white());
         flush();
         m_gpu.cmdBuf().barrier(DkBarrier_Full, DkInvalidateFlags_Image);

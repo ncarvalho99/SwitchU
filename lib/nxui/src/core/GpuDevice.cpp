@@ -97,30 +97,29 @@ void GpuDevice::createDepthStencil() {
 }
 
 void GpuDevice::createOffscreenTargets() {
-    constexpr uint32_t offW = OFF_WIDTH;
-    constexpr uint32_t offH = OFF_HEIGHT;
+    dk::ImageLayout layouts[NUM_OFFSCREEN];
+    for (int i = 0; i < NUM_OFFSCREEN; ++i) {
+        dk::ImageLayoutMaker{m_dev}
+            .setFlags(DkImageFlags_UsageRender | DkImageFlags_Usage2DEngine)
+            .setFormat(DkImageFormat_RGBA8_Unorm)
+            .setDimensions(offscreenWidth(i), offscreenHeight(i))
+            .initialize(layouts[i]);
+    }
 
-    dk::ImageLayout offLayout;
-    dk::ImageLayoutMaker{m_dev}
-        .setFlags(DkImageFlags_UsageRender | DkImageFlags_Usage2DEngine)
-        .setFormat(DkImageFormat_RGBA8_Unorm)
-        .setDimensions(offW, offH)
-        .initialize(offLayout);
-
-    uint64_t offSize  = offLayout.getSize();
-    uint64_t offAlign = offLayout.getAlignment();
     uint32_t totalOff = 0;
     for (int i = 0; i < NUM_OFFSCREEN; ++i) {
-        totalOff = (totalOff + offAlign - 1) & ~(offAlign - 1);
-        totalOff += offSize;
+        const uint64_t a = layouts[i].getAlignment();
+        totalOff = (totalOff + a - 1) & ~(a - 1);
+        totalOff += layouts[i].getSize();
     }
     m_offPool.create(m_dev, totalOff, DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image);
 
     uint32_t off = 0;
     for (int i = 0; i < NUM_OFFSCREEN; ++i) {
-        off = (off + offAlign - 1) & ~(offAlign - 1);
-        m_offImages[i].initialize(offLayout, m_offPool.block, off);
-        off += offSize;
+        const uint64_t a = layouts[i].getAlignment();
+        off = (off + a - 1) & ~(a - 1);
+        m_offImages[i].initialize(layouts[i], m_offPool.block, off);
+        off += layouts[i].getSize();
     }
     m_offscreenReady = true;
 }

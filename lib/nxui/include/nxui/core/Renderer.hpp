@@ -137,6 +137,7 @@ public:
 
     // Post-processing
     void captureToOffscreen(bool reuseIfValid = false);
+    void captureToOffscreenSharp();
     void copyOffscreen(int srcTarget, int dstTarget);
     void drawOffscreen(int target, const Rect& dest, const Color& tint = Color::white());
     void drawOffscreenRounded(int target, const Rect& dest, float radius,
