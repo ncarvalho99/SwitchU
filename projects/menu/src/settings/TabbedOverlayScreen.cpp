@@ -398,27 +398,6 @@ void TabbedOverlayScreen::rebuildContentItems() {
     DebugLog::log("[settings] rebuildContent tab=%d items=%d cache=%s",
                   m_tabIndex, (int)items.size(), cache.empty() ? "miss" : "hit");
 
-    // The acknowledgement text ran off the panel and still looked like it did
-    // after the wrapping change, and reading the code could not tell me whether
-    // it wraps and gets clipped or does not wrap at all — the two look the same
-    // in a screenshot. These are the four numbers that separate them.
-    for (const auto& it : items) {
-        if (!it.wrapLabel) continue;
-        const float labelW  = std::max(1.f, cr.width - kContentCardInsetX * 2.f - 20.f);
-        const float oneLine = m_font ? m_font->measure(it.label).x * 0.94f : -1.f;
-        nxui::Label probe(it.label);
-        if (m_font) probe.setFont(m_font);
-        probe.setScale(0.94f);
-        probe.setMultiline(true);
-        const float wrappedH = probe.measureWrappedText(labelW).y;
-        const float lineH    = m_font ? m_font->measure("Ag").y * 0.94f : 1.f;
-        DebugLog::log("[settings] wrapped label: font=%s labelW=%.0f oneLineW=%.0f "
-                      "wrappedH=%.0f lines=%.1f rowH=%.0f",
-                      m_font ? "yes" : "NO", labelW, oneLine, wrappedH,
-                      lineH > 0.f ? wrappedH / lineH : -1.f,
-                      itemHeight(it, cr.width));
-    }
-
     if (cache.empty()) {
         cache.reserve(items.size());
 
