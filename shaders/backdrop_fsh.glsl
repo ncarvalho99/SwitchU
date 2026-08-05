@@ -44,5 +44,10 @@ void main() {
         }
     }
 
+    // Fully transparent fragments still cost a blend, and a rounded shape's
+    // corners are mostly that. Dropping them is free here: there is no depth
+    // test for the discard to defeat.
+    if (c.a <= 0.0) discard;
+
     outColor = c;
 }

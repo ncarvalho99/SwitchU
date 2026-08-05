@@ -725,11 +725,62 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
                       c, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
+// Shading the whole rect to draw a thin band is what put the frame over
+// budget. The home screen emits about 65 strokes and circles a frame — the
+// draw count went from 105 to 170 when they joined the mask — and at full
+// rect each, together they cover more than the screen: measured 16.7ms a
+// frame before, 19.1ms after, with the draw count itself proven irrelevant
+// (halving it later moved nothing).
+//
+// Only the band is emitted now: four edge strips and four corner boxes. The
+// mask parameters describe the whole shape regardless, so the distance field
+// is unchanged and the sub-quads merely decide which fragments get to run it.
+// One pixel of bleed outward keeps somewhere for the outer half of the
+// antialiasing ramp to land.
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
     if (radius <= 0.f) { drawRectOutline(r, c, t); return; }
+    if (t <= 0.f || r.width <= 0.f || r.height <= 0.f) return;
+
+    const float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
     bindTexture(-1);
-    drawRoundedMasked(r, std::min(radius, std::min(r.width, r.height) * 0.5f),
-                      c, Rect{0.f, 0.f, 1.f, 1.f}, t);
+
+    // The band is the stroke plus a pixel of ramp on each side: the strips
+    // start one pixel outside the edge and reach one past the stroke's inner
+    // face, so neither half of the antialiasing gets clipped off.
+    const float band = t + 2.f;
+    const float cr   = rad + 1.f;       // corner box, same outward bleed
+    const float midW = r.width  - 2.f * rad;
+    const float midH = r.height - 2.f * rad;
+
+    // Degenerate once the band is a sizeable share of the shape: the strips
+    // would overlap and double-blend, so the plain quad is both simpler and no
+    // more expensive at that size.
+    if (band * 2.f >= std::min(r.width, r.height)) {
+        drawRoundedMasked(r, rad, c, Rect{0.f, 0.f, 1.f, 1.f}, t);
+        return;
+    }
+
+    beginShape(r, rad, t);
+
+    const float x0 = r.x - 1.f, y0 = r.y - 1.f;
+    const float x1 = r.right() + 1.f, y1 = r.bottom() + 1.f;
+
+    auto quad = [&](float qx, float qy, float qw, float qh) {
+        if (qw <= 0.f || qh <= 0.f) return;
+        addQuad(qx, qy, qx + qw, qy + qh, 0.f, 0.f, 1.f, 1.f, c);
+    };
+
+    quad(x0,      y0,      cr, cr);     // corners
+    quad(x1 - cr, y0,      cr, cr);
+    quad(x0,      y1 - cr, cr, cr);
+    quad(x1 - cr, y1 - cr, cr, cr);
+
+    quad(r.x + rad, y0,        midW, band);   // edges
+    quad(r.x + rad, y1 - band, midW, band);
+    quad(x0,        r.y + rad, band, midH);
+    quad(x1 - band, r.y + rad, band, midH);
+
+    endShape();
 }
 
 // A circle is the mask with the radius pinned to half the shorter side, so it
@@ -783,18 +834,24 @@ void Renderer::drawTextureSub(const Texture* tex, const Rect& src, const Rect& d
 // A rounded fill is one quad; the fragment shader cuts the corner. The mask
 // state is per shape, so the batch is closed on both sides of it and cleared
 // afterwards, leaving every other draw in the unmasked state.
-void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
-                                 const Rect& uv, float thickness) {
+void Renderer::beginShape(const Rect& dest, float radius, float thickness) {
     m_shapeCentre    = {dest.x + dest.width * 0.5f, dest.y + dest.height * 0.5f};
     m_shapeHalf      = {dest.width * 0.5f, dest.height * 0.5f};
     m_shapeRadius    = radius;
     m_shapeThickness = thickness;
+}
 
-    addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
-            uv.x, uv.y, uv.right(), uv.bottom(), c);
-
+void Renderer::endShape() {
     m_shapeRadius    = 0.f;
     m_shapeThickness = 0.f;
+}
+
+void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
+                                 const Rect& uv, float thickness) {
+    beginShape(dest, radius, thickness);
+    addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
+            uv.x, uv.y, uv.right(), uv.bottom(), c);
+    endShape();
 }
 
 void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint) {
