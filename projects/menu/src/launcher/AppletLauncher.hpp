@@ -8,9 +8,15 @@ public:
     struct Callbacks {
         std::function<void()>     playSfxModalHide;
         std::function<void()>     requestExit;
+        // Blocks until this process has no disk write outstanding. Power
+        // requests call it before handing off, so the reboot cannot catch one
+        // of our writes half-done.
+        std::function<void()>     quiesceWriters;
     };
 
     void init(Callbacks cbs);
+
+    void quiesceForPower(const char* what);
 
     void launchAlbum();
     void launchMiiEditor();
