@@ -212,6 +212,11 @@ private:
     void drawRoundedMasked(const Rect& dest, float radius, const Color& c,
                            const Rect& uv, float thickness = 0.f);
 
+    // Arms and disarms the mask around a run of quads, for shapes that cover
+    // themselves with more than one.
+    void beginShape(const Rect& dest, float radius, float thickness);
+    void endShape();
+
     uint32_t m_frameDrawCalls = 0;
     uint32_t m_framePipelineBinds = 0;
     uint32_t m_peakVtxCount = 0;
