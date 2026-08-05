@@ -208,13 +208,17 @@
     },
     "about": {
       "version": "Версия",
-      "author": "Автор",
+      "based_on": "Основано на",
+      "author": "Оригинальный автор",
       "license": "Лицензия",
       "license_value": "GPL-2.0",
       "acknowledgements": "Благодарности",
       "acknowledgements_desc": "Спасибо xortroll за помощь с проектом uLaunch и за поддержку и советы во время разработки.",
-      "source_code": "Исходный код",
-      "source_code_value": "github.com/PoloNX/SwitchU"
+      "source_code": "Исходный код (форк)",
+      "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "fork_maintainer": "Форк поддерживает",
+      "upstream_source": "Исходный код (оригинал)",
+      "upstream_source_value": "github.com/PoloNX/SwitchU"
     },
     "accessibility": {
       "voice": "Озвучивание",

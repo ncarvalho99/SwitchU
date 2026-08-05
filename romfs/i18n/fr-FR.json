@@ -352,13 +352,17 @@
     },
     "about": {
       "version": "Version",
-      "author": "Auteur",
+      "based_on": "Basé sur",
+      "author": "Auteur original",
       "license": "Licence",
       "license_value": "GPL-2.0",
       "acknowledgements": "Remerciements",
       "acknowledgements_desc": "Merci à xortroll pour l'aide vis à vis du développements.",
-      "source_code": "Code source",
-      "source_code_value": "github.com/PoloNX/SwitchU"
+      "source_code": "Code source (fork)",
+      "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "fork_maintainer": "Fork maintenu par",
+      "upstream_source": "Code source (original)",
+      "upstream_source_value": "github.com/PoloNX/SwitchU"
     }
   },
   "userselect": {

@@ -58,8 +58,13 @@ public:
 
     static constexpr int MAX_TEXTURES   = 2048;
     static constexpr int MAX_SAMPLERS   = 16;
-    static constexpr int MAX_VERTICES   = 65536;
-    static constexpr int VTX_BUF_SIZE   = MAX_VERTICES * 32;
+    // The vertex grew from 32 to 56 bytes to carry the rounded-shape mask, and
+    // the cap came down to match. Every rounded shape is a quad now instead of
+    // a 36-segment fan, so the busiest measured frame uses 1884 vertices where
+    // it once used 25002: 32768 is seventeen times the observed peak, and the
+    // arena still shrinks from 2.00 MB to 1.75 MB per frame slot.
+    static constexpr int MAX_VERTICES   = 32768;
+    static constexpr int VTX_BUF_SIZE   = MAX_VERTICES * 56;
     static constexpr int IDX_BUF_SIZE   = 256;
     static constexpr int VS_UBO_SIZE    = 256;
     static constexpr int FS_UBO_SIZE    = 256;
@@ -154,7 +159,28 @@ public:
 
     bool uploadTexture(dk::Image& dst, const void* pixels, uint32_t size, uint32_t width, uint32_t height);
 
-    static constexpr int NUM_OFFSCREEN = 3;
+    // Two classes of offscreen target, because the two users want opposite
+    // things. The icon and sidebar glass recapture the scene every single
+    // frame, so that capture has to be cheap and does not need detail — it is
+    // sampled through a small refracting panel. Settings, the power menu and
+    // the account dialog capture once per open and cache it, and they stretch
+    // what they captured across the screen, where half resolution is plainly
+    // visible as softness no blur tuning can remove.
+    //
+    // Making them all full resolution cost the home screen 1.8ms a frame and
+    // 60 fps became 54. So the per-frame one stays half.
+    static constexpr int NUM_OFFSCREEN = 5;
+
+    static constexpr int OFF_SCENE    = 0;   // half res, captured every frame
+    static constexpr int OFF_DIALOG   = 1;   // full res, dialog backdrop cache
+    static constexpr int OFF_SETTINGS = 2;   // full res, settings backdrop cache
+    static constexpr int OFF_SHARP_A  = 3;   // full res, sharp capture and blur
+    static constexpr int OFF_SHARP_B  = 4;   // full res, blur scratch
+
+    static constexpr bool offscreenIsFullRes(int i) { return i != OFF_SCENE; }
+    static constexpr int  offscreenWidth(int i)  { return offscreenIsFullRes(i) ? FB_WIDTH  : FB_WIDTH  / 2; }
+    static constexpr int  offscreenHeight(int i) { return offscreenIsFullRes(i) ? FB_HEIGHT : FB_HEIGHT / 2; }
+
     dk::Image&       offscreenImage(int i)       { return m_offImages[i]; }
     const dk::Image& offscreenImage(int i) const { return m_offImages[i]; }
     bool offscreenReady() const { return m_offscreenReady; }
@@ -171,7 +197,7 @@ public:
 
     // Stubs for pool-based allocation (SDL2 uses SDL_CreateTexture directly)
     void resetImagePool() {}
-    static constexpr int NUM_OFFSCREEN = 3;
+    static constexpr int NUM_OFFSCREEN = 5;
     bool offscreenReady() const { return false; }
 #endif
 

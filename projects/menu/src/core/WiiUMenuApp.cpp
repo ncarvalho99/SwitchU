@@ -1543,12 +1543,23 @@ void WiiUMenuApp::onUpdate(float dt) {
         // and therefore how much has to be saved to get back to 60.
         const float avgMs = (m_perfAccumDt / m_perfFrames) * 1000.f;
         const auto& gpu = app().gpu();
-        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  draws=%u binds=%u verts=%u blur=%u caps=%u uploads=%u  settings=%d(1=fullScene,2=sceneHidden) themeshop=%d",
+        // Operation and performance mode. After exiting DBI the menu renders
+        // an unchanged workload — same 90 draws, same 17448 vertices — at
+        // gpu=65ms instead of the usual 0-15ms, which is the GPU running at a
+        // fraction of its clock. Nothing in this project manages the
+        // performance configuration; the real qlaunch does, and this daemon
+        // stands in for it. Log the modes so a repro says which state the
+        // console was left in rather than leaving it to inference.
+        const unsigned opMode = (unsigned)appletGetOperationMode();
+        const unsigned perfMode = (unsigned)appletGetPerformanceMode();
+        DebugLog::log("[perf] %.1f fps  avg=%.1fms worst=%.1fms  vsync=%.1fms gpu=%.1fms  opmode=%u perf=%u  draws=%u binds=%u verts=%u blur=%u caps=%u uploads=%u  settings=%d(1=fullScene,2=sceneHidden) themeshop=%d",
                       m_perfFrames / m_perfAccumDt,
                       avgMs,
                       m_perfWorstDt * 1000.f,
                       gpu.lastAcquireNs() / 1000000.0,
                       gpu.lastFenceWaitNs() / 1000000.0,
+                      opMode,
+                      perfMode,
                       ren.lastFrameDrawCalls(),
                       ren.lastFramePipelineBinds(),
                       ren.lastFrameVertices(),
