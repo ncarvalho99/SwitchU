@@ -246,6 +246,7 @@ void Renderer::beginFrame() {
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
     m_roundRadius = 0.f;
+    m_roundThickness = 0.f;
     m_clipStack.clear();
     // Normally the capture cannot outlive a frame: the framebuffer it copies is
     // redrawn every frame. An overlay that knows nothing behind it has changed
@@ -345,9 +346,10 @@ void Renderer::flush() {
         fs.extra[1] = m_roundUvMin.y;
         fs.extra[2] = m_roundUvScale.x;
         fs.extra[3] = m_roundUvScale.y;
+        fs.extra[4] = m_roundThickness;
         auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
         cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE,
-                          0, sizeof(int32_t) * 8, &fs);
+                          0, sizeof(int32_t) * 9, &fs);
         cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
     }
 
@@ -631,19 +633,12 @@ void Renderer::applyWave(float time, float amplitude, float frequency) {
 
 // Geometry emission
 
-// addQuad already flushes when a quad would not fit, but the rounded shapes
-// emit their triangles one vertex at a time through addVertex, which drops
-// silently instead. A frame that ran out mid-shape lost every remaining vertex
-// without a trace: the menu rendered partially and flickered, since which
-// shapes survived depended on how many the animated background emitted first.
-// Callers reserve their run up front instead.
-void Renderer::reserveVertices(uint32_t count) {
-    if (count > GpuDevice::MAX_VERTICES)
-        return;   // Cannot be satisfied by flushing; let it truncate.
-    if (m_vtxCount + count > GpuDevice::MAX_VERTICES)
-        flush();
-}
-
+// addQuad flushes when a quad would not fit, but this drops silently, and a
+// frame that ran out mid-shape lost every remaining vertex without a trace:
+// the menu rendered partially and flickered, since which shapes survived
+// depended on how many the animated background had emitted first. printf goes
+// nowhere on a console, so the drop is invisible; watch verts= in the perf log
+// instead, which reports the peak against the 65536 cap.
 void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
     if (m_vtxCount >= GpuDevice::MAX_VERTICES) {
         std::printf("[Renderer] WARN: vertex buffer full (%u)\n", m_vtxCount);
@@ -708,55 +703,20 @@ void Renderer::drawRoundedRect(const Rect& r, const Color& c, float radius) {
 
 void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float t) {
     if (radius <= 0.f) { drawRectOutline(r, c, t); return; }
-    float rad = std::min(radius, std::min(r.width, r.height) * 0.5f);
-
     bindTexture(-1);
-
-    constexpr int segs = kCornerSegs;
-    constexpr int maxPts = (segs + 1) * 4;
-    const float pi2 = 3.14159265f * 0.5f;
-
-    struct {float cx, cy; float a0;} corners[4] = {
-        {r.right() - rad, r.y + rad,          0},
-        {r.x + rad,       r.y + rad,          pi2},
-        {r.x + rad,       r.bottom() - rad,   pi2*2},
-        {r.right() - rad, r.bottom() - rad,   pi2*3},
-    };
-
-    Vec2 outer[maxPts], inner[maxPts];
-    int ptCount = 0;
-    for (auto& cn : corners) {
-        for (int i = 0; i <= segs; ++i) {
-            float a = cn.a0 + pi2 * i / segs;
-            float ca = std::cos(a), sa = std::sin(a);
-            outer[ptCount] = {cn.cx + ca * rad,       cn.cy - sa * rad};
-            inner[ptCount] = {cn.cx + ca * (rad - t), cn.cy - sa * (rad - t)};
-            ptCount++;
-        }
-    }
-
-    for (int i = 0; i < ptCount; ++i) {
-        int j = (i + 1) % ptCount;
-        addVertex(outer[i].x, outer[i].y, 0, 0, c);
-        addVertex(inner[i].x, inner[i].y, 0, 0, c);
-        addVertex(outer[j].x, outer[j].y, 0, 0, c);
-
-        addVertex(inner[i].x, inner[i].y, 0, 0, c);
-        addVertex(inner[j].x, inner[j].y, 0, 0, c);
-        addVertex(outer[j].x, outer[j].y, 0, 0, c);
-    }
+    drawRoundedMasked(r, std::min(radius, std::min(r.width, r.height) * 0.5f),
+                      c, Rect{0.f, 0.f, 1.f, 1.f}, t);
 }
 
+// A circle is the mask with the radius pinned to half the shorter side, so it
+// shares the fill path rather than keeping a fan of its own. The segment count
+// no longer means anything: the edge is exact at any size.
 void Renderer::drawCircle(const Vec2& center, float radius, const Color& c, int segments) {
+    (void)segments;
+    if (radius <= 0.f) return;
     bindTexture(-1);
-    const float pi2 = 3.14159265f * 2.f;
-    for (int i = 0; i < segments; ++i) {
-        float a0 = pi2 * i / segments;
-        float a1 = pi2 * (i + 1) / segments;
-        addVertex(center.x, center.y, 0, 0, c);
-        addVertex(center.x + std::cos(a0) * radius, center.y + std::sin(a0) * radius, 0, 0, c);
-        addVertex(center.x + std::cos(a1) * radius, center.y + std::sin(a1) * radius, 0, 0, c);
-    }
+    const Rect box{center.x - radius, center.y - radius, radius * 2.f, radius * 2.f};
+    drawRoundedMasked(box, radius, c, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
 void Renderer::drawTriangle(const Vec2& p1, const Vec2& p2, const Vec2& p3, const Color& c) {
@@ -800,9 +760,10 @@ void Renderer::drawTextureSub(const Texture* tex, const Rect& src, const Rect& d
 // state is per shape, so the batch is closed on both sides of it and cleared
 // afterwards, leaving every other draw in the unmasked state.
 void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
-                                 const Rect& uv) {
+                                 const Rect& uv, float thickness) {
     flush();
     m_roundRadius  = radius;
+    m_roundThickness = thickness;
     m_roundSize    = {dest.width, dest.height};
     m_roundUvMin   = {uv.x, uv.y};
     m_roundUvScale = {uv.width  != 0.f ? 1.f / uv.width  : 0.f,
@@ -813,6 +774,7 @@ void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
 
     flush();
     m_roundRadius = 0.f;
+    m_roundThickness = 0.f;
 }
 
 void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint) {

@@ -16,6 +16,7 @@ layout (std140, binding = 1) uniform FsUniforms {
     vec2  roundSize;
     vec2  roundUvMin;
     vec2  roundUvScale;
+    float roundThickness; // >0 strokes a band inside the edge instead of filling
 };
 
 layout (location = 0) out vec4 outColor;
@@ -34,7 +35,15 @@ void main() {
         vec2 halfExtent = roundSize * 0.5;
         float d = sdRoundedBox((t - vec2(0.5)) * roundSize, halfExtent, roundRadius);
         float w = max(fwidth(d), 1e-5);
-        c.a *= 1.0 - smoothstep(-w, w, d);
+        if (roundThickness > 0.0) {
+            // The stroke sits inside the boundary, so the band is centred on
+            // -h. Sub-pixel strokes are widened to one pixel rather than left
+            // to fade out, which is how the selection ring reads as a line.
+            float h = max(roundThickness, 1.0) * 0.5;
+            c.a *= 1.0 - smoothstep(-w, w, abs(d + h) - h);
+        } else {
+            c.a *= 1.0 - smoothstep(-w, w, d);
+        }
     }
 
     outColor = c;

@@ -180,9 +180,6 @@ public:
 
 private:
     // Emit geometry helpers
-    // Segments per 90-degree corner on rounded geometry.
-    static constexpr int kCornerSegs = 8;
-
     // Rounded fills are a single quad masked by the fragment shader. These
     // describe the shape to it: extent in pixels, and the UV window the quad
     // spans so the shader can normalise fragUV onto the shape. Zero radius
@@ -191,10 +188,12 @@ private:
     Vec2  m_roundSize {0.f, 0.f};
     Vec2  m_roundUvMin {0.f, 0.f};
     Vec2  m_roundUvScale {1.f, 1.f};
+    float m_roundThickness = 0.f;
 
-    // Emits `quad` with the corner mask active, then clears it.
+    // Emits `quad` with the corner mask active, then clears it. A non-zero
+    // thickness strokes a band inside the edge instead of filling the shape.
     void drawRoundedMasked(const Rect& dest, float radius, const Color& c,
-                           const Rect& uv);
+                           const Rect& uv, float thickness = 0.f);
 
     uint32_t m_frameDrawCalls = 0;
     uint32_t m_framePipelineBinds = 0;
@@ -208,10 +207,6 @@ private:
     uint32_t m_lastFrameCaptures = 0;
     bool     m_holdOffscreenCapture = false;
 
-    // Flushes the current batch if `count` more vertices would not fit.
-    // addVertex silently drops past the buffer end, so shapes that emit a run
-    // of vertices have to make room before starting one.
-    void reserveVertices(uint32_t count);
     void addVertex(float x, float y, float u, float v, const Color& c);
     void addQuad(float x0, float y0, float x1, float y1,
                  float u0, float v0, float u1, float v1, const Color& c);
