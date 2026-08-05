@@ -149,10 +149,30 @@ void TabbedOverlayScreen::warmup() {
                   (unsigned)(armTicksToNs(armGetSystemTick() - tickWarmupStart) / 1000000ULL));
 }
 
+// A tab whose items are all text has nothing to focus, and the view scrolls by
+// following the focus — so on About the navigation never left the tab list, the
+// content could not be scrolled by any means, and the last row was unreachable.
+// Its rows become focusable in that case, which is what makes the existing
+// scrollToFocused work there. Section headers are left out: they draw no
+// selected state, so stopping on one looks like the focus vanished.
+bool TabbedOverlayScreen::tabIsTextOnly() const {
+    if (m_tabIndex < 0 || m_tabIndex >= (int)m_tabs.size()) return false;
+    for (const auto& item : m_tabs[m_tabIndex].items)
+        if (item.focusable())
+            return false;
+    return true;
+}
+
 bool TabbedOverlayScreen::itemFocusable(const SettingItem& item) const {
     if (item.focusable())
         return true;
-    return m_accessibilityVoiceEnabled && (item.type == ItemType::Info || item.type == ItemType::Section);
+    const bool isSection = (item.type == ItemType::Section);
+    if (item.type != ItemType::Info && !isSection)
+        return false;
+    // Voice accessibility reads these aloud, so they have to be reachable.
+    if (m_accessibilityVoiceEnabled)
+        return true;
+    return !isSection && tabIsTextOnly();
 }
 
 int TabbedOverlayScreen::focusableCount() const {
