@@ -190,6 +190,16 @@ private:
     Vec2  m_roundUvScale {1.f, 1.f};
     float m_roundThickness = 0.f;
 
+    // Redundant-state suppression for flush(). The command buffer is rebuilt
+    // every frame, so all of it resets in beginFrame; nothing here may outlive
+    // a frame.
+    static constexpr uint32_t kFsPushBytes = sizeof(int32_t) * 9;
+    static constexpr int kTexSlotUnset = -2;   // -1 is the untextured slot
+    unsigned char m_fsCache[kFsPushBytes] {};
+    bool m_fsCacheValid = false;
+    int  m_boundTexSlot = kTexSlotUnset;
+    bool m_vtxBufferBound = false;
+
     // Emits `quad` with the corner mask active, then clears it. A non-zero
     // thickness strokes a band inside the edge instead of filling the shape.
     void drawRoundedMasked(const Rect& dest, float radius, const Color& c,

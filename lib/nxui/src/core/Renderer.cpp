@@ -211,6 +211,8 @@ void Renderer::useShader(ShaderProgram prog) {
     if (prog == m_curShader) return;
     ++m_framePipelineBinds;
     flush();
+    m_fsCacheValid = false;
+    m_boundTexSlot = kTexSlotUnset;
     m_curShader = prog;
     int idx = (int)prog;
     auto cmd = m_gpu.cmdBuf();
@@ -224,6 +226,9 @@ void Renderer::pushFsUniforms(const FsUniforms& fs) {
     auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
     cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE, 0, sizeof(fs), &fs);
     cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
+    // A caller wrote the whole block behind flush()'s back, so what it thinks
+    // is bound is no longer what is bound.
+    m_fsCacheValid = false;
 }
 
 void Renderer::beginFrame() {
@@ -247,6 +252,9 @@ void Renderer::beginFrame() {
     m_curShader  = ShaderProgram::Basic;
     m_roundRadius = 0.f;
     m_roundThickness = 0.f;
+    m_fsCacheValid = false;
+    m_boundTexSlot = kTexSlotUnset;
+    m_vtxBufferBound = false;
     m_clipStack.clear();
     // Normally the capture cannot outlive a frame: the framebuffer it copies is
     // redrawn every frame. An overlay that knows nothing behind it has changed
@@ -332,7 +340,13 @@ void Renderer::flush() {
     if (m_descDirty) {
         cmd.barrier(DkBarrier_None, DkInvalidateFlags_Descriptors);
         m_descDirty = false;
+        m_boundTexSlot = kTexSlotUnset;   // the handle may now point elsewhere
     }
+
+    // Every rounded shape carries its own mask parameters, so it closes the
+    // batch, and the draw count on the home screen more than doubled when the
+    // selection rings and circles joined. Redundant state is what makes that
+    // expensive, so nothing below is re-emitted unless it actually changed.
 
     // Backdrop shares the block so that offscreen captures get the same corner
     // mask as everything else. The other programs push their own uniforms.
@@ -347,19 +361,34 @@ void Renderer::flush() {
         fs.extra[2] = m_roundUvScale.x;
         fs.extra[3] = m_roundUvScale.y;
         fs.extra[4] = m_roundThickness;
-        auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
-        cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE,
-                          0, sizeof(int32_t) * 9, &fs);
-        cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
+
+        // Consecutive draws usually share these: unmasked geometry differs only
+        // in useTexture, and a run of plain rects or glyphs does not differ at
+        // all. The binding survives from the previous draw, so an identical
+        // block means neither the push nor the rebind has to happen.
+        if (!m_fsCacheValid || std::memcmp(m_fsCache, &fs, kFsPushBytes) != 0) {
+            std::memcpy(m_fsCache, &fs, kFsPushBytes);
+            m_fsCacheValid = true;
+            auto fsUboAddr = m_gpu.nextFsUboGpuAddr(slot);
+            cmd.pushConstants(fsUboAddr, GpuDevice::FS_UBO_SIZE, 0, kFsPushBytes, &fs);
+            cmd.bindUniformBuffer(DkStage_Fragment, 1, fsUboAddr, GpuDevice::FS_UBO_SIZE);
+        }
     }
 
     int texSlot = (m_texturing && m_curTexSlot >= 0) ? m_curTexSlot : WHITE_TEX_SLOT;
-    cmd.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(texSlot, 0));
+    if (texSlot != m_boundTexSlot) {
+        cmd.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(texSlot, 0));
+        m_boundTexSlot = texSlot;
+    }
 
-    DkGpuAddr vtxAddr = m_gpu.vtxGpuAddr(slot) + m_vtxBatchStart * sizeof(Vertex2D);
-    cmd.bindVtxBuffer(0, vtxAddr, batchVerts * sizeof(Vertex2D));
+    // The whole arena is bound once per frame and each batch is addressed by
+    // its first vertex, rather than rebinding a window of it per draw.
+    if (!m_vtxBufferBound) {
+        cmd.bindVtxBuffer(0, m_gpu.vtxGpuAddr(slot), GpuDevice::VTX_BUF_SIZE);
+        m_vtxBufferBound = true;
+    }
 
-    cmd.draw(DkPrimitive_Triangles, batchVerts, 1, 0, 0);
+    cmd.draw(DkPrimitive_Triangles, batchVerts, 1, m_vtxBatchStart, 0);
 
     m_vtxBatchStart = m_vtxCount;
 }

@@ -34,7 +34,11 @@ void main() {
         vec2 t = (fragUV - roundUvMin) * roundUvScale;
         vec2 halfExtent = roundSize * 0.5;
         float d = sdRoundedBox((t - vec2(0.5)) * roundSize, halfExtent, roundRadius);
-        float w = max(fwidth(d), 1e-5);
+        // fwidth is |dFdx| + |dFdy|, which overstates the step on a diagonal by
+        // up to 41% against a flat edge. That widened the ramp through the arc
+        // and left a visible seam where the straight edge starts curving. The
+        // gradient length is the real distance one pixel covers.
+        float w = max(length(vec2(dFdx(d), dFdy(d))), 1e-5);
         if (roundThickness > 0.0) {
             // The stroke sits inside the boundary, so the band is centred on
             // -h. Sub-pixel strokes are widened to one pixel rather than left
