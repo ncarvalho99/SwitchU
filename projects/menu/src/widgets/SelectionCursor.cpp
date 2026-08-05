@@ -130,7 +130,11 @@ void SelectionCursor::onRender(nxui::Renderer& ren) {
         nxui::Rect glowRect = r.expanded(expand);
         float a = bloomAlpha[i] * m_opacity * (0.8f + 0.2f * wave);
         nxui::Color gc = m_color.withAlpha(a);
-        ren.drawRoundedRect(glowRect, gc, cr + expand + 2.f);
+        // cr + expand, not cr + expand + 2: the glow rect is the ring's rect
+        // grown by expand, so only that radius keeps the two arcs on one
+        // centre. The extra 2 rounded all five bloom layers more than the ring
+        // they surround, and the halo read as belonging to a different shape.
+        ren.drawRoundedRect(glowRect, gc, cr + expand);
     }
 
     nxui::Color mainC = m_color.withAlpha(m_opacity);
@@ -138,6 +142,6 @@ void SelectionCursor::onRender(nxui::Renderer& ren) {
 
     nxui::Rect inner = r.shrunk(m_borderWidth * 0.5f);
     nxui::Color innerC = nxui::Color(0.3f, 0.85f, 1.f, 0.25f * m_opacity * (0.7f + 0.3f * wave));
-    ren.drawRoundedRectOutline(inner, innerC, cr - 2.f, 1.5f);
+    ren.drawRoundedRectOutline(inner, innerC, cr - m_borderWidth * 0.5f, 1.5f);
 }
 
