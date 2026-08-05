@@ -58,8 +58,13 @@ public:
 
     static constexpr int MAX_TEXTURES   = 2048;
     static constexpr int MAX_SAMPLERS   = 16;
-    static constexpr int MAX_VERTICES   = 65536;
-    static constexpr int VTX_BUF_SIZE   = MAX_VERTICES * 32;
+    // The vertex grew from 32 to 56 bytes to carry the rounded-shape mask, and
+    // the cap came down to match. Every rounded shape is a quad now instead of
+    // a 36-segment fan, so the busiest measured frame uses 1884 vertices where
+    // it once used 25002: 32768 is seventeen times the observed peak, and the
+    // arena still shrinks from 2.00 MB to 1.75 MB per frame slot.
+    static constexpr int MAX_VERTICES   = 32768;
+    static constexpr int VTX_BUF_SIZE   = MAX_VERTICES * 56;
     static constexpr int IDX_BUF_SIZE   = 256;
     static constexpr int VS_UBO_SIZE    = 256;
     static constexpr int FS_UBO_SIZE    = 256;

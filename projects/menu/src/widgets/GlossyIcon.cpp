@@ -9,7 +9,14 @@ GlossyIcon::GlossyIcon() {
     m_appearOpacity.setImmediate(0.f);
     m_focusScale.setImmediate(1.f);
     m_focusGlow.setImmediate(0.f);
-    setCornerRadius(16.f);
+    // 21 rather than 16 so the artwork below stays exactly as it was while the
+    // bezel becomes a constant width. onContentRender insets the art by 8 and
+    // rounds it by radius - inset, which lands back on the 13 it always used.
+    // The two arcs used to sit on different centres, so the bezel measured 8px
+    // along a straight edge and 10px through the corner — it visibly thickened
+    // right where the rounding started. Every other nested pair in the menu
+    // already pairs shrunk(n) with radius - n; this was the one that did not.
+    setCornerRadius(21.f);
     setPadding(8.f);
     setLiquidGlassEnabled(true);
     setBlurEnabled(false);
@@ -175,5 +182,5 @@ void GlossyIcon::onContentRender(nxui::Renderer& ren) {
         iconTint.g = 0.80f;
         iconTint.b = 0.80f;
     }
-    ren.drawTextureRounded(m_tex, texRect, rad - 3.f, iconTint);
+    ren.drawTextureRounded(m_tex, texRect, rad - inset, iconTint);
 }
