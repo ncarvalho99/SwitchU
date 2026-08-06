@@ -101,7 +101,8 @@
       "background_speed": "Скорость анимации фона",
       "background_speed_desc": "Насколько быстро плывут фигуры. Середина — темп самой темы.",
       "show_homebrew": "Показывать homebrew",
-      "show_homebrew_desc": "Показывает файлы .nro с карты вместе с играми."
+      "show_homebrew_desc": "Показывает файлы .nro с карты. Вступит в силу после перезапуска меню.",
+      "show_homebrew_toast": "Вступит в силу при следующем запуске меню."
     },
     "internet": {
       "wifi_ssid": "WiFi-сеть",

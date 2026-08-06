@@ -101,7 +101,8 @@
       "background_speed": "Geschwindigkeit der Hintergrundanimation",
       "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes.",
       "show_homebrew": "Homebrew anzeigen",
-      "show_homebrew_desc": "Listet .nro-Dateien von der Karte neben den installierten Spielen."
+      "show_homebrew_desc": "Listet .nro-Dateien von der Karte. Gilt nach einem Neustart des Menüs.",
+      "show_homebrew_toast": "Gilt beim nächsten Start des Menüs."
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",
