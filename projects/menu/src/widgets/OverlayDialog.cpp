@@ -406,11 +406,22 @@ void OverlayDialog::showUserSwitcher(UserSelectCallback onSelect,
     m_overlayAlpha.set(1.f, 0.18f, nxui::Easing::outCubic);
     m_panelScale.set(1.f, 0.22f, nxui::Easing::outBack);
     m_contentReveal.set(1.f, 0.22f, nxui::Easing::outCubic);
+    m_cursor.setCornerRadius(kUserAvatarSize * 0.5f);
+    m_cursor.moveTo(userAvatarRect(m_selected).expanded(4.f), kUserAvatarSize * 0.5f, 0.001f);
+
+    // Missed when this was split off showUserSelect, and the dialog came up
+    // reachable by touch alone: the direction actions live in setupUserActions,
+    // and without focus nothing would route to them anyway.
+    setFocusable(true);
+    setVisible(true);
+    setupUserActions();
+
+    m_touchHitButton = -1;
     m_touchHitUser = -1;
     m_touchOnSelected = false;
     m_ignoreInitialTouchRelease = true;
     m_pendingInitialAccessibilityFrames = 2;
-    syncUserCursor();
+    announceCurrentSelection();
 }
 
 void OverlayDialog::showUserSelect(UserSelectCallback onSelect, CancelCallback onCancel) {
@@ -611,7 +622,8 @@ void OverlayDialog::handleTouch(nxui::Input& input) {
             float dy = std::abs(input.touchDeltaY());
             if (dx < 20.f && dy < 20.f) {
                 if (m_touchHitUser >= 0 && m_touchHitUser < userSlotCount()) {
-                    if (m_touchOnSelected) {
+                    if (m_touchOnSelected || m_allowCreateUser) {
+                        m_selected = m_touchHitUser;
                         activateSelectedUser();
                     } else {
                         m_selected = m_touchHitUser;
