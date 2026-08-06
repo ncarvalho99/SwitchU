@@ -434,7 +434,8 @@
     "needs_verify": "Game data needs verification.",
     "needs_update": "A required update is available.",
     "no_contents": "Game data is missing.",
-    "cannot_launch": "This game cannot be launched."
+    "cannot_launch": "This game cannot be launched.",
+    "homebrew_not_launchable": "Launching homebrew from the menu is not available yet."
   },
   "button": {
     "ok": "OK",

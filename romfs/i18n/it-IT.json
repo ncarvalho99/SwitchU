@@ -290,7 +290,8 @@
     "needs_verify": "I dati di gioco devono essere verificati.",
     "needs_update": "È disponibile un aggiornamento obbligatorio.",
     "no_contents": "I dati di gioco sono mancanti.",
-    "cannot_launch": "Questo gioco non può essere avviato."
+    "cannot_launch": "Questo gioco non può essere avviato.",
+    "homebrew_not_launchable": "Avviare homebrew dal menu non è ancora disponibile."
   },
   "button": {
     "ok": "OK",

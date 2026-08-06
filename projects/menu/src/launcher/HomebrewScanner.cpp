@@ -107,6 +107,43 @@ bool readEntryImpl(const std::string& path, Entry& out) {
     return true;
 }
 
+// Timing split: the walk and the per-file header reads are separate costs with
+// separate fixes, and 751ms told me the total without saying which.
+struct ScanCost {
+    unsigned walkMs = 0;
+    unsigned readMs = 0;
+    int filesSeen = 0;
+};
+
+void collectPaths(const std::string& dir, int depth, int maxDepth,
+                  std::vector<std::string>& out, ScanCost& cost) {
+    if (depth > maxDepth)
+        return;
+
+    std::error_code ec;
+    std::filesystem::directory_iterator it(dir, ec);
+    if (ec)
+        return;
+
+    for (const auto& item : it) {
+        ++cost.filesSeen;
+        std::error_code itemEc;
+        if (item.is_directory(itemEc)) {
+            collectPaths(item.path().string(), depth + 1, maxDepth, out, cost);
+            continue;
+        }
+
+        std::string p = item.path().string();
+        if (p.size() < 4)
+            continue;
+        std::string ext = p.substr(p.size() - 4);
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return (char)std::tolower(c); });
+        if (ext == ".nro")
+            out.push_back(std::move(p));
+    }
+}
+
 void scanInto(const std::string& dir, int depth, int maxDepth, std::vector<Entry>& out) {
     if (depth > maxDepth)
         return;
@@ -145,8 +182,21 @@ std::vector<Entry> scan(const std::string& root, int maxDepth) {
     // thing this project has spent the most effort protecting, so it is timed.
     const u64 startTick = armGetSystemTick();
 
+    ScanCost cost;
+    std::vector<std::string> paths;
+    const u64 walkStart = armGetSystemTick();
+    collectPaths(root, 0, maxDepth, paths, cost);
+    cost.walkMs = (unsigned)(armTicksToNs(armGetSystemTick() - walkStart) / 1000000ULL);
+
+    const u64 readStart = armGetSystemTick();
     std::vector<Entry> out;
-    scanInto(root, 0, maxDepth, out);
+    out.reserve(paths.size());
+    for (const auto& path : paths) {
+        Entry entry;
+        if (readEntryImpl(path, entry))
+            out.push_back(std::move(entry));
+    }
+    cost.readMs = (unsigned)(armTicksToNs(armGetSystemTick() - readStart) / 1000000ULL);
 
     std::sort(out.begin(), out.end(), [](const Entry& a, const Entry& b) {
         return a.name < b.name;
@@ -159,8 +209,10 @@ std::vector<Entry> scan(const std::string& root, int maxDepth) {
         if (e.iconSize > 0) ++withIcon;
         if (!e.author.empty()) ++withName;
     }
-    DebugLog::log("[homebrew] scan %s: %d entries, %d with icon, %d with NACP, %ums",
-                  root.c_str(), (int)out.size(), withIcon, withName, ms);
+    DebugLog::log("[homebrew] scan %s: %d entries of %d files, %d icon, %d nacp, "
+                  "%ums total (walk %ums, headers %ums)",
+                  root.c_str(), (int)out.size(), cost.filesSeen, withIcon, withName,
+                  ms, cost.walkMs, cost.readMs);
     return out;
 }
 

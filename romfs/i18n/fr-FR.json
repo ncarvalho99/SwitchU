@@ -434,7 +434,8 @@
     "needs_verify": "Les données du jeu doivent être vérifiées.",
     "needs_update": "Une mise à jour requise est disponible.",
     "no_contents": "Les données du jeu sont manquantes.",
-    "cannot_launch": "Ce jeu ne peut pas être lancé."
+    "cannot_launch": "Ce jeu ne peut pas être lancé.",
+    "homebrew_not_launchable": "Lancer un homebrew depuis le menu n'est pas encore disponible."
   },
   "button": {
     "ok": "OK",

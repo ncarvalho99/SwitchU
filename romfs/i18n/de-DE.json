@@ -290,7 +290,8 @@
     "needs_verify": "Spieldaten müssen überprüft werden.",
     "needs_update": "Ein erforderliches Update ist verfügbar.",
     "no_contents": "Spieldaten fehlen.",
-    "cannot_launch": "Dieses Spiel kann nicht gestartet werden."
+    "cannot_launch": "Dieses Spiel kann nicht gestartet werden.",
+    "homebrew_not_launchable": "Homebrew aus dem Menü zu starten ist noch nicht verfügbar."
   },
   "button": {
     "ok": "OK",

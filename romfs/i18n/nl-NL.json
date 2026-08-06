@@ -290,7 +290,8 @@
     "needs_verify": "Spelgegevens moeten worden geverifieerd.",
     "needs_update": "Er is een verplichte update beschikbaar.",
     "no_contents": "Spelgegevens ontbreken.",
-    "cannot_launch": "Dit spel kan niet worden gestart."
+    "cannot_launch": "Dit spel kan niet worden gestart.",
+    "homebrew_not_launchable": "Homebrew starten vanuit het menu is nog niet beschikbaar."
   },
   "button": {
     "ok": "OK",
