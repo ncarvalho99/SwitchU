@@ -209,7 +209,7 @@ void OverlayDialog::buildUserSelect() {
     m_messageLabel.reset();
     m_buttonRow.reset();
 
-    int count = std::max(1, (int)m_users.size());
+    int count = std::max(1, userSlotCount());
     float titleH = m_font ? m_font->measure("A").y * 1.1f : 28.f;
     float nameH = m_smallFont ? m_smallFont->measure("Ag").y : (m_font ? m_font->measure("Ag").y : 20.f);
     float totalUsersW = count * kUserAvatarSize + (count - 1) * kUserAvatarGap;
@@ -233,7 +233,7 @@ void OverlayDialog::buildUserSelect() {
         setHighlightColor(m_theme->panelHighlight.withAlpha(std::clamp(m_theme->panelHighlight.a * 0.70f, 0.03f, 0.10f)));
     }
 
-    m_userAvatarRects.resize(m_users.size());
+    m_userAvatarRects.resize((size_t)userSlotCount());
 }
 
 void OverlayDialog::animateButtonFocus(float duration, nxui::EasingFunc easing) {
@@ -368,7 +368,46 @@ void OverlayDialog::show(const std::string& title,
     m_pendingInitialAccessibilityFrames = 2;
 }
 
+void OverlayDialog::showUserSwitcher(UserSelectCallback onSelect,
+                                     std::function<void()> onCreate,
+                                     std::string createLabel,
+                                     CancelCallback onCancel) {
+    m_allowCreateUser = static_cast<bool>(onCreate);
+    m_onCreateUser = std::move(onCreate);
+    m_createUserLabel = std::move(createLabel);
+    // Unlike the launch flow, this one is worth opening with no accounts at
+    // all: creating the first one is exactly what it is for.
+    m_title = nxui::I18n::instance().tr("userselect.switch_title", "Accounts");
+    m_message.clear();
+    m_buttons.clear();
+    m_selected = std::clamp(m_selected, 0, std::max(0, userSlotCount() - 1));
+    m_onUserSelect = std::move(onSelect);
+    m_onCancel = std::move(onCancel);
+
+    m_active = true;
+    m_animatingOut = false;
+    m_backdropCacheValid = false;
+    m_cachedPreBlurRadius = -1.f;
+    m_cachedBlurIterations = -1;
+
+    buildUserSelect();
+
+    m_overlayAlpha.setImmediate(0.f);
+    m_panelScale.setImmediate(0.92f);
+    m_contentReveal.setImmediate(0.f);
+    m_overlayAlpha.set(1.f, 0.18f, nxui::Easing::outCubic);
+    m_panelScale.set(1.f, 0.22f, nxui::Easing::outBack);
+    m_contentReveal.set(1.f, 0.22f, nxui::Easing::outCubic);
+    m_touchHitUser = -1;
+    m_touchOnSelected = false;
+    m_ignoreInitialTouchRelease = true;
+    m_pendingInitialAccessibilityFrames = 2;
+    syncUserCursor();
+}
+
 void OverlayDialog::showUserSelect(UserSelectCallback onSelect, CancelCallback onCancel) {
+    m_allowCreateUser = false;
+    m_onCreateUser = nullptr;
     if (m_users.empty()) {
         if (onSelect) {
             AccountUid uid{};
@@ -380,7 +419,7 @@ void OverlayDialog::showUserSelect(UserSelectCallback onSelect, CancelCallback o
     m_title = nxui::I18n::instance().tr("userselect.title", "Who's playing?");
     m_message.clear();
     m_buttons.clear();
-    m_selected = std::clamp(m_selected, 0, (int)m_users.size() - 1);
+    m_selected = std::clamp(m_selected, 0, std::max(0, userSlotCount() - 1));
     m_onUserSelect = std::move(onSelect);
     m_onCancel = std::move(onCancel);
 
@@ -465,16 +504,16 @@ void OverlayDialog::setupUserActions() {
     clearActions();
 
     auto selectPrevious = [this]() {
-        if (!m_active || m_animatingOut || m_users.empty()) return;
-        int n = (int)m_users.size();
+        if (!m_active || m_animatingOut || userSlotCount() <= 0) return;
+        int n = userSlotCount();
         m_selected = (m_selected + n - 1) % n;
         if (m_navSfxCb) m_navSfxCb();
         announceCurrentSelection();
     };
 
     auto selectNext = [this]() {
-        if (!m_active || m_animatingOut || m_users.empty()) return;
-        int n = (int)m_users.size();
+        if (!m_active || m_animatingOut || userSlotCount() <= 0) return;
+        int n = userSlotCount();
         m_selected = (m_selected + 1) % n;
         if (m_navSfxCb) m_navSfxCb();
         announceCurrentSelection();
@@ -506,8 +545,15 @@ void OverlayDialog::activateSelected() {
 }
 
 void OverlayDialog::activateSelectedUser() {
-    if (m_selected < 0 || m_selected >= (int)m_users.size())
+    if (m_selected < 0 || m_selected >= userSlotCount())
         return;
+    if (isCreateSlot(m_selected)) {
+        auto cb = m_onCreateUser;
+        if (m_activateSfxCb) m_activateSfxCb();
+        hide();
+        if (cb) cb();
+        return;
+    }
     AccountUid uid = m_users[(size_t)m_selected].uid;
     auto cb = std::move(m_onUserSelect);
     if (m_activateSfxCb) m_activateSfxCb();
@@ -535,7 +581,7 @@ void OverlayDialog::handleTouch(nxui::Input& input) {
             float ty = input.touchY();
             m_touchHitUser = -1;
             m_touchOnSelected = false;
-            for (int i = 0; i < (int)m_users.size(); ++i) {
+            for (int i = 0; i < userSlotCount(); ++i) {
                 if (userAvatarRect(i).expanded(12.f).contains(tx, ty)) {
                     m_touchHitUser = i;
                     break;
@@ -556,7 +602,7 @@ void OverlayDialog::handleTouch(nxui::Input& input) {
             float dx = std::abs(input.touchDeltaX());
             float dy = std::abs(input.touchDeltaY());
             if (dx < 20.f && dy < 20.f) {
-                if (m_touchHitUser >= 0 && m_touchHitUser < (int)m_users.size()) {
+                if (m_touchHitUser >= 0 && m_touchHitUser < userSlotCount()) {
                     if (m_touchOnSelected) {
                         activateSelectedUser();
                     } else {
@@ -645,7 +691,7 @@ void OverlayDialog::syncCursor() {
 }
 
 void OverlayDialog::syncUserCursor() {
-    if (m_selected >= 0 && m_selected < (int)m_users.size()) {
+    if (m_selected >= 0 && m_selected < userSlotCount()) {
         nxui::Rect r = userAvatarRect(m_selected);
         m_cursor.moveTo(r.expanded(4.f), r.width * 0.5f, 0.16f);
     }
@@ -702,7 +748,7 @@ void OverlayDialog::syncUserOpacities() {
 }
 
 nxui::Rect OverlayDialog::userAvatarRect(int index) const {
-    int n = (int)m_users.size();
+    int n = userSlotCount();
     if (n <= 0 || index < 0 || index >= n)
         return {};
 
@@ -740,7 +786,40 @@ void OverlayDialog::renderUserContent(nxui::Renderer& ren, float alpha) {
     }
 
     nxui::Font* nameFont = m_smallFont ? m_smallFont : m_font;
-    m_userAvatarRects.resize(m_users.size());
+    m_userAvatarRects.resize((size_t)userSlotCount());
+
+    if (m_allowCreateUser) {
+        // The slot past the last account: a ring with a plus through it, the
+        // same shape the system's own selector uses so it reads as the same
+        // affordance rather than another account.
+        const int idx = (int)m_users.size();
+        nxui::Rect avatar = userAvatarRect(idx);
+        m_userAvatarRects[(size_t)idx] = avatar;
+
+        const float selected = (idx == m_selected) ? 1.f : 0.f;
+        nxui::Rect drawRect = scaledRect(avatar, 1.f + 0.08f * selected);
+        const float r = drawRect.width * 0.5f;
+        const nxui::Vec2 c{drawRect.x + r, drawRect.y + r};
+
+        ren.drawCircle(c, r, textSecondary.withAlpha(0.16f * contentAlpha), 40);
+        const float ring = std::max(1.5f, r * 0.055f);
+        ren.drawRoundedRectOutline(drawRect, textSecondary.withAlpha(0.55f * contentAlpha), r, ring);
+
+        const float arm = r * 0.42f;
+        const float bar = std::max(2.f, r * 0.10f);
+        nxui::Color plus = textPrimary.withAlpha(0.90f * contentAlpha);
+        ren.drawRoundedRect({c.x - arm, c.y - bar * 0.5f, arm * 2.f, bar}, plus, bar * 0.5f);
+        ren.drawRoundedRect({c.x - bar * 0.5f, c.y - arm, bar, arm * 2.f}, plus, bar * 0.5f);
+
+        if (nameFont && !m_createUserLabel.empty()) {
+            const float nameScale = 0.85f * sc;
+            nxui::Vec2 sz = nameFont->measure(m_createUserLabel);
+            ren.drawText(m_createUserLabel,
+                         {avatar.x + (avatar.width - sz.x * nameScale) * 0.5f,
+                          avatar.bottom() + 12.f * sc},
+                         nameFont, textSecondary.withAlpha(contentAlpha), nameScale);
+        }
+    }
     for (int i = 0; i < (int)m_users.size(); ++i) {
         nxui::Rect avatar = userAvatarRect(i);
         m_userAvatarRects[(size_t)i] = avatar;

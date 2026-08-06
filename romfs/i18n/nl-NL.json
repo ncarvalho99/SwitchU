@@ -245,7 +245,9 @@
     }
   },
   "userselect": {
-    "title": "Wie speelt er?"
+    "title": "Wie speelt er?",
+    "switch_title": "Accounts",
+    "add_user": "Gebruiker toevoegen"
   },
   "game": {
     "move": "Verplaatsen",

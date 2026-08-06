@@ -245,7 +245,9 @@
     }
   },
   "userselect": {
-    "title": "Wer spielt?"
+    "title": "Wer spielt?",
+    "switch_title": "Konten",
+    "add_user": "Benutzer hinzufügen"
   },
   "game": {
     "move": "Verschieben",

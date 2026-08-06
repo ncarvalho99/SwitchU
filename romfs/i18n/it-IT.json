@@ -245,7 +245,9 @@
     }
   },
   "userselect": {
-    "title": "Chi sta giocando?"
+    "title": "Chi sta giocando?",
+    "switch_title": "Account",
+    "add_user": "Aggiungi utente"
   },
   "game": {
     "move": "Sposta",
