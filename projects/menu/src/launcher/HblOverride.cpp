@@ -21,7 +21,7 @@ constexpr const char* kOverrideDir  = "sdmc:/atmosphere/config";
 constexpr const char* kOverridePath = "sdmc:/atmosphere/config/override_config.ini";
 constexpr const char* kBackupPath   = "sdmc:/atmosphere/config/override_config.ini.switchu.bak";
 constexpr const char* kHblPath      = "sdmc:/atmosphere/hbl.nsp";
-constexpr const char* kBundledHbl   = "sdmc:/switch/SwitchU/hbl.nsp";
+constexpr const char* kBundledHbl   = "sdmc:/switch/SwitchU/homebrew/hbl.nsp";
 
 // Written next to the config when this created hbl.nsp, so disable() knows the
 // file is ours to delete rather than someone else's install.
