@@ -40,6 +40,21 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
 
     {
         SettingItem it;
+        it.label = i18n.tr("settings.display.background_speed", "Background animation speed");
+        it.description = i18n.tr("settings.display.background_speed_desc",
+                                 "How fast the shapes drift. Centre is the theme's own pace.");
+        it.type = ItemType::Slider;
+        it.floatVal = screen.backgroundSpeed();
+        it.anim01 = std::clamp(it.floatVal, 0.f, 1.f);
+        it.onChange = [&screen](SettingItem& self) {
+            if (screen.m_backgroundSpeedCb)
+                screen.m_backgroundSpeedCb(self.floatVal);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
         it.label = i18n.tr("settings.display.background_blur", "Background blur");
         it.description = i18n.tr("settings.display.background_blur_desc",
                                  "Soften the wallpaper and the shapes drifting over it.");

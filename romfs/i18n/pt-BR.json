@@ -95,7 +95,9 @@
       "background_blur": "Desfoque do fundo",
       "background_blur_desc": "Suaviza o papel de parede e as formas que flutuam sobre ele.",
       "glass_sharpness": "Nitidez do vidro",
-      "glass_sharpness_desc": "O quanto a tela atrás dos menus aparece através deles."
+      "glass_sharpness_desc": "O quanto a tela atrás dos menus aparece através deles.",
+      "background_speed": "Velocidade da animação de fundo",
+      "background_speed_desc": "O quanto as formas se movem. O centro é o ritmo do próprio tema."
     },
     "internet": {
       "wifi_ssid": "Rede WiFi",

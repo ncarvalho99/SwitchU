@@ -319,6 +319,14 @@ void WiiUMenuApp::createSettings() {
         m_config.glassSharpness = sharpness;
         applyGlassSharpness(sharpness);
     });
+    m_settings->setBackgroundSpeed(m_config.backgroundSpeed);
+    m_settings->onBackgroundSpeedChange([this](float speed) {
+        if (std::abs(m_config.backgroundSpeed - speed) < 0.001f)
+            return;
+        m_config.backgroundSpeed = speed;
+        if (m_background)
+            m_background->setSpeedScale(speed * 2.f);
+    });
     m_settings->setBackgroundBlur(m_config.backgroundBlur);
     m_settings->onBackgroundBlurChange([this](float strength) {
         if (std::abs(m_config.backgroundBlur - strength) < 0.001f)
@@ -1136,6 +1144,7 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         backgroundConfig.imageCover = preset.background.imageCover;
         m_background->setConfig(backgroundConfig);
         m_background->setBlurStrength(m_config.backgroundBlur);
+        m_background->setSpeedScale(m_config.backgroundSpeed * 2.f);
 
         if (backgroundImageNeedsReload) {
             const bool imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);

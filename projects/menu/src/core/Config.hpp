@@ -29,6 +29,10 @@ struct AppConfig {
     // half-resolution look this replaced, and is the default for that reason.
     float glassSharpness = 0.4f;
 
+    // Pace of the drifting shapes, as a slider position: 0 stops them, 0.5 is
+    // the speed the theme asked for, 1 doubles it.
+    float backgroundSpeed = 0.5f;
+
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better
     // dark, and a first boot into white is a jolt on a handheld.

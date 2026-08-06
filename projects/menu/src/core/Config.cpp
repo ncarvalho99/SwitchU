@@ -44,6 +44,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "clockUse12Hour", clockUse12Hour);
     readJsonOpt(j, "backgroundBlur", backgroundBlur);
     readJsonOpt(j, "glassSharpness", glassSharpness);
+    readJsonOpt(j, "backgroundSpeed", backgroundSpeed);
     readJsonOpt(j, "accessibilityEnabled", accessibilityEnabled);
     readJsonOpt(j, "accessibilitySpeakHints", accessibilitySpeakHints);
     readJsonOpt(j, "accessibilitySpeakContextEveryFocus", accessibilitySpeakContextEveryFocus);
@@ -86,6 +87,7 @@ bool AppConfig::save() const {
     j["clockUse12Hour"] = clockUse12Hour;
     j["backgroundBlur"] = backgroundBlur;
     j["glassSharpness"] = glassSharpness;
+    j["backgroundSpeed"] = backgroundSpeed;
     j["accessibilityEnabled"] = accessibilityEnabled;
     j["accessibilitySpeakHints"] = accessibilitySpeakHints;
     j["accessibilitySpeakContextEveryFocus"] = accessibilitySpeakContextEveryFocus;

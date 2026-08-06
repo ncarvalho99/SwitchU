@@ -68,6 +68,11 @@ public:
     void setBlurStrength(float v) { m_blurStrength = v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
     float blurStrength() const { return m_blurStrength; }
 
+    // Multiplies the pace of the whole layer. 0 stops it, 1 is what the theme
+    // asked for, above that it hurries.
+    void setSpeedScale(float v) { m_speedScale = v < 0.f ? 0.f : (v > 3.f ? 3.f : v); }
+    float speedScale() const { return m_speedScale; }
+
 protected:
     void onUpdate(float dt) override;
     void onRender(nxui::Renderer& ren) override;
@@ -101,5 +106,6 @@ private:
     nxui::Texture m_backgroundImage;
     float m_time = 0.f;
     float m_blurStrength = 0.f;
+    float m_speedScale = 1.f;
 };
 

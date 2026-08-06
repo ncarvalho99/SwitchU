@@ -95,7 +95,9 @@
       "background_blur": "Sfocatura dello sfondo",
       "background_blur_desc": "Ammorbidisce lo sfondo e le forme che vi fluttuano sopra.",
       "glass_sharpness": "Nitidezza del vetro",
-      "glass_sharpness_desc": "Quanto lo schermo dietro i menu traspare attraverso di essi."
+      "glass_sharpness_desc": "Quanto lo schermo dietro i menu traspare attraverso di essi.",
+      "background_speed": "Velocità dell'animazione di sfondo",
+      "background_speed_desc": "Quanto si muovono le forme. Al centro è il ritmo del tema stesso."
     },
     "internet": {
       "wifi_ssid": "Rete WiFi",

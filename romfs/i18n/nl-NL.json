@@ -95,7 +95,9 @@
       "background_blur": "Achtergrondvervaging",
       "background_blur_desc": "Verzacht de achtergrond en de vormen die eroverheen zweven.",
       "glass_sharpness": "Glashelderheid",
-      "glass_sharpness_desc": "Hoe duidelijk het scherm achter menu's erdoorheen zichtbaar is."
+      "glass_sharpness_desc": "Hoe duidelijk het scherm achter menu's erdoorheen zichtbaar is.",
+      "background_speed": "Snelheid van achtergrondanimatie",
+      "background_speed_desc": "Hoe snel de vormen zweven. Het midden is het tempo van het thema zelf."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",
