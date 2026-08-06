@@ -391,7 +391,22 @@
     }
   },
   "hint": {
-    "repeat": "Herhaal",
+    "navigate": "Navigeren",
+    "select": "Selecteren",
+    "confirm": "Bevestigen",
+    "cancel": "Annuleren",
+    "back": "Terug",
+    "close": "Sluiten",
+    "open": "Openen",
+    "launch": "Starten",
+    "resume": "Hervatten",
+    "move": "Verplaatsen",
+    "place": "Plaatsen",
+    "prev_page": "Vorige pagina",
+    "next_page": "Volgende pagina",
+    "profile": "Profiel",
+    "search": "Zoeken",
+    "repeat": "Herhalen",
     "voice": "Stem"
   },
   "accessibility": {
