@@ -140,6 +140,21 @@
     "music": "Music"
   },
   "hint": {
+    "navigate": "Navigate",
+    "select": "Select",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "back": "Back",
+    "close": "Close",
+    "open": "Open",
+    "launch": "Launch",
+    "resume": "Resume",
+    "move": "Move",
+    "place": "Place",
+    "prev_page": "Prev page",
+    "next_page": "Next page",
+    "profile": "Profile",
+    "search": "Search",
     "repeat": "Repeat",
     "voice": "Voice"
   },

@@ -391,8 +391,23 @@
     }
   },
   "hint": {
+    "navigate": "Navigieren",
+    "select": "Auswählen",
+    "confirm": "Bestätigen",
+    "cancel": "Abbrechen",
+    "back": "Zurück",
+    "close": "Schließen",
+    "open": "Öffnen",
+    "launch": "Starten",
+    "resume": "Fortsetzen",
+    "move": "Bewegen",
+    "place": "Platzieren",
+    "prev_page": "Vorherige Seite",
+    "next_page": "Nächste Seite",
+    "profile": "Profil",
+    "search": "Suchen",
     "repeat": "Wiederholen",
-    "voice": "Stimme"
+    "voice": "Sprache"
   },
   "accessibility": {
     "speech": {

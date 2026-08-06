@@ -391,6 +391,21 @@
     }
   },
   "hint": {
+    "navigate": "Naviga",
+    "select": "Seleziona",
+    "confirm": "Conferma",
+    "cancel": "Annulla",
+    "back": "Indietro",
+    "close": "Chiudi",
+    "open": "Apri",
+    "launch": "Avvia",
+    "resume": "Riprendi",
+    "move": "Sposta",
+    "place": "Posiziona",
+    "prev_page": "Pagina precedente",
+    "next_page": "Pagina successiva",
+    "profile": "Profilo",
+    "search": "Cerca",
     "repeat": "Ripeti",
     "voice": "Voce"
   },

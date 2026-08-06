@@ -140,6 +140,21 @@
     "theme_shop": "Boutique de thèmes"
   },
   "hint": {
+    "navigate": "Naviguer",
+    "select": "Sélectionner",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "back": "Retour",
+    "close": "Fermer",
+    "open": "Ouvrir",
+    "launch": "Lancer",
+    "resume": "Reprendre",
+    "move": "Déplacer",
+    "place": "Placer",
+    "prev_page": "Page précédente",
+    "next_page": "Page suivante",
+    "profile": "Profil",
+    "search": "Rechercher",
     "repeat": "Répéter",
     "voice": "Voix"
   },
