@@ -920,13 +920,19 @@ void WiiUMenuApp::appendHomebrewToPending(std::vector<PendingApp>& apps) {
         // also what the launcher will need once there is one.
         app.id = hb.path;
         app.title = hb.name;
-        app.titleId = 0;
+        // A synthetic id, because the saved layout rebuilds the grid from a map
+        // keyed by title id and drops anything with none — which is why these
+        // were being appended and then silently discarded.
+        app.titleId = homebrew::syntheticTitleId(hb.path);
         app.userRequired = false;
         app.startupUserKnown = true;
         app.homebrewPath = hb.path;
-        std::vector<std::uint8_t> icon;
-        if (homebrew::readIcon(hb, icon))
-            app.iconData = std::move(icon);
+        // The icon is deliberately not read here. Reading all 42 up front cost
+        // 749ms on the main thread at startup, against the ~400ms this project
+        // spent months getting the whole return-to-menu down to. The streamer
+        // fetches it when the page it belongs to is about to be drawn, exactly
+        // as it already does for titles.
+        homebrew::registerPath(app.titleId, hb.path);
         apps.push_back(std::move(app));
     }
     DebugLog::log("[homebrew] grid now %d entries (%d homebrew)",

@@ -1,4 +1,5 @@
 #include "AppListLoader.hpp"
+#include "HomebrewScanner.hpp"
 #include "core/DebugLog.hpp"
 #include "smi_commands.hpp"
 #include <switch.h>
@@ -329,6 +330,17 @@ std::vector<uint8_t> AppListLoader::loadIconData(uint64_t titleId) {
 #ifdef SWITCHU_MENU
     iconData = switchu::control_cache::readIcon(titleId);
 #endif
+
+    // Homebrew keeps its icon inside the NRO rather than in the control cache,
+    // and is recognised by the bit no real title id sets.
+    if (iconData.empty() && (titleId >> 63) != 0) {
+        std::string path;
+        if (homebrew::pathForId(titleId, path)) {
+            homebrew::Entry entry;
+            if (homebrew::readOne(path, entry))
+                homebrew::readIcon(entry, iconData);
+        }
+    }
 
     return iconData;
 }
