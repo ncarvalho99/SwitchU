@@ -84,7 +84,7 @@ void SidebarManager::build(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         sleep->setRect({rightX, startY + 1.f * (btnSize + gap), btnSize, btnSize});
         m_rightButtons.push_back(std::move(sleep));
 
-        auto themeShop = makeBtn(&m_icons[4], "sidebar.theme_shop", "Theme Shop", actions.onMiiverse);
+        auto themeShop = makeBtn(&m_icons[4], "sidebar.theme_shop", "Themes", actions.onMiiverse);
         m_themeShopButton = themeShop.get();
         themeShop->setRect({rightX, startY + 2.f * (btnSize + gap), btnSize, btnSize});
         m_rightButtons.push_back(std::move(themeShop));

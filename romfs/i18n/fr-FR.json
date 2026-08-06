@@ -127,7 +127,8 @@
       "continue": "Continuer",
       "test": "Tester",
       "skip_step": "Passer étape",
-      "skip_all": "Tout passer"
+      "skip_all": "Tout passer",
+      "skip_all_banner": "Appuyez sur  +  pour passer la configuration"
     }
   },
   "sidebar": {
@@ -137,7 +138,7 @@
     "controllers": "Manettes",
     "sleep": "Veille",
     "music": "Musique",
-    "theme_shop": "Boutique de thèmes"
+    "theme_shop": "Thèmes"
   },
   "hint": {
     "navigate": "Naviguer",

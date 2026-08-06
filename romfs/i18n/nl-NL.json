@@ -12,7 +12,7 @@
     "controllers": "Controllers",
     "sleep": "Slaapstand",
     "music": "Muziek",
-    "theme_shop": "Themawinkel"
+    "theme_shop": "Thema's"
   },
   "settings": {
     "tabs": {
@@ -545,7 +545,8 @@
       "reveal": "Tonen",
       "skip_step": "Stap overslaan",
       "skip_all": "Alles overslaan",
-      "test": "Test"
+      "test": "Test",
+      "skip_all_banner": "Druk op  +  om de installatie over te slaan"
     }
   }
 }

@@ -312,13 +312,10 @@ void WiiUMenuApp::createSettings() {
     // the radius it last captured with, so writing it here is enough to make
     // the backdrop refresh on the next frame.
     applyGlassSharpness(m_config.glassSharpness);
-    m_settings->setGlassSharpness(m_config.glassSharpness);
-    m_settings->onGlassSharpnessChange([this](float sharpness) {
-        if (std::abs(m_config.glassSharpness - sharpness) < 0.001f)
-            return;
-        m_config.glassSharpness = sharpness;
-        applyGlassSharpness(sharpness);
-    });
+    // The sliders for sharpness, background speed and blur moved to the Themes
+    // screen, so the SettingsScreen hooks they used are gone with them. This
+    // call stays: it is what applies the saved sharpness at startup. Speed and
+    // blur are applied where the background is built, from the same config.
     m_settings->onAddUser([this]() {
         m_launcher.launchUserCreator();
     });
@@ -340,22 +337,6 @@ void WiiUMenuApp::createSettings() {
                         "Applies the next time the menu starts."),
                 2.6f);
         }
-    });
-    m_settings->setBackgroundSpeed(m_config.backgroundSpeed);
-    m_settings->onBackgroundSpeedChange([this](float speed) {
-        if (std::abs(m_config.backgroundSpeed - speed) < 0.001f)
-            return;
-        m_config.backgroundSpeed = speed;
-        if (m_background)
-            m_background->setSpeedScale(speed * 2.f);
-    });
-    m_settings->setBackgroundBlur(m_config.backgroundBlur);
-    m_settings->onBackgroundBlurChange([this](float strength) {
-        if (std::abs(m_config.backgroundBlur - strength) < 0.001f)
-            return;
-        m_config.backgroundBlur = strength;
-        if (m_background)
-            m_background->setBlurStrength(strength);
     });
     m_settings->onClockUse12HourChange([this](bool enabled) {
         if (m_config.clockUse12Hour == enabled)
@@ -497,7 +478,7 @@ void WiiUMenuApp::createThemeShop() {
         const auto* entry = m_themeShop->findCommunityThemeEntry(themeId);
         if (!entry) {
             auto& i18n = nxui::I18n::instance();
-            showThemeShopInfo(i18n.tr("sidebar.theme_shop", "Theme Shop"),
+            showThemeShopInfo(i18n.tr("sidebar.theme_shop", "Themes"),
                               i18n.tr("themeshop.community.selected_missing",
                                       "The selected community theme is no longer available in the catalog."));
             return;
@@ -575,6 +556,9 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->setRenderContext(&app().gpu(), &app().renderer());
     m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
     m_themeShop->setGridLayoutState(m_config.gridColumns, m_config.gridRows);
+    m_themeShop->setAppearanceState(m_config.glassSharpness,
+                                    m_config.backgroundSpeed,
+                                    m_config.backgroundBlur);
     m_themeShop->setAccessibilityVoiceEnabled(m_config.accessibilityEnabled);
     m_themeShop->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                    m_config.accessibilitySpeakPosition);
@@ -590,6 +574,21 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->onSfxVolumeChange([this](float v) {
         m_audio.setSfxVolume(v);
         m_config.sfxVolume = v;
+    });
+    // Sole home for these three now. They used to be mirrored into Settings >
+    // Display so the two screens agreed; with the Display copies gone there is
+    // nothing left to keep in step.
+    m_themeShop->onGlassSharpnessChange([this](float v) {
+        m_config.glassSharpness = v;
+        applyGlassSharpness(v);
+    });
+    m_themeShop->onBackgroundSpeedChange([this](float v) {
+        m_config.backgroundSpeed = v;
+        if (m_background) m_background->setSpeedScale(v * 2.f);
+    });
+    m_themeShop->onBackgroundBlurChange([this](float v) {
+        m_config.backgroundBlur = v;
+        if (m_background) m_background->setBlurStrength(v);
     });
     m_themeShop->onGridColumnsChange([this](int cols) {
         cols = std::clamp(cols, 3, 8);

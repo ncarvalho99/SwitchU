@@ -23,7 +23,15 @@ compile_commands.json
 /.compilado_fork/
 /.logs/
 
+# Manually fetched toolchain packages, kept out of the tree.
+/.download/
+
 # Staging area for assets and ideas waiting to be implemented. What gets
 # implemented is committed from wherever it belongs in the tree; this folder
 # itself never is.
 /.features/
+
+# Install layout and packaged zip produced by .logs/build-local.ps1, the same
+# two the CI workflow builds and uploads as artifacts.
+/dist/
+/artifacts/

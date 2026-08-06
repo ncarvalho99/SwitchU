@@ -1,3 +1,59 @@
+# Não publicado / Unreleased
+
+## English
+
+**Themes**
+
+- The theme shop is now just **Themes** in the sidebar, in every language
+- Glass sharpness, background animation speed and background blur moved out of
+  Settings > Display and into the Themes screen, next to the other controls that
+  change how the menu looks. They exist in one place now, not two
+
+**Crash on a fresh install — attempt 1, unconfirmed**
+
+A reporter sees the menu crash twice on a clean install and work from the third
+boot on. The focus manager was calling `onFocusLost()` on icons that a refresh
+had already destroyed, and the guard written for exactly that case
+(`invalidateWidget`) had never been called. It is called now.
+
+This is the first attempt and it is **not confirmed to be the fix**. The crash
+has never reproduced here, and the diagnosis comes from reading the code against
+one report rather than from a crash report resolved to these lines. It stays open
+until someone who could reproduce it says it stopped.
+
+If it still happens, `sdmc:/atmosphere/crash_reports/` plus the
+`SwitchU-symbols-sysmodule-release` artifact from the *same* build are what make
+the next attempt better than a guess.
+
+---
+
+## Português
+
+**Temas**
+
+- A loja de temas agora é só **Temas** na barra lateral, em todos os idiomas
+- Nitidez do vidro, velocidade da animação de fundo e desfoque de fundo saíram de
+  Configurações > Tela e foram para a tela de Temas, junto dos outros controles
+  que mudam a aparência do menu. Agora existem num lugar só, não em dois
+
+**Crash em instalação limpa — tentativa 1, não confirmada**
+
+Um usuário relata o menu quebrando duas vezes em instalação limpa e funcionando
+a partir do terceiro boot. O gerenciador de foco chamava `onFocusLost()` em
+ícones que um refresh já havia destruído, e a proteção escrita exatamente para
+esse caso (`invalidateWidget`) nunca havia sido chamada. Agora é.
+
+Esta é a primeira tentativa e **não está confirmada como a correção**. O crash
+nunca reproduziu aqui, e o diagnóstico vem de ler o código contra um relato, não
+de um crash report resolvido até estas linhas. Fica em aberto até alguém que
+conseguia reproduzir dizer que parou.
+
+Se continuar acontecendo, `sdmc:/atmosphere/crash_reports/` mais o artefato
+`SwitchU-symbols-sysmodule-release` do *mesmo* build são o que faz a próxima
+tentativa ser melhor que um chute.
+
+---
+
 # SwitchU 1.1.0+fork.2
 
 ## English
