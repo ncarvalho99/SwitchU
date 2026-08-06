@@ -196,6 +196,21 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
+        // Opens the system's own account creation applet. Deleting an account
+        // is deliberately not offered: it takes the save data with it, and the
+        // system reserves that for Settings, behind its own confirmations.
+        SettingItem it;
+        it.label = i18n.tr("settings.system.add_user", "Add User");
+        it.description = i18n.tr("settings.system.add_user_desc",
+                                 "Create a new user account on this console.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_addUserCb) screen.m_addUserCb();
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
         auto profiles = listProfileOptions();
         SettingItem it;
         it.label = i18n.tr("settings.system.default_profile", "Default Profile");

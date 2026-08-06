@@ -201,7 +201,9 @@
       "error_reporting": "Rapports d'erreurs",
       "default_profile": "Default Profile",
       "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time"
+      "default_profile_ask": "Ask each time",
+      "add_user": "Ajouter un Utilisateur",
+      "add_user_desc": "Crée un nouveau compte utilisateur sur cette console."
     },
     "accessibility": {
       "voice": "Lecture vocale",

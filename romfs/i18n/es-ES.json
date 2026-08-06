@@ -57,7 +57,9 @@
       "auto_update": "Actualización automática",
       "error_reporting": "Informe de errores",
       "clock_12h": "Reloj de 12 horas",
-      "clock_12h_desc": "Muestra la hora en formato de 12 horas."
+      "clock_12h_desc": "Muestra la hora en formato de 12 horas.",
+      "add_user": "Añadir Usuario",
+      "add_user_desc": "Crea una nueva cuenta de usuario en esta consola."
     },
     "audio": {
       "speaker_auto_mute": "Auto-mute de altavoces",

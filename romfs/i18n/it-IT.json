@@ -57,7 +57,9 @@
       "default_profile_desc": "Launch games with this profile when possible.",
       "default_profile_ask": "Ask each time",
       "clock_12h": "Orologio 12 ore",
-      "clock_12h_desc": "Mostra l’ora in formato 12 ore."
+      "clock_12h_desc": "Mostra l’ora in formato 12 ore.",
+      "add_user": "Aggiungi Utente",
+      "add_user_desc": "Crea un nuovo account utente su questa console."
     },
     "audio": {
       "speaker_auto_mute": "Auto-mute altoparlanti",

@@ -57,7 +57,9 @@
       "default_profile_desc": "Launch games with this profile when possible.",
       "default_profile_ask": "Ask each time",
       "clock_12h": "12-Stunden-Uhr",
-      "clock_12h_desc": "Zeit im 12-Stunden-Format anzeigen."
+      "clock_12h_desc": "Zeit im 12-Stunden-Format anzeigen.",
+      "add_user": "Benutzer hinzufügen",
+      "add_user_desc": "Erstellt ein neues Benutzerkonto auf dieser Konsole."
     },
     "audio": {
       "speaker_auto_mute": "Konsolenlautsprecher stummschalten",
