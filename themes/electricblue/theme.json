@@ -2,7 +2,7 @@
   "id": "electricblue",
   "name": "Electric Blue",
   "author": "ncarvalho99",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "preview": {
     "screenshots": [
       "media/screenshots/00.jpg"
@@ -12,36 +12,36 @@
     "mode": "dark",
     "colors": {
       "cursor": [
-        0.5036,
-        1,
-        0.62
+        0.5028,
+        1.0,
+        0.6
       ],
       "accent": [
-        0.5036,
+        0.5028,
         1.0,
-        0.8196
+        0.55
       ],
       "background": [
         0.5722,
-        0.5769,
-        0.2039
+        0.72,
+        0.07
       ],
       "backgroundAccent": [
         0.5722,
-        0.6923,
-        0.2639
+        0.8,
+        0.12
       ],
       "shapes": [
-        0.5036,
+        0.5028,
         1.0,
-        0.8196
+        0.55
       ]
     },
     "background": {
       "layout": "floating",
       "shape": "triangle",
       "symmetry": "none",
-      "count": 34,
+      "count": 22,
       "fixedOrientation": false,
       "orientation": 0,
       "roundness": 0.5,
@@ -63,10 +63,10 @@
       ],
       "wobble": 6,
       "rotationSpeed": 0,
-      "opacity": 0.26,
+      "opacity": 0.18,
       "image": {
         "path": "media/backgrounds/bg.jpg",
-        "opacity": 0.38,
+        "opacity": 0.9,
         "fit": "cover"
       }
     }
