@@ -22,3 +22,8 @@ compile_commands.json
 /.compilado_autor/
 /.compilado_fork/
 /.logs/
+
+# Staging area for assets and ideas waiting to be implemented. What gets
+# implemented is committed from wherever it belongs in the tree; this folder
+# itself never is.
+/.features/
