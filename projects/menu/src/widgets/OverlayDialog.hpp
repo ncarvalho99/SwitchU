@@ -45,6 +45,14 @@ public:
     bool loadUsers(nxui::GpuDevice& gpu, nxui::Renderer& ren);
     void showUserSelect(UserSelectCallback onSelect, CancelCallback onCancel = {});
 
+    // Same dialog with a create tile after the accounts, which is what the top
+    // avatar opens. Passing no create callback leaves it out, so the launch
+    // flow keeps the plain selector it already had.
+    void showUserSwitcher(UserSelectCallback onSelect,
+                          std::function<void()> onCreate,
+                          std::string createLabel,
+                          CancelCallback onCancel = {});
+
     void hide();
 
     bool isActive() const { return m_active || m_animatingOut; }
@@ -88,6 +96,15 @@ private:
     void setupUserActions();
     void activateSelected();
     void activateSelectedUser();
+
+    // The create tile is the slot past the last account, so navigation, touch
+    // and geometry all count it; only the account array itself does not.
+    int  userSlotCount() const {
+        return (int)m_users.size() + (m_allowCreateUser ? 1 : 0);
+    }
+    bool isCreateSlot(int index) const {
+        return m_allowCreateUser && index == (int)m_users.size();
+    }
     void cancel();
     void syncCursor();
     void syncUserCursor();
@@ -147,6 +164,9 @@ private:
 
     CancelCallback m_onCancel;
     UserSelectCallback m_onUserSelect;
+    std::function<void()> m_onCreateUser;
+    bool m_allowCreateUser = false;
+    std::string m_createUserLabel;
     VoidCb         m_navSfxCb;
     VoidCb         m_activateSfxCb;
     VoidCb         m_closeSfxCb;

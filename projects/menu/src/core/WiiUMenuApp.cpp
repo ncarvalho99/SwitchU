@@ -411,11 +411,20 @@ void WiiUMenuApp::buildUserAvatarBar() {
             }
         }
 
-        AccountUid uid = uids[i];
-        avatar->setOnActivate([this, uid]() {
+        avatar->setOnActivate([this]() {
             m_audio.playSfx(Sfx::Activate);
 #ifdef SWITCHU_MENU
-            m_launcher.launchUserPage(uid);
+            // The accounts open in the same styled dialog the launch flow uses,
+            // with a create tile after them. Picking an account still opens its
+            // page, which is what tapping the avatar used to do directly.
+            if (!m_userSelect)
+                return;
+            auto& i18n = nxui::I18n::instance();
+            m_userSelect->loadUsers(app().gpu(), app().renderer());
+            m_userSelect->showUserSwitcher(
+                [this](AccountUid picked) { m_launcher.launchUserPage(picked); },
+                [this]() { m_launcher.launchUserCreator(); },
+                i18n.tr("userselect.add_user", "Add user"));
 #endif
         });
 

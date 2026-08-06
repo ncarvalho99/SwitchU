@@ -389,7 +389,9 @@
     }
   },
   "userselect": {
-    "title": "Who's playing?"
+    "title": "Who's playing?",
+    "switch_title": "Accounts",
+    "add_user": "Add user"
   },
   "game": {
     "move": "Move",

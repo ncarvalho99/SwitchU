@@ -389,7 +389,9 @@
     }
   },
   "userselect": {
-    "title": "Qui joue ?"
+    "title": "Qui joue ?",
+    "switch_title": "Comptes",
+    "add_user": "Ajouter un utilisateur"
   },
   "game": {
     "move": "Déplacer",
