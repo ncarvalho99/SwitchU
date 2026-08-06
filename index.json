@@ -5,7 +5,7 @@
       "id": "neonloop",
       "name": "Neon Loop",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/neonloop",
       "manifest": "themes/neonloop/theme.json",
       "cover": "themes/neonloop/media/screenshots/00.jpg"
@@ -14,7 +14,7 @@
       "id": "emberbokeh",
       "name": "Ember Bokeh",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/emberbokeh",
       "manifest": "themes/emberbokeh/theme.json",
       "cover": "themes/emberbokeh/media/screenshots/00.jpg"
@@ -23,7 +23,7 @@
       "id": "holographic",
       "name": "Holographic",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/holographic",
       "manifest": "themes/holographic/theme.json",
       "cover": "themes/holographic/media/screenshots/00.jpg"
@@ -32,7 +32,7 @@
       "id": "electricblue",
       "name": "Electric Blue",
       "author": "ncarvalho99",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "path": "themes/electricblue",
       "manifest": "themes/electricblue/theme.json",
       "cover": "themes/electricblue/media/screenshots/00.jpg"
@@ -41,7 +41,7 @@
       "id": "goldendust",
       "name": "Golden Dust",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/goldendust",
       "manifest": "themes/goldendust/theme.json",
       "cover": "themes/goldendust/media/screenshots/00.jpg"
@@ -50,7 +50,7 @@
       "id": "deepcurrent",
       "name": "Deep Current",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/deepcurrent",
       "manifest": "themes/deepcurrent/theme.json",
       "cover": "themes/deepcurrent/media/screenshots/00.jpg"
@@ -59,7 +59,7 @@
       "id": "violetwave",
       "name": "Violet Wave",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/violetwave",
       "manifest": "themes/violetwave/theme.json",
       "cover": "themes/violetwave/media/screenshots/00.jpg"
@@ -68,7 +68,7 @@
       "id": "aquabokeh",
       "name": "Aqua Bokeh",
       "author": "ncarvalho99",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "path": "themes/aquabokeh",
       "manifest": "themes/aquabokeh/theme.json",
       "cover": "themes/aquabokeh/media/screenshots/00.jpg"
