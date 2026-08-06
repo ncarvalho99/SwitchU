@@ -167,6 +167,8 @@ private:
     std::function<void()> m_onCreateUser;
     bool m_allowCreateUser = false;
     std::string m_createUserLabel;
+    nxui::Texture m_createIcon;
+    bool m_createIconTried = false;
     VoidCb         m_navSfxCb;
     VoidCb         m_activateSfxCb;
     VoidCb         m_closeSfxCb;
