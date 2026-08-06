@@ -33,6 +33,11 @@ struct AppConfig {
     // the speed the theme asked for, 1 doubles it.
     float backgroundSpeed = 0.5f;
 
+    // Lists the .nro files on the card alongside installed titles. Off by
+    // default: it adds a scan of the card at startup, and an install that has
+    // never asked for it should not pay for it.
+    bool showHomebrew = false;
+
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better
     // dark, and a first boot into white is a jolt on a handheld.

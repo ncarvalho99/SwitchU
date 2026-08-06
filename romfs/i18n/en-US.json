@@ -258,7 +258,9 @@
       "glass_sharpness": "Glass sharpness",
       "glass_sharpness_desc": "How clearly the screen behind menus shows through them.",
       "background_speed": "Background animation speed",
-      "background_speed_desc": "How fast the shapes drift. Centre is the theme's own pace."
+      "background_speed_desc": "How fast the shapes drift. Centre is the theme's own pace.",
+      "show_homebrew": "Show homebrew",
+      "show_homebrew_desc": "List .nro files from the card alongside installed games."
     },
     "internet": {
       "wifi_ssid": "WiFi Network",

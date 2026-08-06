@@ -21,6 +21,10 @@ struct PendingApp {
     uint8_t             startupUserAccount = 1;
     uint8_t             startupUserAccountOption = 0;
     std::vector<uint8_t> iconData;
+    // Set only for homebrew. Titles keep it empty, which is what tells the two
+    // apart everywhere downstream — there is no title id to key on, since an
+    // NRO has none.
+    std::string         homebrewPath;
 };
 
 class AppListLoader {

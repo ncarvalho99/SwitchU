@@ -207,6 +207,7 @@ void registerEntries(std::vector<PendingApp>& apps,
         entry.startupUserKnown = p.startupUserKnown;
         entry.startupUserAccount = p.startupUserAccount;
         entry.startupUserAccountOption = p.startupUserAccountOption;
+        entry.homebrewPath = std::move(p.homebrewPath);
         model.addEntry(std::move(entry));
     }
 }

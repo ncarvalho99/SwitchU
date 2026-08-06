@@ -42,6 +42,9 @@ public:
     void onAccessibilitySpeechRateChange(IntCb cb) { m_accessibilitySpeechRateCb = std::move(cb); }
     void onNetConnect(VoidCb cb)        { m_netConnectCb = std::move(cb); }
     void onAddUser(VoidCb cb)           { m_addUserCb = std::move(cb); }
+    void onShowHomebrewChange(BoolCb cb) { m_showHomebrewCb = std::move(cb); }
+    void setShowHomebrew(bool v)        { m_showHomebrew = v; }
+    bool showHomebrew() const           { return m_showHomebrew; }
     void onSleepRequest(VoidCb cb)      { m_sleepCb = std::move(cb); }
     void onShutdownRequest(VoidCb cb)   { m_shutdownCb = std::move(cb); }
     void onRebootRequest(VoidCb cb)     { m_rebootCb = std::move(cb); }
@@ -107,6 +110,8 @@ private:
     IntCb m_accessibilitySpeechRateCb;
     VoidCb m_netConnectCb;
     VoidCb m_addUserCb;
+    BoolCb m_showHomebrewCb;
+    bool m_showHomebrew = false;
     VoidCb m_sleepCb;
     VoidCb m_shutdownCb;
     VoidCb m_rebootCb;

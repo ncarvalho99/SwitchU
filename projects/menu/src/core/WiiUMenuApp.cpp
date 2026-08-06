@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include "launcher/HomebrewScanner.hpp"
 #include <switchu/sd_commit.hpp>
 #include "widgets/GlossyIcon.hpp"
 #include "themeshop/ThemeHttp.hpp"
@@ -239,6 +240,7 @@ bool WiiUMenuApp::onCreate() {
     m_config.load();
     loadMenuLayout();
     m_appLoader.setPendingTransform([this](std::vector<PendingApp>& apps) {
+        appendHomebrewToPending(apps);
         applyMenuLayoutToPending(apps);
     });
 
@@ -899,6 +901,36 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     });
 #endif
     return icon;
+}
+
+// Homebrew is appended to whatever the daemon's catalogue returned, before the
+// saved layout is applied, so a user's arrangement covers both kinds alike.
+void WiiUMenuApp::appendHomebrewToPending(std::vector<PendingApp>& apps) {
+#ifdef SWITCHU_MENU
+    if (!m_config.showHomebrew)
+        return;
+
+    auto entries = homebrew::scan("sdmc:/switch");
+    apps.reserve(apps.size() + entries.size());
+    for (auto& hb : entries) {
+        PendingApp app;
+        // No title id exists for an NRO, so the path is the identity. It is
+        // also what the launcher will need once there is one.
+        app.id = hb.path;
+        app.title = hb.name;
+        app.titleId = 0;
+        app.userRequired = false;
+        app.startupUserKnown = true;
+        app.homebrewPath = hb.path;
+        std::vector<std::uint8_t> icon;
+        if (homebrew::readIcon(hb, icon))
+            app.iconData = std::move(icon);
+        apps.push_back(std::move(app));
+    }
+    DebugLog::log("[homebrew] appended %d entries to the grid", (int)entries.size());
+#else
+    (void)apps;
+#endif
 }
 
 void WiiUMenuApp::buildGrid() {

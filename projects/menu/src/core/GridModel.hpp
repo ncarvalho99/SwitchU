@@ -17,6 +17,10 @@ struct AppEntry {
     bool        startupUserKnown = true;
     uint8_t     startupUserAccount = 1;
     uint8_t     startupUserAccountOption = 0;
+    // Absolute sdmc: path when this entry is homebrew, empty for a title.
+    std::string homebrewPath;
+
+    bool isHomebrew() const { return !homebrewPath.empty(); }
 
     bool isGameCard() const {
         return switchu::ns::viewHasFlag(viewFlags, switchu::ns::AppViewFlag_IsGameCard);
