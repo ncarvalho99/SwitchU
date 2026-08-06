@@ -831,7 +831,12 @@ void OverlayDialog::renderUserContent(nxui::Renderer& ren, float alpha) {
         }
 
         if (m_createIcon.valid()) {
-            ren.drawTextureRounded(&m_createIcon, drawRect, r,
+            // Half the width of an account portrait, centred in a slot that
+            // keeps its full size. A plus drawn as large as a face read as
+            // another account rather than as the action beside them.
+            const float iconW = drawRect.width * 0.5f;
+            const nxui::Rect iconRect{c.x - iconW * 0.5f, c.y - iconW * 0.5f, iconW, iconW};
+            ren.drawTextureRounded(&m_createIcon, iconRect, iconW * 0.5f,
                                    nxui::Color::white().withAlpha(contentAlpha));
         } else {
             ren.drawCircle(c, r, textSecondary.withAlpha(0.16f * contentAlpha), 40);
