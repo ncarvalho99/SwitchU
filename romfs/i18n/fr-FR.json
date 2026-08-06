@@ -127,7 +127,8 @@
       "continue": "Continuer",
       "test": "Tester",
       "skip_step": "Passer étape",
-      "skip_all": "Tout passer"
+      "skip_all": "Tout passer",
+      "skip_all_banner": "Appuyez sur  +  pour passer la configuration"
     }
   },
   "sidebar": {

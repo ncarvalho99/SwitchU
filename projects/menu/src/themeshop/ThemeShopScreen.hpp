@@ -43,6 +43,12 @@ public:
     void onMusicEnabledChange(BoolCb cb) { m_musicEnabledCb = std::move(cb); }
     void onMusicVolumeChange(FloatCb cb) { m_musicVolumeCb = std::move(cb); }
     void onSfxVolumeChange(FloatCb cb)   { m_sfxVolumeCb = std::move(cb); }
+    // The three appearance controls also live under Settings > Display. They
+    // are repeated here because this is the screen someone is on while judging
+    // how a theme looks, and walking back out to change them breaks that.
+    void onGlassSharpnessChange(FloatCb cb)  { m_glassSharpnessCb = std::move(cb); }
+    void onBackgroundSpeedChange(FloatCb cb) { m_backgroundSpeedCb = std::move(cb); }
+    void onBackgroundBlurChange(FloatCb cb)  { m_backgroundBlurCb = std::move(cb); }
     void onGridColumnsChange(IntCb cb)   { m_gridColumnsCb = std::move(cb); }
     void onGridRowsChange(IntCb cb)      { m_gridRowsCb = std::move(cb); }
     void onNextTrack(VoidCb cb)          { m_nextTrackCb = std::move(cb); }
@@ -56,6 +62,11 @@ public:
         m_musicEnabled = enabled;
         m_musicVolume = musicVol;
         m_sfxVolume = sfxVol;
+    }
+    void setAppearanceState(float glassSharpness, float backgroundSpeed, float backgroundBlur) {
+        m_glassSharpness = std::clamp(glassSharpness, 0.f, 1.f);
+        m_backgroundSpeed = std::clamp(backgroundSpeed, 0.f, 1.f);
+        m_backgroundBlur = std::clamp(backgroundBlur, 0.f, 1.f);
     }
     void setGridLayoutState(int columns, int rows) {
         m_gridColumns = std::clamp(columns, 3, 8);
@@ -193,6 +204,9 @@ private:
     BoolCb m_musicEnabledCb;
     FloatCb m_musicVolumeCb;
     FloatCb m_sfxVolumeCb;
+    FloatCb m_glassSharpnessCb;
+    FloatCb m_backgroundSpeedCb;
+    FloatCb m_backgroundBlurCb;
     IntCb m_gridColumnsCb;
     IntCb m_gridRowsCb;
     VoidCb m_nextTrackCb;
@@ -205,6 +219,9 @@ private:
     bool m_musicEnabled = true;
     float m_musicVolume = 0.4f;
     float m_sfxVolume = 0.7f;
+    float m_glassSharpness = 0.4f;
+    float m_backgroundSpeed = 0.5f;
+    float m_backgroundBlur = 0.f;
     int m_gridColumns = 5;
     int m_gridRows = 3;
     std::string m_searchQuery;

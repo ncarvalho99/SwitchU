@@ -541,7 +541,8 @@
       "reveal": "Mostrar",
       "skip_step": "Pular etapa",
       "skip_all": "Pular tudo",
-      "test": "Testar"
+      "test": "Testar",
+      "skip_all_banner": "Aperte  +  para pular a configuração"
     }
   }
 }

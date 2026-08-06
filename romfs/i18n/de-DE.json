@@ -541,7 +541,8 @@
       "reveal": "Anzeigen",
       "skip_step": "Schritt überspringen",
       "skip_all": "Alles überspringen",
-      "test": "Test"
+      "test": "Test",
+      "skip_all_banner": "Drücke  +  um die Einrichtung zu überspringen"
     }
   }
 }
