@@ -72,6 +72,14 @@ inline bool readMeta(uint64_t titleId, Meta& out) {
     if (meta.magic != kMetaMagic || meta.version != kMetaVersion || meta.title_id != titleId)
         return false;
 
+    // The writer always terminates this, but the reader must not depend on the
+    // writer: a file truncated by a power cut, or written by an older build,
+    // can leave 0x201 bytes with no terminator, and every consumer of this
+    // field turns it straight into a std::string. That read would run off the
+    // end of the struct, which is how a name ends up in a register that is
+    // about to be used as a pointer.
+    meta.name[sizeof(meta.name) - 1] = 0;
+
     out = meta;
     return true;
 }
