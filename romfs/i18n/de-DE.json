@@ -99,7 +99,9 @@
       "glass_sharpness": "Glasschärfe",
       "glass_sharpness_desc": "Wie deutlich der Bildschirm hinter den Menüs durchscheint.",
       "background_speed": "Geschwindigkeit der Hintergrundanimation",
-      "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes."
+      "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes.",
+      "show_homebrew": "Homebrew anzeigen",
+      "show_homebrew_desc": "Listet .nro-Dateien von der Karte neben den installierten Spielen."
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",

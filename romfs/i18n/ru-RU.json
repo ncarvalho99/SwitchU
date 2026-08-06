@@ -99,7 +99,9 @@
       "glass_sharpness": "Чёткость стекла",
       "glass_sharpness_desc": "Насколько чётко экран за меню виден сквозь них.",
       "background_speed": "Скорость анимации фона",
-      "background_speed_desc": "Насколько быстро плывут фигуры. Середина — темп самой темы."
+      "background_speed_desc": "Насколько быстро плывут фигуры. Середина — темп самой темы.",
+      "show_homebrew": "Показывать homebrew",
+      "show_homebrew_desc": "Показывает файлы .nro с карты вместе с играми."
     },
     "internet": {
       "wifi_ssid": "WiFi-сеть",

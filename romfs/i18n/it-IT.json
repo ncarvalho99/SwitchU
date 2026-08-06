@@ -99,7 +99,9 @@
       "glass_sharpness": "Nitidezza del vetro",
       "glass_sharpness_desc": "Quanto lo schermo dietro i menu traspare attraverso di essi.",
       "background_speed": "Velocità dell'animazione di sfondo",
-      "background_speed_desc": "Quanto si muovono le forme. Al centro è il ritmo del tema stesso."
+      "background_speed_desc": "Quanto si muovono le forme. Al centro è il ritmo del tema stesso.",
+      "show_homebrew": "Mostra homebrew",
+      "show_homebrew_desc": "Elenca i file .nro della scheda insieme ai giochi installati."
     },
     "internet": {
       "wifi_ssid": "Rete WiFi",

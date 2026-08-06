@@ -99,7 +99,9 @@
       "glass_sharpness": "Glashelderheid",
       "glass_sharpness_desc": "Hoe duidelijk het scherm achter menu's erdoorheen zichtbaar is.",
       "background_speed": "Snelheid van achtergrondanimatie",
-      "background_speed_desc": "Hoe snel de vormen zweven. Het midden is het tempo van het thema zelf."
+      "background_speed_desc": "Hoe snel de vormen zweven. Het midden is het tempo van het thema zelf.",
+      "show_homebrew": "Homebrew tonen",
+      "show_homebrew_desc": "Toont .nro-bestanden van de kaart naast de geïnstalleerde games."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",

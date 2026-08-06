@@ -82,6 +82,7 @@ private:
     GridLayoutMetrics computeGridLayoutMetrics() const;
     void reflowHomeGrid();
     void buildGrid();
+    void appendHomebrewToPending(std::vector<PendingApp>& apps);
     void applyGlassSharpness(float sharpness);
     void buildUserAvatarBar();
     void applyTheme();

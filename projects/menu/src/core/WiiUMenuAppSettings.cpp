@@ -322,6 +322,16 @@ void WiiUMenuApp::createSettings() {
     m_settings->onAddUser([this]() {
         m_launcher.launchUserCreator();
     });
+    m_settings->setShowHomebrew(m_config.showHomebrew);
+    m_settings->onShowHomebrewChange([this](bool enabled) {
+        if (m_config.showHomebrew == enabled)
+            return;
+        m_config.showHomebrew = enabled;
+        // The grid is built from the catalogue at startup, so the list only
+        // changes on the next launch. Saying so beats looking broken.
+        DebugLog::log("[homebrew] listing %s; applies on next menu start",
+                      enabled ? "enabled" : "disabled");
+    });
     m_settings->setBackgroundSpeed(m_config.backgroundSpeed);
     m_settings->onBackgroundSpeedChange([this](float speed) {
         if (std::abs(m_config.backgroundSpeed - speed) < 0.001f)

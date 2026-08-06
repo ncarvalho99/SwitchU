@@ -25,6 +25,20 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
 
     {
         SettingItem it;
+        it.label = i18n.tr("settings.display.show_homebrew", "Show homebrew");
+        it.description = i18n.tr("settings.display.show_homebrew_desc",
+                                 "List .nro files from the card alongside installed games.");
+        it.type = ItemType::Toggle;
+        it.boolVal = screen.showHomebrew();
+        it.onChange = [&screen](SettingItem& self) {
+            if (screen.m_showHomebrewCb)
+                screen.m_showHomebrewCb(self.boolVal);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
         it.label = i18n.tr("settings.display.glass_sharpness", "Glass sharpness");
         it.description = i18n.tr("settings.display.glass_sharpness_desc",
                                  "How clearly the screen behind menus shows through them.");
