@@ -613,6 +613,33 @@ void TutorialActivity::drawHintPanel(nxui::Renderer& ren) {
     if (hints.empty())
         return;
 
+    // Skipping had the same weight as every other hint, in a corner panel at
+    // half text size, so people sat through a tutorial they did not want.
+    // It gets its own line, centred, at nearly twice that scale.
+    {
+        const std::string glyph = buttonGlyph(nxui::Button::Plus);
+        const std::string label = nxui::I18n::instance().tr(
+            "tutorial.hints.skip_all_banner", "Press  +  to skip the setup");
+        constexpr float kBannerScale = 0.95f;
+        constexpr float kGap = 10.f;
+
+        nxui::Vec2 glyphSz = m_fontIcons.measure(glyph);
+        nxui::Vec2 labelSz = m_fontSmall.measure(label);
+        const float w = glyphSz.x * kBannerScale + kGap + labelSz.x * kBannerScale;
+        const float h = std::max(glyphSz.y, labelSz.y) * kBannerScale;
+        const float x = (1280.f - w) * 0.5f;
+        const float y = 720.f - 52.f - h;
+
+        nxui::Rect pill{x - 22.f, y - 12.f, w + 44.f, h + 24.f};
+        ren.drawRoundedRect(pill, m_theme.panelBase.withAlpha(0.42f), pill.height * 0.5f);
+        ren.drawRoundedRectOutline(pill, m_theme.cursorNormal.withAlpha(0.55f),
+                                   pill.height * 0.5f, 1.6f);
+
+        ren.drawText(glyph, {x, y}, &m_fontIcons, m_theme.textPrimary, kBannerScale);
+        ren.drawText(label, {x + glyphSz.x * kBannerScale + kGap, y},
+                     &m_fontSmall, m_theme.textPrimary, kBannerScale);
+    }
+
     constexpr float kIconScale = 0.66f;
     constexpr float kTextScale = 0.54f;
     constexpr float kRowH = 22.f;

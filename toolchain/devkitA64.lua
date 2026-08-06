@@ -45,5 +45,14 @@ toolchain("devkita64")
         -- libnx (always needed for switch.specs / <switch.h>)
         toolchain:add("includedirs", path.join(LIBNX, "include"))
         toolchain:add("linkdirs", path.join(LIBNX, "lib"))
+
+        -- portlibs, exactly as devkitPro's own switch_rules exposes them.
+        -- Packages xmake builds from source (curlpp, fmt) reach their
+        -- pacman-installed dependencies no other way: switch-repo hands those
+        -- back through on_fetch, and that result does not propagate into a
+        -- source build, so curlpp failed on <curl/curl.h> and then on -lcurl.
+        local PORTLIBS = path.join(DEVKITPRO, "portlibs", "switch")
+        toolchain:add("includedirs", path.join(PORTLIBS, "include"))
+        toolchain:add("linkdirs", path.join(PORTLIBS, "lib"))
     end)
 toolchain_end()

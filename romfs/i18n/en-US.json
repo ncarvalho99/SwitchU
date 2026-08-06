@@ -127,7 +127,8 @@
       "continue": "Continue",
       "test": "Test",
       "skip_step": "Skip step",
-      "skip_all": "Skip all"
+      "skip_all": "Skip all",
+      "skip_all_banner": "Press  +  to skip the setup"
     }
   },
   "sidebar": {
@@ -135,7 +136,7 @@
     "mii_editor": "Mii Editor",
     "settings": "Settings",
     "controllers": "Controllers",
-    "theme_shop": "Theme Shop",
+    "theme_shop": "Themes",
     "sleep": "Sleep",
     "music": "Music"
   },

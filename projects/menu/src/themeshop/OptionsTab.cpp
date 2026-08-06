@@ -56,6 +56,54 @@ ThemeShopScreen::Tab themeshop::tabs::OptionsTab::build(ThemeShopScreen& screen)
 
     {
         SettingItem it;
+        it.label = i18n.tr("settings.display.glass_sharpness", "Glass sharpness");
+        it.description = i18n.tr("settings.display.glass_sharpness_desc",
+                                 "How clearly the screen behind menus shows through them.");
+        it.type = ItemType::Slider;
+        it.floatVal = std::clamp(screen.m_glassSharpness, 0.f, 1.f);
+        it.anim01 = it.floatVal;
+        it.onChange = [&screen](SettingItem& self) {
+            self.anim01 = self.floatVal;
+            screen.m_glassSharpness = std::clamp(self.floatVal, 0.f, 1.f);
+            if (screen.m_glassSharpnessCb) screen.m_glassSharpnessCb(screen.m_glassSharpness);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.display.background_speed", "Background animation speed");
+        it.description = i18n.tr("settings.display.background_speed_desc",
+                                 "How fast the shapes drift. Centre is the theme's own pace.");
+        it.type = ItemType::Slider;
+        it.floatVal = std::clamp(screen.m_backgroundSpeed, 0.f, 1.f);
+        it.anim01 = it.floatVal;
+        it.onChange = [&screen](SettingItem& self) {
+            self.anim01 = self.floatVal;
+            screen.m_backgroundSpeed = std::clamp(self.floatVal, 0.f, 1.f);
+            if (screen.m_backgroundSpeedCb) screen.m_backgroundSpeedCb(screen.m_backgroundSpeed);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.display.background_blur", "Background blur");
+        it.description = i18n.tr("settings.display.background_blur_desc",
+                                 "Soften the wallpaper and the shapes drifting over it.");
+        it.type = ItemType::Slider;
+        it.floatVal = std::clamp(screen.m_backgroundBlur, 0.f, 1.f);
+        it.anim01 = it.floatVal;
+        it.onChange = [&screen](SettingItem& self) {
+            self.anim01 = self.floatVal;
+            screen.m_backgroundBlur = std::clamp(self.floatVal, 0.f, 1.f);
+            if (screen.m_backgroundBlurCb) screen.m_backgroundBlurCb(screen.m_backgroundBlur);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
         it.label = i18n.tr("settings.display.grid_columns", "Home Grid Columns");
         it.type = ItemType::Slider;
         it.sliderSteps = 5;

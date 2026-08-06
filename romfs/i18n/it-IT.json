@@ -12,7 +12,7 @@
     "controllers": "Controller",
     "sleep": "Sospensione",
     "music": "Musica",
-    "theme_shop": "Negozio temi"
+    "theme_shop": "Temi"
   },
   "settings": {
     "tabs": {
@@ -545,7 +545,8 @@
       "reveal": "Mostra",
       "skip_step": "Salta passo",
       "skip_all": "Salta tutto",
-      "test": "Test"
+      "test": "Test",
+      "skip_all_banner": "Premi  +  per saltare la configurazione"
     }
   }
 }
