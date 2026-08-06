@@ -8,14 +8,6 @@
 #include <cmath>
 
 namespace {
-#ifdef SWITCHU_HOMEBREW
-constexpr const char* kAssetRoot = "romfs:";
-#else
-constexpr const char* kAssetRoot = "sdmc:/switch/SwitchU";
-#endif
-}
-
-namespace {
 
 static nxui::Rect scaledRect(const nxui::Rect& rect, float scale) {
     nxui::Rect scaled = rect;
@@ -821,34 +813,18 @@ void OverlayDialog::renderUserContent(nxui::Renderer& ren, float alpha) {
         const float r = drawRect.width * 0.5f;
         const nxui::Vec2 c{drawRect.x + r, drawRect.y + r};
 
-        // The supplied artwork if it is there, and a drawn ring and cross if it
-        // is not — a missing file should cost the tile its looks, not its
-        // existence, since it is the only way to create the first account.
-        if (!m_createIconTried) {
-            m_createIconTried = true;
-            m_createIcon.loadFromFile(ren.gpu(), ren,
-                                      std::string(kAssetRoot) + "/icons/plus.png");
-        }
+        // Drawn rather than an image. The artwork version was tried and read
+        // worse at every size: a photographic plus among photographic faces
+        // competes with them, where a ring and a cross plainly is not a face.
+        ren.drawCircle(c, r, textSecondary.withAlpha(0.16f * contentAlpha), 40);
+        const float ring = std::max(1.5f, r * 0.055f);
+        ren.drawRoundedRectOutline(drawRect, textSecondary.withAlpha(0.55f * contentAlpha), r, ring);
 
-        if (m_createIcon.valid()) {
-            // Half the width of an account portrait, centred in a slot that
-            // keeps its full size. A plus drawn as large as a face read as
-            // another account rather than as the action beside them.
-            const float iconW = drawRect.width * 0.5f;
-            const nxui::Rect iconRect{c.x - iconW * 0.5f, c.y - iconW * 0.5f, iconW, iconW};
-            ren.drawTextureRounded(&m_createIcon, iconRect, iconW * 0.5f,
-                                   nxui::Color::white().withAlpha(contentAlpha));
-        } else {
-            ren.drawCircle(c, r, textSecondary.withAlpha(0.16f * contentAlpha), 40);
-            const float ring = std::max(1.5f, r * 0.055f);
-            ren.drawRoundedRectOutline(drawRect, textSecondary.withAlpha(0.55f * contentAlpha), r, ring);
-
-            const float arm = r * 0.42f;
-            const float bar = std::max(2.f, r * 0.10f);
-            nxui::Color plus = textPrimary.withAlpha(0.90f * contentAlpha);
-            ren.drawRoundedRect({c.x - arm, c.y - bar * 0.5f, arm * 2.f, bar}, plus, bar * 0.5f);
-            ren.drawRoundedRect({c.x - bar * 0.5f, c.y - arm, bar, arm * 2.f}, plus, bar * 0.5f);
-        }
+        const float arm = r * 0.42f;
+        const float bar = std::max(2.f, r * 0.10f);
+        nxui::Color plus = textPrimary.withAlpha(0.90f * contentAlpha);
+        ren.drawRoundedRect({c.x - arm, c.y - bar * 0.5f, arm * 2.f, bar}, plus, bar * 0.5f);
+        ren.drawRoundedRect({c.x - bar * 0.5f, c.y - arm, bar, arm * 2.f}, plus, bar * 0.5f);
 
         if (nameFont && !m_createUserLabel.empty()) {
             const float nameScale = 0.85f * sc;
