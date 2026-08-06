@@ -327,10 +327,19 @@ void WiiUMenuApp::createSettings() {
         if (m_config.showHomebrew == enabled)
             return;
         m_config.showHomebrew = enabled;
-        // The grid is built from the catalogue at startup, so the list only
-        // changes on the next launch. Saying so beats looking broken.
+        // The grid is built once from the catalogue at startup, so this cannot
+        // take effect until the menu restarts. Toggling it and seeing nothing
+        // happen reads as a broken switch, so it says so on screen rather than
+        // only in the log.
         DebugLog::log("[homebrew] listing %s; applies on next menu start",
                       enabled ? "enabled" : "disabled");
+        if (m_settings) {
+            auto& i18n = nxui::I18n::instance();
+            m_settings->requestToast(
+                i18n.tr("settings.display.show_homebrew_toast",
+                        "Applies the next time the menu starts."),
+                2.6f);
+        }
     });
     m_settings->setBackgroundSpeed(m_config.backgroundSpeed);
     m_settings->onBackgroundSpeedChange([this](float speed) {

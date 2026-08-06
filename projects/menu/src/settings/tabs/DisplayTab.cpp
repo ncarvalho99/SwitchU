@@ -27,7 +27,7 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         SettingItem it;
         it.label = i18n.tr("settings.display.show_homebrew", "Show homebrew");
         it.description = i18n.tr("settings.display.show_homebrew_desc",
-                                 "List .nro files from the card alongside installed games.");
+                                 "List .nro files from the card. Applies when the menu restarts.");
         it.type = ItemType::Toggle;
         it.boolVal = screen.showHomebrew();
         it.onChange = [&screen](SettingItem& self) {

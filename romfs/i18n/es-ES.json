@@ -101,7 +101,8 @@
       "background_speed": "Velocidad de la animación de fondo",
       "background_speed_desc": "Cuánto se mueven las formas. El centro es el ritmo del propio tema.",
       "show_homebrew": "Mostrar homebrew",
-      "show_homebrew_desc": "Lista los archivos .nro de la tarjeta junto a los juegos instalados."
+      "show_homebrew_desc": "Lista los archivos .nro de la tarjeta. Se aplica al reiniciar el menú.",
+      "show_homebrew_toast": "Se aplica la próxima vez que se inicie el menú."
     },
     "internet": {
       "wifi_ssid": "Red WiFi",

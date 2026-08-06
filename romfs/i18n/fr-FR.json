@@ -260,7 +260,8 @@
       "background_speed": "Vitesse de l'animation de fond",
       "background_speed_desc": "À quelle vitesse les formes dérivent. Le centre est le rythme du thème.",
       "show_homebrew": "Afficher les homebrews",
-      "show_homebrew_desc": "Liste les fichiers .nro de la carte avec les jeux installés."
+      "show_homebrew_desc": "Liste les fichiers .nro de la carte. Prend effet au redémarrage du menu.",
+      "show_homebrew_toast": "Prend effet au prochain démarrage du menu."
     },
     "internet": {
       "wifi_ssid": "Réseau WiFi",
