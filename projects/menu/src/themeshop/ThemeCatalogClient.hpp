@@ -31,7 +31,11 @@ public:
         std::uint64_t revision = 0;
     };
 
-    static constexpr const char* kDefaultCatalogUrl = "https://raw.githubusercontent.com/PoloNX/SwitchU-Themes/main/index.json";
+    // Our own catalogue. PoloNX's still exists and this is not a replacement of
+    // his work — but his index describes themes built for his build, and the
+    // shop has to point somewhere we can add to. Themes download on demand, so
+    // none of this is in the package.
+    static constexpr const char* kDefaultCatalogUrl = "https://raw.githubusercontent.com/ncarvalho99/SwitchU/themes/index.json";
 
     explicit ThemeCatalogClient(std::string catalogUrl = kDefaultCatalogUrl);
 

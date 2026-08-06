@@ -250,7 +250,9 @@
       "album_sd": "SD Card",
       "album_nand": "NAND",
       "ui_wireframe": "UI Wireframe",
-      "ui_wireframe_desc": "Show outlines of all Box widgets for layout debugging."
+      "ui_wireframe_desc": "Show outlines of all Box widgets for layout debugging.",
+      "background_blur": "Background blur",
+      "background_blur_desc": "Soften the wallpaper and the shapes drifting over it."
     },
     "internet": {
       "wifi_ssid": "WiFi Network",

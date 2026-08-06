@@ -91,7 +91,9 @@
       "album_sd": "Cartão SD",
       "album_nand": "NAND",
       "ui_wireframe": "Wireframe da UI",
-      "ui_wireframe_desc": "Mostra os contornos de todos os widgets de caixa para depuração de layout."
+      "ui_wireframe_desc": "Mostra os contornos de todos os widgets de caixa para depuração de layout.",
+      "background_blur": "Desfoque do fundo",
+      "background_blur_desc": "Suaviza o papel de parede e as formas que flutuam sobre ele."
     },
     "internet": {
       "wifi_ssid": "Rede WiFi",

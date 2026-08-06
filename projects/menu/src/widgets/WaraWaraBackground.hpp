@@ -63,11 +63,18 @@ public:
 
     void regenerate(int count = 50) override;
 
+    // Softens the whole wallpaper layer — the image and the drifting shapes
+    // alike. 0 draws it straight to the screen and costs nothing.
+    void setBlurStrength(float v) { m_blurStrength = v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
+    float blurStrength() const { return m_blurStrength; }
+
 protected:
     void onUpdate(float dt) override;
     void onRender(nxui::Renderer& ren) override;
 
 private:
+    void renderLayer(nxui::Renderer& ren, bool intoOffscreen);
+
     enum ShapeType { Circle, Triangle, Square, Diamond, Hexagon, ShapeCount };
 
     struct Shape {
@@ -93,5 +100,6 @@ private:
     std::vector<Shape> m_shapes;
     nxui::Texture m_backgroundImage;
     float m_time = 0.f;
+    float m_blurStrength = 0.f;
 };
 

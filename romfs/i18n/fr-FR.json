@@ -250,7 +250,9 @@
       "album_sd": "Carte SD",
       "album_nand": "NAND",
       "ui_wireframe": "Wireframe UI",
-      "ui_wireframe_desc": "Affiche le contour de toutes les Box pour le debug layout."
+      "ui_wireframe_desc": "Affiche le contour de toutes les Box pour le debug layout.",
+      "background_blur": "Flou de l'arrière-plan",
+      "background_blur_desc": "Adoucit le fond d'écran et les formes qui flottent dessus."
     },
     "internet": {
       "wifi_ssid": "Réseau WiFi",

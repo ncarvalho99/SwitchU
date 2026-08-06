@@ -91,7 +91,9 @@
       "album_sd": "SD-kaart",
       "album_nand": "NAND",
       "ui_wireframe": "UI-draadmodel",
-      "ui_wireframe_desc": "Toont contouren van alle Box-widgets voor lay-outdebugging."
+      "ui_wireframe_desc": "Toont contouren van alle Box-widgets voor lay-outdebugging.",
+      "background_blur": "Achtergrondvervaging",
+      "background_blur_desc": "Verzacht de achtergrond en de vormen die eroverheen zweven."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",

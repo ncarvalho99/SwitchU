@@ -145,6 +145,14 @@ public:
     void drawLiquidGlass(int target, const Rect& panelRect, float radius,
                          const Color& tint, float opacity = 1.f, float shade = 0.f);
     void applyBlur(float radius = 1.0f, int passes = 2);
+    void applyBlurBetween(int a, int b, float radius, int passes);
+
+    // Draws into an offscreen while keeping screen coordinates: the viewport is
+    // the target's own size but the projection stays the screen's, so a layer
+    // laid out in 1280x720 lands scaled onto a 640x360 target instead of being
+    // clipped to its top-left quarter.
+    void beginScreenSpaceTarget(int offscreenIdx, const Color& clear = Color(0.f, 0.f, 0.f, 0.f));
+    void endScreenSpaceTarget();
     void applyWave(float time, float amplitude, float frequency);
 
     // Switch shader program (flushes current batch)
@@ -241,7 +249,7 @@ private:
     bool loadShaders();
     void setupSampler();
     void updateProjection();
-    void bindRenderTarget(int offscreenIdx);
+    void bindRenderTarget(int offscreenIdx, float logicalW = 0.f, float logicalH = 0.f);
     void restoreRenderTarget();
 #endif
 

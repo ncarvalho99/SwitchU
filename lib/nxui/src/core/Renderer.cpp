@@ -387,7 +387,7 @@ void Renderer::flush() {
 
 // Render target switching
 
-void Renderer::bindRenderTarget(int offscreenIdx) {
+void Renderer::bindRenderTarget(int offscreenIdx, float logicalW, float logicalH) {
     flush();
     auto cmd = m_gpu.cmdBuf();
     dk::ImageView colorTarget{m_gpu.offscreenImage(offscreenIdx)};
@@ -398,9 +398,15 @@ void Renderer::bindRenderTarget(int offscreenIdx) {
     cmd.setViewports(0, DkViewport{0.f, 0.f, (float)offW, (float)offH, 0.f, 1.f});
     cmd.setScissors(0, DkScissor{0, 0, offW, offH});
 
+    // Zero means "address it in its own pixels", which is what the blur passes
+    // want. A caller drawing a screen-space layer passes the screen size, and
+    // the viewport above scales it down to fit.
+    const float projW = logicalW > 0.f ? logicalW : (float)offW;
+    const float projH = logicalH > 0.f ? logicalH : (float)offH;
+
     int slot = m_gpu.slot();
     VsUniforms vs;
-    ortho(vs.projection, (float)offW, (float)offH);
+    ortho(vs.projection, projW, projH);
     auto* ubo = static_cast<uint8_t*>(m_gpu.vsUboCpuAddr(slot));
     std::memcpy(ubo, &vs, sizeof(vs));
     cmd.bindUniformBuffer(DkStage_Vertex, 0, m_gpu.vsUboGpuAddr(slot), GpuDevice::VS_UBO_SIZE);
@@ -615,19 +621,37 @@ void Renderer::drawLiquidGlass(int target, const Rect& panelRect, float radius,
     useShader(ShaderProgram::Basic);
 }
 
-void Renderer::applyBlur(float radius, int passes) {
-    if (!m_gpu.offscreenReady()) return;
+void Renderer::beginScreenSpaceTarget(int offscreenIdx, const Color& clear) {
+    bindRenderTarget(offscreenIdx, (float)m_gpu.width(), (float)m_gpu.height());
+    m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, clear.r, clear.g, clear.b, clear.a);
+}
 
+void Renderer::endScreenSpaceTarget() {
+    restoreRenderTarget();
+}
+
+void Renderer::applyBlur(float radius, int passes) {
     // The blur works on the sharp pair now, so the scene capture it used to
     // clobber survives — no need to make the next frame recapture.
+    applyBlurBetween(GpuDevice::OFF_SHARP_A, GpuDevice::OFF_SHARP_B, radius, passes);
+}
+
+// Ping-pongs between two targets of the same size, leaving the result in `a`.
+// The wallpaper blur needs its own half-resolution pair, and running it through
+// the full-resolution one would cost four times the pixels for something drawn
+// every frame rather than once per panel.
+void Renderer::applyBlurBetween(int a, int b, float radius, int passes) {
+    if (!m_gpu.offscreenReady()) return;
+    if (a < 0 || b < 0 || a >= GpuDevice::NUM_OFFSCREEN || b >= GpuDevice::NUM_OFFSCREEN) return;
+
     m_frameBlurPasses += passes * 2;
 
-    constexpr float offW = (float)GpuDevice::offscreenWidth(GpuDevice::OFF_SHARP_A);
-    constexpr float offH = (float)GpuDevice::offscreenHeight(GpuDevice::OFF_SHARP_A);
+    const float offW = (float)GpuDevice::offscreenWidth(a);
+    const float offH = (float)GpuDevice::offscreenHeight(a);
 
     for (int p = 0; p < passes; ++p) {
-        // H blur: sharp A -> sharp B
-        bindRenderTarget(GpuDevice::OFF_SHARP_B);
+        // H blur: a -> b
+        bindRenderTarget(b);
         m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
         useShader(ShaderProgram::BlurH);
         FsUniforms fs = {};
@@ -636,17 +660,17 @@ void Renderer::applyBlur(float radius, int passes) {
         fs.param2 = 1.f / offW;
         fs.param3 = 1.f / offH;
         pushFsUniforms(fs);
-        bindTexture(m_offDescSlot[GpuDevice::OFF_SHARP_A]);
+        bindTexture(m_offDescSlot[a]);
         addQuad(-1.f, -1.f, 1.f, 1.f, 0, 0, 1, 1, Color::white());
         flush();
         m_gpu.cmdBuf().barrier(DkBarrier_Full, DkInvalidateFlags_Image);
 
-        // V blur: sharp B -> sharp A
-        bindRenderTarget(GpuDevice::OFF_SHARP_A);
+        // V blur: b -> a
+        bindRenderTarget(a);
         m_gpu.cmdBuf().clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
         useShader(ShaderProgram::BlurV);
         pushFsUniforms(fs);
-        bindTexture(m_offDescSlot[GpuDevice::OFF_SHARP_B]);
+        bindTexture(m_offDescSlot[b]);
         addQuad(-1.f, -1.f, 1.f, 1.f, 0, 0, 1, 1, Color::white());
         flush();
         m_gpu.cmdBuf().barrier(DkBarrier_Full, DkInvalidateFlags_Image);

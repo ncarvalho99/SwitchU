@@ -42,6 +42,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "defaultProfileUid", defaultProfileUid);
     readJsonOpt(j, "tutorialCompleted", tutorialCompleted);
     readJsonOpt(j, "clockUse12Hour", clockUse12Hour);
+    readJsonOpt(j, "backgroundBlur", backgroundBlur);
     readJsonOpt(j, "accessibilityEnabled", accessibilityEnabled);
     readJsonOpt(j, "accessibilitySpeakHints", accessibilitySpeakHints);
     readJsonOpt(j, "accessibilitySpeakContextEveryFocus", accessibilitySpeakContextEveryFocus);
@@ -82,6 +83,7 @@ bool AppConfig::save() const {
     j["defaultProfileUid"] = defaultProfileEnabled ? defaultProfileUid : std::string();
     j["tutorialCompleted"] = tutorialCompleted;
     j["clockUse12Hour"] = clockUse12Hour;
+    j["backgroundBlur"] = backgroundBlur;
     j["accessibilityEnabled"] = accessibilityEnabled;
     j["accessibilitySpeakHints"] = accessibilitySpeakHints;
     j["accessibilitySpeakContextEveryFocus"] = accessibilitySpeakContextEveryFocus;

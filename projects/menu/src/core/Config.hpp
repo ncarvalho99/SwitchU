@@ -19,6 +19,10 @@ struct AppConfig {
     bool  accessibilitySpeakPosition = true;
     int   accessibilitySpeechRate = 190;
 
+    // Softens the wallpaper and the shapes drifting over it. Off by default so
+    // an existing install looks unchanged until someone asks for it.
+    float backgroundBlur = 0.f;
+
     std::string themePreset = "Default Light";
 
     bool load();

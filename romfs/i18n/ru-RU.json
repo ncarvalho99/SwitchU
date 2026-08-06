@@ -91,7 +91,9 @@
       "album_sd": "SD-карта",
       "album_nand": "NAND",
       "ui_wireframe": "Каркас интерфейса",
-      "ui_wireframe_desc": "Показывает контуры всех Box для отладки макета."
+      "ui_wireframe_desc": "Показывает контуры всех Box для отладки макета.",
+      "background_blur": "Размытие фона",
+      "background_blur_desc": "Смягчает обои и фигуры, плывущие поверх них."
     },
     "internet": {
       "wifi_ssid": "WiFi-сеть",
