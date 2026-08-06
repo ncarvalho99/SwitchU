@@ -140,6 +140,15 @@ struct PreviewData {
     std::vector<std::string> screenshots;
 };
 
+std::string absoluteFromCatalog(const std::string& catalogUrl, const std::string& relative) {
+    if (relative.empty()) return relative;
+    if (relative.rfind("http://", 0) == 0 || relative.rfind("https://", 0) == 0)
+        return relative;
+    std::size_t slash = catalogUrl.find_last_of('/');
+    if (slash == std::string::npos) return relative;
+    return catalogUrl.substr(0, slash + 1) + trimSlashes(relative);
+}
+
 PreviewData derivePreviewDataFromManifest(const std::string& catalogUrl,
                                           const ThemeCatalogClient::Entry& entry) {
     if (entry.manifest.empty())
@@ -205,13 +214,20 @@ PreviewData derivePreviewDataFromManifest(const std::string& catalogUrl,
 
 } // namespace
 
-ThemeCatalogClient::ThemeCatalogClient(std::string catalogUrl)
-    : m_catalogUrl(std::move(catalogUrl)) {
+ThemeCatalogClient::ThemeCatalogClient(std::string catalogUrl) {
+    m_catalogUrls.push_back(std::move(catalogUrl));
+    m_catalogUrls.emplace_back(kUpstreamCatalogUrl);
 }
 
 void ThemeCatalogClient::setCatalogUrl(std::string catalogUrl) {
     std::lock_guard<std::mutex> lk(m_mutex);
-    m_catalogUrl = std::move(catalogUrl);
+    m_catalogUrls.clear();
+    m_catalogUrls.push_back(std::move(catalogUrl));
+}
+
+void ThemeCatalogClient::setCatalogUrls(std::vector<std::string> urls) {
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_catalogUrls = std::move(urls);
 }
 
 void ThemeCatalogClient::refresh(nxui::ThreadPool& pool) {
@@ -222,20 +238,50 @@ void ThemeCatalogClient::refresh(nxui::ThreadPool& pool) {
         m_future.get();
 
     std::string url;
+    std::vector<std::string> urls;
     {
         std::lock_guard<std::mutex> lk(m_mutex);
-        url = m_catalogUrl;
+        urls = m_catalogUrls;
+        url = urls.empty() ? std::string() : urls.front();
         m_loading.begin("Loading theme catalog...");
         ++m_revision;
     }
 
-    DebugLog::log("[themeshop] catalog refresh start: %s", url.c_str());
+    DebugLog::log("[themeshop] catalog refresh start: %d source(s)", (int)urls.size());
 
-    m_future = pool.submit([this, url]() {
+    m_future = pool.submit([this, urls]() {
         Snapshot loaded;
+        std::string lastError;
+        int okSources = 0;
+        // One unreachable catalogue must not empty the shop: whatever the other
+        // returns is still worth showing, and only a total failure is an error.
+        for (const auto& source : urls) {
+            try {
+                Snapshot part = loadCatalog(source);
+                ++okSources;
+                for (auto& entry : part.entries) {
+                    const bool dup = std::any_of(loaded.entries.begin(), loaded.entries.end(),
+                                                 [&](const Entry& e) { return e.id == entry.id; });
+                    if (!dup)
+                        loaded.entries.push_back(std::move(entry));
+                }
+                DebugLog::log("[themeshop] catalog %s: %d entries",
+                              source.c_str(), (int)part.entries.size());
+            } catch (const std::exception& ex) {
+                lastError = ex.what();
+                DebugLog::log("[themeshop] catalog %s failed: %s", source.c_str(), ex.what());
+            } catch (...) {
+                lastError = "Unknown network error";
+                DebugLog::log("[themeshop] catalog %s failed: unknown error", source.c_str());
+            }
+        }
+
         try {
-            loaded = loadCatalog(url);
-            DebugLog::log("[themeshop] catalog refresh done: %d entries", (int)loaded.entries.size());
+            if (okSources == 0)
+                throw std::runtime_error(lastError.empty() ? "No catalog reachable" : lastError);
+            loaded.loading.succeed();
+            DebugLog::log("[themeshop] catalog refresh done: %d entries from %d source(s)",
+                          (int)loaded.entries.size(), okSources);
         } catch (const std::exception& ex) {
             loaded.loading.fail(ex.what());
             DebugLog::log("[themeshop] catalog refresh failed: %s", ex.what());
@@ -302,6 +348,7 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
         readStringOpt(item, "manifest", entry.manifest);
         readStringOpt(item, "cover", entry.cover);
         readStringArrayOpt(item, "screenshots", entry.screenshots);
+        entry.catalogUrl = url;
 
         std::string screenshot;
         readStringOpt(item, "screenshot", screenshot);
@@ -326,6 +373,14 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
         }
 
         ensureCoverFirst(entry);
+
+        // Preview paths are relative to their own index. Resolving them here
+        // means every consumer downstream can stay ignorant of which catalogue
+        // an entry came from — only the installer, which walks a whole theme
+        // directory, still needs the origin.
+        entry.cover = absoluteFromCatalog(url, entry.cover);
+        for (auto& shot : entry.screenshots)
+            shot = absoluteFromCatalog(url, shot);
 
         snapshot.entries.push_back(std::move(entry));
     }

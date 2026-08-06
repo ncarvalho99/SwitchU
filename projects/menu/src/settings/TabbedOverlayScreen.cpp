@@ -455,6 +455,10 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
     if (opacity > 0.01f) {
         if (needsBackdropRefresh) {
             ren.captureToOffscreenSharp();
+            // Kept before the blur: this is what the margin around the panel
+            // shows, and it has to look like the scene, not like the glass.
+            ren.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A,
+                              nxui::GpuDevice::OFF_SCENE_FROZEN);
             if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
                 ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
             }
@@ -479,11 +483,13 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
     ren.setHoldOffscreenCapture(sceneSettled);
 
     // With the underlying scene hidden, nothing painted the framebuffer this
-    // frame. Draw the frozen blurred capture (the same one the panel glass
-    // samples) as the base, so the margin around the panel shows a frosted
-    // version of the scene rather than stale swapchain contents.
+    // frame, so the margin around the panel needs a base. It used to get the
+    // blurred copy the glass samples, which frosted the entire screen until the
+    // first input released the hold and the real scene came back — reported as
+    // the blur covering everything. The unblurred capture is the one that
+    // matches what the scene actually looks like.
     if (m_sceneHidden && opacity > 0.01f) {
-        ren.drawOffscreen(kSettingsBackdropCacheTarget,
+        ren.drawOffscreen(nxui::GpuDevice::OFF_SCENE_FROZEN,
                           {0.f, 0.f, (float)ren.width(), (float)ren.height()});
     }
 

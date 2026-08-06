@@ -23,6 +23,10 @@ public:
         std::string manifest;
         std::string cover;
         std::vector<std::string> screenshots;
+        // Which index this came from. Entries carry relative paths, so once two
+        // catalogues are merged the resolving base can no longer be a single
+        // property of the client.
+        std::string catalogUrl;
     };
 
     struct Snapshot {
@@ -37,11 +41,17 @@ public:
     // none of this is in the package.
     static constexpr const char* kDefaultCatalogUrl = "https://raw.githubusercontent.com/ncarvalho99/SwitchU/themes/index.json";
 
+    // PoloNX's catalogue is read alongside ours rather than replaced by it: his
+    // themes work here, and there is no reason to offer fewer of them. Ours is
+    // listed first, so an id present in both resolves to ours.
+    static constexpr const char* kUpstreamCatalogUrl = "https://raw.githubusercontent.com/PoloNX/SwitchU-Themes/main/index.json";
+
     explicit ThemeCatalogClient(std::string catalogUrl = kDefaultCatalogUrl);
 
     void setCatalogUrl(std::string catalogUrl);
+    void setCatalogUrls(std::vector<std::string> urls);
     const std::string& catalogUrl() const {
-        return m_catalogUrl;
+        return m_catalogUrls.empty() ? m_emptyUrl : m_catalogUrls.front();
     }
 
     void refresh(nxui::ThreadPool& pool);
@@ -51,7 +61,8 @@ public:
 private:
     static Snapshot loadCatalog(const std::string& url);
 
-    std::string m_catalogUrl;
+    std::vector<std::string> m_catalogUrls;
+    std::string m_emptyUrl;
     mutable std::mutex m_mutex;
     ThemeTransferState m_loading;
     std::vector<Entry> m_entries;

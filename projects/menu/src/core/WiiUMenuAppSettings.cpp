@@ -707,9 +707,12 @@ void WiiUMenuApp::startThemePackageTransfer(const ThemeCatalogClient::Entry& ent
         focusManager().setFocus(m_progressDialog.get());
     }
 
-    const std::string catalogUrl = m_themeShop
-        ? m_themeShop->communityCatalogUrl()
-        : ThemeCatalogClient::kDefaultCatalogUrl;
+    // The entry's own index, not the shop's first one: with two catalogues
+    // merged, half the entries resolve against the other.
+    const std::string catalogUrl = !entry.catalogUrl.empty()
+        ? entry.catalogUrl
+        : (m_themeShop ? m_themeShop->communityCatalogUrl()
+                       : std::string(ThemeCatalogClient::kDefaultCatalogUrl));
     ThemePackageInstaller::Mode mode = installMode
         ? ThemePackageInstaller::Mode::InstallAndApply
         : ThemePackageInstaller::Mode::InstallOnly;
