@@ -228,6 +228,10 @@ void WaraWaraBackground::regenerate(int count) {
 }
 
 void WaraWaraBackground::onUpdate(float dt) {
+    // Scaling time rather than each speed keeps drift, wobble and spin in step
+    // with one another, so the layer slows down as a whole instead of the
+    // shapes sliding while still spinning at the authored rate.
+    dt *= m_speedScale;
     m_time += dt;
     for (auto& s : m_shapes) {
         if (m_config.layout == Layout::Floating) {

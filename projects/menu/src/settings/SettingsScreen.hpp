@@ -30,6 +30,9 @@ public:
     void onGlassSharpnessChange(FloatCb cb) { m_glassSharpnessCb = std::move(cb); }
     void setGlassSharpness(float v) { m_glassSharpness = v; }
     float glassSharpness() const { return m_glassSharpness; }
+    void onBackgroundSpeedChange(FloatCb cb) { m_backgroundSpeedCb = std::move(cb); }
+    void setBackgroundSpeed(float v) { m_backgroundSpeed = v; }
+    float backgroundSpeed() const { return m_backgroundSpeed; }
     void setBackgroundBlur(float v) { m_backgroundBlur = v; }
     float backgroundBlur() const { return m_backgroundBlur; }
     void onAccessibilityEnabledChange(BoolCb cb) { m_accessibilityEnabledCb = std::move(cb); }
@@ -92,6 +95,8 @@ private:
     BoolCb m_clockUse12HourCb;
     FloatCb m_backgroundBlurCb;
     float m_backgroundBlur = 0.f;
+    FloatCb m_backgroundSpeedCb;
+    float m_backgroundSpeed = 0.5f;
     FloatCb m_glassSharpnessCb;
     float m_glassSharpness = 0.4f;
     BoolCb m_accessibilityEnabledCb;

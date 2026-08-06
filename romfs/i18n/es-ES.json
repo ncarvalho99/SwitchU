@@ -95,7 +95,9 @@
       "background_blur": "Desenfoque del fondo",
       "background_blur_desc": "Suaviza el fondo de pantalla y las formas que flotan sobre él.",
       "glass_sharpness": "Nitidez del cristal",
-      "glass_sharpness_desc": "Cuánto se ve la pantalla detrás de los menús a través de ellos."
+      "glass_sharpness_desc": "Cuánto se ve la pantalla detrás de los menús a través de ellos.",
+      "background_speed": "Velocidad de la animación de fondo",
+      "background_speed_desc": "Cuánto se mueven las formas. El centro es el ritmo del propio tema."
     },
     "internet": {
       "wifi_ssid": "Red WiFi",

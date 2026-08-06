@@ -95,7 +95,9 @@
       "background_blur": "Размытие фона",
       "background_blur_desc": "Смягчает обои и фигуры, плывущие поверх них.",
       "glass_sharpness": "Чёткость стекла",
-      "glass_sharpness_desc": "Насколько чётко экран за меню виден сквозь них."
+      "glass_sharpness_desc": "Насколько чётко экран за меню виден сквозь них.",
+      "background_speed": "Скорость анимации фона",
+      "background_speed_desc": "Насколько быстро плывут фигуры. Середина — темп самой темы."
     },
     "internet": {
       "wifi_ssid": "WiFi-сеть",
