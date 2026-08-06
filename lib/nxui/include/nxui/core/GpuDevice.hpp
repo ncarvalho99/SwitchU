@@ -169,7 +169,7 @@ public:
     //
     // Making them all full resolution cost the home screen 1.8ms a frame and
     // 60 fps became 54. So the per-frame one stays half.
-    static constexpr int NUM_OFFSCREEN = 6;
+    static constexpr int NUM_OFFSCREEN = 7;
 
     static constexpr int OFF_SCENE    = 0;   // half res, captured every frame
     static constexpr int OFF_DIALOG   = 1;   // full res, dialog backdrop cache
@@ -180,6 +180,10 @@ public:
     // the scene target, blurred against this one, and drawn back, all before
     // anything captures the scene for the icon glass.
     static constexpr int OFF_BG_BLUR  = 5;
+    // Full res, the scene as captured before the panel blurred it. With the
+    // home scene skipped under an open overlay nothing paints the margin around
+    // the panel, and painting it with the blurred copy frosted the whole screen.
+    static constexpr int OFF_SCENE_FROZEN = 6;
 
     static constexpr bool offscreenIsFullRes(int i) {
         return i != OFF_SCENE && i != OFF_BG_BLUR;
@@ -203,7 +207,7 @@ public:
 
     // Stubs for pool-based allocation (SDL2 uses SDL_CreateTexture directly)
     void resetImagePool() {}
-    static constexpr int NUM_OFFSCREEN = 6;
+    static constexpr int NUM_OFFSCREEN = 7;
     bool offscreenReady() const { return false; }
 #endif
 
