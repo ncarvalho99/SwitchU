@@ -57,7 +57,9 @@
       "default_profile_desc": "Launch games with this profile when possible.",
       "default_profile_ask": "Ask each time",
       "clock_12h": "12-uursklok",
-      "clock_12h_desc": "Toon de tijd in 12-uursformaat."
+      "clock_12h_desc": "Toon de tijd in 12-uursformaat.",
+      "add_user": "Gebruiker toevoegen",
+      "add_user_desc": "Maakt een nieuw gebruikersaccount op deze console."
     },
     "audio": {
       "speaker_auto_mute": "Automatisch dempen speakers",

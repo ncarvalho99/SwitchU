@@ -35,6 +35,9 @@ enum class SystemMessage : uint32_t {
     LaunchControllers     = 12,
     LaunchNetConnect      = 13,
     LaunchUserPage        = 14,
+    // The system's own account creation applet. Creating a user was the one
+    // account operation the menu had no route to at all.
+    LaunchUserCreator     = 15,
 
     EnterSleep            = 20,
     Shutdown              = 21,

@@ -228,6 +228,7 @@ enum class ActionType : uint32_t {
     OpenControllers,
     OpenNetConnect,
     OpenUserPage,
+    OpenUserCreator,
 };
 
 struct Action {
@@ -1025,6 +1026,15 @@ static void handleMenuCommand() {
         switchu::FileLog::log("[smi] queued Mii Editor launch (actions=%zu)", g_actionQueue.size());
         break;
 
+    case smi::SystemMessage::LaunchUserCreator:
+        {
+            Action action{};
+            action.type = ActionType::OpenUserCreator;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued user creator launch (actions=%zu)", g_actionQueue.size());
+        break;
+
     case smi::SystemMessage::LaunchNetConnect:
         {
             Action action{};
@@ -1175,6 +1185,17 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] NetConnect FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after NetConnect");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+
+        case ActionType::OpenUserCreator: {
+            // libnx wraps the whole libapplet handshake for this one, so there
+            // is no input struct to build as there is for the Mii editor.
+            Result rc = pselShowUserCreator();
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] user creator FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after user creator");
             daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
             return true;
         }

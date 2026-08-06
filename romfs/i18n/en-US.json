@@ -201,7 +201,9 @@
       "region_taiwan": "Taiwan",
       "region_south_korea": "South Korea",
       "auto_update": "Auto Update",
-      "error_reporting": "Error Reporting"
+      "error_reporting": "Error Reporting",
+      "add_user": "Add User",
+      "add_user_desc": "Create a new user account on this console."
     },
     "accessibility": {
       "voice": "Voice Guidance",

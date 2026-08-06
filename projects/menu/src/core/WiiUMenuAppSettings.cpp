@@ -319,6 +319,9 @@ void WiiUMenuApp::createSettings() {
         m_config.glassSharpness = sharpness;
         applyGlassSharpness(sharpness);
     });
+    m_settings->onAddUser([this]() {
+        m_launcher.launchUserCreator();
+    });
     m_settings->setBackgroundSpeed(m_config.backgroundSpeed);
     m_settings->onBackgroundSpeedChange([this](float speed) {
         if (std::abs(m_config.backgroundSpeed - speed) < 0.001f)

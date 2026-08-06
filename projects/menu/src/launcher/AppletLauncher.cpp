@@ -69,6 +69,16 @@ void AppletLauncher::launchNetConnect() {
     }
 }
 
+void AppletLauncher::launchUserCreator() {
+    DebugLog::log("[launcher] requesting user creator via daemon");
+    Result rc = switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::LaunchUserCreator);
+    DebugLog::log("[launcher] user creator rc=0x%X", rc);
+    if (R_SUCCEEDED(rc)) {
+        if (m_cb.playSfxModalHide) m_cb.playSfxModalHide();
+        if (m_cb.requestExit)      m_cb.requestExit();
+    }
+}
+
 void AppletLauncher::launchUserPage(AccountUid uid) {
     DebugLog::log("[launcher] requesting User Page launch via daemon");
     Result rc = switchu::menu::smi_cmd::launchUserPage(uid);
@@ -147,6 +157,7 @@ void AppletLauncher::setSuspendedTitleId(uint64_t)   {}
 
 void AppletLauncher::launchAlbum()             {}
 void AppletLauncher::launchMiiEditor()         {}
+void AppletLauncher::launchUserCreator()       {}
 void AppletLauncher::launchControllerPairing() {}
 void AppletLauncher::launchNetConnect()        {}
 void AppletLauncher::launchUserPage(AccountUid) {}

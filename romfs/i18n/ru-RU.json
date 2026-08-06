@@ -57,7 +57,9 @@
       "default_profile_desc": "Launch games with this profile when possible.",
       "default_profile_ask": "Ask each time",
       "clock_12h": "12-часовой формат",
-      "clock_12h_desc": "Показывать время в 12-часовом формате."
+      "clock_12h_desc": "Показывать время в 12-часовом формате.",
+      "add_user": "Добавить пользователя",
+      "add_user_desc": "Создаёт новую учётную запись на этой консоли."
     },
     "audio": {
       "speaker_auto_mute": "Автоматическое отключение динамиков",

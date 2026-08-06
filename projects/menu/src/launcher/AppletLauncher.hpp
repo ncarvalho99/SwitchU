@@ -23,6 +23,7 @@ public:
     void launchControllerPairing();
     void launchNetConnect();
     void launchUserPage(AccountUid uid);
+    void launchUserCreator();
     void enterSleep();
     void shutdown();
     void reboot();
