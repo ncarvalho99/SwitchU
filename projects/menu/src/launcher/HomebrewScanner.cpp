@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <utility>
+#include <vector>
 
 namespace homebrew {
 namespace {
@@ -44,7 +46,7 @@ bool firstNamedLanguage(const NacpStruct& nacp, std::string& name, std::string& 
     return false;
 }
 
-bool readEntry(const std::string& path, Entry& out) {
+bool readEntryImpl(const std::string& path, Entry& out) {
     std::FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) {
         DebugLog::log("[homebrew] open failed: %s", path.c_str());
@@ -131,7 +133,7 @@ void scanInto(const std::string& dir, int depth, int maxDepth, std::vector<Entry
             continue;
 
         Entry entry;
-        if (readEntry(p, entry))
+        if (readEntryImpl(p, entry))
             out.push_back(std::move(entry));
     }
 }
@@ -160,6 +162,49 @@ std::vector<Entry> scan(const std::string& root, int maxDepth) {
     DebugLog::log("[homebrew] scan %s: %d entries, %d with icon, %d with NACP, %ums",
                   root.c_str(), (int)out.size(), withIcon, withName, ms);
     return out;
+}
+
+bool readOne(const std::string& path, Entry& out) {
+    return readEntryImpl(path, out);
+}
+
+std::uint64_t syntheticTitleId(const std::string& path) {
+    // FNV-1a. Any stable hash would do; what matters is bit 63, which keeps
+    // these out of the range real title ids occupy.
+    std::uint64_t h = 1469598103934665603ull;
+    for (unsigned char c : path) {
+        h ^= c;
+        h *= 1099511628211ull;
+    }
+    return h | (1ull << 63);
+}
+
+namespace {
+std::vector<std::pair<std::uint64_t, std::string>>& pathRegistry() {
+    static std::vector<std::pair<std::uint64_t, std::string>> registry;
+    return registry;
+}
+}
+
+void registerPath(std::uint64_t id, std::string path) {
+    auto& reg = pathRegistry();
+    for (auto& e : reg) {
+        if (e.first == id) {
+            e.second = std::move(path);
+            return;
+        }
+    }
+    reg.emplace_back(id, std::move(path));
+}
+
+bool pathForId(std::uint64_t id, std::string& out) {
+    for (const auto& e : pathRegistry()) {
+        if (e.first == id) {
+            out = e.second;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool readIcon(const Entry& entry, std::vector<std::uint8_t>& out) {
