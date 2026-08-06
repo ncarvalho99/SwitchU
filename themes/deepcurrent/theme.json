@@ -1,0 +1,74 @@
+{
+  "id": "deepcurrent",
+  "name": "Deep Current",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "dark",
+    "colors": {
+      "cursor": [
+        0.5805,
+        0.9747,
+        0.62
+      ],
+      "accent": [
+        0.5805,
+        0.9283,
+        0.4373
+      ],
+      "background": [
+        0.6477,
+        0.8462,
+        0.102
+      ],
+      "backgroundAccent": [
+        0.6477,
+        1,
+        0.162
+      ],
+      "shapes": [
+        0.5805,
+        0.9283,
+        0.4373
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "circle",
+      "symmetry": "none",
+      "count": 70,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        3,
+        10
+      ],
+      "speed": [
+        0,
+        8
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.28,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.46,
+        "fit": "cover"
+      }
+    }
+  }
+}

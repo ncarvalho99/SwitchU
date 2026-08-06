@@ -1,0 +1,74 @@
+{
+  "id": "aquabokeh",
+  "name": "Aqua Bokeh",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "light",
+    "colors": {
+      "cursor": [
+        0.5543,
+        0.7723,
+        0.46
+      ],
+      "accent": [
+        0.5543,
+        0.7355,
+        0.2373
+      ],
+      "background": [
+        0.5327,
+        0.2435,
+        0.549
+      ],
+      "backgroundAccent": [
+        0.5327,
+        0.2922,
+        0.609
+      ],
+      "shapes": [
+        0.5543,
+        0.7355,
+        0.2373
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "circle",
+      "symmetry": "none",
+      "count": 90,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        6,
+        24
+      ],
+      "speed": [
+        0,
+        8
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.3,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.5,
+        "fit": "cover"
+      }
+    }
+  }
+}

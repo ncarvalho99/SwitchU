@@ -1,0 +1,74 @@
+{
+  "id": "holographic",
+  "name": "Holographic",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "light",
+    "colors": {
+      "cursor": [
+        0.5591,
+        1,
+        0.46
+      ],
+      "accent": [
+        0.5591,
+        1.0,
+        0.8176
+      ],
+      "background": [
+        0.7139,
+        0.4054,
+        0.7098
+      ],
+      "backgroundAccent": [
+        0.7139,
+        0.4865,
+        0.7698
+      ],
+      "shapes": [
+        0.5591,
+        1.0,
+        0.8176
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "circle",
+      "symmetry": "none",
+      "count": 40,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        8,
+        20
+      ],
+      "speed": [
+        0,
+        7
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.22,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.55,
+        "fit": "cover"
+      }
+    }
+  }
+}

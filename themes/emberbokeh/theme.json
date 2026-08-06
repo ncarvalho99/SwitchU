@@ -1,0 +1,74 @@
+{
+  "id": "emberbokeh",
+  "name": "Ember Bokeh",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "dark",
+    "colors": {
+      "cursor": [
+        0.1255,
+        0.9837,
+        0.62
+      ],
+      "accent": [
+        0.1255,
+        0.9368,
+        0.8137
+      ],
+      "background": [
+        0.0429,
+        0.6364,
+        0.2157
+      ],
+      "backgroundAccent": [
+        0.0429,
+        0.7636,
+        0.2757
+      ],
+      "shapes": [
+        0.1255,
+        0.9368,
+        0.8137
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "circle",
+      "symmetry": "none",
+      "count": 80,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        6,
+        22
+      ],
+      "speed": [
+        0,
+        9
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.3,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.42,
+        "fit": "cover"
+      }
+    }
+  }
+}

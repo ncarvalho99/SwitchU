@@ -1,0 +1,74 @@
+{
+  "id": "goldendust",
+  "name": "Golden Dust",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "dark",
+    "colors": {
+      "cursor": [
+        0.1227,
+        0.9851,
+        0.62
+      ],
+      "accent": [
+        0.1227,
+        0.9381,
+        0.8098
+      ],
+      "background": [
+        0.0872,
+        0.7471,
+        0.1706
+      ],
+      "backgroundAccent": [
+        0.0872,
+        0.8966,
+        0.2306
+      ],
+      "shapes": [
+        0.1227,
+        0.9381,
+        0.8098
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "circle",
+      "symmetry": "none",
+      "count": 110,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        4,
+        14
+      ],
+      "speed": [
+        0,
+        11
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.34,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.4,
+        "fit": "cover"
+      }
+    }
+  }
+}

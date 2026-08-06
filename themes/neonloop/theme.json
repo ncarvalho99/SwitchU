@@ -1,0 +1,74 @@
+{
+  "id": "neonloop",
+  "name": "Neon Loop",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "dark",
+    "colors": {
+      "cursor": [
+        0.6627,
+        0.7475,
+        0.62
+      ],
+      "accent": [
+        0.6627,
+        0.7119,
+        0.4627
+      ],
+      "background": [
+        0.6667,
+        0.72,
+        0.098
+      ],
+      "backgroundAccent": [
+        0.6667,
+        0.864,
+        0.158
+      ],
+      "shapes": [
+        0.6627,
+        0.7119,
+        0.4627
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "circle",
+      "symmetry": "none",
+      "count": 26,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        10,
+        26
+      ],
+      "speed": [
+        0,
+        6
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.22,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.34,
+        "fit": "cover"
+      }
+    }
+  }
+}

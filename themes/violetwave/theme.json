@@ -1,0 +1,74 @@
+{
+  "id": "violetwave",
+  "name": "Violet Wave",
+  "author": "ncarvalho99",
+  "version": "1.0.0",
+  "preview": {
+    "screenshots": [
+      "media/screenshots/00.jpg"
+    ]
+  },
+  "theme": {
+    "mode": "dark",
+    "colors": {
+      "cursor": [
+        0.7556,
+        1,
+        0.62
+      ],
+      "accent": [
+        0.7556,
+        1.0,
+        0.7686
+      ],
+      "background": [
+        0.7051,
+        0.5493,
+        0.2784
+      ],
+      "backgroundAccent": [
+        0.7051,
+        0.6592,
+        0.3384
+      ],
+      "shapes": [
+        0.7556,
+        1.0,
+        0.7686
+      ]
+    },
+    "background": {
+      "layout": "floating",
+      "shape": "hexagon",
+      "symmetry": "none",
+      "count": 48,
+      "fixedOrientation": false,
+      "orientation": 0,
+      "roundness": 0.5,
+      "grid": {
+        "columns": -1,
+        "rows": 0,
+        "spacing": [
+          10,
+          10
+        ]
+      },
+      "size": [
+        6,
+        18
+      ],
+      "speed": [
+        0,
+        9
+      ],
+      "wobble": 6,
+      "rotationSpeed": 0,
+      "opacity": 0.26,
+      "image": {
+        "path": "media/backgrounds/bg.jpg",
+        "opacity": 0.44,
+        "fit": "cover"
+      }
+    }
+  }
+}
