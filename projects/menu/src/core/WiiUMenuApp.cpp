@@ -796,6 +796,26 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             int entryIndex = findTitleIndex(tid);
             if (entryIndex >= 0)
                 entry = &m_model.at(entryIndex);
+
+            // Homebrew has no title to hand to the application launcher, so the
+            // call fails and the daemon relaunches the menu — which is what it
+            // looked like from the outside. Says so until step three gives it a
+            // real route.
+            if (entry && entry->isHomebrew()) {
+                auto& i18n = nxui::I18n::instance();
+                m_audio.playSfx(Sfx::ModalShow);
+                m_dialogReturnFocus = raw;
+                m_dialog->show(
+                    entry->title,
+                    i18n.tr("error.homebrew_not_launchable",
+                            "Launching homebrew from the menu is not available yet."),
+                    {{i18n.tr("button.ok", "OK"), [this]() {}, true}},
+                    0, {}
+                );
+                focusManager().setFocus(m_dialog.get());
+                return;
+            }
+
             if (entry && !entry->isLaunchable()) {
                 m_audio.playSfx(Sfx::ModalShow);
                 m_dialogReturnFocus = raw;
