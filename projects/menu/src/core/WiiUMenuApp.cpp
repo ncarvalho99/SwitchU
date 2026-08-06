@@ -1447,6 +1447,20 @@ void WiiUMenuApp::finalizeRefresh() {
     }
 
     app().gpu().waitIdle();
+
+    // The icons about to be replaced are held as raw pointers by both focus
+    // managers, and FocusManager::changeFocusTo calls onFocusLost() — a virtual
+    // — on whatever it thinks is focused. Destroying them without saying so
+    // leaves that call reading a freed vtable, which is what two crash reports
+    // from a clean install show: a garbage pointer in x1, then
+    // ldr x1,[x1,#40]; blr x1 inside changeFocusTo.
+    //
+    // invalidateWidget was written for this and had no callers.
+    for (const auto& icon : m_grid->allIcons()) {
+        focusManager().invalidateWidget(icon.get());
+        m_grid->focusManager().invalidateWidget(icon.get());
+    }
+
     m_grid->clearChildren();
     m_model = std::move(refreshedModel);
     m_iconStreamer = std::move(refreshedStreamer);
@@ -1483,8 +1497,9 @@ void WiiUMenuApp::finalizeRefresh() {
                                  m_grid->allIcons());
 
     m_grid->startAppearAnimation();
-    if (auto* firstIcon = m_grid->focusManager().current())
-        focusManager().setFocus(firstIcon);
+    // If the rebuilt grid has nothing focusable, the app focus manager must be
+    // left holding nothing rather than whatever it held before.
+    focusManager().setFocus(m_grid->focusManager().current());
 
     // Keep a short cooldown to coalesce duplicate app-record notifications.
     m_refreshCooldownFrames = 20;
