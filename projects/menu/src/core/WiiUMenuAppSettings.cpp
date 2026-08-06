@@ -556,6 +556,9 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->setRenderContext(&app().gpu(), &app().renderer());
     m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
     m_themeShop->setGridLayoutState(m_config.gridColumns, m_config.gridRows);
+    m_themeShop->setAppearanceState(m_config.glassSharpness,
+                                    m_config.backgroundSpeed,
+                                    m_config.backgroundBlur);
     m_themeShop->setAccessibilityVoiceEnabled(m_config.accessibilityEnabled);
     m_themeShop->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                    m_config.accessibilitySpeakPosition);
@@ -571,6 +574,24 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->onSfxVolumeChange([this](float v) {
         m_audio.setSfxVolume(v);
         m_config.sfxVolume = v;
+    });
+    // The same three controls as Settings > Display, writing the same config
+    // and applying the same way. Whichever screen someone changes them on, the
+    // other reads the config next time it opens.
+    m_themeShop->onGlassSharpnessChange([this](float v) {
+        m_config.glassSharpness = v;
+        applyGlassSharpness(v);
+        if (m_settings) m_settings->setGlassSharpness(v);
+    });
+    m_themeShop->onBackgroundSpeedChange([this](float v) {
+        m_config.backgroundSpeed = v;
+        if (m_background) m_background->setSpeedScale(v * 2.f);
+        if (m_settings) m_settings->setBackgroundSpeed(v);
+    });
+    m_themeShop->onBackgroundBlurChange([this](float v) {
+        m_config.backgroundBlur = v;
+        if (m_background) m_background->setBlurStrength(v);
+        if (m_settings) m_settings->setBackgroundBlur(v);
     });
     m_themeShop->onGridColumnsChange([this](int cols) {
         cols = std::clamp(cols, 3, 8);
