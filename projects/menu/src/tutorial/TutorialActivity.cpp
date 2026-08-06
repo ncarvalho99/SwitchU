@@ -129,7 +129,10 @@ bool TutorialActivity::onCreate() {
     m_audio.setSfxVolume(0.52f);
     loadAnimaleseSfx();
 
-    m_theme = nxui::Theme::light();
+    // Dark, to match the preset a fresh install now boots into. The tutorial is
+    // the very first thing anyone sees, and it appearing white before the menu
+    // it introduces turns up dark is a jolt in the wrong place.
+    m_theme = nxui::Theme::dark();
     buildSteps();
     buildUi();
     m_stepIndex = 0;
