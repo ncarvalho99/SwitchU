@@ -425,6 +425,9 @@ void WiiUMenuApp::buildUserAvatarBar() {
                 [this](AccountUid picked) { m_launcher.launchUserPage(picked); },
                 [this]() { m_launcher.launchUserCreator(); },
                 i18n.tr("userselect.add_user", "Add user"));
+            // Without this the dialog draws but no button reaches it, which is
+            // how it came up touch-only.
+            focusManager().setFocus(m_userSelect.get());
 #endif
         });
 
