@@ -907,6 +907,8 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
 // saved layout is applied, so a user's arrangement covers both kinds alike.
 void WiiUMenuApp::appendHomebrewToPending(std::vector<PendingApp>& apps) {
 #ifdef SWITCHU_MENU
+    DebugLog::log("[homebrew] listing setting=%d, catalogue had %d titles",
+                  m_config.showHomebrew ? 1 : 0, (int)apps.size());
     if (!m_config.showHomebrew)
         return;
 
@@ -927,7 +929,8 @@ void WiiUMenuApp::appendHomebrewToPending(std::vector<PendingApp>& apps) {
             app.iconData = std::move(icon);
         apps.push_back(std::move(app));
     }
-    DebugLog::log("[homebrew] appended %d entries to the grid", (int)entries.size());
+    DebugLog::log("[homebrew] grid now %d entries (%d homebrew)",
+                  (int)apps.size(), (int)entries.size());
 #else
     (void)apps;
 #endif

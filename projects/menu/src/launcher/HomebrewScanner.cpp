@@ -37,8 +37,10 @@ bool firstNamedLanguage(const NacpStruct& nacp, std::string& name, std::string& 
 
 bool readEntry(const std::string& path, Entry& out) {
     std::FILE* f = std::fopen(path.c_str(), "rb");
-    if (!f)
+    if (!f) {
+        DebugLog::log("[homebrew] open failed: %s", path.c_str());
         return false;
+    }
 
     struct Closer {
         std::FILE* f;
@@ -48,8 +50,11 @@ bool readEntry(const std::string& path, Entry& out) {
     NroHeader header{};
     if (!readAt(f, (long)kNroStartSize, &header, sizeof(header)))
         return false;
-    if (header.magic != NROHEADER_MAGIC)
+    if (header.magic != NROHEADER_MAGIC) {
+        DebugLog::log("[homebrew] not an NRO (magic=0x%08X): %s",
+                      (unsigned)header.magic, path.c_str());
         return false;
+    }
 
     out.path = path;
     // The filename without its extension, so an NRO with no asset section still
@@ -60,8 +65,11 @@ bool readEntry(const std::string& path, Entry& out) {
     const long assetOffset = (long)header.size;
     if (!readAt(f, assetOffset, &asset, sizeof(asset)))
         return true;
-    if (asset.magic != NROASSETHEADER_MAGIC)
+    if (asset.magic != NROASSETHEADER_MAGIC) {
+        // Legal: an NRO built without assets. It keeps the filename as a label.
+        DebugLog::log("[homebrew] no asset section, using filename: %s", out.name.c_str());
         return true;
+    }
 
     if (asset.nacp.size >= sizeof(NacpStruct)) {
         NacpStruct nacp{};
@@ -73,6 +81,12 @@ bool readEntry(const std::string& path, Entry& out) {
             }
         }
     }
+
+    DebugLog::log("[homebrew] %s -> name='%s' author='%s' nacp=%llu icon=%llu",
+                  std::filesystem::path(path).filename().string().c_str(),
+                  out.name.c_str(), out.author.c_str(),
+                  (unsigned long long)asset.nacp.size,
+                  (unsigned long long)asset.icon.size);
 
     if (asset.icon.size > 0) {
         out.iconOffset = (std::uint64_t)assetOffset + asset.icon.offset;
@@ -116,6 +130,10 @@ void scanInto(const std::string& dir, int depth, int maxDepth, std::vector<Entry
 }  // namespace
 
 std::vector<Entry> scan(const std::string& root, int maxDepth) {
+    // The walk reads a header per file off the SD card, and startup time is the
+    // thing this project has spent the most effort protecting, so it is timed.
+    const u64 startTick = armGetSystemTick();
+
     std::vector<Entry> out;
     scanInto(root, 0, maxDepth, out);
 
@@ -123,7 +141,15 @@ std::vector<Entry> scan(const std::string& root, int maxDepth) {
         return a.name < b.name;
     });
 
-    DebugLog::log("[homebrew] scanned %s: %d entries", root.c_str(), (int)out.size());
+    const unsigned ms =
+        (unsigned)(armTicksToNs(armGetSystemTick() - startTick) / 1000000ULL);
+    int withIcon = 0, withName = 0;
+    for (const auto& e : out) {
+        if (e.iconSize > 0) ++withIcon;
+        if (!e.author.empty()) ++withName;
+    }
+    DebugLog::log("[homebrew] scan %s: %d entries, %d with icon, %d with NACP, %ums",
+                  root.c_str(), (int)out.size(), withIcon, withName, ms);
     return out;
 }
 
@@ -140,7 +166,15 @@ bool readIcon(const Entry& entry, std::vector<std::uint8_t>& out) {
     } closer{f};
 
     out.resize(entry.iconSize);
-    return readAt(f, (long)entry.iconOffset, out.data(), out.size());
+    const bool ok = readAt(f, (long)entry.iconOffset, out.data(), out.size());
+    // A JPEG starts FFD8. If this is not one, the streamer will fail to decode
+    // and the tile will be blank, so the bytes are worth naming here.
+    const bool jpeg = ok && out.size() >= 2 && out[0] == 0xFF && out[1] == 0xD8;
+    if (!ok || !jpeg)
+        DebugLog::log("[homebrew] icon read %s for %s (%u bytes, jpeg=%d)",
+                      ok ? "ok" : "FAILED", entry.name.c_str(),
+                      (unsigned)out.size(), jpeg ? 1 : 0);
+    return ok;
 }
 
 }  // namespace homebrew
