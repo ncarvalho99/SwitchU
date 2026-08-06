@@ -21,6 +21,15 @@ bool readAt(std::FILE* f, long offset, void* dst, std::size_t size) {
     return std::fread(dst, 1, size, f) == size;
 }
 
+// strnlen is POSIX and does not arrive through <cstring> here, and these fields
+// are fixed-size and not guaranteed terminated, so the bound is explicit.
+std::size_t boundedLength(const char* p, std::size_t max) {
+    std::size_t n = 0;
+    while (n < max && p[n] != 0)
+        ++n;
+    return n;
+}
+
 // A NACP holds sixteen language entries and the console's language is not known
 // here, so the first non-empty one is used. hbmenu does the same, which keeps
 // the two lists reading alike.
@@ -28,8 +37,8 @@ bool firstNamedLanguage(const NacpStruct& nacp, std::string& name, std::string& 
     for (const auto& lang : nacp.lang) {
         if (lang.name[0] == '\0')
             continue;
-        name.assign(lang.name, strnlen(lang.name, sizeof(lang.name)));
-        author.assign(lang.author, strnlen(lang.author, sizeof(lang.author)));
+        name.assign(lang.name, boundedLength(lang.name, sizeof(lang.name)));
+        author.assign(lang.author, boundedLength(lang.author, sizeof(lang.author)));
         return true;
     }
     return false;
