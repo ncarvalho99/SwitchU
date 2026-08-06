@@ -1,74 +1,78 @@
-# SwitchU 1.1.0+fork.1
+# SwitchU 1.1.0+fork.2
 
 ## English
 
-Hello everyone. This is a fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
-1.1.0 — all the original work is his, and it stays credited in the About page.
-This build focuses on three things: a bug that was corrupting microSD cards,
-the stutter when returning to the menu, and the jagged corners throughout the
-interface. Everything below was measured on hardware. Here is the changelog:
+Second release of this fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. All the original work is his, and it stays credited in the About page.
+
+This one is mostly about themes, and about giving back control over how the
+interface looks: a theme catalogue of our own alongside his, and sliders for the
+things people said were too sharp, too busy or too fast. Here is the changelog:
+
+**Themes**
+
+- New theme shop catalogue with eight backgrounds, downloaded on demand — none of it is in the package
+- PoloNX's catalogue is read alongside ours rather than replaced, so both sets appear in one list
+- A catalogue that cannot be reached no longer empties the shop; whatever the other returns is still listed
+- The dark theme is now the default on a fresh install, and the first-run tutorial follows it
+
+**New settings**
+
+- **Background blur** — softens the wallpaper and the shapes drifting over it, together
+- **Glass sharpness** — how clearly the screen behind menus shows through them. The default matches how it looked before
+- **Background animation speed** — from stopped to twice the theme's own pace
 
 **Bug fixes**
 
-- Fixed microSD card corruption when rebooting or shutting down from the power menu
-- Fixed game names showing as garbage characters on some titles
-- Fixed the app grid briefly going empty while the list refreshed
-- Fixed long text running off the edge of the About page
+- Fixed the settings overlay frosting the entire screen until the first button press
+- Fixed the wallpaper and icons disappearing while the glass sharpness slider was moved
+- Fixed the button hints in the corner appearing in English in every language — 15 of the 17 had never been translated
+- Restored the more detailed sidebar icons
 
-**Performance**
+**Known issue**
 
-- Returning to the menu after closing a game or homebrew: 1–2 seconds down to ~400 ms
-- Opening Settings for the first time: 1.5 seconds down to 135 ms
-- Settings now runs at 60 fps instead of 30
-- Home screen holds 60 fps while drawing with a quarter of the geometry it used before
-
-**Appearance**
-
-- Smooth, antialiased corners everywhere: game covers, Settings cards, power menu, account picker and the selection outline
-- Sharper glass in Settings, the power menu and the account picker
-
-**Other**
-
-- About page now identifies this build as a fork and links both repositories
-- Version reads 1.1.0+fork.1
-- CI builds release binaries with symbols; build time 21 min down to 3 min
-- Shader changes are no longer silently skipped by the build
+A crash has been reported when installing a new game or homebrew. It does not
+reproduce here and no crash report has reached us yet, so it is not fixed in this
+release. If it happens to you, `sdmc:/atmosphere/crash_reports/` and
+`sdmc:/config/SwitchU/` are what make it fixable.
 
 ---
 
 ## Português
 
-Olá a todos. Este é um fork do [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
-1.1.0 — todo o trabalho original é dele, e o crédito continua na página Sobre.
-Esta build foca em três coisas: um bug que estava corrompendo cartões microSD, o
-engasgo ao voltar para o menu, e os cantos serrilhados por toda a interface. Tudo
-abaixo foi medido no console. Segue o changelog:
+Segunda versão deste fork do [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. Todo o trabalho original é dele, e o crédito continua na página Sobre.
+
+Esta é sobre temas e sobre devolver o controle da aparência: um catálogo de temas
+nosso ao lado do dele, e sliders para o que as pessoas acharam nítido demais,
+carregado demais ou rápido demais. Segue o changelog:
+
+**Temas**
+
+- Novo catálogo da loja de temas com oito fundos, baixados sob demanda — nada disso vai no pacote
+- O catálogo do PoloNX é lido junto com o nosso, não no lugar dele, então os dois conjuntos aparecem numa lista só
+- Um catálogo fora do ar não esvazia mais a loja; o que o outro devolver continua listado
+- O tema escuro passa a ser o padrão em instalação nova, e o tutorial inicial acompanha
+
+**Novas configurações**
+
+- **Desfoque do fundo** — suaviza o papel de parede e as formas que flutuam sobre ele, juntos
+- **Nitidez do vidro** — o quanto a tela atrás dos menus aparece através deles. O padrão reproduz como era antes
+- **Velocidade da animação de fundo** — de parado até o dobro do ritmo do próprio tema
 
 **Correções de bugs**
 
-- Corrigida a corrupção do cartão microSD ao reiniciar ou desligar pelo menu de energia
-- Corrigidos nomes de jogos aparecendo como caracteres estranhos em alguns títulos
-- Corrigida a grade de aplicativos ficando vazia por um instante durante a atualização da lista
-- Corrigido o texto longo saindo para fora da página Sobre
+- Corrigido o painel de configurações deixando a tela inteira embaçada até o primeiro toque de botão
+- Corrigidos o papel de parede e os ícones sumindo enquanto o slider de nitidez era arrastado
+- Corrigidas as dicas de botão do canto aparecendo em inglês em todos os idiomas — 15 das 17 nunca haviam sido traduzidas
+- Restaurados os ícones mais detalhados da barra lateral
 
-**Desempenho**
+**Problema conhecido**
 
-- Voltar ao menu depois de fechar um jogo ou homebrew: de 1–2 segundos para ~400 ms
-- Abrir as Configurações pela primeira vez: de 1,5 segundo para 135 ms
-- As Configurações agora rodam a 60 fps em vez de 30
-- A tela inicial mantém 60 fps desenhando com um quarto da geometria que usava
-
-**Aparência**
-
-- Cantos suavizados em todo o menu: capas de jogos, cards das Configurações, menu de energia, seletor de conta e o contorno de seleção
-- Vidro mais nítido nas Configurações, no menu de energia e no seletor de conta
-
-**Outros**
-
-- A página Sobre identifica esta build como fork e mostra os dois repositórios
-- A versão passa a ser 1.1.0+fork.1
-- O CI compila binários de release com símbolos; tempo de build de 21 min para 3 min
-- Mudanças em shaders não são mais ignoradas silenciosamente pela compilação
+Foi relatado um crash ao instalar um jogo ou homebrew novo. Não reproduz aqui e
+nenhum relatório de crash chegou até agora, então não está corrigido nesta
+versão. Se acontecer contigo, `sdmc:/atmosphere/crash_reports/` e
+`sdmc:/config/SwitchU/` são o que torna isso corrigível.
 
 ---
 
@@ -77,3 +81,11 @@ abaixo foi medido no console. Segue o changelog:
 Extract to the root of the microSD card, replacing the existing files. Requires Atmosphère.
 
 Extraia na raiz do cartão microSD, substituindo os arquivos existentes. Requer Atmosphère.
+
+---
+
+## Previous releases / Versões anteriores
+
+**1.1.0+fork.1** — microSD corruption from the power menu, return-to-menu stutter
+from 1–2s to ~400ms, Settings from 30 to 60 fps, antialiased corners throughout,
+sharper glass, and the About page identifying the fork.
