@@ -252,7 +252,9 @@
       "ui_wireframe": "UI Wireframe",
       "ui_wireframe_desc": "Show outlines of all Box widgets for layout debugging.",
       "background_blur": "Background blur",
-      "background_blur_desc": "Soften the wallpaper and the shapes drifting over it."
+      "background_blur_desc": "Soften the wallpaper and the shapes drifting over it.",
+      "glass_sharpness": "Glass sharpness",
+      "glass_sharpness_desc": "How clearly the screen behind menus shows through them."
     },
     "internet": {
       "wifi_ssid": "WiFi Network",

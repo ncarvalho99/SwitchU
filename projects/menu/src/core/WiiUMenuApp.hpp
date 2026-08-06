@@ -82,6 +82,7 @@ private:
     GridLayoutMetrics computeGridLayoutMetrics() const;
     void reflowHomeGrid();
     void buildGrid();
+    void applyGlassSharpness(float sharpness);
     void buildUserAvatarBar();
     void applyTheme();
     void applyThemeResources(const ThemePreset& preset);

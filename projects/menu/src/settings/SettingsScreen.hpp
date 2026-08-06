@@ -27,6 +27,9 @@ public:
     void onDefaultProfileChange(StringCb cb) { m_defaultProfileCb = std::move(cb); }
     void onClockUse12HourChange(BoolCb cb) { m_clockUse12HourCb = std::move(cb); }
     void onBackgroundBlurChange(FloatCb cb) { m_backgroundBlurCb = std::move(cb); }
+    void onGlassSharpnessChange(FloatCb cb) { m_glassSharpnessCb = std::move(cb); }
+    void setGlassSharpness(float v) { m_glassSharpness = v; }
+    float glassSharpness() const { return m_glassSharpness; }
     void setBackgroundBlur(float v) { m_backgroundBlur = v; }
     float backgroundBlur() const { return m_backgroundBlur; }
     void onAccessibilityEnabledChange(BoolCb cb) { m_accessibilityEnabledCb = std::move(cb); }
@@ -89,6 +92,8 @@ private:
     BoolCb m_clockUse12HourCb;
     FloatCb m_backgroundBlurCb;
     float m_backgroundBlur = 0.f;
+    FloatCb m_glassSharpnessCb;
+    float m_glassSharpness = 0.4f;
     BoolCb m_accessibilityEnabledCb;
     BoolCb m_accessibilitySpeakHintsCb;
     BoolCb m_accessibilitySpeakContextEveryFocusCb;

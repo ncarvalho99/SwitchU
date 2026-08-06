@@ -93,7 +93,9 @@
       "ui_wireframe": "UI-Wireframe",
       "ui_wireframe_desc": "Umrisse aller Box-Widgets zur Layout-Fehlersuche anzeigen.",
       "background_blur": "Hintergrund-Weichzeichner",
-      "background_blur_desc": "Weicht das Hintergrundbild und die darüber treibenden Formen auf."
+      "background_blur_desc": "Weicht das Hintergrundbild und die darüber treibenden Formen auf.",
+      "glass_sharpness": "Glasschärfe",
+      "glass_sharpness_desc": "Wie deutlich der Bildschirm hinter den Menüs durchscheint."
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",

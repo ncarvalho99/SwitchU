@@ -93,7 +93,9 @@
       "ui_wireframe": "Каркас интерфейса",
       "ui_wireframe_desc": "Показывает контуры всех Box для отладки макета.",
       "background_blur": "Размытие фона",
-      "background_blur_desc": "Смягчает обои и фигуры, плывущие поверх них."
+      "background_blur_desc": "Смягчает обои и фигуры, плывущие поверх них.",
+      "glass_sharpness": "Чёткость стекла",
+      "glass_sharpness_desc": "Насколько чётко экран за меню виден сквозь них."
     },
     "internet": {
       "wifi_ssid": "WiFi-сеть",
