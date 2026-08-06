@@ -45,13 +45,29 @@ Whichever is chosen, the other applet is untouched.
 ## Files this feature adds
 
 ```
-sdmc:/atmosphere/hbl.nsp                       nx-hbloader itself
-sdmc:/atmosphere/config/override_config.ini    which title ID it takes over
+sdmc:/switch/SwitchU/homebrew/hbl.nsp          the loader SwitchU ships
+sdmc:/atmosphere/config/override_config.ini    which title ID it takes over,
+                                               and which loader answers
 ```
 
 `override_config.ini` is a file Atmosphère reads and other tools also write to.
 If it already exists it is edited, not replaced, and the previous contents are
 copied to `override_config.ini.switchu.bak` beside it first.
+
+### This changes the loader for the whole console
+
+Stock nx-hbloader always opens `sdmc:/hbmenu.nro`; there is no way to hand it a
+particular NRO when it starts as an applet. Launching an individual homebrew
+from the grid therefore needs a modified loader, and SwitchU ships one.
+
+Atmosphère holds **one** loader path for the entire system — `path=` under
+`[hbl_config]` is a single global, not a per-title setting. Pointing it at
+SwitchU's loader means every homebrew override on the console uses SwitchU's
+loader, **including one you set up yourself on the Album**. The previous value
+is saved in the `.bak` file and put back when the feature is turned off.
+
+If you rely on a specific loader build of your own, that is the setting that
+takes it away, and turning this feature off is what returns it.
 
 ## Undoing it
 
@@ -63,8 +79,9 @@ copied to `override_config.ini.switchu.bak` beside it first.
    If `override_config.ini.switchu.bak` is there, rename it back over the
    original instead of deleting — that restores whatever the file held before.
 
-Deleting `hbl.nsp` is optional. On its own it does nothing; it only matters
-while an override points at it.
+Restoring the `.bak` matters more than it used to: it carries the loader path
+your console used before, so putting it back returns your own hbl setup along
+with everything else.
 
 ### The console does not boot, or hangs on the menu
 
@@ -96,6 +113,8 @@ whole time; only the prompt that enforces them was standing aside.
 - The parental-control PIN, or any other setting held in NAND
 - `sdmc:/atmosphere/contents/`, apart from SwitchU's own `0100000000001000`
   that the normal installation already places there
+- `sdmc:/atmosphere/hbl.nsp` — SwitchU's loader lives under `switch/SwitchU/`
+  and a loader you installed yourself is never overwritten or deleted
 - Kernel patches, KIPs, or anything loaded before Atmosphère hands off
 
 ## If something goes wrong anyway
