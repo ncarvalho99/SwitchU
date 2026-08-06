@@ -4,6 +4,9 @@ build_switch/
 *.nro
 *.nacp
 *.nsp
+# nx-hbloader ships as an .nsp and is vendored deliberately, not built
+# here, so the blanket build-output rule above must not swallow it.
+!romfs/homebrew/hbl.nsp
 *.zip
 *.log
 sd_out/

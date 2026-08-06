@@ -160,7 +160,7 @@ rule("switch")
             if romfs and os.isdir(romfs) then
                 local assets_name = target:values("switch.assets_dir") or name
                 local assetsdir   = path.join(installdir, "switch", assets_name)
-                for _, sub in ipairs({"fonts", "sounds", "icons", "i18n", "shaders", "espeak-ng-data"}) do
+                for _, sub in ipairs({"fonts", "sounds", "icons", "i18n", "shaders", "espeak-ng-data", "homebrew"}) do
                     local src = path.join(romfs, sub)
                     if sub == "espeak-ng-data" then
                         local generated = path.join(os.projectdir(), "build/espeak-ng-native/espeak-ng-data")
