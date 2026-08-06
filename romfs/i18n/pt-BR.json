@@ -93,7 +93,9 @@
       "ui_wireframe": "Wireframe da UI",
       "ui_wireframe_desc": "Mostra os contornos de todos os widgets de caixa para depuração de layout.",
       "background_blur": "Desfoque do fundo",
-      "background_blur_desc": "Suaviza o papel de parede e as formas que flutuam sobre ele."
+      "background_blur_desc": "Suaviza o papel de parede e as formas que flutuam sobre ele.",
+      "glass_sharpness": "Nitidez do vidro",
+      "glass_sharpness_desc": "O quanto a tela atrás dos menus aparece através deles."
     },
     "internet": {
       "wifi_ssid": "Rede WiFi",

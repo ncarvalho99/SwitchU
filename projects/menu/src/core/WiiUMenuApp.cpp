@@ -895,11 +895,11 @@ void WiiUMenuApp::buildGrid() {
     m_activePresetName = m_config.themePreset;
     ThemePreset* preset = findPresetPtr(m_activePresetName);
     if (!preset) {
-        m_activePresetName = "builtin:Default Light";
+        m_activePresetName = "builtin:Default Dark";
         preset = findPresetPtr(m_activePresetName);
     }
     if (!preset) {
-        m_activePresetName = "Default Light";
+        m_activePresetName = "Default Dark";
         preset = findPresetPtr(m_activePresetName);
     }
 

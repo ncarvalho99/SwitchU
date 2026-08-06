@@ -93,7 +93,9 @@
       "ui_wireframe": "UI-draadmodel",
       "ui_wireframe_desc": "Toont contouren van alle Box-widgets voor lay-outdebugging.",
       "background_blur": "Achtergrondvervaging",
-      "background_blur_desc": "Verzacht de achtergrond en de vormen die eroverheen zweven."
+      "background_blur_desc": "Verzacht de achtergrond en de vormen die eroverheen zweven.",
+      "glass_sharpness": "Glashelderheid",
+      "glass_sharpness_desc": "Hoe duidelijk het scherm achter menu's erdoorheen zichtbaar is."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",

@@ -93,7 +93,9 @@
       "ui_wireframe": "Wireframe UI",
       "ui_wireframe_desc": "Mostra i contorni di tutti i widget Box per il debug del layout.",
       "background_blur": "Sfocatura dello sfondo",
-      "background_blur_desc": "Ammorbidisce lo sfondo e le forme che vi fluttuano sopra."
+      "background_blur_desc": "Ammorbidisce lo sfondo e le forme che vi fluttuano sopra.",
+      "glass_sharpness": "Nitidezza del vetro",
+      "glass_sharpness_desc": "Quanto lo schermo dietro i menu traspare attraverso di essi."
     },
     "internet": {
       "wifi_ssid": "Rete WiFi",

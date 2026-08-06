@@ -43,6 +43,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "tutorialCompleted", tutorialCompleted);
     readJsonOpt(j, "clockUse12Hour", clockUse12Hour);
     readJsonOpt(j, "backgroundBlur", backgroundBlur);
+    readJsonOpt(j, "glassSharpness", glassSharpness);
     readJsonOpt(j, "accessibilityEnabled", accessibilityEnabled);
     readJsonOpt(j, "accessibilitySpeakHints", accessibilitySpeakHints);
     readJsonOpt(j, "accessibilitySpeakContextEveryFocus", accessibilitySpeakContextEveryFocus);
@@ -60,7 +61,7 @@ bool AppConfig::load() {
     if (soundPreset.empty()) soundPreset = "wiiu";
     if (!defaultProfileEnabled) defaultProfileUid.clear();
     accessibilitySpeechRate = std::clamp(accessibilitySpeechRate, 120, 320);
-    if (themePreset.empty()) themePreset = "Default Light";
+    if (themePreset.empty()) themePreset = "Default Dark";
 
     return true;
 }
@@ -84,6 +85,7 @@ bool AppConfig::save() const {
     j["tutorialCompleted"] = tutorialCompleted;
     j["clockUse12Hour"] = clockUse12Hour;
     j["backgroundBlur"] = backgroundBlur;
+    j["glassSharpness"] = glassSharpness;
     j["accessibilityEnabled"] = accessibilityEnabled;
     j["accessibilitySpeakHints"] = accessibilitySpeakHints;
     j["accessibilitySpeakContextEveryFocus"] = accessibilitySpeakContextEveryFocus;

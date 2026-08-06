@@ -1,5 +1,6 @@
 #include "WiiUMenuApp.hpp"
 #include "themeshop/ThemePackageInstaller.hpp"
+#include "settings/SettingsGlassTuning.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 
@@ -221,6 +222,15 @@ std::string defaultThemeRef() {
 
 } // namespace
 
+// Radius 3 at half resolution reached six screen pixels; at full resolution it
+// reaches three, which is the sharpening that was reported as too strong on a
+// dark theme. 0.4 maps back to a reach of six, so the default looks like what
+// it replaced and the slider goes either way from there.
+void WiiUMenuApp::applyGlassSharpness(float sharpness) {
+    const float s = std::clamp(sharpness, 0.f, 1.f);
+    settings::debug::settingsGlassTuning().preBlurRadius = 9.f - s * 7.f;
+}
+
 void WiiUMenuApp::createSettings() {
     if (m_settings) return;
 
@@ -297,6 +307,17 @@ void WiiUMenuApp::createSettings() {
         if (m_settings)
             m_settings->setDefaultProfileState(m_config.defaultProfileEnabled,
                                                m_config.defaultProfileUid);
+    });
+    // The tuning struct already drives the cache: TabbedOverlayScreen compares
+    // the radius it last captured with, so writing it here is enough to make
+    // the backdrop refresh on the next frame.
+    applyGlassSharpness(m_config.glassSharpness);
+    m_settings->setGlassSharpness(m_config.glassSharpness);
+    m_settings->onGlassSharpnessChange([this](float sharpness) {
+        if (std::abs(m_config.glassSharpness - sharpness) < 0.001f)
+            return;
+        m_config.glassSharpness = sharpness;
+        applyGlassSharpness(sharpness);
     });
     m_settings->setBackgroundBlur(m_config.backgroundBlur);
     m_settings->onBackgroundBlurChange([this](float strength) {

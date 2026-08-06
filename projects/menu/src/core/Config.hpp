@@ -23,7 +23,16 @@ struct AppConfig {
     // an existing install looks unchanged until someone asks for it.
     float backgroundBlur = 0.f;
 
-    std::string themePreset = "Default Light";
+    // How sharply the scene reads through the glass panels. Capturing that
+    // scene at full resolution made it sharper than it had ever been, which
+    // helps a light theme and is too much on a dark one. 0.4 reproduces the
+    // half-resolution look this replaced, and is the default for that reason.
+    float glassSharpness = 0.4f;
+
+    // Dark by default. The light preset was the one that shipped, and the
+    // request to change it came with a reason: the interface reads better
+    // dark, and a first boot into white is a jolt on a handheld.
+    std::string themePreset = "Default Dark";
 
     bool load();
 
