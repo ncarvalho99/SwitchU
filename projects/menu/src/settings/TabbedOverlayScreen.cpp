@@ -452,8 +452,15 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
         || std::abs(m_cachedPreBlurRadius - tuning.preBlurRadius) > 0.001f
         || m_cachedBlurIterations != tuning.blurIterations;
 
+    // Capturing while the scene is hidden captures a frame with no scene in
+    // it — just the panel over the frozen copy — and the glass then samples
+    // itself, so the wallpaper and the icons dissolve until the overlay closes
+    // and the scene is drawn again. Reported after the sharpness slider, which
+    // is what makes the backdrop refresh mid-session. Releasing the hold below
+    // brings the scene back next frame, and the capture waits for it.
+    const bool canCapture = !m_sceneHidden;
     if (opacity > 0.01f) {
-        if (needsBackdropRefresh) {
+        if (needsBackdropRefresh && canCapture) {
             ren.captureToOffscreenSharp();
             // Kept before the blur: this is what the margin around the panel
             // shows, and it has to look like the scene, not like the glass.
@@ -479,6 +486,7 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
         && !m_animating
         && !m_dropdownOpen
         && !m_dropdownClosing
+        && !needsBackdropRefresh
         && std::abs(m_scrollY - m_scrollTarget) < 0.5f;
     ren.setHoldOffscreenCapture(sceneSettled);
 
