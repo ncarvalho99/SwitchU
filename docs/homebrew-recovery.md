@@ -27,13 +27,18 @@ reasonable choices break different things.
 
 | Setting | Title ID | What stops working while enabled |
 | --- | --- | --- |
-| **Album** (default) | `010000000000100D` | Opening the Album gives homebrew instead of the screenshot gallery |
-| Parental controls | `0100000000001001` | The parental-control PIN prompt is replaced, so parental controls no longer block anything |
+| **Parental controls** (default) | `0100000000001001` | The parental-control PIN prompt is replaced, so parental controls no longer block anything |
+| Album | `010000000000100D` | Opening the Album gives homebrew instead of the screenshot gallery |
 
-Album is the default because losing the screenshot gallery is an inconvenience,
-while losing the parental-control prompt is a protection silently switching off.
-If nobody on the console uses parental controls, the second option costs
-nothing and keeps the Album intact — that is the only reason it is offered.
+Parental controls is the default because on most consoles it is never set up,
+and taking it costs those consoles nothing while leaving the Album working.
+
+**If this console has parental controls set up, change this setting before
+enabling homebrew launching.** The PIN prompt is what enforces them, and while
+it is replaced they stop being enforced at all — the restrictions still appear
+configured in Settings, and are no longer applied. Nothing warns about this on
+the console itself, which is why it is stated here. Switching the setting to
+Album restores enforcement immediately.
 
 Whichever is chosen, the other applet is untouched.
 
@@ -79,9 +84,11 @@ Nintendo home menu, and SwitchU is out of the picture entirely.
 ### Getting parental controls back
 
 Nothing is stored, so there is nothing to restore: the moment the override is
-gone, the real applet answers again and the existing PIN works as before. The
-PIN itself lives in the console's own settings and this feature never reads or
-writes it.
+gone — either by switching the host to Album or by deleting
+`override_config.ini` — the real applet answers again and the existing PIN
+works as before. The PIN itself lives in the console's own settings, and this
+feature never reads, writes or clears it. The restrictions were configured the
+whole time; only the prompt that enforces them was standing aside.
 
 ## What this never touches
 
