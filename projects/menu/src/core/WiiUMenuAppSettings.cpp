@@ -6,6 +6,7 @@
 #include <nxui/core/I18n.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
@@ -296,6 +297,14 @@ void WiiUMenuApp::createSettings() {
         if (m_settings)
             m_settings->setDefaultProfileState(m_config.defaultProfileEnabled,
                                                m_config.defaultProfileUid);
+    });
+    m_settings->setBackgroundBlur(m_config.backgroundBlur);
+    m_settings->onBackgroundBlurChange([this](float strength) {
+        if (std::abs(m_config.backgroundBlur - strength) < 0.001f)
+            return;
+        m_config.backgroundBlur = strength;
+        if (m_background)
+            m_background->setBlurStrength(strength);
     });
     m_settings->onClockUse12HourChange([this](bool enabled) {
         if (m_config.clockUse12Hour == enabled)
@@ -1102,6 +1111,7 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         backgroundConfig.imageOpacity = preset.background.imageOpacity;
         backgroundConfig.imageCover = preset.background.imageCover;
         m_background->setConfig(backgroundConfig);
+        m_background->setBlurStrength(m_config.backgroundBlur);
 
         if (backgroundImageNeedsReload) {
             const bool imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);

@@ -4,7 +4,6 @@
 #include <algorithm>
 
 SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
-    (void)screen;
     using Tab = SettingsScreen::Tab;
     using SettingItem = SettingsScreen::SettingItem;
     using ItemType = SettingsScreen::ItemType;
@@ -20,6 +19,21 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         it.anim01 = std::clamp(val, 0.f, 1.f);
         it.onChange = [](SettingItem& self) {
             lblSetCurrentBrightnessSetting(self.floatVal);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.display.background_blur", "Background blur");
+        it.description = i18n.tr("settings.display.background_blur_desc",
+                                 "Soften the wallpaper and the shapes drifting over it.");
+        it.type = ItemType::Slider;
+        it.floatVal = screen.backgroundBlur();
+        it.anim01 = std::clamp(it.floatVal, 0.f, 1.f);
+        it.onChange = [&screen](SettingItem& self) {
+            if (screen.m_backgroundBlurCb)
+                screen.m_backgroundBlurCb(self.floatVal);
         };
         t.items.push_back(std::move(it));
     }

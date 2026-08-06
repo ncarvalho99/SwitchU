@@ -169,15 +169,21 @@ public:
     //
     // Making them all full resolution cost the home screen 1.8ms a frame and
     // 60 fps became 54. So the per-frame one stays half.
-    static constexpr int NUM_OFFSCREEN = 5;
+    static constexpr int NUM_OFFSCREEN = 6;
 
     static constexpr int OFF_SCENE    = 0;   // half res, captured every frame
     static constexpr int OFF_DIALOG   = 1;   // full res, dialog backdrop cache
     static constexpr int OFF_SETTINGS = 2;   // full res, settings backdrop cache
     static constexpr int OFF_SHARP_A  = 3;   // full res, sharp capture and blur
     static constexpr int OFF_SHARP_B  = 4;   // full res, blur scratch
+    // Half res, and the pair for it is OFF_SCENE: the wallpaper is drawn into
+    // the scene target, blurred against this one, and drawn back, all before
+    // anything captures the scene for the icon glass.
+    static constexpr int OFF_BG_BLUR  = 5;
 
-    static constexpr bool offscreenIsFullRes(int i) { return i != OFF_SCENE; }
+    static constexpr bool offscreenIsFullRes(int i) {
+        return i != OFF_SCENE && i != OFF_BG_BLUR;
+    }
     static constexpr int  offscreenWidth(int i)  { return offscreenIsFullRes(i) ? FB_WIDTH  : FB_WIDTH  / 2; }
     static constexpr int  offscreenHeight(int i) { return offscreenIsFullRes(i) ? FB_HEIGHT : FB_HEIGHT / 2; }
 
@@ -197,7 +203,7 @@ public:
 
     // Stubs for pool-based allocation (SDL2 uses SDL_CreateTexture directly)
     void resetImagePool() {}
-    static constexpr int NUM_OFFSCREEN = 5;
+    static constexpr int NUM_OFFSCREEN = 6;
     bool offscreenReady() const { return false; }
 #endif
 

@@ -91,7 +91,9 @@
       "album_sd": "Tarjeta SD",
       "album_nand": "NAND",
       "ui_wireframe": "Wireframe de la interfaz",
-      "ui_wireframe_desc": "Muestra contornos de todos los widgets Box para depuración de layout."
+      "ui_wireframe_desc": "Muestra contornos de todos los widgets Box para depuración de layout.",
+      "background_blur": "Desenfoque del fondo",
+      "background_blur_desc": "Suaviza el fondo de pantalla y las formas que flotan sobre él."
     },
     "internet": {
       "wifi_ssid": "Red WiFi",

@@ -265,7 +265,37 @@ nxui::Rect WaraWaraBackground::backgroundImageRect() const {
     return {areaX + (areaW - drawW) * 0.5f, areaY + (areaH - drawH) * 0.5f, drawW, drawH};
 }
 
+// Someone found the wallpaper too sharp and the drifting shapes distracting.
+// Both come from the same layer, so both are softened by the same control: the
+// layer is drawn into the half-resolution scene target, blurred there, and
+// drawn back. Blurring only the image would have left the shapes crisp, which
+// is the half of it that was actually in the way.
+//
+// The scene target is free at this point — the icon glass captures the finished
+// framebuffer into it later in the frame, so this is done with it by then.
 void WaraWaraBackground::onRender(nxui::Renderer& ren) {
+    const bool blurred = m_blurStrength > 0.01f && ren.gpu().offscreenReady();
+    if (blurred)
+        ren.beginScreenSpaceTarget(nxui::GpuDevice::OFF_SCENE);
+
+    renderLayer(ren, blurred);
+
+    if (blurred) {
+        // One pass at radius 1 is barely a smudge and four is a wash; the
+        // slider moves the radius and adds passes only as it gets wide, since
+        // passes cost a fullscreen pair each and radius alone does not.
+        const float radius = 1.f + m_blurStrength * 5.f;
+        const int   passes = 1 + (int)(m_blurStrength * 2.99f);
+        ren.applyBlurBetween(nxui::GpuDevice::OFF_SCENE, nxui::GpuDevice::OFF_BG_BLUR,
+                             radius, passes);
+        ren.drawOffscreen(nxui::GpuDevice::OFF_SCENE, m_rect,
+                          nxui::Color::white().withAlpha(m_opacity));
+        ren.flush();
+    }
+}
+
+void WaraWaraBackground::renderLayer(nxui::Renderer& ren, bool intoOffscreen) {
+    (void)intoOffscreen;
     ren.useShader(nxui::ShaderProgram::Gradient);
     nxui::FsUniforms fs = {};
     fs.useTexture = 0;

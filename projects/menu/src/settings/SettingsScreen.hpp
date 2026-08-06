@@ -26,6 +26,9 @@ public:
     void onUiLanguageChange(StringCb cb) { m_uiLanguageCb = std::move(cb); }
     void onDefaultProfileChange(StringCb cb) { m_defaultProfileCb = std::move(cb); }
     void onClockUse12HourChange(BoolCb cb) { m_clockUse12HourCb = std::move(cb); }
+    void onBackgroundBlurChange(FloatCb cb) { m_backgroundBlurCb = std::move(cb); }
+    void setBackgroundBlur(float v) { m_backgroundBlur = v; }
+    float backgroundBlur() const { return m_backgroundBlur; }
     void onAccessibilityEnabledChange(BoolCb cb) { m_accessibilityEnabledCb = std::move(cb); }
     void onAccessibilitySpeakHintsChange(BoolCb cb) { m_accessibilitySpeakHintsCb = std::move(cb); }
     void onAccessibilitySpeakContextEveryFocusChange(BoolCb cb) { m_accessibilitySpeakContextEveryFocusCb = std::move(cb); }
@@ -84,6 +87,8 @@ private:
     StringCb m_uiLanguageCb;
     StringCb m_defaultProfileCb;
     BoolCb m_clockUse12HourCb;
+    FloatCb m_backgroundBlurCb;
+    float m_backgroundBlur = 0.f;
     BoolCb m_accessibilityEnabledCb;
     BoolCb m_accessibilitySpeakHintsCb;
     BoolCb m_accessibilitySpeakContextEveryFocusCb;
