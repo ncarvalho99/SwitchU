@@ -1,3 +1,5 @@
+**[Português](#lançar-homebrew-o-que-muda-e-como-desfazer) abaixo.**
+
 # Launching homebrew: what it changes, and how to undo it
 
 Read this before installing a build with homebrew launching enabled. Written
@@ -130,3 +132,143 @@ whole time; only the prompt that enforces them was standing aside.
 report actionable, together with the `SwitchU-symbols-*` artifact from the
 **same build** — symbols from a different build resolve to the wrong lines and
 send the search in the wrong direction.
+
+---
+
+# Lançar homebrew: o que muda, e como desfazer
+
+Leia isto antes de instalar um build com o lançamento de homebrew habilitado.
+Escrito antes da funcionalidade existir, para que o caminho de volta exista
+funcione ou não o caminho de ida.
+
+## A versão curta
+
+Tudo que esta funcionalidade adiciona fica no cartão microSD, sob `atmosphere/`.
+Nada é escrito na memória interna do console. **Apagar os arquivos listados
+abaixo restaura o comportamento original por completo** — não sobra estado
+nenhum na NAND para limpar, e não há passo que não possa ser desfeito com o
+cartão num computador.
+
+## Por que um applet precisa ser tomado
+
+O SwitchU substitui o qlaunch (`0100000000001000`), o menu principal. Um menu
+principal não consegue executar um `.nro` sozinho: homebrew roda dentro do
+`nx-hbloader`, e o `nx-hbloader` roda tomando o lugar de um applet do sistema. O
+Atmosphère faz isso com um override baseado em arquivo — o título do applet é
+apontado para um `hbl.nsp` no cartão.
+
+Então lançar homebrew pela grade significa que um applet do sistema deixa de ser
+ele mesmo enquanto o override existir. Qual deles é um ajuste, porque as duas
+escolhas razoáveis quebram coisas diferentes.
+
+## O que é tomado, e o que isso custa
+
+| Ajuste | Título | O que deixa de funcionar enquanto ligado |
+| --- | --- | --- |
+| **Controle parental** (padrão) | `0100000000001001` | O prompt de PIN é substituído, então o controle parental deixa de barrar qualquer coisa |
+| Álbum | `010000000000100D` | Abrir o Álbum dá homebrew em vez da galeria de capturas |
+
+O controle parental é o padrão porque na maioria dos consoles ele nunca foi
+configurado, e tomá-lo não custa nada a esses consoles, deixando o Álbum
+funcionando.
+
+**Se este console tem controle parental configurado, troque este ajuste antes de
+habilitar o lançamento de homebrew.** O prompt de PIN é o que o aplica, e
+enquanto ele estiver substituído nada é aplicado — as restrições continuam
+aparecendo configuradas em Configurações, e deixam de valer. Nada avisa disso no
+próprio console, que é o motivo de estar dito aqui. Trocar o ajuste para Álbum
+restaura a aplicação imediatamente.
+
+Segurar **R** enquanto o sistema levanta um prompt de PIN dá o applet de verdade
+em vez do loader, então o prompt continua funcionando para quem souber. Mas não
+segure R ao lançar homebrew pela grade: o menu inicia o applet sem argumento
+nenhum, o que o loader ignora e o applet real aborta. Esse crash é do applet,
+não do console, e nada fica quebrado depois.
+
+Qualquer que seja a escolha, o outro applet fica intocado.
+
+## Arquivos que esta funcionalidade adiciona
+
+```
+sdmc:/switch/SwitchU/homebrew/hbl.nsp          o loader que o SwitchU embarca
+sdmc:/atmosphere/config/override_config.ini    qual título é tomado,
+                                               e qual loader responde
+```
+
+O `override_config.ini` é um arquivo que o Atmosphère lê e que outras
+ferramentas também escrevem. Se já existir, ele é editado e não substituído, e o
+conteúdo anterior é copiado para `override_config.ini.switchu.bak` ao lado
+antes.
+
+### Isto troca o loader do console inteiro
+
+O nx-hbloader original sempre abre `sdmc:/hbmenu.nro`; não há como entregar a
+ele um `.nro` específico quando iniciado como applet. Lançar um homebrew
+individual pela grade exige portanto um loader modificado, e o SwitchU embarca
+um.
+
+O Atmosphère guarda **um** caminho de loader para o sistema inteiro — a chave
+`path=` sob `[hbl_config]` é global, não por título. Apontá-la para o loader do
+SwitchU significa que todo override de homebrew do console passa a usar o loader
+do SwitchU, **inclusive um que você mesmo tenha configurado no Álbum**. O valor
+anterior é salvo no arquivo `.bak` e devolvido quando a funcionalidade é
+desligada.
+
+Se você depende de um build específico de loader, é esse ajuste que o tira, e
+desligar a funcionalidade é o que o devolve.
+
+## Desfazendo
+
+### Caso normal — o console liga
+
+1. Desligue o ajuste no SwitchU, ou
+2. Desligue o console, coloque o cartão SD num computador, e apague
+   `sdmc:/atmosphere/config/override_config.ini`.
+   Se houver um `override_config.ini.switchu.bak`, renomeie-o de volta por cima
+   do original em vez de apagar — isso restaura o que o arquivo continha antes.
+
+Restaurar o `.bak` importa mais do que antes: ele carrega o caminho de loader
+que o console usava, então devolvê-lo traz de volta o seu próprio hbl junto com
+todo o resto.
+
+### O console não liga, ou trava no menu
+
+O override é texto puro no cartão SD, então basta um computador. Sem payload
+RCM, sem restauração de NAND.
+
+1. Segure **Power** por 12 segundos para forçar o desligamento.
+2. Coloque o cartão microSD num computador.
+3. Apague `atmosphere/config/override_config.ini` (ou restaure o `.bak`).
+4. Devolva o cartão e ligue.
+
+Se mesmo assim não ligar, a causa não é esta funcionalidade — o override só
+entra em ação quando o applet é lançado, muito depois do boot. Renomeie
+`atmosphere/contents/0100000000001000` para `…1000.off` para voltar ao menu
+principal original da Nintendo, e o SwitchU sai de cena por completo.
+
+### Recuperando o controle parental
+
+Nada é armazenado, então não há o que restaurar: no momento em que o override
+sai — seja trocando o applet para Álbum, seja apagando o `override_config.ini` —
+o applet de verdade volta a responder e o PIN existente funciona como antes. O
+PIN em si vive nas configurações do próprio console, e esta funcionalidade nunca
+o lê, escreve ou apaga. As restrições estiveram configuradas o tempo todo; só o
+prompt que as aplica é que estava de lado.
+
+## O que isto nunca toca
+
+- A memória interna do console — nenhum título é instalado, movido ou apagado
+- O PIN do controle parental, ou qualquer outro ajuste guardado na NAND
+- `sdmc:/atmosphere/contents/`, exceto o `0100000000001000` do próprio SwitchU
+  que a instalação normal já coloca lá
+- `sdmc:/atmosphere/hbl.nsp` — o loader do SwitchU vive em `switch/SwitchU/` e
+  um loader que você tenha instalado nunca é sobrescrito nem apagado
+- Patches de kernel, KIPs, ou qualquer coisa carregada antes do Atmosphère
+  passar o controle adiante
+
+## Se algo der errado mesmo assim
+
+`sdmc:/atmosphere/crash_reports/` e `sdmc:/config/SwitchU/` são o que torna um
+relato acionável, junto com o artefato `SwitchU-symbols-*` do **mesmo build** —
+símbolos de outro build resolvem para as linhas erradas e mandam a investigação
+na direção errada.
