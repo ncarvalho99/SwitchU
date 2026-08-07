@@ -1,112 +1,21 @@
 <div align="center">
-    <h1>SwitchU</h1>
-    <p>A Wii U-style custom home menu replacement for Nintendo Switch</p>
+    <h1>SwitchU — Homebrew launching</h1>
+    <p>Test build. Not a release, not the default.</p>
 </div>
 
-<p align="center">
-  <a rel="LICENSE" href="https://github.com/PoloNX/SwitchU/blob/master/LICENSE">
-    <img src="https://img.shields.io/static/v1?label=license&message=GPLV3&labelColor=111111&color=0057da&style=for-the-badge" alt="License">
-  </a>
-  <a rel="VERSION" href="https://github.com/PoloNX/SwitchU/releases">
-    <img src="https://img.shields.io/static/v1?label=version&message=1.1.0&labelColor=111111&color=06f&style=for-the-badge" alt="Version">
-  </a>
-  <a rel="BUILD" href="https://github.com/PoloNX/SwitchU/actions">
-      <img src="https://img.shields.io/github/actions/workflow/status/PoloNX/SwitchU/switch.yml?branch=master &labelColor=111111&color=06f&style=for-the-badge" alt=Build>
-  </a>
-</p>
+---
+
+This branch adds launching homebrew from the grid. It is here to be tried and
+reported on. Read [docs/homebrew-recovery.md](docs/homebrew-recovery.md) before
+turning it on — it is short, and it is the way back out.
+
+**[Português](#português) below.**
 
 ---
 
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [How to build](#how-to-build)
-- [Help me](#help-me)
-- [Credits](#credits)
-- [License](#license)
+## English
 
-
-## Screenshots
-
-![](./screenshots/1.jpg)
-
-<details>
-  <summary><b>More screenshots</b></summary>
-
-![](./screenshots/2.jpg)
-![](./screenshots/3.jpg)
-![](./screenshots/4.jpg)
-![](./screenshots/5.jpg)
-
-</details>
-
-## How to build
-
-### Requirements
-
-- [devkitPro](https://devkitpro.org/wiki/Getting_Started)
-- [Xmake](https://xmake.io/#/)
-
-### Clone
-
-```bash
-git clone --recursive https://github.com/PoloNX/SwitchU
-cd SwitchU
-```
-
-### Build (production daemon + external menu mode)
-
-```bash
-xmake f -p cross --toolchain=devkita64 --homebrew=n --backend=deko3d
-xmake
-```
-
-### Build (homebrew .nro mode)
-
-```bash
-xmake f -p cross --toolchain=devkita64 --homebrew=y --backend=deko3d
-xmake
-```
-
-### Clean
-
-```bash
-xmake clean
-```
-
-Build outputs are generated under `build/cross/aarch64/<mode>/`.
-
-## Know issues
-- Some settings are not implemented yet
-- Current icons are very ugly, feel free to replace them with better ones
-- You may experience somme crash when using a lot of sysmodules. I tried to reduce the ram usage but I still get some instability when launching a game.
-
-## TODO
-- Add a pannel when pressing + on a game to show more information about it
-- Add video in background for the home menu
-- Add a steamgriddb integration to get game banners and backgrounds
-
-## Help me
-
-If you want to help, open an issue when you find a bug and open a pull request if you have a fix.
-
-## Credits
-
-- Thanks to [Xortroll](https://github.com/Xortroll) for the help and for [uLaunch](https://github.com/Xortroll/uLaunch) which inspired this project a lot
-
-## License
-
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](https://github.com/PoloNX/SwitchU/blob/master/LICENSE) file for details.
-
----
-
-# Homebrew launching — test build
-
-This branch adds launching homebrew from the grid. It is **not** in a release
-and is not the default; it is here to be tried and reported on. Read
-[docs/homebrew-recovery.md](docs/homebrew-recovery.md) before turning it on —
-it is short, and it is the way back out.
-
-## What it does
+### What it does
 
 `.nro` files on the card appear in the grid beside your games. Opening one runs
 that homebrew, and leaving it returns to the page you started from.
@@ -114,7 +23,7 @@ that homebrew, and leaving it returns to the page you started from.
 Everything is under **SwitchU → Homebrew**, in the order you meet it: turn it
 on, choose what it costs, restart the menu to see it, then manage the files.
 
-## What it costs, and why
+### What it costs, and why
 
 A home menu cannot run an `.nro` by itself. Homebrew runs inside `nx-hbloader`,
 and `nx-hbloader` runs by taking the place of a system applet. So one applet
@@ -136,17 +45,17 @@ SwitchU's loader answers for every homebrew override on the console — includin
 one you set up on the Album yourself. The previous value is saved and put back
 when you turn this off.
 
-## Turning it off is the whole way back
+### Turning it off is the whole way back
 
 Everything this writes lives on the microSD card under `atmosphere/`. Nothing
 touches internal storage. Switching it off in the menu removes what it added; if
-the console will not boot, deleting
-`atmosphere/config/override_config.ini` from a computer does the same. The
-override only takes effect when an applet launches, long after boot, so it
-cannot stop the console starting. Details, including how to get parental
-controls back, are in [docs/homebrew-recovery.md](docs/homebrew-recovery.md).
+the console will not boot, deleting `atmosphere/config/override_config.ini` from
+a computer does the same. The override only takes effect when an applet
+launches, long after boot, so it cannot stop the console starting. Details,
+including how to get parental controls back, are in
+[docs/homebrew-recovery.md](docs/homebrew-recovery.md).
 
-## What does not work, and will not
+### What does not work, and will not
 
 **Ports installed by another homebrew.** PortNX and the like install a shortcut
 of their own that passes the port arguments saying which game to load. Launching
@@ -159,7 +68,7 @@ installer made.**
 Self-contained homebrew is unaffected. A port that finds its own data by a fixed
 path, like Render96, launches fine.
 
-## Hiding duplicates
+### Hiding duplicates
 
 An installed shortcut and the emulator behind it are two entries for what looks
 like one thing — PortNX gives Ocarina of Time its real name and icon, and Ship
@@ -171,7 +80,7 @@ it.
 Deleting is there too, and removes the `.nro` only. The folder beside it stays,
 because those hold saves and settings — JKSV keeps its backups in one.
 
-## How it works
+### How it works
 
 - `lib/switchu-hbloader/` — a vendored copy of
   [nx-hbloader](https://github.com/switchbrew/nx-hbloader) v2.4.5 with one
@@ -191,10 +100,109 @@ because those hold saves and settings — JKSV keeps its backups in one.
 - `tests/hbl_override/` — runs the override writer on a PC against a fake SD
   tree. It caught two defects a compiler never would.
 
-## Reporting a problem
+### Reporting a problem
 
 Turn the console off, put the card in a computer, and send whatever is in
 `atmosphere/crash_reports`. Say which build. The `.log` files there are plain
 text with nothing personal in them. Without them there is nothing to go on — the
 console shows a code that says a crash happened and nothing about where.
 
+---
+
+## Português
+
+### O que faz
+
+Arquivos `.nro` do cartão aparecem na grade ao lado dos seus jogos. Abrir um
+executa aquele homebrew, e sair dele volta para a página de onde você partiu.
+
+Tudo fica em **SwitchU → Homebrew**, na ordem em que você encontra as coisas:
+ligar, escolher o que custa, reiniciar o menu para ver, e gerenciar os arquivos.
+
+### O que custa, e por quê
+
+Um menu principal não consegue executar um `.nro` sozinho. Homebrew roda dentro
+do `nx-hbloader`, e o `nx-hbloader` roda tomando o lugar de um applet do
+sistema. Então um applet deixa de ser ele mesmo enquanto isto estiver ligado, e
+qual deles é escolha sua:
+
+| Ajuste | O que deixa de funcionar |
+| --- | --- |
+| **Controle parental** (padrão) | O prompt de PIN é substituído, então o controle parental deixa de ser aplicado |
+| Álbum | Abrir o Álbum dá homebrew em vez da galeria de capturas |
+
+O controle parental é o padrão porque na maioria dos consoles ele nunca foi
+configurado. **Se no seu foi, troque para Álbum antes de habilitar.** As
+restrições continuam parecendo configuradas em Configurações enquanto nada as
+aplica, e o console não avisa nada disso. Segurar **R** enquanto o sistema
+levanta um prompt de PIN dá o applet de verdade, então ele continua alcançável
+para quem souber.
+
+O Atmosphère guarda **um** caminho de loader para o sistema inteiro, então
+enquanto isto estiver ligado o loader do SwitchU responde por todo override de
+homebrew do console — inclusive um que você mesmo tenha configurado no Álbum. O
+valor anterior é salvo e devolvido quando você desliga.
+
+### Desligar é a rota de volta inteira
+
+Tudo que isto escreve fica no cartão microSD, sob `atmosphere/`. Nada toca a
+memória interna. Desligar a opção no menu remove o que foi adicionado; se o
+console não bootar, apagar `atmosphere/config/override_config.ini` por um
+computador faz o mesmo. O override só entra em ação quando um applet é lançado,
+muito depois do boot, então ele não é capaz de impedir o console de ligar. Os
+detalhes, inclusive como recuperar o controle parental, estão em
+[docs/homebrew-recovery.md](docs/homebrew-recovery.md).
+
+### O que não funciona, e não vai funcionar
+
+**Ports instalados por outro homebrew.** O PortNX e semelhantes instalam um
+atalho próprio, que passa ao port os argumentos dizendo qual jogo carregar.
+Lançar o `.nro` pela grade passa apenas o caminho dele — que é o que qualquer
+lançador comum faz — então um port que precisa ser avisado reporta arquivo
+ausente e para. Esses argumentos vivem dentro do atalho instalado, num formato
+que ninguém promete manter, então nada aqui consegue recuperá-los. **Abra esses
+pelo atalho que o instalador deles criou.**
+
+Homebrew autossuficiente não é afetado. Um port que acha os próprios dados por
+caminho fixo, como o Render96, abre normalmente.
+
+### Ocultar duplicatas
+
+Um atalho instalado e o emulador por trás dele são duas entradas para o que
+parece ser uma coisa só — o PortNX dá ao Ocarina of Time o nome e o ícone
+corretos, e o Ship of Harkinian aparece em seguida sob o nome dele. Qual dos
+dois você quer não é coisa para adivinhar, então **SwitchU → Homebrew** permite
+tirar qualquer arquivo da grade deixando-o no cartão. Deixe no cartão: o atalho
+precisa dele.
+
+Apagar também está lá, e remove apenas o `.nro`. A pasta ao lado permanece,
+porque elas guardam saves e configurações — o JKSV mantém os backups dele numa.
+
+### Como funciona
+
+- `lib/switchu-hbloader/` — uma cópia vendorizada do
+  [nx-hbloader](https://github.com/switchbrew/nx-hbloader) v2.4.5 com uma
+  modificação. O original sempre abre o `hbmenu.nro` quando iniciado como
+  applet: o caminho que ele executa só é escrito por homebrew que já está
+  rodando, pelo ABI do `envSetNextLoad`, então um menu que o inicia não tem como
+  nomear um alvo. O fork lê uma linha de
+  `sdmc:/config/SwitchU/next_nro.txt`, apaga o arquivo, e cai no hbmenu
+  exatamente como o original quando não há pedido. Compilado a partir da fonte
+  pelo alvo `switchu-hbloader` do xmake, para que o binário que embarca e a
+  fonte desta árvore não possam divergir. ISC, com o aviso junto.
+- `projects/menu/src/launcher/HblOverride.*` — escreve e remove o override.
+  Adiciona uma entrada no primeiro slot livre, deixa as demais linhas como
+  estavam, faz backup do arquivo antes, e nunca sobrescreve o `hbl.nsp` de
+  ninguém.
+- `SystemMessage::LaunchHomebrew` — o menu não inicia applets, ele pede ao
+  daemon. Esta é a primeira mensagem `Launch*` que carrega argumento, porque
+  todas as outras têm applet fixo e o desta é um ajuste.
+- `tests/hbl_override/` — roda o escritor do override num PC, contra uma árvore
+  de cartão falsa. Ele encontrou dois defeitos que compilador nenhum acharia.
+
+### Reportando um problema
+
+Desligue o console, coloque o cartão num computador, e mande o que estiver em
+`atmosphere/crash_reports`. Diga qual build. Os arquivos `.log` de lá são texto
+puro e não contêm nada pessoal. Sem eles não há por onde começar — o console
+mostra um código que diz que houve um crash e nada sobre onde.
