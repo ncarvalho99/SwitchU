@@ -22,6 +22,7 @@
 #include <unordered_set>
 #include <fstream>
 #include <filesystem>
+#include <nxui/third_party/stb/stb_image.h>
 #include <nlohmann/json.hpp>
 #include <system_error>
 
@@ -380,6 +381,77 @@ void WiiUMenuApp::measureUploadCost() {
 
     DebugLog::log("[upload-bench] frame budget at 60fps is 16.67ms, "
                   "and the home grid already spends about 8.5ms of it");
+
+    measureDecodeCost();
+}
+
+// The other half of the video question. Uploading a frame turned out to cost
+// 4.17ms, well inside the budget and well under my estimate -- but a frame has
+// to be decoded before it can be uploaded, and that runs on the CPU.
+//
+// Measured with stb_image, which the project already links, rather than by
+// pulling in ffmpeg: 31 MB of dependency to answer a question a decoder already
+// present can answer. A sequence of stills is also the cheap implementation
+// that would follow if the number is good, so this measures the thing that
+// would actually ship, not a proxy for it.
+void WiiUMenuApp::measureDecodeCost() {
+    // Whatever full-screen artwork is on the card. Themes keep their wallpaper
+    // at screen size, which is exactly the size a video frame would be.
+    static const char* candidates[] = {
+        "sdmc:/switch/SwitchU/themes",
+        "sdmc:/config/SwitchU/themes",
+    };
+
+    std::string picked;
+    uint64_t pickedBytes = 0;
+    for (const char* root : candidates) {
+        std::error_code ec;
+        if (!std::filesystem::exists(root, ec)) continue;
+        for (auto it = std::filesystem::recursive_directory_iterator(root, ec);
+             it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            if (ec) break;
+            if (!it->is_regular_file(ec)) continue;
+            const std::string p = it->path().string();
+            const bool image = p.size() > 4 &&
+                (p.compare(p.size() - 4, 4, ".jpg") == 0 ||
+                 p.compare(p.size() - 4, 4, ".png") == 0);
+            if (!image) continue;
+            const uint64_t sz = (uint64_t)it->file_size(ec);
+            // Biggest file wins: the largest image on the card is the closest
+            // thing to a full-screen frame that is certain to be there.
+            if (sz > pickedBytes) { pickedBytes = sz; picked = p; }
+        }
+        if (!picked.empty()) break;
+    }
+
+    if (picked.empty()) {
+        DebugLog::log("[decode-bench] no theme artwork found to decode");
+        return;
+    }
+
+    int w = 0, h = 0, ch = 0;
+    uint64_t best = UINT64_MAX;
+    for (int i = 0; i < 3; ++i) {
+        const uint64_t a = armGetSystemTick();
+        uint8_t* px = stbi_load(picked.c_str(), &w, &h, &ch, 4);
+        const uint64_t b = armGetSystemTick();
+        if (!px) {
+            DebugLog::log("[decode-bench] failed to decode %s", picked.c_str());
+            return;
+        }
+        stbi_image_free(px);
+        best = std::min(best, b - a);
+    }
+
+    const double ms = armTicksToNs(best) / 1000000.0;
+    DebugLog::log("[decode-bench] %s", picked.c_str());
+    DebugLog::log("[decode-bench] %dx%d, %.0f KB on disk, decode %.2fms (best of 3)",
+                  w, h, pickedBytes / 1024.0, ms);
+    // What the number means, so the log answers the question on its own.
+    DebugLog::log("[decode-bench] at that cost a decode thread sustains %.1f fps, "
+                  "and one frame of decode plus 4.17ms of upload is %.2fms of a "
+                  "16.67ms budget",
+                  ms > 0.0 ? 1000.0 / ms : 0.0, ms + 4.17);
 }
 void WiiUMenuApp::onDestroy() {
     if (m_audioFuture.valid()) m_audioFuture.get();
