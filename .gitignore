@@ -35,3 +35,8 @@ compile_commands.json
 # two the CI workflow builds and uploads as artifacts.
 /dist/
 /artifacts/
+
+# Intermediate output from the vendored loader's Makefile. hbl.nsp is already
+# covered by the *.nsp rule above; these two are not.
+/lib/switchu-hbloader/hbl.nso
+/lib/switchu-hbloader/hbl.npdm
