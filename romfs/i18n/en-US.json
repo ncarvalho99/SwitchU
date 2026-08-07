@@ -547,6 +547,14 @@
       "missing": "No screenshot",
       "prev": "Prev",
       "next": "Next"
+    },
+    "options": {
+      "homebrew_launch": "Launch homebrew",
+      "homebrew_launch_desc": "Opens .nro files from the grid. Takes over one system applet.",
+      "homebrew_host": "Applet homebrew replaces",
+      "homebrew_host_desc": "Parental controls stop being enforced, or the Album stops showing screenshots. Hold R while launching for the real one.",
+      "host_parental": "Parental controls",
+      "host_album": "Album"
     }
   }
 }

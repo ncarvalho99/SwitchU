@@ -402,6 +402,14 @@
       "pagination_actions": "Sinistra e destra cambiano pulsante. A cambia pagina. Su alla griglia.",
       "no_theme": "Nessun tema",
       "grid_actions": "Croce direzionale per navigare. A apre dettagli. B torna alle schede."
+    },
+    "options": {
+      "homebrew_launch": "Avvia homebrew",
+      "homebrew_launch_desc": "Apre i file .nro dalla griglia. Occupa un applet di sistema.",
+      "homebrew_host": "Applet sostituito dall'homebrew",
+      "homebrew_host_desc": "Il filtro famiglia smette di essere applicato, o l'Album smette di mostrare le catture. Tieni premuto R all'avvio per l'originale.",
+      "host_parental": "Filtro famiglia",
+      "host_album": "Album"
     }
   },
   "hint": {

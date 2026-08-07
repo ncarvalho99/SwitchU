@@ -547,6 +547,14 @@
       "missing": "Aucune capture",
       "prev": "Préc.",
       "next": "Suiv."
+    },
+    "options": {
+      "homebrew_launch": "Lancer un homebrew",
+      "homebrew_launch_desc": "Ouvre les fichiers .nro depuis la grille. Occupe un applet système.",
+      "homebrew_host": "Applet remplacé par le homebrew",
+      "homebrew_host_desc": "Le contrôle parental cesse d'être appliqué, ou l'Album n'affiche plus les captures. Maintenez R au lancement pour l'original.",
+      "host_parental": "Contrôle parental",
+      "host_album": "Album"
     }
   }
 }

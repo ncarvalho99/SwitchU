@@ -49,6 +49,12 @@ public:
     void onGlassSharpnessChange(FloatCb cb)  { m_glassSharpnessCb = std::move(cb); }
     void onBackgroundSpeedChange(FloatCb cb) { m_backgroundSpeedCb = std::move(cb); }
     void onBackgroundBlurChange(FloatCb cb)  { m_backgroundBlurCb = std::move(cb); }
+    void onHomebrewLaunchChange(BoolCb cb)   { m_homebrewLaunchCb = std::move(cb); }
+    void onHomebrewHostChange(IntCb cb)      { m_homebrewHostCb = std::move(cb); }
+    void setHomebrewState(bool launchEnabled, int appletHost) {
+        m_homebrewLaunch = launchEnabled;
+        m_homebrewHost = std::clamp(appletHost, 0, 1);
+    }
     void onGridColumnsChange(IntCb cb)   { m_gridColumnsCb = std::move(cb); }
     void onGridRowsChange(IntCb cb)      { m_gridRowsCb = std::move(cb); }
     void onNextTrack(VoidCb cb)          { m_nextTrackCb = std::move(cb); }
@@ -222,6 +228,10 @@ private:
     float m_glassSharpness = 0.4f;
     float m_backgroundSpeed = 0.5f;
     float m_backgroundBlur = 0.f;
+    BoolCb m_homebrewLaunchCb;
+    IntCb  m_homebrewHostCb;
+    bool   m_homebrewLaunch = false;
+    int    m_homebrewHost = 0;
     int m_gridColumns = 5;
     int m_gridRows = 3;
     std::string m_searchQuery;
