@@ -409,7 +409,8 @@
       "homebrew_host": "Applet sostituito dall'homebrew",
       "homebrew_host_desc": "Il filtro famiglia smette di essere applicato, o l'Album smette di mostrare le catture. Tieni premuto R all'avvio per l'originale.",
       "host_parental": "Filtro famiglia",
-      "host_album": "Album"
+      "host_album": "Album",
+      "homebrew_listing_on": "L'homebrew comparirà al riavvio del menu."
     }
   },
   "hint": {

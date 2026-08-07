@@ -409,7 +409,8 @@
       "homebrew_host": "Applet que o homebrew substitui",
       "homebrew_host_desc": "O controle parental deixa de ser aplicado, ou o Álbum deixa de mostrar capturas. Segure R ao abrir para ter o original.",
       "host_parental": "Controle parental",
-      "host_album": "Álbum"
+      "host_album": "Álbum",
+      "homebrew_listing_on": "O homebrew será listado quando o menu reiniciar."
     }
   },
   "hint": {

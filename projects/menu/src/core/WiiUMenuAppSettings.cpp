@@ -614,6 +614,27 @@ void WiiUMenuApp::createThemeShop() {
             return;
         }
         m_config.homebrewLaunchEnabled = enabled;
+
+        // Listing and launching were separate switches on separate screens,
+        // and turning this one on did nothing anyone could see: the grid had
+        // no homebrew in it to launch. Reported as exactly that. Nothing is
+        // launchable that is not listed, so this turns listing on with it --
+        // and never off, because someone may want the icons without giving up
+        // an applet.
+        if (enabled && !m_config.showHomebrew) {
+            m_config.showHomebrew = true;
+            if (m_settings)
+                m_settings->setShowHomebrew(true);
+            // The grid is built once from the catalogue at startup, so the
+            // icons cannot appear until the menu restarts. Saying nothing
+            // here is what made this look broken in the first place.
+            auto& i18n = nxui::I18n::instance();
+            m_themeShop->requestToast(
+                i18n.tr("themeshop.options.homebrew_listing_on",
+                        "Homebrew will be listed when the menu restarts."),
+                3.2f);
+            DebugLog::log("[homebrew] listing enabled alongside launching");
+        }
     });
 
     m_themeShop->onHomebrewHostChange([this](int host) {

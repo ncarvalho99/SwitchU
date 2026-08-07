@@ -111,10 +111,15 @@ std::array<bool, 8> usedSlots(const std::vector<std::string>& lines) {
         std::string key = trim(line.substr(0, line.find('=')));
         std::transform(key.begin(), key.end(), key.begin(),
                        [](unsigned char c) { return (char)std::tolower(c); });
-        if (key == "program_id") {
+        // A slot counts as taken if either half of it is set. One card in
+        // testing had override_key_0 without a program_id_0, and claiming that
+        // slot wrote a second override_key_0 into the same section -- the last
+        // one wins, so it happened to be harmless, but only by luck.
+        if (key == "program_id" || key == "override_key") {
             used[0] = true;
-        } else if (key.rfind("program_id_", 0) == 0 && key.size() == 12) {
-            char d = key[11];
+        } else if ((key.rfind("program_id_", 0) == 0 && key.size() == 12)
+                   || (key.rfind("override_key_", 0) == 0 && key.size() == 14)) {
+            char d = key.back();
             if (d >= '0' && d <= '7')
                 used[(std::size_t)(d - '0')] = true;
         }
