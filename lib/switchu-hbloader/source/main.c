@@ -395,6 +395,21 @@ void loadNro(void)
         g_nroAddr = g_nroSize = 0;
     }
 
+    uint8_t *nrobuf = (uint8_t*) g_heapAddr;
+
+    NroStart*  start  = (NroStart*)  (nrobuf + 0);
+    header = (NroHeader*) (nrobuf + sizeof(NroStart));
+    uint8_t*   rest   = (uint8_t*)   (nrobuf + sizeof(NroStart) + sizeof(NroHeader));
+
+    rc = fsdevMountSdmc();
+    if (R_FAILED(rc))
+        diagAbortWithResult(MAKERESULT(Module_HomebrewLoader, 404));
+
+    // SwitchU modification: this block used to sit above, before the SD card
+    // was mounted, so reading the request always failed with the file right
+    // there -- every launch fell through to hbmenu and left the request
+    // behind. It has to come after fsdevMountSdmc, and it brings the g_argv
+    // copy with it because that reads what the block just decided.
     if (g_nextNroPath[0] == '\0')
     {
         // SwitchU modification. Upstream falls straight through to hbmenu
@@ -417,16 +432,6 @@ void loadNro(void)
     memcpy(g_argv, g_nextArgv, sizeof g_argv);
 
     svcBreak(BreakReason_NotificationOnlyFlag | BreakReason_PreLoadDll, (uintptr_t)g_argv, sizeof(g_argv));
-
-    uint8_t *nrobuf = (uint8_t*) g_heapAddr;
-
-    NroStart*  start  = (NroStart*)  (nrobuf + 0);
-    header = (NroHeader*) (nrobuf + sizeof(NroStart));
-    uint8_t*   rest   = (uint8_t*)   (nrobuf + sizeof(NroStart) + sizeof(NroHeader));
-
-    rc = fsdevMountSdmc();
-    if (R_FAILED(rc))
-        diagAbortWithResult(MAKERESULT(Module_HomebrewLoader, 404));
 
     int fd = open(g_nextNroPath, O_RDONLY);
     if (fd < 0)
