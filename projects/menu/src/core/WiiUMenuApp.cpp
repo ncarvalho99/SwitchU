@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include <cctype>
 #include <switchu/sd_commit.hpp>
 #include "widgets/GlossyIcon.hpp"
 #include "themeshop/ThemeHttp.hpp"
@@ -488,6 +489,8 @@ WiiUMenuApp::GridLayoutMetrics WiiUMenuApp::computeGridLayoutMetrics() const {
     return m;
 }
 
+
+
 void WiiUMenuApp::reflowHomeGrid() {
     if (!m_grid)
         return;
@@ -509,7 +512,38 @@ void WiiUMenuApp::reflowHomeGrid() {
         byId.emplace(entry.titleId, entry);
     }
 
-    std::vector<uint64_t> slots = m_layoutSlots;
+    // Sorting replaces the saved arrangement rather than editing it: the
+    // hand-made layout is kept on disk untouched, so switching back to it
+    // restores exactly what the owner built instead of an approximation.
+    if (m_config.sortMode != 0) {
+        std::sort(appOrder.begin(), appOrder.end(),
+                  [&](uint64_t a, uint64_t b) {
+            if (m_config.sortMode == 2) {
+                const auto ta = m_config.lastOpenedAt(a);
+                const auto tb = m_config.lastOpenedAt(b);
+                // Never-opened titles sort last rather than first, which is
+                // what a zero timestamp would otherwise do.
+                if (ta != tb) return ta > tb;
+            }
+            const auto& ea = byId.at(a);
+            const auto& eb = byId.at(b);
+            // Compared the way a person reads them, so "apple" and "Apple"
+            // land together instead of in two separate blocks of the
+            // alphabet. Inline because a file-scope helper has to be defined
+            // above this and kept there.
+            const std::string& la = ea.title;
+            const std::string& lb = eb.title;
+            const size_t n = std::min(la.size(), lb.size());
+            for (size_t i = 0; i < n; ++i) {
+                const unsigned char ca = (unsigned char)std::tolower((unsigned char)la[i]);
+                const unsigned char cb = (unsigned char)std::tolower((unsigned char)lb[i]);
+                if (ca != cb) return ca < cb;
+            }
+            return la.size() < lb.size();
+        });
+    }
+
+    std::vector<uint64_t> slots = m_config.sortMode == 0 ? m_layoutSlots : appOrder;
     if (slots.empty())
         slots = appOrder;
 
@@ -657,6 +691,31 @@ void WiiUMenuApp::loadMenuLayout() {
         }
         m_layoutSlots.push_back(tid);
     }
+}
+
+std::string WiiUMenuApp::sortModeLabel() const {
+    auto& i18n = nxui::I18n::instance();
+    switch (m_config.sortMode) {
+        case 1:  return i18n.tr("hint.sort_alpha", "A-Z");
+        case 2:  return i18n.tr("hint.sort_recent", "Recent");
+        default: return i18n.tr("hint.sort_custom", "My order");
+    }
+}
+
+void WiiUMenuApp::cycleSortMode() {
+#ifdef SWITCHU_MENU
+    if (m_editMode) return;
+    m_config.sortMode = (m_config.sortMode + 1) % 3;
+    m_config.save();
+    switchu::commitSdCard("sort mode");
+    DebugLog::log("[menu] sort mode -> %d", m_config.sortMode);
+
+    // Rebuilt in place so the change is visible at once. The hand-made layout
+    // on disk is never rewritten by this, so coming back to it returns what
+    // the owner actually arranged.
+    m_audio.playSfx(Sfx::Navigate);
+    reflowHomeGrid();
+#endif
 }
 
 void WiiUMenuApp::saveMenuLayout() {
@@ -847,7 +906,12 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             auto startLaunch = [this, fr, tex, cr, base, bord, tid](AccountUid uid) {
                 m_audio.playSfx(Sfx::LaunchGame);
                 m_launchAnim->start(fr, tex, cr, base, bord, tid, uid,
-                    [this](uint64_t id, AccountUid u) { m_launcher.launchApplication(id, u); });
+                    [this](uint64_t id, AccountUid u) { // ns records last_updated, which is when a title was installed or
+ // patched. "Last played" is a different question and only the menu is
+ // in a position to answer it.
+ m_config.noteOpened(id, armGetSystemTick());
+ m_config.save();
+ m_launcher.launchApplication(id, u); });
             };
             if (entry) {
                 if (!entry->startupUserKnown) {
@@ -1982,6 +2046,10 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             add(buttonGlyph(nxui::Button::A), i18n.tr("hint.open", "Open"));
 #endif
             add(buttonGlyph(nxui::Button::Y), i18n.tr("hint.move", "Move"));
+            // The hint carries the current mode, not the word "Sort": a hint
+            // that only names the button leaves someone pressing it to find
+            // out what it does and what it just did.
+            add(buttonGlyph(nxui::Button::R), sortModeLabel());
         }
     } else if (cur) {
         for (const auto& btn : m_sidebar.leftButtons()) {

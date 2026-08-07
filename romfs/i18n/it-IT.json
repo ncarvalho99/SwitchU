@@ -417,7 +417,10 @@
     "profile": "Profilo",
     "search": "Cerca",
     "repeat": "Ripeti",
-    "voice": "Voce"
+    "voice": "Voce",
+    "sort_custom": "Il mio ordine",
+    "sort_alpha": "A-Z",
+    "sort_recent": "Recenti"
   },
   "accessibility": {
     "speech": {

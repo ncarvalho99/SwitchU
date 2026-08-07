@@ -612,6 +612,10 @@ void WiiUMenuApp::wireGlobalActions() {
         m_accessibility.repeatLastAnnouncement();
     });
 
+    root.addAction(static_cast<uint64_t>(nxui::Button::R), [this]() {
+        cycleSortMode();
+    });
+
     root.addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() {
         int p = m_grid->currentPage() - 1;
         if (p >= 0 && !m_grid->isTransitioning()) {

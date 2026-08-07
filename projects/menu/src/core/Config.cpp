@@ -1,4 +1,6 @@
 #include "Config.hpp"
+#include <cstdlib>
+#include <cstdio>
 #include <fstream>
 #include <algorithm>
 #include <filesystem>
@@ -52,6 +54,15 @@ bool AppConfig::load() {
     readJsonOpt(j, "accessibilitySpeechRate", accessibilitySpeechRate);
     readJsonOpt(j, "themePreset", themePreset);
     readJsonOpt(j, "lastPageTitleId", lastPageTitleId);
+    readJsonOpt(j, "sortMode", sortMode);
+    lastOpened.clear();
+    if (auto it = j.find("lastOpened"); it != j.end() && it->is_object()) {
+        for (auto& [k, v] : it->items()) {
+            if (!v.is_number_unsigned()) continue;
+            lastOpened.emplace_back(std::strtoull(k.c_str(), nullptr, 16),
+                                    v.get<std::uint64_t>());
+        }
+    }
 
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
@@ -96,6 +107,16 @@ bool AppConfig::save() const {
     j["accessibilitySpeechRate"] = std::clamp(accessibilitySpeechRate, 120, 320);
     j["themePreset"] = themePreset;
     j["lastPageTitleId"] = lastPageTitleId;
+    j["sortMode"] = sortMode;
+    {
+        nlohmann::json opened = nlohmann::json::object();
+        char key[17];
+        for (const auto& e : lastOpened) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)e.first);
+            opened[key] = e.second;
+        }
+        j["lastOpened"] = std::move(opened);
+    }
 
     std::ofstream f(kConfigPath, std::ios::trunc);
     if (!f.is_open()) return false;
