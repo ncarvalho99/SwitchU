@@ -202,17 +202,7 @@ bool enable(AppletHost host, std::string& error) {
         return false;
     }
 
-    // Nobody else's loader is touched. Atmosphere holds one loader path for
-    // the whole system, so ours is pointed at rather than copied over theirs,
-    // and the value found here is kept so disable() can hand it back.
     std::filesystem::create_directories("sdmc:/config/SwitchU", ec);
-    {
-        std::string previous = currentPathValue(splitLines(readFile(kOverridePath)));
-        std::string ignored;
-        writeFile(kSavedPath, previous, ignored);
-        DebugLog::log("[hbl] previous loader path: %s",
-                      previous.empty() ? "<default>" : previous.c_str());
-    }
 
     std::string original = readFile(kOverridePath);
     std::vector<std::string> lines = splitLines(original);
@@ -221,6 +211,17 @@ bool enable(AppletHost host, std::string& error) {
     auto [oldBegin, oldEnd] = findBlock(lines);
     if (oldBegin != std::string::npos && oldEnd != std::string::npos)
         lines.erase(lines.begin() + (long)oldBegin, lines.begin() + (long)oldEnd + 1);
+
+    // Only now, with any previous block of ours removed, does the file say
+    // what loader the console actually uses. Read before this, a re-enable
+    // would have recorded our own path as the one to go back to.
+    {
+        std::string previous = currentPathValue(lines);
+        std::string ignored;
+        writeFile(kSavedPath, previous, ignored);
+        DebugLog::log("[hbl] loader path before this: %s",
+                      previous.empty() ? "<atmosphere default>" : previous.c_str());
+    }
 
     auto used = usedSlots(lines);
     int slot = -1;
@@ -302,11 +303,14 @@ bool disable(std::string& error) {
             return false;
     }
 
-    // Put the console back on whatever loader it used before, if anything.
-    if (exists(kSavedPath)) {
+    // Removing the block above is what restores the loader: our path line
+    // lived inside it, and theirs -- if they had one -- was never touched and
+    // is uncovered again. The saved copy is a breadcrumb for anyone reading
+    // the card by hand, not something rewritten here.
+    {
         std::string previous = trim(readFile(kSavedPath));
-        if (!previous.empty())
-            DebugLog::log("[hbl] restoring loader path %s", previous.c_str());
+        DebugLog::log("[hbl] loader path returns to %s",
+                      previous.empty() ? "<atmosphere default>" : previous.c_str());
         std::error_code ec;
         std::filesystem::remove(kSavedPath, ec);
     }
