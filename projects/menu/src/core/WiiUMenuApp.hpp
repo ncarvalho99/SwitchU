@@ -85,6 +85,9 @@ private:
     void applyGlassSharpness(float sharpness);
     // The + menu on a focused icon: what the stock home menu offers, minus
     // the entries that would need a daemon round trip to answer.
+    // Branch-only: times texture uploads so the video-background question
+    // is answered by the console rather than by estimate.
+    void measureUploadCost();
     void showIconOptions();
     void showSoftwareInformation(std::uint64_t titleId, const std::string& title);
     void confirmDeleteSoftware(std::uint64_t titleId, const std::string& title);
