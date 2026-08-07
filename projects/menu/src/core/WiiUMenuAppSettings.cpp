@@ -1149,7 +1149,28 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         m_background->setSpeedScale(m_config.backgroundSpeed * 2.f);
 
         if (backgroundImageNeedsReload) {
-            const bool imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);
+            // A theme that lists frames gets the moving wallpaper; one that
+            // names a single image keeps the still, and pays exactly what it
+            // paid before. Frames are resolved against the theme's own folder,
+            // the same way its single image is.
+            bool imageLoaded = false;
+            if (!preset.background.imageFrames.empty()) {
+                std::vector<std::string> framePaths;
+                framePaths.reserve(preset.background.imageFrames.size());
+                for (const auto& rel : preset.background.imageFrames) {
+                    std::string abs = resolveThemeAssetPath(preset, rel);
+                    if (!abs.empty() && pathExists(abs))
+                        framePaths.push_back(std::move(abs));
+                }
+                imageLoaded = !framePaths.empty() &&
+                              m_background->loadImageSequence(gpu, ren, framePaths,
+                                                              preset.background.imageFps);
+                DebugLog::log("[theme-apply] background frames: listed=%zu found=%zu loaded=%d",
+                              preset.background.imageFrames.size(),
+                              framePaths.size(), imageLoaded ? 1 : 0);
+            }
+            if (!imageLoaded)
+                imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);
             DebugLog::log("[theme-apply] background image: path=%s exists=%d reloaded=%d loaded=%d",
                           safeLogPath(backgroundImagePath),
                           imageExists ? 1 : 0,
