@@ -40,6 +40,13 @@ configured in Settings, and are no longer applied. Nothing warns about this on
 the console itself, which is why it is stated here. Switching the setting to
 Album restores enforcement immediately.
 
+Holding **R** while the system raises a PIN prompt gives the real applet instead
+of the loader, so the prompt still works for anyone who knows to do it. Do not
+hold R while launching homebrew from the grid, though: the menu starts the
+applet with no arguments at all, which the loader ignores and the real applet
+aborts on. That crash is the applet, not the console, and nothing is left broken
+afterwards.
+
 Whichever is chosen, the other applet is untouched.
 
 ## Files this feature adds
