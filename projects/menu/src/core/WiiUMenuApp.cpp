@@ -283,6 +283,9 @@ bool WiiUMenuApp::onCreate() {
     });
 
 
+    // Runs once, before anything is on screen. Remove with this branch.
+    measureUploadCost();
+
     DebugLog::log("[init] loadResources...");
     loadResources();
     DebugLog::log("[init] buildGrid...");
@@ -323,6 +326,61 @@ void WiiUMenuApp::quiesceWritersForPowerAction() {
     DebugLog::log("[menu] writers quiesced for power action");
 }
 
+
+// One-shot measurement, so the video-background question is settled by the
+// console instead of by arithmetic. The estimate said a 1280x720 upload
+// cannot fit in a 16.7ms frame that already spends 8.5ms on the GPU -- the
+// only honest way to know is to upload one and time it.
+//
+// Each size is uploaded several times and the best is reported: a single
+// sample would fold in whatever else the first frame was doing. Memory is
+// released immediately, and the whole thing runs once before the grid is
+// built, so nothing it does can affect a frame anyone sees.
+void WiiUMenuApp::measureUploadCost() {
+    struct Case { int w, h; const char* what; };
+    static constexpr Case cases[] = {
+        {1280, 720, "full screen"},
+        { 640, 360, "half"},
+        { 320, 180, "quarter"},
+        { 160, 160, "one icon, for scale"},
+    };
+
+    for (const auto& c : cases) {
+        const size_t bytes = (size_t)c.w * c.h * 4;
+        std::vector<uint8_t> pixels(bytes, 0x40);
+
+        nxui::Texture tex;
+        // The first upload also allocates, which is not what a video frame
+        // would pay every frame -- so it is timed separately from the rest.
+        const uint64_t t0 = armGetSystemTick();
+        const bool ok = tex.loadFromPixels(app().gpu(), app().renderer(),
+                                           pixels.data(), c.w, c.h);
+        const uint64_t t1 = armGetSystemTick();
+        if (!ok) {
+            DebugLog::log("[upload-bench] %dx%d (%s): FAILED to allocate",
+                          c.w, c.h, c.what);
+            continue;
+        }
+
+        uint64_t best = UINT64_MAX;
+        for (int i = 0; i < 5; ++i) {
+            const uint64_t a = armGetSystemTick();
+            app().gpu().uploadTexture(tex.image(), pixels.data(),
+                                      (uint32_t)bytes, c.w, c.h);
+            app().gpu().waitIdle();
+            const uint64_t b = armGetSystemTick();
+            best = std::min(best, b - a);
+        }
+
+        DebugLog::log("[upload-bench] %dx%d (%-20s) %6.2f MB  first=%.2fms  reupload=%.2fms",
+                      c.w, c.h, c.what, bytes / 1048576.0,
+                      armTicksToNs(t1 - t0) / 1000000.0,
+                      armTicksToNs(best) / 1000000.0);
+    }
+
+    DebugLog::log("[upload-bench] frame budget at 60fps is 16.67ms, "
+                  "and the home grid already spends about 8.5ms of it");
+}
 void WiiUMenuApp::onDestroy() {
     if (m_audioFuture.valid()) m_audioFuture.get();
 
