@@ -47,8 +47,22 @@ that cannot be read without it.
 Without the crash reports there is nothing to go on: the console shows an
 error code that says a crash happened and nothing about where.
 
+**Glass**
+
+- Lowering glass sharpness turned the panels into visible squares. The blur
+  takes nine samples spaced by its radius, so at the low end they landed 9 to
+  36 texels apart with nothing read between them — sampling a grid rather than
+  blurring it. Width now comes from repeating the pass instead of spreading it
+- The account and power dialogs read sharper than the settings screen with the
+  same setting. Refraction was displacing in panel-relative units, so it bent
+  proportionally more behind a large panel than a small one. It is measured in
+  pixels now, and a small window looks like a large one
+
 **Appearance settings**
 
+- New defaults, chosen after looking at them on a console rather than here:
+  glass sharpness 40%, background animation speed 35%, background blur 5%.
+  Defaults only apply to a fresh install — an existing one keeps what it has
 - Glass sharpness, background animation speed and background blur moved out of
   Settings, Display and into the theme screen, next to the rest of what changes
   how the menu looks. They were in two places at once; now they are in one
@@ -122,8 +136,22 @@ não teria como ser lido.
 Sem os crash reports não há por onde começar: o console mostra um código de
 erro que diz que houve um crash e nada sobre onde.
 
+**Vidro**
+
+- Baixar a nitidez do vidro deixava os painéis quadriculados. O desfoque tira
+  nove amostras espaçadas pelo seu raio, então no mínimo elas caíam a 9 e 36
+  texels de distância sem ler nada entre elas — amostrando uma grade em vez de
+  borrá-la. A largura agora vem de repetir o passe, não de espalhá-lo
+- As janelas de contas e de energia apareciam mais nítidas que a de
+  configurações com o mesmo ajuste. A refração deslocava em unidades relativas
+  ao painel, e por isso desviava proporcionalmente mais atrás de um painel
+  grande. Agora é medida em pixels, e uma janela pequena fica igual a uma grande
+
 **Configurações de aparência**
 
+- Novos padrões, escolhidos olhando no console e não aqui: nitidez do vidro 40%,
+  velocidade da animação de fundo 35%, desfoque de fundo 5%. Padrões só valem
+  para instalação nova — quem já tem configuração salva mantém a dele
 - Nitidez do vidro, velocidade da animação de fundo e desfoque de fundo saíram de
   Configurações, Tela e foram para a tela de temas, junto do resto do que muda a
   aparência do menu. Estavam em dois lugares ao mesmo tempo; agora estão em um
