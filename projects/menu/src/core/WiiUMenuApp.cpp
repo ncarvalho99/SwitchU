@@ -326,6 +326,26 @@ void WiiUMenuApp::quiesceWritersForPowerAction() {
 void WiiUMenuApp::onDestroy() {
     if (m_audioFuture.valid()) m_audioFuture.get();
 
+#ifdef SWITCHU_MENU
+    // Remember where we were. Returning from a suspended game already jumps to
+    // its page, but closing a game outright or opening an applet suspends
+    // nothing, and the menu came back on page one every time. Recorded as a
+    // title rather than a page number: the grid can be rebuilt at a different
+    // width between leaving and coming back, and the page number would then
+    // point somewhere else.
+    if (m_grid && m_grid->iconsPerPage() > 0) {
+        const int first = m_grid->currentPage() * m_grid->iconsPerPage();
+        if (first >= 0 && first < m_model.count()) {
+            const std::uint64_t anchor = m_model.at(first).titleId;
+            if (anchor != m_config.lastPageTitleId) {
+                m_config.lastPageTitleId = anchor;
+                m_config.save();
+                switchu::commitSdCard("last page");
+            }
+        }
+    }
+#endif
+
 #ifdef SWITCHU_DEBUG_UI
     if (m_debugOverlay) {
         m_debugOverlay->shutdown(app().gpu());
@@ -1044,10 +1064,17 @@ void WiiUMenuApp::buildGrid() {
 
     int initialPage = 0;
 #ifdef SWITCHU_MENU
-    if (m_launcher.suspendedTitleId() != 0) {
-        int suspendedIndex = findTitleIndex(m_launcher.suspendedTitleId());
-        if (suspendedIndex >= 0 && m_grid->iconsPerPage() > 0)
-            initialPage = suspendedIndex / m_grid->iconsPerPage();
+    // A suspended game is the better anchor when there is one: it is where the
+    // person actually was. The remembered page covers everything else -- a game
+    // closed rather than suspended, an applet, the menu restarting itself.
+    std::uint64_t pageAnchor = m_launcher.suspendedTitleId();
+    if (pageAnchor == 0)
+        pageAnchor = m_config.lastPageTitleId;
+
+    if (pageAnchor != 0) {
+        int anchorIndex = findTitleIndex(pageAnchor);
+        if (anchorIndex >= 0 && m_grid->iconsPerPage() > 0)
+            initialPage = anchorIndex / m_grid->iconsPerPage();
         if (initialPage > 0)
             m_grid->setPage(initialPage);
     }

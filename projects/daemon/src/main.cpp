@@ -212,6 +212,12 @@ struct DaemonAppCatalogEntry {
 
 static std::vector<DaemonAppCatalogEntry> g_appCatalog;
 static std::atomic<bool> g_appCatalogRefreshPending{false};
+// The catalogue changed while the menu was not on screen, so nobody could be
+// told. Installing a game from a homebrew is exactly that: the installer is
+// in front, the notification was raised and dropped, and the shortcut only
+// appeared once something restarted the menu -- reported as "the first two
+// games never showed up, then the third made all three appear at once".
+static std::atomic<bool> g_catalogChangedWhileAway{false};
 static int g_appCatalogRefreshDelay = 0;
 static constexpr const char* kAppCatalogPath = smi::kAppCatalogPath;
 static constexpr const char* kAppCatalogTmpPath = smi::kAppCatalogTmpPath;
@@ -1255,8 +1261,12 @@ static void mainLoop() {
         g_appCatalogRefreshPending.store(false);
         bool catalogChanged = false;
         if (rebuildAppCatalog("record-event", &catalogChanged)) {
-            if (catalogChanged && daemon::menu_la::isActive())
-                pushNotification(smi::MenuMessage::AppRecordsChanged);
+            if (catalogChanged) {
+                if (daemon::menu_la::isActive())
+                    pushNotification(smi::MenuMessage::AppRecordsChanged);
+                else
+                    g_catalogChangedWhileAway.store(true);
+            }
             didWork = true;
         }
     }
@@ -1271,6 +1281,18 @@ static void mainLoop() {
         // another reason.
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
+        else
+            g_catalogChangedWhileAway.store(true);
+        didWork = true;
+    }
+
+    // Deliver what was missed. The menu cannot ask for this itself: from its
+    // side a stale grid and a current one look identical, which is why it sat
+    // there showing games that had been deleted.
+    if (g_catalogChangedWhileAway.load() && daemon::menu_la::isActive()) {
+        g_catalogChangedWhileAway.store(false);
+        switchu::FileLog::log("[event] catalog changed while the menu was away, telling it now");
+        pushNotification(smi::MenuMessage::AppRecordsChanged);
         didWork = true;
     }
     if (g_eventPollsRemaining > 0 && shouldDeferViewPolling()) {

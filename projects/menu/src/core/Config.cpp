@@ -51,6 +51,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "accessibilitySpeakPosition", accessibilitySpeakPosition);
     readJsonOpt(j, "accessibilitySpeechRate", accessibilitySpeechRate);
     readJsonOpt(j, "themePreset", themePreset);
+    readJsonOpt(j, "lastPageTitleId", lastPageTitleId);
 
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
@@ -94,6 +95,7 @@ bool AppConfig::save() const {
     j["accessibilitySpeakPosition"] = accessibilitySpeakPosition;
     j["accessibilitySpeechRate"] = std::clamp(accessibilitySpeechRate, 120, 320);
     j["themePreset"] = themePreset;
+    j["lastPageTitleId"] = lastPageTitleId;
 
     std::ofstream f(kConfigPath, std::ios::trunc);
     if (!f.is_open()) return false;

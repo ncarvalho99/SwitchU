@@ -544,5 +544,16 @@
       "test": "Test",
       "skip_all_banner": "Drücke  +  um die Einrichtung zu überspringen"
     }
+  },
+  "dialog": {
+    "icon_options_body": "Choose what to do with this software.",
+    "icon_options_info": "Software information",
+    "icon_options_delete": "Delete software",
+    "software_information": "Software information",
+    "software_title_id": "Title ID",
+    "delete_software": "Delete software?",
+    "delete_software_body": "This removes the software from the console. It cannot be undone here -- the software has to be downloaded or installed again.",
+    "delete_software_done": "The software was deleted.",
+    "delete_software_failed": "The software could not be deleted."
   }
 }

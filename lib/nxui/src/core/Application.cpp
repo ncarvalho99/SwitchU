@@ -109,16 +109,53 @@ void Application::dispatchInput() {
         m_input.isDown(Button::RStickL) || m_input.isDown(Button::RStickR) ||
         m_input.isDown(Button::RStickU) || m_input.isDown(Button::RStickD);
 
+    // Holding a direction moved one icon and stopped: this fired only on the
+    // frame a button went down. It repeats while held now, after a pause long
+    // enough that a deliberate single press is still a single step, and
+    // speeding up after that so crossing a wide grid is not a queue of taps.
+    // The repeat goes through the same path as a press, so a widget with its
+    // own action for that direction -- the grid changing page at its edge --
+    // keeps getting it.
+    constexpr int kHoldBeforeRepeat = 26;  // ~430 ms
+    constexpr int kRepeatSlow       = 8;   // ~130 ms for the first few
+    constexpr int kRepeatFast       = 4;   // ~65 ms once it is clearly held
+    constexpr int kFramesUntilFast  = 30;  // half a second of repeating
+
+    const bool anyDirHeld =
+        m_input.isHeld(Button::DLeft)   || m_input.isHeld(Button::DRight)  ||
+        m_input.isHeld(Button::DUp)     || m_input.isHeld(Button::DDown)   ||
+        m_input.isHeld(Button::LStickL) || m_input.isHeld(Button::LStickR) ||
+        m_input.isHeld(Button::LStickU) || m_input.isHeld(Button::LStickD) ||
+        m_input.isHeld(Button::RStickL) || m_input.isHeld(Button::RStickR) ||
+        m_input.isHeld(Button::RStickU) || m_input.isHeld(Button::RStickD);
+
+    if (!anyDirHeld) {
+        m_navHoldFrames = 0;
+    } else {
+        ++m_navHoldFrames;
+    }
+
+    bool repeating = false;
+    if (m_navHoldFrames > kHoldBeforeRepeat) {
+        const int since = m_navHoldFrames - kHoldBeforeRepeat;
+        const int step  = since > kFramesUntilFast ? kRepeatFast : kRepeatSlow;
+        repeating = (since % step) == 0;
+    }
+
     if (m_navDebounce > 0) {
         --m_navDebounce;
-    } else if (anyDpad) {
+    } else if (anyDpad || repeating) {
         m_navDebounce = 6;  // ~100 ms at 60 fps
 
         Widget* cur = fm.current();
         auto tryDir = [&](Button dpad, Button leftStick, Button rightStick, FocusDirection dir) {
-            bool dpadDown  = m_input.isDown(dpad);
-            bool leftStickDown = m_input.isDown(leftStick);
-            bool rightStickDown = m_input.isDown(rightStick);
+            // While repeating, held counts as pressed -- otherwise nothing
+            // would be true on a frame where no button changed.
+            bool dpadDown  = m_input.isDown(dpad)  || (repeating && m_input.isHeld(dpad));
+            bool leftStickDown = m_input.isDown(leftStick)
+                              || (repeating && m_input.isHeld(leftStick));
+            bool rightStickDown = m_input.isDown(rightStick)
+                              || (repeating && m_input.isHeld(rightStick));
             if (!dpadDown && !leftStickDown && !rightStickDown) return;
 
             // Focused widget's action takes priority (no bubbling for D-pad)

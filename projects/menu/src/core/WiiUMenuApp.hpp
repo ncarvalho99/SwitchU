@@ -83,6 +83,11 @@ private:
     void reflowHomeGrid();
     void buildGrid();
     void applyGlassSharpness(float sharpness);
+    // The + menu on a focused icon: what the stock home menu offers, minus
+    // the entries that would need a daemon round trip to answer.
+    void showIconOptions();
+    void showSoftwareInformation(std::uint64_t titleId, const std::string& title);
+    void confirmDeleteSoftware(std::uint64_t titleId, const std::string& title);
     void buildUserAvatarBar();
     void applyTheme();
     void applyThemeResources(const ThemePreset& preset);
