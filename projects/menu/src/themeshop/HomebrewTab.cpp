@@ -110,6 +110,26 @@ ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen
 
     const std::size_t pickerIdx = t.items.size();
     {
+        // Ports installed by something else -- PortNX and the like -- come with
+        // a shortcut of their own, and that shortcut passes the port arguments
+        // saying which game to load. Launching the .nro from here passes only
+        // its path, which is all any plain launcher does, so a port that needs
+        // to be told what to run reports a missing file and stops. Nothing here
+        // can guess those arguments, so the honest thing is to say where the
+        // working route is rather than let it look broken.
+        SettingItem it;
+        it.label = i18n.tr("settings.homebrew.ports_note",
+                           "Ports installed by another homebrew");
+        it.wrapLabel = true;
+        it.description = i18n.tr("settings.homebrew.ports_note_desc",
+                                 "Open those from the shortcut their installer created. "
+                                 "Started from here they get no arguments, so they cannot "
+                                 "tell which game to load.");
+        it.type = ItemType::Info;
+        t.items.push_back(std::move(it));
+    }
+
+    {
         SettingItem it;
         it.label = i18n.tr("settings.homebrew.pick", "Homebrew");
         it.description = screen.selectedHomebrewPath();

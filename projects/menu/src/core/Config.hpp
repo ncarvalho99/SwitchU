@@ -54,6 +54,10 @@ struct AppConfig {
     // as an applet and leaves nothing suspended, so the page it was on has
     // to survive the menu restarting by itself.
     std::uint64_t homebrewReturnTitleId = 0;
+    // System tick when that launch happened. A homebrew that comes back in
+    // seconds did not get used -- it failed to start -- and the usual reason
+    // is worth explaining rather than leaving as a menu that blinked.
+    std::uint64_t homebrewLaunchTick = 0;
     // Paths of .nro files kept out of the grid. Some homebrew install a
     // forwarder for what they run -- PortNX gives Ocarina of Time its real
     // name and icon -- and the emulator behind it then shows up a second

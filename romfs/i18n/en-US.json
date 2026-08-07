@@ -401,7 +401,9 @@
       "delete": "Delete this file",
       "applies_on_restart": "Applies the next time the menu starts.",
       "deleted": "File deleted.",
-      "delete_failed": "The file could not be deleted."
+      "delete_failed": "The file could not be deleted.",
+      "ports_note": "Ports installed by another homebrew",
+      "ports_note_desc": "Open those from the shortcut their installer created. Started from here they get no arguments, so they cannot tell which game to load."
     }
   },
   "userselect": {
