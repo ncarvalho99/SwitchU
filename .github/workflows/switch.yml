@@ -1,14 +1,30 @@
 name: Switch build
 
+# Nothing below is compiled into the build, so a push that only touches these
+# has nothing to verify. The '[ci skip]' guard on the job still exists for the
+# cases a path filter cannot see, but relying on it meant remembering it, and a
+# changelog-only commit burned a full matrix because nobody did.
 on:
   push:
     branches:
       - master
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.logs/**'
   pull_request:
     types:
       - opened
       - reopened
       - synchronize
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.logs/**'
   workflow_dispatch:
 
 permissions:
