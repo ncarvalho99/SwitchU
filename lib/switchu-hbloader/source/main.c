@@ -315,6 +315,8 @@ static void getCodeMemoryCapability(void)
 // stale request cannot outlive the launch that meant it.
 #define SWITCHU_REQUEST_PATH "sdmc:/config/SwitchU/next_nro.txt"
 
+static bool g_switchuRequested = false;
+
 static bool readSwitchURequest(void)
 {
     int fd = open(SWITCHU_REQUEST_PATH, O_RDONLY);
@@ -348,6 +350,7 @@ static bool readSwitchURequest(void)
 
     memcpy(g_nextNroPath, buf, len + 1);
     memcpy(g_nextArgv,    buf, len + 1);
+    g_switchuRequested = true;
     return true;
 }
 
@@ -359,6 +362,28 @@ void loadNro(void)
     Result rc=0;
 
     memcpy((u8*)armGetTls() + 0x100, g_savedTls, 0x100);
+
+    // SwitchU modification. Reaching here a second time means the NRO the
+    // menu asked for has exited. Homebrew normally writes hbmenu into the
+    // next-load buffer on the way out, since that is where it came from --
+    // but it came from the grid this time, and dropping the person into
+    // hbmenu is not going back, it is going somewhere they never chose.
+    // Reported as exactly that: B returned to Sphaira instead of the menu.
+    //
+    // A request for some other NRO is still honoured: chaining is a
+    // deliberate act, and only the default is being second-guessed here.
+    if (g_switchuRequested && g_nroSize > 0)
+    {
+        const bool wantsDefault =
+            g_nextNroPath[0] == '\0' || strcmp(g_nextNroPath, DEFAULT_NRO) == 0;
+        if (wantsDefault)
+        {
+            // Ending the process closes the library applet, which is what
+            // hands control back to the menu that started it.
+            fsdevUnmountAll();
+            svcExitProcess();
+        }
+    }
 
     if (g_nroSize > 0)
     {
