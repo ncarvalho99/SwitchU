@@ -51,6 +51,7 @@ public:
     void onBackgroundBlurChange(FloatCb cb)  { m_backgroundBlurCb = std::move(cb); }
     void onHomebrewLaunchChange(BoolCb cb)   { m_homebrewLaunchCb = std::move(cb); }
     void onHomebrewHostChange(IntCb cb)      { m_homebrewHostCb = std::move(cb); }
+    void onRestartMenu(VoidCb cb)            { m_restartMenuCb = std::move(cb); }
     void setHomebrewState(bool launchEnabled, int appletHost) {
         m_homebrewLaunch = launchEnabled;
         m_homebrewHost = std::clamp(appletHost, 0, 1);
@@ -230,6 +231,7 @@ private:
     float m_backgroundBlur = 0.f;
     BoolCb m_homebrewLaunchCb;
     IntCb  m_homebrewHostCb;
+    VoidCb m_restartMenuCb;
     bool   m_homebrewLaunch = false;
     int    m_homebrewHost = 0;
     int m_gridColumns = 5;

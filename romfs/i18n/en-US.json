@@ -555,7 +555,9 @@
       "homebrew_host_desc": "Parental controls stop being enforced, or the Album stops showing screenshots. Hold R while launching for the real one.",
       "host_parental": "Parental controls",
       "host_album": "Album",
-      "homebrew_listing_on": "Homebrew will be listed when the menu restarts."
+      "homebrew_listing_on": "Homebrew will be listed when the menu restarts.",
+      "restart_menu": "Restart the menu",
+      "restart_menu_desc": "Needed for newly listed homebrew to appear."
     }
   }
 }

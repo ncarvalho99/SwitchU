@@ -555,7 +555,9 @@
       "homebrew_host_desc": "Le contrôle parental cesse d'être appliqué, ou l'Album n'affiche plus les captures. Maintenez R au lancement pour l'original.",
       "host_parental": "Contrôle parental",
       "host_album": "Album",
-      "homebrew_listing_on": "Les homebrews apparaîtront au redémarrage du menu."
+      "homebrew_listing_on": "Les homebrews apparaîtront au redémarrage du menu.",
+      "restart_menu": "Redémarrer le menu",
+      "restart_menu_desc": "Nécessaire pour que les homebrews ajoutés apparaissent."
     }
   }
 }

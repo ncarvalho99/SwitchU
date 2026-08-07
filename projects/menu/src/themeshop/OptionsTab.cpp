@@ -159,6 +159,22 @@ ThemeShopScreen::Tab themeshop::tabs::OptionsTab::build(ThemeShopScreen& screen)
 
     {
         SettingItem it;
+        it.label = i18n.tr("themeshop.options.restart_menu", "Restart the menu");
+        // Listing homebrew only takes effect on a restart, and "restart the
+        // menu" is not something a person is expected to know how to do --
+        // the console offers no such command. Asking them to do it without
+        // giving them a way was the gap.
+        it.description = i18n.tr("themeshop.options.restart_menu_desc",
+                                 "Needed for newly listed homebrew to appear.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_restartMenuCb) screen.m_restartMenuCb();
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
         it.label = i18n.tr("themeshop.options.homebrew_host", "Applet homebrew replaces");
         // The console gives no warning of its own, so the description is the
         // only place someone finds out what they are agreeing to.

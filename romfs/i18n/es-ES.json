@@ -410,7 +410,9 @@
       "homebrew_host_desc": "El control parental deja de aplicarse, o el Álbum deja de mostrar capturas. Mantén R al abrir para el original.",
       "host_parental": "Control parental",
       "host_album": "Álbum",
-      "homebrew_listing_on": "El homebrew aparecerá cuando el menú se reinicie."
+      "homebrew_listing_on": "El homebrew aparecerá cuando el menú se reinicie.",
+      "restart_menu": "Reiniciar el menú",
+      "restart_menu_desc": "Necesario para que el homebrew recién listado aparezca."
     }
   },
   "hint": {
