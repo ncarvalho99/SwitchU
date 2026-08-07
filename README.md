@@ -1,6 +1,7 @@
 <div align="center">
     <h1>SwitchU — Homebrew launching</h1>
     <p>Test build. Not a release, not the default.</p>
+    <p>Build de teste. Não é uma versão publicada, e não é o padrão.</p>
 </div>
 
 ---
@@ -9,7 +10,12 @@ This branch adds launching homebrew from the grid. It is here to be tried and
 reported on. Read [docs/homebrew-recovery.md](docs/homebrew-recovery.md) before
 turning it on — it is short, and it is the way back out.
 
-**[Português](#português) below.**
+Esta branch adiciona o lançamento de homebrew pela grade. Ela existe para ser
+experimentada e relatada. Leia
+[docs/homebrew-recovery.md](docs/homebrew-recovery.md) antes de ligar — é curto,
+e é o caminho de volta.
+
+**[English](#english) · [Português](#português)**
 
 ---
 
