@@ -647,6 +647,15 @@ void WiiUMenuApp::createThemeShop() {
         if (!homebrew::enable((homebrew::AppletHost)host, error))
             DebugLog::log("[hbl] host change failed: %s", error.c_str());
     });
+    m_themeShop->onRestartMenu([this]() {
+        // The daemon relaunches the menu whenever it sees it gone, which is
+        // how every applet launch already returns here. Exiting is the whole
+        // restart -- there is no separate command for it.
+        DebugLog::log("[menu] restart requested from the theme options");
+        quiesceWritersForPowerAction();
+        m_audio.playSfx(Sfx::ModalHide);
+        app().requestExit();
+    });
     m_themeShop->onGridColumnsChange([this](int cols) {
         cols = std::clamp(cols, 3, 8);
         if (m_config.gridColumns == cols)

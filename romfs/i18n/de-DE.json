@@ -410,7 +410,9 @@
       "homebrew_host_desc": "Die Kindersicherung greift nicht mehr, oder das Album zeigt keine Aufnahmen mehr. Beim Starten R halten für das Original.",
       "host_parental": "Kindersicherung",
       "host_album": "Album",
-      "homebrew_listing_on": "Homebrew erscheint beim Neustart des Menüs."
+      "homebrew_listing_on": "Homebrew erscheint beim Neustart des Menüs.",
+      "restart_menu": "Menü neu starten",
+      "restart_menu_desc": "Nötig, damit neu gelistete Homebrew erscheint."
     }
   },
   "hint": {

@@ -1626,12 +1626,26 @@ void WiiUMenuApp::onUpdate(float dt) {
     // only sets while open, not animating, not scrolling and with no
     // dropdown up; any interaction releases it and the scene renders again
     // the next frame.
+    //
+    // The theme screen covers the scene exactly as completely and was left out
+    // of this, so it kept paying the ~16ms the settings overlay stopped paying:
+    // 31.7ms of GPU against 8.5ms on the home grid, locked to 30fps with vsync
+    // never waited on. Reported as the theme options lagging while settings did
+    // not, which is precisely the shape of one screen having this and the other
+    // not. It holds the capture already -- that lives in the shared base class
+    // -- so only the question asked here had to widen.
     {
-        const bool hideScene = m_settings && m_settings->isFullyVisible() &&
+        const bool settingsUp = m_settings && m_settings->isFullyVisible();
+        const bool themeShopUp = m_themeShop && m_themeShop->isFullyVisible();
+        const bool hideScene = (settingsUp || themeShopUp) &&
                                app().renderer().holdOffscreenCapture();
         m_probeSceneHidden = hideScene;
+        // Each overlay is told only about itself: the one that is not up must
+        // not start drawing the frozen backdrop as its base.
         if (m_settings)
-            m_settings->setSceneHidden(hideScene);
+            m_settings->setSceneHidden(hideScene && settingsUp);
+        if (m_themeShop)
+            m_themeShop->setSceneHidden(hideScene && themeShopUp);
         if (m_bgLayer) m_bgLayer->setVisible(!hideScene);
         if (m_contentLayer) m_contentLayer->setVisible(!hideScene);
     }
