@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include <switchu/sd_commit.hpp>
 #include "launcher/HblOverride.hpp"
 #include "themeshop/ThemePackageInstaller.hpp"
 #include "settings/SettingsGlassTuning.hpp"
@@ -317,6 +318,71 @@ void WiiUMenuApp::createSettings() {
     // screen, so the SettingsScreen hooks they used are gone with them. This
     // call stays: it is what applies the saved sharpness at startup. Speed and
     // blur are applied where the background is built, from the same config.
+    m_settings->setHiddenHomebrew(m_config.hiddenHomebrew);
+
+    m_settings->onHomebrewHiddenChange([this](const std::string& path, bool hidden) {
+        m_config.setHomebrewHidden(path, hidden);
+        m_config.save();
+        switchu::commitSdCard("homebrew hidden");
+        m_settings->setHiddenHomebrew(m_config.hiddenHomebrew);
+        // The grid is built once at startup, so this cannot take effect
+        // until the menu restarts -- saying nothing would read as a switch
+        // that does not work.
+        auto& i18n = nxui::I18n::instance();
+        m_settings->requestToast(
+            i18n.tr("settings.homebrew.applies_on_restart",
+                    "Applies the next time the menu starts."),
+            2.8f);
+        DebugLog::log("[homebrew] %s %s", hidden ? "hidden" : "shown", path.c_str());
+    });
+
+    m_settings->onHomebrewDelete([this](const std::string& path) {
+        auto& i18n = nxui::I18n::instance();
+        // Deleting is asked about, never just done. An uninstalled title
+        // comes back from the eShop; this file does not come back at all,
+        // and a forwarder another homebrew installed for it stops working
+        // the moment it goes -- which is exactly what someone tidying away
+        // a duplicate is about to do without being told.
+        std::string message =
+            i18n.tr("dialog.homebrew_delete_body",
+                    "This deletes the file from the microSD card. It cannot be undone, "
+                    "and any shortcut another homebrew created for it will stop working. "
+                    "To only take it out of the menu, hide it instead.");
+        message += "\n\n" + path;
+
+        m_audio.playSfx(Sfx::ModalShow);
+        m_dialog->show(
+            i18n.tr("dialog.homebrew_delete_title", "Delete this homebrew?"),
+            message,
+            {
+                {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                {i18n.tr("dialog.homebrew_delete_confirm", "Delete"), [this, path]() {
+                     std::error_code ec;
+                     const bool gone = std::filesystem::remove(path, ec);
+                     switchu::commitSdCard("homebrew delete");
+                     auto& tr = nxui::I18n::instance();
+                     if (gone) {
+                         // A path that no longer exists has no business
+                         // staying in the hidden set.
+                         m_config.setHomebrewHidden(path, false);
+                         m_config.save();
+                         switchu::commitSdCard("homebrew delete cleanup");
+                         DebugLog::log("[homebrew] deleted %s", path.c_str());
+                     } else {
+                         DebugLog::log("[homebrew] delete FAILED %s (%s)",
+                                       path.c_str(), ec.message().c_str());
+                     }
+                     if (m_settings)
+                         m_settings->requestToast(
+                             gone ? tr.tr("settings.homebrew.deleted", "File deleted.")
+                                  : tr.tr("settings.homebrew.delete_failed",
+                                          "The file could not be deleted."),
+                             2.8f);
+                 }, false},
+            },
+            0, {});
+        focusManager().setFocus(m_dialog.get());
+    });
     m_settings->onAddUser([this]() {
         m_launcher.launchUserCreator();
     });

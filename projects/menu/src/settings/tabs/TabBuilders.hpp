@@ -24,6 +24,11 @@ public:
     static SettingsScreen::Tab build(SettingsScreen& screen);
 };
 
+class HomebrewTab {
+public:
+    static SettingsScreen::Tab build(SettingsScreen& screen);
+};
+
 class InternetTab {
 public:
     static SettingsScreen::Tab build(SettingsScreen& screen);

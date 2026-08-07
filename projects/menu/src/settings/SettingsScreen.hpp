@@ -1,12 +1,16 @@
 #pragma once
 
 #include "TabbedOverlayScreen.hpp"
+#include <vector>
+#include <string>
+#include <functional>
 
 namespace settings::tabs {
 class SystemTab;
 class AccessibilityTab;
 class AudioTab;
 class DisplayTab;
+class HomebrewTab;
 class InternetTab;
 class ControllersTab;
 class BluetoothTab;
@@ -36,6 +40,18 @@ public:
     void onNetConnect(VoidCb cb)        { m_netConnectCb = std::move(cb); }
     void onAddUser(VoidCb cb)           { m_addUserCb = std::move(cb); }
     void onShowHomebrewChange(BoolCb cb) { m_showHomebrewCb = std::move(cb); }
+    using PathBoolCb = std::function<void(const std::string&, bool)>;
+    using PathCb     = std::function<void(const std::string&)>;
+    void onHomebrewHiddenChange(PathBoolCb cb) { m_homebrewHiddenCb = std::move(cb); }
+    void onHomebrewDelete(PathCb cb)           { m_homebrewDeleteCb = std::move(cb); }
+    void setHiddenHomebrew(std::vector<std::string> paths) {
+        m_hiddenHomebrew = std::move(paths);
+    }
+    bool isHomebrewHidden(const std::string& path) const {
+        for (const auto& p : m_hiddenHomebrew)
+            if (p == path) return true;
+        return false;
+    }
     void setShowHomebrew(bool v)        { m_showHomebrew = v; }
     bool showHomebrew() const           { return m_showHomebrew; }
     void onSleepRequest(VoidCb cb)      { m_sleepCb = std::move(cb); }
@@ -77,6 +93,7 @@ private:
     friend class settings::tabs::AccessibilityTab;
     friend class settings::tabs::AudioTab;
     friend class settings::tabs::DisplayTab;
+    friend class settings::tabs::HomebrewTab;
     friend class settings::tabs::InternetTab;
     friend class settings::tabs::ControllersTab;
     friend class settings::tabs::BluetoothTab;
@@ -98,6 +115,9 @@ private:
     VoidCb m_netConnectCb;
     VoidCb m_addUserCb;
     BoolCb m_showHomebrewCb;
+    PathBoolCb m_homebrewHiddenCb;
+    PathCb     m_homebrewDeleteCb;
+    std::vector<std::string> m_hiddenHomebrew;
     bool m_showHomebrew = false;
     VoidCb m_sleepCb;
     VoidCb m_shutdownCb;

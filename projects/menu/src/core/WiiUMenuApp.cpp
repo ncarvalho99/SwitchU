@@ -954,7 +954,12 @@ void WiiUMenuApp::appendHomebrewToPending(std::vector<PendingApp>& apps) {
 
     auto entries = homebrew::scan("sdmc:/switch");
     apps.reserve(apps.size() + entries.size());
+    int hidden = 0;
     for (auto& hb : entries) {
+        // Hidden ones stay on the card and out of the grid. The forwarder a
+        // homebrew installed for itself usually still needs the file.
+        if (m_config.isHomebrewHidden(hb.path)) { ++hidden; continue; }
+
         PendingApp app;
         // No title id exists for an NRO, so the path is the identity. It is
         // also what the launcher will need once there is one.

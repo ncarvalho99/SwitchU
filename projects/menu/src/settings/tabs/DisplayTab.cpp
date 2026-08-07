@@ -23,20 +23,8 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         t.items.push_back(std::move(it));
     }
 
-    {
-        SettingItem it;
-        it.label = i18n.tr("settings.display.show_homebrew", "Show homebrew");
-        it.description = i18n.tr("settings.display.show_homebrew_desc",
-                                 "List .nro files from the card. Applies when the menu restarts.");
-        it.type = ItemType::Toggle;
-        it.boolVal = screen.showHomebrew();
-        it.onChange = [&screen](SettingItem& self) {
-            if (screen.m_showHomebrewCb)
-                screen.m_showHomebrewCb(self.boolVal);
-        };
-        t.items.push_back(std::move(it));
-    }
-
+    // "Show homebrew" was here, next to brightness and burn-in. It is on the
+    // Homebrew tab with the per-file controls it belongs beside.
     // Glass sharpness, background speed and background blur used to sit here.
     // They are appearance, not display hardware, and nobody looked for them
     // next to brightness and burn-in; they live in the Themes screen now,
