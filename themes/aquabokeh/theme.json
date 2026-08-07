@@ -58,11 +58,11 @@
         24
       ],
       "speed": [
-        0,
-        4
+        3,
+        5
       ],
-      "wobble": 4,
-      "rotationSpeed": 0,
+      "wobble": 8,
+      "rotationSpeed": 0.1,
       "opacity": 0.22,
       "image": {
         "path": "media/backgrounds/bg.jpg",
