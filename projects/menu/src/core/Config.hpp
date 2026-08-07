@@ -19,9 +19,10 @@ struct AppConfig {
     bool  accessibilitySpeakPosition = true;
     int   accessibilitySpeechRate = 190;
 
-    // Softens the wallpaper and the shapes drifting over it. Off by default so
-    // an existing install looks unchanged until someone asks for it.
-    float backgroundBlur = 0.f;
+    // Softens the wallpaper and the shapes drifting over it. Barely on: enough
+    // to take the hard edge off the shapes without anyone noticing a blur, and
+    // the value asked for after people looked at it on real hardware.
+    float backgroundBlur = 0.05f;
 
     // How sharply the scene reads through the glass panels. Capturing that
     // scene at full resolution made it sharper than it had ever been, which
@@ -30,8 +31,9 @@ struct AppConfig {
     float glassSharpness = 0.4f;
 
     // Pace of the drifting shapes, as a slider position: 0 stops them, 0.5 is
-    // the speed the theme asked for, 1 doubles it.
-    float backgroundSpeed = 0.5f;
+    // the speed the theme asked for, 1 doubles it. Below centre by default --
+    // the theme's own pace read as restless behind a menu people sit in.
+    float backgroundSpeed = 0.35f;
 
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better
