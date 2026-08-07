@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include "launcher/HblOverride.hpp"
 #include "launcher/HomebrewScanner.hpp"
 #include <switchu/sd_commit.hpp>
 #include "widgets/GlossyIcon.hpp"
@@ -797,21 +798,31 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             if (entryIndex >= 0)
                 entry = &m_model.at(entryIndex);
 
-            // Homebrew has no title to hand to the application launcher, so the
-            // call fails and the daemon relaunches the menu — which is what it
-            // looked like from the outside. Says so until step three gives it a
-            // real route.
             if (entry && entry->isHomebrew()) {
                 auto& i18n = nxui::I18n::instance();
+                std::string why;
+                homebrew::Status hbl = homebrew::inspect();
+
+                // Enabled but never set up reads as a broken icon, so each
+                // reason says which one it is rather than failing the same way.
+                if (!m_config.homebrewLaunchEnabled)
+                    why = i18n.tr("error.homebrew_disabled",
+                                  "Turn on homebrew launching in Themes, Options.");
+                else if (!hbl.overrideActive)
+                    why = i18n.tr("error.homebrew_not_set_up",
+                                  "Homebrew launching is not set up on this console yet.");
+                else if (!m_launcher.launchHomebrew(entry->homebrewPath,
+                                                    homebrew::hostAppletId(hbl.activeHost)))
+                    why = i18n.tr("error.homebrew_launch_failed",
+                                  "This homebrew could not be started.");
+
+                if (why.empty())
+                    return;   // launched; the menu is on its way out
+
                 m_audio.playSfx(Sfx::ModalShow);
                 m_dialogReturnFocus = raw;
-                m_dialog->show(
-                    entry->title,
-                    i18n.tr("error.homebrew_not_launchable",
-                            "Launching homebrew from the menu is not available yet."),
-                    {{i18n.tr("button.ok", "OK"), [this]() {}, true}},
-                    0, {}
-                );
+                m_dialog->show(entry->title, why,
+                               {{i18n.tr("button.ok", "OK"), [this]() {}, true}}, 0, {});
                 focusManager().setFocus(m_dialog.get());
                 return;
             }

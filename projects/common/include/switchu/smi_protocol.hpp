@@ -38,6 +38,10 @@ enum class SystemMessage : uint32_t {
     // The system's own account creation applet. Creating a user was the one
     // account operation the menu had no route to at all.
     LaunchUserCreator     = 15,
+    // Homebrew. Unlike every Launch* above it, this one has to say which
+    // applet to start: the loader takes the place of whichever applet the
+    // owner chose to give up, and that is a setting, not a constant.
+    LaunchHomebrew        = 16,
 
     EnterSleep            = 20,
     Shutdown              = 21,
@@ -73,6 +77,14 @@ struct UserArgs {
     uint8_t user_uid[16];
 };
 static_assert(sizeof(UserArgs) == 16);
+
+struct HomebrewArgs {
+    // A libnx AppletId. Widened to 32 bits because the enum's underlying type
+    // is not fixed and this crosses a process boundary.
+    uint32_t applet_id;
+    uint32_t reserved;
+};
+static_assert(sizeof(HomebrewArgs) == 8);
 
 struct SystemStatus {
     uint64_t  suspended_app_id;

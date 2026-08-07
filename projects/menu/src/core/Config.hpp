@@ -37,6 +37,12 @@ struct AppConfig {
     // default: it adds a scan of the card at startup, and an install that has
     // never asked for it should not pay for it.
     bool showHomebrew = false;
+    // Listing homebrew is harmless; launching it takes over a system applet,
+    // so the two are separate switches and this one starts off.
+    bool homebrewLaunchEnabled = false;
+    // homebrew::AppletHost. Parental controls by default: most consoles never
+    // set it up, and taking it leaves the Album gallery working.
+    int  homebrewAppletHost = 0;
 
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better

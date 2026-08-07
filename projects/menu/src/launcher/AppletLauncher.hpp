@@ -1,4 +1,6 @@
 #pragma once
+
+#include <string>
 #include <functional>
 #include <atomic>
 #include <switch.h>
@@ -24,6 +26,11 @@ public:
     void launchNetConnect();
     void launchUserPage(AccountUid uid);
     void launchUserCreator();
+    // Writes the request the forked loader reads, then asks the daemon to
+    // start whichever applet is hosting it. Returns false without launching
+    // if the request could not be written -- starting anyway would open the
+    // loader on hbmenu, which looks like the wrong homebrew ran.
+    bool launchHomebrew(const std::string& nroPath, int appletId);
     void enterSleep();
     void shutdown();
     void reboot();

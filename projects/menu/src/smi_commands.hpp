@@ -68,6 +68,18 @@ inline Result launchUserPage(AccountUid uid) {
     return pushOutStorage(buf, sizeof(buf));
 }
 
+inline Result launchHomebrew(uint32_t appletId) {
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::HomebrewArgs)]{};
+    auto* hdr  = reinterpret_cast<smi::CommandHeader*>(buf);
+    auto* args = reinterpret_cast<smi::HomebrewArgs*>(buf + sizeof(smi::CommandHeader));
+
+    hdr->magic     = smi::kCommandMagic;
+    hdr->message   = static_cast<uint32_t>(smi::SystemMessage::LaunchHomebrew);
+    args->applet_id = appletId;
+
+    return pushOutStorage(buf, sizeof(buf));
+}
+
 inline Result resumeApplication() {
     return sendSimple(smi::SystemMessage::ResumeApplication);
 }
