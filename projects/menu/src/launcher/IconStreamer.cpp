@@ -347,6 +347,20 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
             m_appToSlot[pending[i].appIndex] = poolIdx;
             if (pending[i].appIndex < (int)allIcons.size())
                 allIcons[pending[i].appIndex]->setTexture(&slot.texture);
+        } else {
+            // Silent until now, and the icon just stayed blank -- which is what
+            // "some shortcuts were blank" on a 1TB card looks like from the
+            // outside. The slot had already been taken off m_freeSlots and was
+            // never recorded in m_appToSlot, so it leaked too: every failure
+            // brought the next one closer. It goes back on the free list, and
+            // says so, because a report of blank icons with nothing in the log
+            // leaves nothing to work from.
+            DebugLog::log("[streamer] UPLOAD FAILED app=%d %dx%d "
+                          "(pool=%d free=%d) -- icon blank, slot returned",
+                          pending[i].appIndex, d.w, d.h,
+                          (int)m_pool.size(), (int)m_freeSlots.size());
+            slot.appIndex = -1;
+            m_freeSlots.push_back(poolIdx);
         }
 
         if (d.scaledWithMalloc) std::free(d.rgba);

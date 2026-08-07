@@ -459,7 +459,7 @@ void WiiUMenuApp::createThemeShop() {
         const auto* entry = m_themeShop->findCommunityThemeEntry(themeId);
         if (!entry) {
             auto& i18n = nxui::I18n::instance();
-            showThemeShopInfo(i18n.tr("sidebar.theme_shop", "Themes"),
+            showThemeShopInfo(i18n.tr("sidebar.theme_shop", "SwitchU"),
                               i18n.tr("themeshop.community.selected_missing",
                                       "The selected community theme is no longer available in the catalog."));
             return;

@@ -1,3 +1,76 @@
+# SwitchU 1.1.0+fork.4
+
+## English
+
+Fourth release of this fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. All the original work is his, and it stays credited in the About page.
+
+A short one: two things that were wrong on screen, and one more attempt at the
+crash people keep reporting.
+
+**The reported crash — still open**
+
+Someone with a 1TB card described it more precisely: it happens with many games
+installed, a clean card is fine, it goes wrong while the shortcuts are being
+built, and some shortcuts came out blank.
+
+That last detail matters, because nothing found so far explains a blank icon.
+Following it led to a real defect: when uploading an icon's texture failed, the
+failure was ignored entirely. The icon stayed blank, and the texture slot it had
+taken was never given back — so every failure made the next one likelier, which
+is exactly the shape of "the more games, the worse it gets". The slot is
+returned now, and the failure is written to the log with the pool's state.
+
+**This is not a fix for the crash.** It is a real bug that produces one of the
+reported symptoms, and it turns the next report into evidence instead of another
+guess.
+
+**Fixed**
+
+- The theme screen ran at 30fps. It covers the home scene completely, and the
+  optimisation that stops drawing an occluded scene had only ever been offered
+  to the settings overlay — about 16ms a frame spent on pixels nothing could see
+- Long setting descriptions ran over the control beside them instead of wrapping
+
+---
+
+## Português
+
+Quarta versão deste fork do [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. Todo o trabalho original é dele, e o crédito continua na página Sobre.
+
+Uma versão curta: duas coisas que estavam erradas na tela, e mais uma tentativa
+no crash que continua sendo relatado.
+
+**O crash relatado — ainda em aberto**
+
+Alguém com um cartão de 1TB descreveu melhor: acontece com muitos jogos
+instalados, cartão limpo funciona, dá errado enquanto os atalhos estão sendo
+criados, e alguns atalhos saíam em branco.
+
+Esse último detalhe importa, porque nada do que foi encontrado até agora explica
+um ícone em branco. Seguir por ele levou a um defeito real: quando o envio da
+textura de um ícone falhava, a falha era simplesmente ignorada. O ícone ficava
+em branco, e o espaço de textura que ele tinha ocupado nunca era devolvido — de
+modo que cada falha tornava a seguinte mais provável, que é exatamente o formato
+de "quanto mais jogos, pior fica". O espaço agora é devolvido, e a falha é
+registrada no log junto com o estado do conjunto.
+
+**Isto não é a correção do crash.** É um defeito real que produz um dos sintomas
+relatados, e transforma o próximo relato em evidência em vez de mais um
+chute.
+
+**Corrigido**
+
+- A tela de temas rodava a 30fps. Ela cobre a cena da home por completo, e a
+  otimização que para de desenhar uma cena ocluída só havia sido oferecida ao
+  painel de configurações — cerca de 16ms por frame gastos em pixels que
+  ninguém podia ver
+- Descrições longas de ajustes passavam por cima do controle ao lado em vez de
+  quebrar linha
+
+---
+
 # SwitchU 1.1.0+fork.3
 
 ## English
