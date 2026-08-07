@@ -402,6 +402,14 @@
       "pagination_actions": "Izquierda y derecha cambian botón. A cambia página. Arriba a la cuadrícula.",
       "no_theme": "Ningún tema",
       "grid_actions": "Cruz direccional para navegar. A abre detalles. B vuelve a las pestañas."
+    },
+    "options": {
+      "homebrew_launch": "Abrir homebrew",
+      "homebrew_launch_desc": "Abre archivos .nro desde la cuadrícula. Ocupa un applet del sistema.",
+      "homebrew_host": "Applet que el homebrew reemplaza",
+      "homebrew_host_desc": "El control parental deja de aplicarse, o el Álbum deja de mostrar capturas. Mantén R al abrir para el original.",
+      "host_parental": "Control parental",
+      "host_album": "Álbum"
     }
   },
   "hint": {

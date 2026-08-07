@@ -402,6 +402,14 @@
       "pagination_actions": "Links und rechts wechseln die Taste. A wechselt die Seite. Hoch zum Raster.",
       "no_theme": "Kein Theme",
       "grid_actions": "Steuerkreuz zum Navigieren. A öffnet Details. B zurück zu den Tabs."
+    },
+    "options": {
+      "homebrew_launch": "Homebrew starten",
+      "homebrew_launch_desc": "Öffnet .nro-Dateien aus dem Raster. Belegt ein System-Applet.",
+      "homebrew_host": "Applet, das Homebrew ersetzt",
+      "homebrew_host_desc": "Die Kindersicherung greift nicht mehr, oder das Album zeigt keine Aufnahmen mehr. Beim Starten R halten für das Original.",
+      "host_parental": "Kindersicherung",
+      "host_album": "Album"
     }
   },
   "hint": {

@@ -402,6 +402,14 @@
       "pagination_actions": "Links en rechts wisselen knop. A wisselt pagina. Omhoog naar het raster.",
       "no_theme": "Geen thema",
       "grid_actions": "Richtingsknoppen om te navigeren. A opent details. B terug naar tabs."
+    },
+    "options": {
+      "homebrew_launch": "Homebrew starten",
+      "homebrew_launch_desc": "Opent .nro-bestanden vanuit het raster. Neemt één systeemapplet over.",
+      "homebrew_host": "Applet die homebrew vervangt",
+      "homebrew_host_desc": "Ouderlijk toezicht wordt niet meer toegepast, of het Album toont geen opnamen meer. Houd R ingedrukt bij het starten voor het origineel.",
+      "host_parental": "Ouderlijk toezicht",
+      "host_album": "Album"
     }
   },
   "hint": {

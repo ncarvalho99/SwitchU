@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include "launcher/HblOverride.hpp"
 #include "themeshop/ThemePackageInstaller.hpp"
 #include "settings/SettingsGlassTuning.hpp"
 #include "widgets/GlossyIcon.hpp"
@@ -589,6 +590,41 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->onBackgroundBlurChange([this](float v) {
         m_config.backgroundBlur = v;
         if (m_background) m_background->setBlurStrength(v);
+    });
+    m_themeShop->setHomebrewState(m_config.homebrewLaunchEnabled,
+                                  m_config.homebrewAppletHost);
+
+    // Turning the switch off is the documented way back out, so it must do
+    // the whole undo, not only forget a preference: the override on the SD
+    // card is what a console actually reads.
+    m_themeShop->onHomebrewLaunchChange([this](bool enabled) {
+        std::string error;
+        bool ok = enabled
+            ? homebrew::enable((homebrew::AppletHost)m_config.homebrewAppletHost, error)
+            : homebrew::disable(error);
+
+        if (!ok) {
+            DebugLog::log("[hbl] %s failed: %s", enabled ? "enable" : "disable",
+                          error.c_str());
+            // The config must not claim something the card does not agree
+            // with, or the next boot would launch into a state that is not
+            // there.
+            m_config.homebrewLaunchEnabled = false;
+            m_themeShop->setHomebrewState(false, m_config.homebrewAppletHost);
+            return;
+        }
+        m_config.homebrewLaunchEnabled = enabled;
+    });
+
+    m_themeShop->onHomebrewHostChange([this](int host) {
+        m_config.homebrewAppletHost = host;
+        // Only rewrite the card when something is already written there;
+        // choosing a host while the feature is off is just a preference.
+        if (!m_config.homebrewLaunchEnabled)
+            return;
+        std::string error;
+        if (!homebrew::enable((homebrew::AppletHost)host, error))
+            DebugLog::log("[hbl] host change failed: %s", error.c_str());
     });
     m_themeShop->onGridColumnsChange([this](int cols) {
         cols = std::clamp(cols, 3, 8);

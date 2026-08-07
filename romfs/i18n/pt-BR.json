@@ -402,6 +402,14 @@
       "pagination_actions": "Esquerda e direita mudam botão. A muda página. Cima para a grade.",
       "no_theme": "Nenhum tema",
       "grid_actions": "Direcional para navegar. A abre detalhes. B volta para abas."
+    },
+    "options": {
+      "homebrew_launch": "Abrir homebrew",
+      "homebrew_launch_desc": "Abre arquivos .nro pela grade. Toma um applet do sistema.",
+      "homebrew_host": "Applet que o homebrew substitui",
+      "homebrew_host_desc": "O controle parental deixa de ser aplicado, ou o Álbum deixa de mostrar capturas. Segure R ao abrir para ter o original.",
+      "host_parental": "Controle parental",
+      "host_album": "Álbum"
     }
   },
   "hint": {

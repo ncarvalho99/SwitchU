@@ -142,5 +142,41 @@ ThemeShopScreen::Tab themeshop::tabs::OptionsTab::build(ThemeShopScreen& screen)
         t.items.push_back(std::move(it));
     }
 
+    {
+        SettingItem it;
+        it.label = i18n.tr("themeshop.options.homebrew_launch", "Launch homebrew");
+        it.description = i18n.tr("themeshop.options.homebrew_launch_desc",
+                                 "Opens .nro files from the grid. Takes over one system applet.");
+        it.type = ItemType::Toggle;
+        it.boolVal = screen.m_homebrewLaunch;
+        it.anim01 = it.boolVal ? 1.f : 0.f;
+        it.onChange = [&screen](SettingItem& self) {
+            screen.m_homebrewLaunch = self.boolVal;
+            if (screen.m_homebrewLaunchCb) screen.m_homebrewLaunchCb(self.boolVal);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("themeshop.options.homebrew_host", "Applet homebrew replaces");
+        // The console gives no warning of its own, so the description is the
+        // only place someone finds out what they are agreeing to.
+        it.description = i18n.tr("themeshop.options.homebrew_host_desc",
+                                 "Parental controls stop being enforced, or the Album stops "
+                                 "showing screenshots. Hold R while launching for the real one.");
+        it.type = ItemType::Selector;
+        it.options = {
+            i18n.tr("themeshop.options.host_parental", "Parental controls"),
+            i18n.tr("themeshop.options.host_album", "Album"),
+        };
+        it.intVal = std::clamp(screen.m_homebrewHost, 0, 1);
+        it.onChange = [&screen](SettingItem& self) {
+            screen.m_homebrewHost = std::clamp(self.intVal, 0, 1);
+            if (screen.m_homebrewHostCb) screen.m_homebrewHostCb(screen.m_homebrewHost);
+        };
+        t.items.push_back(std::move(it));
+    }
+
     return t;
 }
