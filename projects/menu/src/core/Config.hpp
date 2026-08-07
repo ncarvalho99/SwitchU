@@ -1,4 +1,6 @@
 #pragma once
+
+#include <cstdint>
 #include <string>
 
 struct AppConfig {
@@ -45,6 +47,11 @@ struct AppConfig {
     // homebrew::AppletHost. Parental controls by default: most consoles never
     // set it up, and taking it leaves the Album gallery working.
     int  homebrewAppletHost = 0;
+    // The grid entry to come back to after launching homebrew. A suspended
+    // application already does this through the launcher, but homebrew runs
+    // as an applet and leaves nothing suspended, so the page it was on has
+    // to survive the menu restarting by itself.
+    std::uint64_t homebrewReturnTitleId = 0;
 
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better
