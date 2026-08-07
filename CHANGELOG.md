@@ -1,56 +1,119 @@
-# Não publicado / Unreleased
+# SwitchU 1.1.0+fork.3
 
 ## English
 
-**Themes**
+Third release of this fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. All the original work is his, and it stays credited in the About page.
 
-- The theme shop is now just **Themes** in the sidebar, in every language
-- Glass sharpness, background animation speed and background blur moved out of
-  Settings > Display and into the Themes screen, next to the other controls that
-  change how the menu looks. They exist in one place now, not two
+This one is about the crash people have been reporting, and about putting the
+settings where they are actually looked for.
 
-**Crash on a fresh install — attempt 1, unconfirmed**
+**The reported crash — attempt one, not confirmed**
 
-A reporter sees the menu crash twice on a clean install and work from the third
-boot on. The focus manager was calling `onFocusLost()` on icons that a refresh
-had already destroyed, and the guard written for exactly that case
-(`invalidateWidget`) had never been called. It is called now.
+A crash report finally arrived with symbols that match the build it came from.
+It resolves to `WiiUMenuApp::onUpdate` branching to an address in no module at
+all: a call through a pointer to an object that had already been destroyed.
 
-This is the first attempt and it is **not confirmed to be the fix**. The crash
-has never reproduced here, and the diagnosis comes from reading the code against
-one report rather than from a crash report resolved to these lines. It stays open
-until someone who could reproduce it says it stopped.
+Rebuilding the grid frees every icon, and two places kept using them afterwards.
+The focus managers hold raw pointers and call `onFocusLost()` on whatever they
+believe is focused; edit mode holds two more and dereferences both without
+checking. Both are told now.
 
+That explains the shape of the reports: a title installed while the menu is open
+makes the grid genuinely different, so it is rebuilt — and the crash lands during
+the rebuild, which is why the new shortcut is missing and only appears after a
+restart. On a fresh install the same thing happens repeatedly while the icon
+cache is still cold.
+
+**It is not confirmed fixed.** It has never reproduced here, and both changes
+come from reading code against crash reports rather than from watching it stop.
 If it still happens, `sdmc:/atmosphere/crash_reports/` plus the
-`SwitchU-symbols-sysmodule-release` artifact from the *same* build are what make
+`SwitchU-symbols-sysmodule-release` artifact from the *same* build is what makes
 the next attempt better than a guess.
+
+**Appearance settings**
+
+- Glass sharpness, background animation speed and background blur moved out of
+  Settings, Display and into the theme screen, next to the rest of what changes
+  how the menu looks. They were in two places at once; now they are in one
+- "Theme Shop" is now just **Themes**, in all eight languages
+
+**Accounts**
+
+- The top avatar opens the account list, with a tile for creating a new user
+- The accounts dialog can be reached with the controller, not only by touch
+
+**Tutorial**
+
+- Skipping was one line in a corner panel at half size, indistinguishable from
+  "skip step". It has its own centred prompt now, at nearly twice the scale,
+  translated everywhere
+
+**Under the hood**
+
+- Cached names are terminated on read as well as on write, so a truncated cache
+  file cannot walk off the end of one
+- The devkitA64 toolchain exposes portlibs, which is what a local build needs to
+  find the libraries it links against. No effect on the console
 
 ---
 
 ## Português
 
-**Temas**
+Terceira versão deste fork do [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. Todo o trabalho original é dele, e o crédito continua na página Sobre.
 
-- A loja de temas agora é só **Temas** na barra lateral, em todos os idiomas
-- Nitidez do vidro, velocidade da animação de fundo e desfoque de fundo saíram de
-  Configurações > Tela e foram para a tela de Temas, junto dos outros controles
-  que mudam a aparência do menu. Agora existem num lugar só, não em dois
+Esta é sobre o crash que vem sendo relatado, e sobre colocar as configurações
+onde as pessoas realmente procuram por elas.
 
-**Crash em instalação limpa — tentativa 1, não confirmada**
+**O crash relatado — tentativa um, não confirmada**
 
-Um usuário relata o menu quebrando duas vezes em instalação limpa e funcionando
-a partir do terceiro boot. O gerenciador de foco chamava `onFocusLost()` em
-ícones que um refresh já havia destruído, e a proteção escrita exatamente para
-esse caso (`invalidateWidget`) nunca havia sido chamada. Agora é.
+Chegou finalmente um crash report com símbolos que batem com a build que o
+gerou. Ele resolve para `WiiUMenuApp::onUpdate` saltando para um endereço que
+não existe em módulo nenhum: chamada através de um ponteiro para um objeto já
+destruído.
 
-Esta é a primeira tentativa e **não está confirmada como a correção**. O crash
-nunca reproduziu aqui, e o diagnóstico vem de ler o código contra um relato, não
-de um crash report resolvido até estas linhas. Fica em aberto até alguém que
-conseguia reproduzir dizer que parou.
+Reconstruir a grade libera todos os ícones, e dois lugares continuavam usando-os
+depois disso. Os gerenciadores de foco guardam ponteiros crus e chamam
+`onFocusLost()` no que julgam estar focado; o modo de edição guarda mais dois e
+desreferencia ambos sem verificar. Os dois passam a ser avisados.
 
-Se continuar acontecendo, `sdmc:/atmosphere/crash_reports/` mais o artefato
-`SwitchU-symbols-sysmodule-release` do *mesmo* build são o que faz a próxima
+Isso explica o formato dos relatos: um título instalado com o menu aberto torna
+a grade de fato diferente, então ela é reconstruída — e o crash acontece durante
+a reconstrução, que é por isso que o atalho novo não aparece e só surge depois de
+reiniciar. Em instalação limpa a mesma coisa se repete enquanto o cache de
+ícones ainda está frio.
+
+**Não está confirmado como corrigido.** Nunca reproduziu aqui, e as duas
+mudanças vêm de ler código contra crash reports, não de ver o problema parar. Se
+continuar acontecendo, `sdmc:/atmosphere/crash_reports/` mais o artefato
+`SwitchU-symbols-sysmodule-release` da *mesma* build são o que faz a próxima
 tentativa ser melhor que um chute.
+
+**Configurações de aparência**
+
+- Nitidez do vidro, velocidade da animação de fundo e desfoque de fundo saíram de
+  Configurações, Tela e foram para a tela de temas, junto do resto do que muda a
+  aparência do menu. Estavam em dois lugares ao mesmo tempo; agora estão em um
+- "Loja de temas" agora é só **Temas**, nos oito idiomas
+
+**Contas**
+
+- O avatar do topo abre a lista de contas, com um bloco para criar um usuário novo
+- O diálogo de contas passa a ser alcançável pelo controle, não só por toque
+
+**Tutorial**
+
+- Pular era uma linha num painel de canto, em metade do tamanho, idêntica a
+  "pular passo". Agora tem aviso próprio e centralizado, quase o dobro da escala,
+  traduzido em todos os idiomas
+
+**Por baixo**
+
+- Nomes em cache são terminados na leitura além da escrita, para que um arquivo
+  de cache truncado não possa passar do fim de um deles
+- O toolchain devkitA64 expõe portlibs, que é o que um build local precisa para
+  achar as bibliotecas que linka. Sem efeito no console
 
 ---
 
