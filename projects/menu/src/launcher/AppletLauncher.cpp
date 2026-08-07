@@ -3,6 +3,7 @@
 #include <fstream>
 #include <filesystem>
 #include "core/DebugLog.hpp"
+#include <switchu/sd_commit.hpp>
 #ifdef SWITCHU_MENU
 #include "smi_commands.hpp"
 #include <switchu/smi_protocol.hpp>
@@ -57,6 +58,10 @@ bool AppletLauncher::launchHomebrew(const std::string& nroPath, int appletId) {
             return false;
         }
     }
+
+    // The applet starts and this process ends moments later, so the request
+    // must be on the card rather than in a cache by the time that happens.
+    switchu::commitSdCard("homebrew request");
 
     DebugLog::log("[launcher] homebrew %s via applet 0x%X", nroPath.c_str(), appletId);
     Result rc = switchu::menu::smi_cmd::launchHomebrew((uint32_t)appletId);

@@ -1,5 +1,6 @@
 #include "HblOverride.hpp"
 #include "core/DebugLog.hpp"
+#include <switchu/sd_commit.hpp>
 
 #include <switch.h>
 
@@ -287,6 +288,12 @@ bool enable(AppletHost host, std::string& error) {
     if (!writeFile(kOverridePath, body, error))
         return false;
 
+    // Not durable until this runs. Exactly this left the card unmountable
+    // three times before -- hekate came up unable to find nyx and the
+    // firmware files had to be restored -- and toggling this setting writes
+    // right before someone reboots to check that it worked.
+    switchu::commitSdCard("hbl enable");
+
     DebugLog::log("[hbl] slot %d -> %s", slot, hostProgramIdText(host));
     return true;
 }
@@ -320,6 +327,7 @@ bool disable(std::string& error) {
         std::filesystem::remove(kSavedPath, ec);
     }
 
+    switchu::commitSdCard("hbl disable");
     DebugLog::log("[hbl] override removed");
     return true;
 }
