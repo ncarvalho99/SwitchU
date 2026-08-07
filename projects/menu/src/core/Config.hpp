@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 
 struct AppConfig {
@@ -38,6 +39,13 @@ struct AppConfig {
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better
     // dark, and a first boot into white is a jolt on a handheld.
+    // A title from the page the menu was last on. Returning from a suspended
+    // game already jumps to it, but closing a game outright, or opening an
+    // applet, suspends nothing -- and the menu came back on page one every
+    // time. Stored as a title rather than a page number because the grid can
+    // be rebuilt with a different width between the two moments.
+    std::uint64_t lastPageTitleId = 0;
+
     std::string themePreset = "Default Dark";
 
     bool load();

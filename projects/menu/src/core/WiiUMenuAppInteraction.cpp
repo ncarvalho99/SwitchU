@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include <fmt/format.h>
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 
@@ -686,7 +687,9 @@ void WiiUMenuApp::wireGlobalActions() {
     });
 #else
     root.addAction(static_cast<uint64_t>(nxui::Button::Plus), [this]() {
-        handleAccessibilityToggleCombo();
+        if (handleAccessibilityToggleCombo())
+            return;
+        showIconOptions();
     });
 #endif
 
@@ -890,4 +893,101 @@ void WiiUMenuApp::updateCursor() {
     } else {
         m_cursor->setVisible(false);
     }
+}
+
+// Pressing + on an icon, the way the stock menu does it. Two entries, both
+// answerable here: nsDeleteApplicationCompletely is called straight from the
+// menu in the storage tab already, so removing a game needs no daemon round
+// trip, and everything shown as information is already in the model.
+void WiiUMenuApp::showIconOptions() {
+#ifdef SWITCHU_MENU
+    if (m_editMode) return;
+    if (m_dialog && m_dialog->isActive()) return;
+
+    auto* cur = focusManager().current();
+    if (!cur || cur->tag() != "glossy_icon") return;
+    auto* icon = static_cast<GlossyIcon*>(cur);
+
+    const int index = findTitleIndex(icon->titleId());
+    if (index < 0) return;
+    const auto& entry = m_model.at(index);
+
+
+    auto& i18n = nxui::I18n::instance();
+    const std::uint64_t titleId = entry.titleId;
+    const std::string title = entry.title;
+
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialogReturnFocus = cur;
+    m_dialog->show(
+        title,
+        i18n.tr("dialog.icon_options_body", "Choose what to do with this software."),
+        {
+            {i18n.tr("dialog.icon_options_info", "Software information"),
+             [this, titleId, title]() { showSoftwareInformation(titleId, title); }, true},
+            {i18n.tr("dialog.icon_options_delete", "Delete software"),
+             [this, titleId, title]() { confirmDeleteSoftware(titleId, title); }, false},
+            {i18n.tr("button.cancel", "Cancel"), [this]() {}, false},
+        },
+        0, {});
+    focusManager().setFocus(m_dialog.get());
+#endif
+}
+
+void WiiUMenuApp::showSoftwareInformation(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    auto& i18n = nxui::I18n::instance();
+    std::string body = fmt::format("{}\n\n{}: {:016X}",
+                                   title,
+                                   i18n.tr("dialog.software_title_id", "Title ID"),
+                                   titleId);
+
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show(i18n.tr("dialog.software_information", "Software information"),
+                   body,
+                   {{i18n.tr("button.ok", "OK"), [this]() {}, true}},
+                   0, {});
+    focusManager().setFocus(m_dialog.get());
+#endif
+}
+
+void WiiUMenuApp::confirmDeleteSoftware(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    auto& i18n = nxui::I18n::instance();
+    // Says what goes and what does not. Save data survives a delete on this
+    // console, and somebody about to remove a game they intend to reinstall
+    // deserves to know that before they decide, not after.
+    std::string body = fmt::format("{}\n\n{}", title,
+        i18n.tr("dialog.delete_software_body",
+                "This removes the software from the console. It cannot be undone "
+                "here -- the software has to be downloaded or installed again."));
+
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show(
+        i18n.tr("dialog.delete_software", "Delete software?"),
+        body,
+        {
+            {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+            {i18n.tr("button.delete", "Delete"), [this, titleId]() {
+                 const Result rc = nsDeleteApplicationCompletely(titleId);
+                 DebugLog::log("[menu] delete 0x%016lX rc=0x%X", titleId, rc);
+                 // The daemon notices the record change and asks for a
+                 // refresh, which is what takes the icon off the grid. Doing
+                 // it here as well would rebuild the grid from under the
+                 // dialog that is still closing.
+                 auto& tr = nxui::I18n::instance();
+                 m_dialog->show(
+                     tr.tr("dialog.delete_software", "Delete software?"),
+                     R_SUCCEEDED(rc)
+                         ? tr.tr("dialog.delete_software_done", "The software was deleted.")
+                         : tr.tr("dialog.delete_software_failed",
+                                 "The software could not be deleted."),
+                     {{tr.tr("button.ok", "OK"), [this]() {}, true}},
+                     0, {});
+                 focusManager().setFocus(m_dialog.get());
+             }, false},
+        },
+        0, {});
+    focusManager().setFocus(m_dialog.get());
+#endif
 }

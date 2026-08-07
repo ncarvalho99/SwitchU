@@ -64,6 +64,9 @@ private:
     bool m_running = true;
     bool m_renderEnabled = true;
     int  m_navDebounce = 0;
+    // Frames a direction has been held for. Navigation used to fire only on the
+    // frame a button went down, so holding one moved a single icon and stopped.
+    int  m_navHoldFrames = 0;
 };
 
 } // namespace nxui

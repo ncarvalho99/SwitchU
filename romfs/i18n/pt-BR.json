@@ -544,5 +544,16 @@
       "test": "Testar",
       "skip_all_banner": "Aperte  +  para pular a configuração"
     }
+  },
+  "dialog": {
+    "icon_options_body": "Escolha o que fazer com este software.",
+    "icon_options_info": "Informações do software",
+    "icon_options_delete": "Apagar software",
+    "software_information": "Informações do software",
+    "software_title_id": "ID do título",
+    "delete_software": "Apagar o software?",
+    "delete_software_body": "Isto remove o software do console. Não há como desfazer por aqui — o software terá de ser baixado ou instalado de novo.",
+    "delete_software_done": "O software foi apagado.",
+    "delete_software_failed": "Não foi possível apagar o software."
   }
 }
