@@ -188,11 +188,26 @@ void main() {
     // refractionCurve is a pow per pixel; mix() then scales its effect by
     // refrIntensity, which is 0.035 here. Below a threshold the displacement is
     // under a pixel, so the sample lands on the same texel either way.
+    // p is normalised so the panel's shorter half-extent is 1.0, which makes
+    // the displacement below proportional to the panel's size in pixels: the
+    // same intensity bends far more of the screen behind a large panel than a
+    // small one. Refraction is what reads as softness, so the account and power
+    // dialogs came out looking sharper than the settings overlay even with
+    // identical settings -- reported as exactly that.
+    //
+    // 636 is the shorter side of the settings glass panel (720 - 2*32 margin,
+    // less the 10px inset), which is the panel refractionIntensity was tuned
+    // against. Scaling by it keeps the displacement a fixed size in pixels
+    // whatever the panel is. The clamp keeps a very small popup from being
+    // handed an intensity far outside the range the rest of the pass expects.
+    const float kTunedPanelMinSide = 636.0;
+    float sizeComp = clamp(kTunedPanelMinSide / panelMinSide, 0.5, 3.0);
+
     vec2 sampleP = p;
     if (refrIntensity > 0.002) {
         float refBase = refractionCurve(dist);
         float refScale = (abs(fPower - 1.0) < 0.001) ? refBase : pow(refBase, fPower);
-        sampleP = p * mix(1.0, refScale, refrIntensity);
+        sampleP = p * mix(1.0, refScale, min(refrIntensity * sizeComp, 1.0));
     }
 
     // A sin and a cos per pixel, scaled by roughness * 0.05. The settings
