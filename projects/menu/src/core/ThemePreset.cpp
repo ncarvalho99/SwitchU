@@ -324,6 +324,16 @@ void readThemeBackgroundFromObject(const nlohmann::json& j, ThemeBackgroundConfi
                 background.imagePath = imageIt->get<std::string>();
             } else if (imageIt->is_object()) {
                 readJsonAliases(*imageIt, {"path", "file", "src"}, background.imagePath);
+                // "frames": ["a.jpg", "b.jpg", ...] alongside "fps". A theme
+                // with a single still is unaffected and costs what it always
+                // did; this only adds a way to say there is more than one.
+                if (auto fr = imageIt->find("frames");
+                    fr != imageIt->end() && fr->is_array()) {
+                    for (const auto& v : *fr)
+                        if (v.is_string())
+                            background.imageFrames.push_back(v.get<std::string>());
+                }
+                readJsonAliases(*imageIt, {"fps", "rate"}, background.imageFps);
                 readJsonAliases(*imageIt, {"opacity", "alpha"}, background.imageOpacity);
                 readJsonAliases(*imageIt, {"cover", "fill"}, background.imageCover);
 

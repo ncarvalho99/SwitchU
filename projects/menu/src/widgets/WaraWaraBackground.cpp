@@ -143,8 +143,69 @@ bool WaraWaraBackground::loadImage(nxui::GpuDevice& gpu, nxui::Renderer& ren, co
     return true;
 }
 
+bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                                           const std::vector<std::string>& paths,
+                                           float fps) {
+    clearImage();
+    if (paths.empty())
+        return false;
+
+    // Each frame is a full-screen texture held for as long as the theme is on.
+    // The image budget is 32 MB and is shared with every game icon on screen;
+    // exhausting it is what produced the crash reports this project spent days
+    // on. Twelve is enough for a loop that reads as motion and leaves the
+    // larger share of the budget where it was.
+    constexpr size_t kMaxFrames = 12;
+    const size_t wanted = std::min(paths.size(), kMaxFrames);
+    if (paths.size() > kMaxFrames) {
+        DebugLog::log("[background] %zu frames offered, loading %zu -- the image "
+                      "budget is shared with icons",
+                      paths.size(), kMaxFrames);
+    }
+
+    m_frames.reserve(wanted);
+    for (size_t i = 0; i < wanted; ++i) {
+        nxui::Texture tex;
+        if (!tex.loadFromFile(gpu, ren, paths[i], 0)) {
+            // Stopping here rather than carrying on: a sequence missing a frame
+            // in the middle stutters at that point every loop, which looks like
+            // a fault rather than a shorter animation.
+            DebugLog::log("[background] frame %zu failed to load (%s), keeping %zu",
+                          i, paths[i].c_str(), m_frames.size());
+            break;
+        }
+        m_frames.push_back(std::move(tex));
+    }
+
+    if (m_frames.empty())
+        return false;
+
+    m_backgroundImage = nxui::Texture{};
+    m_frameIndex = 0;
+    m_frameTimer = 0.f;
+    m_frameInterval = (fps > 0.f && m_frames.size() > 1) ? (1.f / fps) : 0.f;
+
+    DebugLog::log("[background] %zu frames at %.1f fps (%dx%d)",
+                  m_frames.size(), fps,
+                  m_frames[0].width(), m_frames[0].height());
+    return true;
+}
+
 void WaraWaraBackground::clearImage() {
     m_backgroundImage = nxui::Texture{};
+    m_frames.clear();
+    m_frameInterval = 0.f;
+    m_frameTimer = 0.f;
+    m_frameIndex = 0;
+}
+
+// The texture to draw this frame: the sequence when there is one, the still
+// wallpaper otherwise. Everything downstream asks through here so neither path
+// has to know about the other.
+const nxui::Texture* WaraWaraBackground::currentBackground() const {
+    if (!m_frames.empty())
+        return &m_frames[(size_t)m_frameIndex];
+    return m_backgroundImage.valid() ? &m_backgroundImage : nullptr;
 }
 
 WaraWaraBackground::ShapeType WaraWaraBackground::pickShapeType() const {
@@ -233,6 +294,16 @@ void WaraWaraBackground::onUpdate(float dt) {
     // shapes sliding while still spinning at the authored rate.
     dt *= m_speedScale;
     m_time += dt;
+
+    // Scaled dt on purpose: the background-speed slider should move the
+    // wallpaper as well as the shapes, or the two would drift apart.
+    if (m_frameInterval > 0.f && m_frames.size() > 1) {
+        m_frameTimer += dt;
+        while (m_frameTimer >= m_frameInterval) {
+            m_frameTimer -= m_frameInterval;
+            m_frameIndex = (m_frameIndex + 1) % (int)m_frames.size();
+        }
+    }
     for (auto& s : m_shapes) {
         if (m_config.layout == Layout::Floating) {
             float top = m_rect.y - s.size - 20.f;
@@ -252,15 +323,16 @@ void WaraWaraBackground::onUpdate(float dt) {
 }
 
 nxui::Rect WaraWaraBackground::backgroundImageRect() const {
-    if (!m_backgroundImage.valid() || m_backgroundImage.width() <= 0 || m_backgroundImage.height() <= 0)
+    const nxui::Texture* bg = currentBackground();
+    if (!bg || !bg->valid() || bg->width() <= 0 || bg->height() <= 0)
         return m_rect;
 
     float areaX = m_rect.x;
     float areaY = m_rect.y;
     float areaW = (m_rect.width > 1.f) ? m_rect.width : 1280.f;
     float areaH = (m_rect.height > 1.f) ? m_rect.height : 720.f;
-    float texW = static_cast<float>(m_backgroundImage.width());
-    float texH = static_cast<float>(m_backgroundImage.height());
+    float texW = static_cast<float>(bg->width());
+    float texH = static_cast<float>(bg->height());
     float sx = areaW / texW;
     float sy = areaH / texH;
     float scale = m_config.imageCover ? std::max(sx, sy) : std::min(sx, sy);
@@ -315,8 +387,9 @@ void WaraWaraBackground::renderLayer(nxui::Renderer& ren, bool intoOffscreen) {
     ren.flush();
     ren.useShader(nxui::ShaderProgram::Basic);
 
-    if (m_backgroundImage.valid() && m_config.imageOpacity > 0.f) {
-        ren.drawTexture(&m_backgroundImage,
+    const nxui::Texture* bg = currentBackground();
+    if (bg && bg->valid() && m_config.imageOpacity > 0.f) {
+        ren.drawTexture(bg,
                         backgroundImageRect(),
                         nxui::Color::white().withAlpha(m_config.imageOpacity * m_opacity));
     }

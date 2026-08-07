@@ -59,7 +59,22 @@ public:
     const Config& config() const { return m_config; }
 
     bool loadImage(nxui::GpuDevice& gpu, nxui::Renderer& ren, const std::string& path);
+    // A wallpaper that moves, without decoding anything while it runs.
+    //
+    // Real video was measured and ruled out: a 1080p still costs 365ms to
+    // decode on this hardware, and even 640x360 projects to about 40ms -- more
+    // than twice a whole frame, for a background. Decoding every frame is not
+    // available at any resolution, and ffmpeg would not help because it decodes
+    // in software here too.
+    //
+    // So the frames are decoded once, at load, and the loop only swaps which
+    // texture is drawn. That costs nothing per frame beyond the draw already
+    // being made.
+    bool loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                           const std::vector<std::string>& paths, float fps);
     void clearImage();
+    bool hasAnimatedBackground() const { return m_frames.size() > 1; }
+    const nxui::Texture* currentBackground() const;
 
     void regenerate(int count = 50) override;
 
@@ -104,6 +119,12 @@ private:
     Config m_config;
     std::vector<Shape> m_shapes;
     nxui::Texture m_backgroundImage;
+    // Extra frames beyond the first. A still wallpaper leaves this empty and
+    // costs exactly what it did before.
+    std::vector<nxui::Texture> m_frames;
+    float m_frameInterval = 0.f;   // seconds; 0 disables cycling
+    float m_frameTimer    = 0.f;
+    int   m_frameIndex    = 0;
     float m_time = 0.f;
     float m_blurStrength = 0.f;
     float m_speedScale = 1.f;
