@@ -256,7 +256,9 @@
       "delete": "Apagar este arquivo",
       "applies_on_restart": "Vale a partir do próximo início do menu.",
       "deleted": "Arquivo apagado.",
-      "delete_failed": "Não foi possível apagar o arquivo."
+      "delete_failed": "Não foi possível apagar o arquivo.",
+      "ports_note": "Ports instalados por outro homebrew",
+      "ports_note_desc": "Abra esses pelo atalho que o instalador deles criou. Iniciados por aqui eles não recebem argumentos, então não sabem qual jogo carregar."
     }
   },
   "userselect": {

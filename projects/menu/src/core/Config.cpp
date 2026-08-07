@@ -49,6 +49,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "homebrewLaunchEnabled", homebrewLaunchEnabled);
     readJsonOpt(j, "homebrewAppletHost", homebrewAppletHost);
     readJsonOpt(j, "homebrewReturnTitleId", homebrewReturnTitleId);
+    readJsonOpt(j, "homebrewLaunchTick", homebrewLaunchTick);
     hiddenHomebrew.clear();
     if (auto it = j.find("hiddenHomebrew"); it != j.end() && it->is_array()) {
         for (const auto& v : *it)
@@ -101,6 +102,7 @@ bool AppConfig::save() const {
     j["homebrewLaunchEnabled"] = homebrewLaunchEnabled;
     j["homebrewAppletHost"] = homebrewAppletHost;
     j["homebrewReturnTitleId"] = homebrewReturnTitleId;
+    j["homebrewLaunchTick"] = homebrewLaunchTick;
     j["hiddenHomebrew"] = hiddenHomebrew;
     j["accessibilityEnabled"] = accessibilityEnabled;
     j["accessibilitySpeakHints"] = accessibilitySpeakHints;

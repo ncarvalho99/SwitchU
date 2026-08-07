@@ -816,6 +816,9 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
                     // moments later and the daemon starts a fresh one, so
                     // anything not on the card by then is gone.
                     m_config.homebrewReturnTitleId = entry->titleId;
+                    // Uptime, not wall clock: it survives the menu restarting
+                    // and does not care what the console thinks the date is.
+                    m_config.homebrewLaunchTick = armGetSystemTick();
                     m_config.save();
                     switchu::commitSdCard("homebrew return page");
                 }
@@ -1146,7 +1149,9 @@ void WiiUMenuApp::buildGrid() {
         // Cleared immediately, and written back: it is good for one return, and
         // leaving it set would send every later boot to the same page.
         m_config.homebrewReturnTitleId = 0;
+        m_config.homebrewLaunchTick = 0;
         m_config.save();
+
         if (index >= 0 && m_grid->iconsPerPage() > 0) {
             initialPage = index / m_grid->iconsPerPage();
             m_grid->setPage(initialPage);
