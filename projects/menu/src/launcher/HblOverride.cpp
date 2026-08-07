@@ -20,12 +20,13 @@ namespace {
 constexpr const char* kOverrideDir  = "sdmc:/atmosphere/config";
 constexpr const char* kOverridePath = "sdmc:/atmosphere/config/override_config.ini";
 constexpr const char* kBackupPath   = "sdmc:/atmosphere/config/override_config.ini.switchu.bak";
-constexpr const char* kHblPath      = "sdmc:/atmosphere/hbl.nsp";
-constexpr const char* kBundledHbl   = "sdmc:/switch/SwitchU/homebrew/hbl.nsp";
+// Relative, because Atmosphere prefixes it with the SD root itself.
+constexpr const char* kOurHblRelative = "switch/SwitchU/homebrew/hbl.nsp";
+constexpr const char* kOurHblPath   = "sdmc:/switch/SwitchU/homebrew/hbl.nsp";
+// The loader path Atmosphere used before this touched it, so disable() can
+// hand back whatever the owner had rather than guessing at the default.
+constexpr const char* kSavedPath    = "sdmc:/config/SwitchU/hbl_prev_path";
 
-// Written next to the config when this created hbl.nsp, so disable() knows the
-// file is ours to delete rather than someone else's install.
-constexpr const char* kOwnedMarker  = "sdmc:/config/SwitchU/hbl_owned";
 
 // The block is bracketed by comments so disable() removes exactly what enable()
 // added, whatever anyone else has done to the file in between. Atmosphere's
@@ -121,6 +122,29 @@ std::array<bool, 8> usedSlots(const std::vector<std::string>& lines) {
     return used;
 }
 
+// The global loader path currently in force, empty when the file does not set
+// one and Atmosphere is using its own default.
+std::string currentPathValue(const std::vector<std::string>& lines) {
+    bool inHbl = false;
+    for (const auto& raw : lines) {
+        std::string line = trim(raw);
+        if (line.empty() || line[0] == ';' || line[0] == '#')
+            continue;
+        if (line[0] == '[') {
+            inHbl = (line.find("hbl_config") != std::string::npos);
+            continue;
+        }
+        if (!inHbl)
+            continue;
+        std::string key = trim(line.substr(0, line.find('=')));
+        std::transform(key.begin(), key.end(), key.begin(),
+                       [](unsigned char c) { return (char)std::tolower(c); });
+        if (key == "path")
+            return trim(line.substr(line.find('=') + 1));
+    }
+    return {};
+}
+
 std::pair<std::size_t, std::size_t> findBlock(const std::vector<std::string>& lines) {
     std::size_t begin = std::string::npos, end = std::string::npos;
     for (std::size_t i = 0; i < lines.size(); ++i) {
@@ -152,8 +176,7 @@ int hostAppletId(AppletHost host) {
 
 Status inspect() {
     Status st;
-    st.hblPresent = exists(kHblPath);
-    st.hblIsOurs  = exists(kOwnedMarker);
+    st.loaderPresent = exists(kOurHblPath);
 
     std::vector<std::string> lines = splitLines(readFile(kOverridePath));
     auto [begin, end] = findBlock(lines);
@@ -174,17 +197,21 @@ bool enable(AppletHost host, std::string& error) {
     std::error_code ec;
     std::filesystem::create_directories(kOverrideDir, ec);
 
-    // hbl.nsp already there belongs to whoever put it there. Ours only fills a
-    // gap; overwriting could downgrade a newer or patched loader.
-    if (!exists(kHblPath)) {
-        if (!copyFile(kBundledHbl, kHblPath, error))
-            return false;
-        std::filesystem::create_directories("sdmc:/config/SwitchU", ec);
+    if (!exists(kOurHblPath)) {
+        error = "the bundled loader is missing from switch/SwitchU/homebrew";
+        return false;
+    }
+
+    // Nobody else's loader is touched. Atmosphere holds one loader path for
+    // the whole system, so ours is pointed at rather than copied over theirs,
+    // and the value found here is kept so disable() can hand it back.
+    std::filesystem::create_directories("sdmc:/config/SwitchU", ec);
+    {
+        std::string previous = currentPathValue(splitLines(readFile(kOverridePath)));
         std::string ignored;
-        writeFile(kOwnedMarker, "nx-hbloader written by SwitchU\n", ignored);
-        DebugLog::log("[hbl] wrote %s from the bundled copy", kHblPath);
-    } else {
-        DebugLog::log("[hbl] %s already present, left alone", kHblPath);
+        writeFile(kSavedPath, previous, ignored);
+        DebugLog::log("[hbl] previous loader path: %s",
+                      previous.empty() ? "<default>" : previous.c_str());
     }
 
     std::string original = readFile(kOverridePath);
@@ -239,6 +266,10 @@ bool enable(AppletHost host, std::string& error) {
     // real applet back. That is what keeps parental controls reachable rather
     // than switched off -- docs/homebrew-recovery.md says so in those words.
     block.push_back("override_key_" + std::to_string(slot) + "=!R");
+    // Single global, so this is the console-wide loader from now on -- said
+    // plainly in docs/homebrew-recovery.md, because it also answers for an
+    // Album override somebody else set up.
+    block.push_back(std::string("path=") + kOurHblRelative);
     block.push_back(kEnd);
 
     lines.insert(lines.begin() + (long)insertAt, block.begin(), block.end());
@@ -271,11 +302,13 @@ bool disable(std::string& error) {
             return false;
     }
 
-    if (exists(kOwnedMarker)) {
+    // Put the console back on whatever loader it used before, if anything.
+    if (exists(kSavedPath)) {
+        std::string previous = trim(readFile(kSavedPath));
+        if (!previous.empty())
+            DebugLog::log("[hbl] restoring loader path %s", previous.c_str());
         std::error_code ec;
-        std::filesystem::remove(kHblPath, ec);
-        std::filesystem::remove(kOwnedMarker, ec);
-        DebugLog::log("[hbl] removed the hbl.nsp this wrote");
+        std::filesystem::remove(kSavedPath, ec);
     }
 
     DebugLog::log("[hbl] override removed");
