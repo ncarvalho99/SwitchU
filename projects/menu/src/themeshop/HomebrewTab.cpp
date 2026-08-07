@@ -3,11 +3,13 @@
 #include <nxui/core/I18n.hpp>
 #include <algorithm>
 
-// A row per file plus a row per action does not survive a card with a hundred
-// .nro on it -- the first version of this pushed the last settings tab off the
-// window on a card with forty-two. One picker names the file and the two
-// actions below it act on whatever it names, so the tab is three rows whether
-// the card holds four homebrew or four hundred.
+// Everything about homebrew, in the order someone meets it: turn it on, choose
+// what it costs, restart to see it, then manage the files.
+//
+// The tab is a fixed number of rows whatever the card holds. A row per file
+// plus a row per action pushed the About tab off the settings window on a card
+// with forty-two .nro; one picker names the file and the rows below it act on
+// what it names.
 ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen) {
     using Tab = ThemeShopScreen::Tab;
     using SettingItem = ThemeShopScreen::SettingItem;
@@ -15,6 +17,41 @@ ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen
     auto& i18n = nxui::I18n::instance();
     Tab t;
     t.name = i18n.tr("themeshop.tabs.homebrew", "Homebrew");
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("themeshop.options.homebrew_launch", "Launch homebrew");
+        it.description = i18n.tr("themeshop.options.homebrew_launch_desc",
+                                 "Opens .nro files from the grid. Takes over one system applet.");
+        it.type = ItemType::Toggle;
+        it.boolVal = screen.m_homebrewLaunch;
+        it.anim01 = it.boolVal ? 1.f : 0.f;
+        it.onChange = [&screen](SettingItem& self) {
+            screen.m_homebrewLaunch = self.boolVal;
+            if (screen.m_homebrewLaunchCb) screen.m_homebrewLaunchCb(self.boolVal);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("themeshop.options.homebrew_host", "Applet homebrew replaces");
+        // The console warns about none of this, so the description does.
+        it.description = i18n.tr("themeshop.options.homebrew_host_desc",
+                                 "Parental controls stop being enforced, or the Album stops "
+                                 "showing screenshots. Hold R while launching for the real one.");
+        it.type = ItemType::Selector;
+        it.options = {
+            i18n.tr("themeshop.options.host_parental", "Parental controls"),
+            i18n.tr("themeshop.options.host_album", "Album"),
+        };
+        it.intVal = std::clamp(screen.m_homebrewHost, 0, 1);
+        it.onChange = [&screen](SettingItem& self) {
+            screen.m_homebrewHost = std::clamp(self.intVal, 0, 1);
+            if (screen.m_homebrewHostCb) screen.m_homebrewHostCb(screen.m_homebrewHost);
+        };
+        t.items.push_back(std::move(it));
+    }
 
     {
         SettingItem it;
@@ -34,10 +71,8 @@ ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen
     {
         SettingItem it;
         it.label = i18n.tr("themeshop.options.restart_menu", "Restart the menu");
-        // Everything on this tab -- listing, hiding -- only lands on a restart,
-        // and the only way to do one was a button on another tab. Repeating it
-        // here is not clutter; sending someone two tabs away to finish what they
-        // started here is.
+        // Listing and hiding both only land on a restart, and sending someone
+        // to another tab to finish what they started here is the real clutter.
         it.description = i18n.tr("themeshop.options.restart_menu_desc",
                                  "Needed for newly listed homebrew to appear.");
         it.type = ItemType::Action;
@@ -73,6 +108,7 @@ ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen
     screen.m_homebrewIndex =
         std::clamp(screen.m_homebrewIndex, 0, (int)names.size() - 1);
 
+    const std::size_t pickerIdx = t.items.size();
     {
         SettingItem it;
         it.label = i18n.tr("settings.homebrew.pick", "Homebrew");
@@ -82,14 +118,11 @@ ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen
         it.intVal = screen.m_homebrewIndex;
         it.onChange = [&screen](SettingItem& self) {
             screen.m_homebrewIndex = self.intVal;
-            // The path is the identity, and it is the one thing about a
-            // selection that is not obvious from the name.
-            self.description = screen.selectedHomebrewPath();
-            if (screen.m_homebrewSelectionCb) screen.m_homebrewSelectionCb();
         };
         t.items.push_back(std::move(it));
     }
 
+    const std::size_t toggleIdx = t.items.size();
     {
         SettingItem it;
         it.label = i18n.tr("settings.homebrew.in_menu", "Show in the menu");
@@ -117,6 +150,27 @@ ThemeShopScreen::Tab themeshop::tabs::HomebrewTab::build(ThemeShopScreen& screen
         };
         t.items.push_back(std::move(it));
     }
+
+    // The rows below the picker describe whatever it points at, so they have to
+    // follow it. Reading the state once at build time left them showing the
+    // first selection for ever: picking a second homebrew kept the first one's
+    // switch, and toggling it would have acted on the wrong file. Rebuilding
+    // the tab from inside an item's own callback would free that item mid-call,
+    // so the sync happens here, once a frame, where nothing is being destroyed.
+    t.onUpdate = [&screen, pickerIdx, toggleIdx](Tab& tab, TabbedOverlayScreen&) {
+        if (toggleIdx >= tab.items.size())
+            return;
+        const std::string path = screen.selectedHomebrewPath();
+        if (pickerIdx < tab.items.size())
+            tab.items[pickerIdx].description = path;
+
+        auto& toggle = tab.items[toggleIdx];
+        const bool visible = !screen.isHomebrewHidden(path);
+        if (toggle.boolVal != visible) {
+            toggle.boolVal = visible;
+            toggle.anim01 = visible ? 1.f : 0.f;
+        }
+    };
 
     return t;
 }
