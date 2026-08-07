@@ -46,6 +46,8 @@ bool AppConfig::load() {
     readJsonOpt(j, "glassSharpness", glassSharpness);
     readJsonOpt(j, "backgroundSpeed", backgroundSpeed);
     readJsonOpt(j, "showHomebrew", showHomebrew);
+    readJsonOpt(j, "homebrewLaunchEnabled", homebrewLaunchEnabled);
+    readJsonOpt(j, "homebrewAppletHost", homebrewAppletHost);
     readJsonOpt(j, "accessibilityEnabled", accessibilityEnabled);
     readJsonOpt(j, "accessibilitySpeakHints", accessibilitySpeakHints);
     readJsonOpt(j, "accessibilitySpeakContextEveryFocus", accessibilitySpeakContextEveryFocus);
@@ -90,6 +92,8 @@ bool AppConfig::save() const {
     j["glassSharpness"] = glassSharpness;
     j["backgroundSpeed"] = backgroundSpeed;
     j["showHomebrew"] = showHomebrew;
+    j["homebrewLaunchEnabled"] = homebrewLaunchEnabled;
+    j["homebrewAppletHost"] = homebrewAppletHost;
     j["accessibilityEnabled"] = accessibilityEnabled;
     j["accessibilitySpeakHints"] = accessibilitySpeakHints;
     j["accessibilitySpeakContextEveryFocus"] = accessibilitySpeakContextEveryFocus;

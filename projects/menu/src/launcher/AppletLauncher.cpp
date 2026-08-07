@@ -1,4 +1,7 @@
 #include "AppletLauncher.hpp"
+#include <system_error>
+#include <fstream>
+#include <filesystem>
 #include "core/DebugLog.hpp"
 #ifdef SWITCHU_MENU
 #include "smi_commands.hpp"
@@ -39,6 +42,37 @@ void AppletLauncher::launchAlbum() {
     }
 }
 
+bool AppletLauncher::launchHomebrew(const std::string& nroPath, int appletId) {
+    // The loader reads this once and deletes it. Writing it before the applet
+    // starts is the whole handshake -- see lib/switchu-hbloader.
+    {
+        std::error_code ec;
+        std::filesystem::create_directories("sdmc:/config/SwitchU", ec);
+        std::ofstream out("sdmc:/config/SwitchU/next_nro.txt",
+                          std::ios::binary | std::ios::trunc);
+        out << nroPath << "\n";
+        out.flush();
+        if (!out) {
+            DebugLog::log("[launcher] could not write the homebrew request");
+            return false;
+        }
+    }
+
+    DebugLog::log("[launcher] homebrew %s via applet 0x%X", nroPath.c_str(), appletId);
+    Result rc = switchu::menu::smi_cmd::launchHomebrew((uint32_t)appletId);
+    DebugLog::log("[launcher] homebrew rc=0x%X", rc);
+    if (R_FAILED(rc)) {
+        // Leaving the request behind would make the next launch open the wrong
+        // thing, so it goes with the failure that produced it.
+        std::error_code ec;
+        std::filesystem::remove("sdmc:/config/SwitchU/next_nro.txt", ec);
+        return false;
+    }
+
+    if (m_cb.playSfxModalHide) m_cb.playSfxModalHide();
+    if (m_cb.requestExit)      m_cb.requestExit();
+    return true;
+}
 void AppletLauncher::launchMiiEditor() {
     DebugLog::log("[launcher] requesting Mii Editor launch via daemon");
     Result rc = switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::LaunchMiiEditor);
@@ -158,6 +192,7 @@ void AppletLauncher::setSuspendedTitleId(uint64_t)   {}
 void AppletLauncher::launchAlbum()             {}
 void AppletLauncher::launchMiiEditor()         {}
 void AppletLauncher::launchUserCreator()       {}
+bool AppletLauncher::launchHomebrew(const std::string&, int) { return false; }
 void AppletLauncher::launchControllerPairing() {}
 void AppletLauncher::launchNetConnect()        {}
 void AppletLauncher::launchUserPage(AccountUid) {}

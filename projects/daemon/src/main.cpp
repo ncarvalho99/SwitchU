@@ -229,12 +229,16 @@ enum class ActionType : uint32_t {
     OpenNetConnect,
     OpenUserPage,
     OpenUserCreator,
+    // The only Open* whose applet is not fixed: which one hosts the
+    // homebrew loader is the owner's choice, so the menu names it.
+    OpenHomebrew,
 };
 
 struct Action {
     ActionType type;
     uint64_t title_id = 0;
     AccountUid uid = {};
+    uint32_t applet_id = 0;   // OpenHomebrew only
 };
 
 static std::vector<Action> g_actionQueue;
@@ -1026,6 +1030,17 @@ static void handleMenuCommand() {
         switchu::FileLog::log("[smi] queued Mii Editor launch (actions=%zu)", g_actionQueue.size());
         break;
 
+    case smi::SystemMessage::LaunchHomebrew: {
+        auto args = reader.pop<smi::HomebrewArgs>();
+        Action action{};
+        action.type = ActionType::OpenHomebrew;
+        action.applet_id = args.applet_id;
+        g_actionQueue.push_back(action);
+        switchu::FileLog::log("[smi] queued homebrew on applet 0x%X (actions=%zu)",
+                              args.applet_id, g_actionQueue.size());
+        break;
+    }
+
     case smi::SystemMessage::LaunchUserCreator:
         {
             Action action{};
@@ -1196,6 +1211,18 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] user creator FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after user creator");
+            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            return true;
+        }
+
+        case ActionType::OpenHomebrew: {
+            // The menu has already written the NRO it wants next to the
+            // loader's request file. Starting the applet is all that is left,
+            // and which applet depends on what the owner gave up for it.
+            Result rc = launchLibraryApplet((AppletId)action.applet_id, "homebrew");
+            if (R_FAILED(rc))
+                switchu::FileLog::log("[action] homebrew FAIL: 0x%X", rc);
+            switchu::FileLog::log("[action] relaunching menu after homebrew");
             daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
             return true;
         }
