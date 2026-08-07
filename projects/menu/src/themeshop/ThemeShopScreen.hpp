@@ -16,6 +16,7 @@ namespace themeshop::tabs {
 class InstalledTab;
 class CommunityTab;
 class OptionsTab;
+class HomebrewTab;
 }
 
 namespace nxui {
@@ -52,6 +53,26 @@ public:
     void onHomebrewLaunchChange(BoolCb cb)   { m_homebrewLaunchCb = std::move(cb); }
     void onHomebrewHostChange(IntCb cb)      { m_homebrewHostCb = std::move(cb); }
     void onRestartMenu(VoidCb cb)            { m_restartMenuCb = std::move(cb); }
+    using PathBoolCb = std::function<void(const std::string&, bool)>;
+    using PathCb     = std::function<void(const std::string&)>;
+    void onShowHomebrewChange(BoolCb cb)       { m_showHomebrewCb = std::move(cb); }
+    void onHomebrewHiddenChange(PathBoolCb cb) { m_homebrewHiddenCb = std::move(cb); }
+    void onHomebrewDelete(PathCb cb)           { m_homebrewDeleteCb = std::move(cb); }
+    void onHomebrewSelection(VoidCb cb)        { m_homebrewSelectionCb = std::move(cb); }
+    void setHomebrewListingState(bool show, std::vector<std::string> hidden) {
+        m_showHomebrew = show;
+        m_hiddenHomebrew = std::move(hidden);
+    }
+    std::string selectedHomebrewPath() const {
+        if (m_homebrewIndex < 0 || m_homebrewIndex >= (int)m_homebrewPaths.size())
+            return {};
+        return m_homebrewPaths[(std::size_t)m_homebrewIndex];
+    }
+    bool isHomebrewHidden(const std::string& path) const {
+        for (const auto& p : m_hiddenHomebrew)
+            if (p == path) return true;
+        return false;
+    }
     void setHomebrewState(bool launchEnabled, int appletHost) {
         m_homebrewLaunch = launchEnabled;
         m_homebrewHost = std::clamp(appletHost, 0, 1);
@@ -123,6 +144,7 @@ private:
     friend class themeshop::tabs::InstalledTab;
     friend class themeshop::tabs::CommunityTab;
     friend class themeshop::tabs::OptionsTab;
+    friend class themeshop::tabs::HomebrewTab;
 
     enum class PreviewPhase {
         Idle,
@@ -232,6 +254,14 @@ private:
     BoolCb m_homebrewLaunchCb;
     IntCb  m_homebrewHostCb;
     VoidCb m_restartMenuCb;
+    BoolCb     m_showHomebrewCb;
+    PathBoolCb m_homebrewHiddenCb;
+    PathCb     m_homebrewDeleteCb;
+    VoidCb     m_homebrewSelectionCb;
+    bool       m_showHomebrew = false;
+    std::vector<std::string> m_hiddenHomebrew;
+    std::vector<std::string> m_homebrewPaths;
+    int        m_homebrewIndex = 0;
     bool   m_homebrewLaunch = false;
     int    m_homebrewHost = 0;
     int m_gridColumns = 5;
