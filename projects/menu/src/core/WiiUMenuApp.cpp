@@ -811,8 +811,17 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
                 else if (!hbl.overrideActive)
                     why = i18n.tr("error.homebrew_not_set_up",
                                   "Homebrew launching is not set up on this console yet.");
-                else if (!m_launcher.launchHomebrew(entry->homebrewPath,
-                                                    homebrew::hostAppletId(hbl.activeHost)))
+                else {
+                    // Written before the launch, not after: the menu exits
+                    // moments later and the daemon starts a fresh one, so
+                    // anything not on the card by then is gone.
+                    m_config.homebrewReturnTitleId = entry->titleId;
+                    m_config.save();
+                    switchu::commitSdCard("homebrew return page");
+                }
+                if (why.empty() && !m_launcher.launchHomebrew(
+                        entry->homebrewPath,
+                        homebrew::hostAppletId(hbl.activeHost)))
                     why = i18n.tr("error.homebrew_launch_failed",
                                   "This homebrew could not be started.");
 
@@ -1122,6 +1131,22 @@ void WiiUMenuApp::buildGrid() {
             initialPage = suspendedIndex / m_grid->iconsPerPage();
         if (initialPage > 0)
             m_grid->setPage(initialPage);
+    }
+
+    // Coming back from homebrew. Nothing is suspended -- it ran as an applet
+    // and the menu was restarted from scratch -- so the entry it started from
+    // is read back off the card and cleared, since it is only good once.
+    if (m_config.homebrewReturnTitleId != 0) {
+        int index = findTitleIndex(m_config.homebrewReturnTitleId);
+        // Cleared immediately, and written back: it is good for one return, and
+        // leaving it set would send every later boot to the same page.
+        m_config.homebrewReturnTitleId = 0;
+        m_config.save();
+        if (index >= 0 && m_grid->iconsPerPage() > 0) {
+            initialPage = index / m_grid->iconsPerPage();
+            m_grid->setPage(initialPage);
+            DebugLog::log("[homebrew] returning to page %d", initialPage);
+        }
     }
 #endif
 
