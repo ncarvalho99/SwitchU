@@ -417,7 +417,10 @@
     "profile": "Профиль",
     "search": "Поиск",
     "repeat": "Повторить",
-    "voice": "Голос"
+    "voice": "Голос",
+    "sort_custom": "Мой порядок",
+    "sort_alpha": "А-Я",
+    "sort_recent": "Недавние"
   },
   "accessibility": {
     "speech": {

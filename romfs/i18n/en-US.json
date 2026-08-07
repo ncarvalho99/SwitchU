@@ -157,7 +157,10 @@
     "profile": "Profile",
     "search": "Search",
     "repeat": "Repeat",
-    "voice": "Voice"
+    "voice": "Voice",
+    "sort_custom": "My order",
+    "sort_alpha": "A-Z",
+    "sort_recent": "Recent"
   },
   "settings": {
     "tabs": {

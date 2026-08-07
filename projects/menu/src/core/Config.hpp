@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <utility>
+#include <vector>
 #include <string>
 
 struct AppConfig {
@@ -45,6 +47,29 @@ struct AppConfig {
     // time. Stored as a title rather than a page number because the grid can
     // be rebuilt with a different width between the two moments.
     std::uint64_t lastPageTitleId = 0;
+
+    // 0 = the arrangement the owner made by hand, which stays the default:
+    // somebody who dragged their icons into an order did not do that to have
+    // it thrown away. 1 = A to Z. 2 = most recently opened first.
+    int sortMode = 0;
+
+    // When each title was last opened, by title id. The record ns keeps is
+    // last_updated -- when it was installed or patched -- which is not the
+    // same question and puts a game patched this morning above one played
+    // every day for a year.
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> lastOpened;
+
+    std::uint64_t lastOpenedAt(std::uint64_t titleId) const {
+        for (const auto& e : lastOpened)
+            if (e.first == titleId) return e.second;
+        return 0;
+    }
+    void noteOpened(std::uint64_t titleId, std::uint64_t when) {
+        for (auto& e : lastOpened) {
+            if (e.first == titleId) { e.second = when; return; }
+        }
+        lastOpened.emplace_back(titleId, when);
+    }
 
     std::string themePreset = "Default Dark";
 
