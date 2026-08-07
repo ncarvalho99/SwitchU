@@ -447,6 +447,62 @@ void WiiUMenuApp::measureDecodeCost() {
     DebugLog::log("[decode-bench] %s", picked.c_str());
     DebugLog::log("[decode-bench] %dx%d, %.0f KB on disk, decode %.2fms (best of 3)",
                   w, h, pickedBytes / 1024.0, ms);
+    if (w > 0 && h > 0) {
+        DebugLog::log("[decode-bench] that is %.1f ms per megapixel, PNG",
+                      ms / ((double)w * h / 1000000.0));
+    }
+
+    // The number above is a PNG at 1080p, which is the harshest case and not
+    // what a video would use. Rather than guess how much faster JPEG is -- a
+    // guess of mine was already off by half on the upload side -- decode the
+    // JPEGs that are certainly on this card: the cached game icons. That gives
+    // this hardware's real cost per pixel for the decoder that would ship, and
+    // the sizes worth considering follow from a measurement instead of a ratio.
+    {
+        std::error_code ec;
+        const char* cacheDir = "sdmc:/config/SwitchU/control_cache";
+        int decoded = 0;
+        uint64_t totalTicks = 0;
+        double totalMegapixels = 0.0;
+
+        if (std::filesystem::exists(cacheDir, ec)) {
+            for (const auto& e : std::filesystem::directory_iterator(cacheDir, ec)) {
+                if (decoded >= 8) break;
+                const std::string p = e.path().string();
+                if (p.size() < 5 || p.compare(p.size() - 4, 4, ".jpg") != 0) continue;
+
+                int jw = 0, jh = 0, jc = 0;
+                const uint64_t a = armGetSystemTick();
+                uint8_t* px = stbi_load(p.c_str(), &jw, &jh, &jc, 4);
+                const uint64_t b = armGetSystemTick();
+                if (!px) continue;
+                stbi_image_free(px);
+
+                totalTicks += (b - a);
+                totalMegapixels += (double)jw * jh / 1000000.0;
+                ++decoded;
+            }
+        }
+
+        if (decoded > 0 && totalMegapixels > 0.0) {
+            const double jpegMs = armTicksToNs(totalTicks) / 1000000.0;
+            const double perMp = jpegMs / totalMegapixels;
+            DebugLog::log("[decode-bench] JPEG: %d icons, %.2f megapixels, %.2fms "
+                          "-> %.1f ms per megapixel",
+                          decoded, totalMegapixels, jpegMs, perMp);
+            // Projected linearly in pixels, which is how a DCT decoder scales.
+            DebugLog::log("[decode-bench] a JPEG frame would cost about "
+                          "%.1fms at 1280x720 and %.1fms at 640x360",
+                          perMp * (1280.0 * 720.0 / 1000000.0),
+                          perMp * (640.0 * 360.0 / 1000000.0));
+            DebugLog::log("[decode-bench] with upload: %.1fms at 1280x720, "
+                          "%.1fms at 640x360, against 16.67ms",
+                          perMp * (1280.0 * 720.0 / 1000000.0) + 4.20,
+                          perMp * (640.0 * 360.0 / 1000000.0) + 1.70);
+        } else {
+            DebugLog::log("[decode-bench] no cached JPEG icons to measure against");
+        }
+    }
     // What the number means, so the log answers the question on its own.
     DebugLog::log("[decode-bench] at that cost a decode thread sustains %.1f fps, "
                   "and one frame of decode plus 4.17ms of upload is %.2fms of a "
