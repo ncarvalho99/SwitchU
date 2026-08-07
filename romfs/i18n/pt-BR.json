@@ -27,7 +27,8 @@
       "theme": "Tema",
       "storage": "Armazenamento",
       "about": "Sobre",
-      "accessibility": "Acessibilidade"
+      "accessibility": "Acessibilidade",
+      "homebrew": "Homebrew"
     },
     "system": {
       "firmware": "Versão do Firmware",
@@ -245,6 +246,17 @@
       "repeat_context_desc": "Repete a área atual a cada mudança de foco.",
       "speak_position": "Ler posição",
       "speak_position_desc": "Lê linha, coluna e posição quando disponível."
+    },
+    "homebrew": {
+      "show": "Mostrar homebrew",
+      "show_desc": "Lista arquivos .nro do cartão. Vale quando o menu reiniciar.",
+      "files": "Arquivos no cartão",
+      "none": "Nenhum arquivo .nro encontrado no cartão.",
+      "hide_desc": "Entradas ocultas continuam no cartão, só não na grade.",
+      "delete": "Apagar este arquivo",
+      "applies_on_restart": "Vale a partir do próximo início do menu.",
+      "deleted": "Arquivo apagado.",
+      "delete_failed": "Não foi possível apagar o arquivo."
     }
   },
   "userselect": {
@@ -559,5 +571,10 @@
       "test": "Testar",
       "skip_all_banner": "Aperte  +  para pular a configuração"
     }
+  },
+  "dialog": {
+    "homebrew_delete_title": "Apagar este homebrew?",
+    "homebrew_delete_body": "Isto apaga o arquivo do cartão microSD. Não há como desfazer, e qualquer atalho que outro homebrew tenha criado para ele deixa de funcionar. Para apenas tirá-lo do menu, oculte em vez de apagar.",
+    "homebrew_delete_confirm": "Apagar"
   }
 }

@@ -49,6 +49,11 @@ bool AppConfig::load() {
     readJsonOpt(j, "homebrewLaunchEnabled", homebrewLaunchEnabled);
     readJsonOpt(j, "homebrewAppletHost", homebrewAppletHost);
     readJsonOpt(j, "homebrewReturnTitleId", homebrewReturnTitleId);
+    hiddenHomebrew.clear();
+    if (auto it = j.find("hiddenHomebrew"); it != j.end() && it->is_array()) {
+        for (const auto& v : *it)
+            if (v.is_string()) hiddenHomebrew.push_back(v.get<std::string>());
+    }
     readJsonOpt(j, "accessibilityEnabled", accessibilityEnabled);
     readJsonOpt(j, "accessibilitySpeakHints", accessibilitySpeakHints);
     readJsonOpt(j, "accessibilitySpeakContextEveryFocus", accessibilitySpeakContextEveryFocus);
@@ -96,6 +101,7 @@ bool AppConfig::save() const {
     j["homebrewLaunchEnabled"] = homebrewLaunchEnabled;
     j["homebrewAppletHost"] = homebrewAppletHost;
     j["homebrewReturnTitleId"] = homebrewReturnTitleId;
+    j["hiddenHomebrew"] = hiddenHomebrew;
     j["accessibilityEnabled"] = accessibilityEnabled;
     j["accessibilitySpeakHints"] = accessibilitySpeakHints;
     j["accessibilitySpeakContextEveryFocus"] = accessibilitySpeakContextEveryFocus;

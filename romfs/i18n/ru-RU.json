@@ -27,7 +27,8 @@
       "theme": "Тема",
       "storage": "Хранилище",
       "about": "О программе",
-      "accessibility": "Доступность"
+      "accessibility": "Доступность",
+      "homebrew": "Homebrew"
     },
     "system": {
       "firmware": "Версия прошивки",
@@ -245,6 +246,17 @@
       "repeat_context_desc": "Повторяет текущую область при каждом смещении фокуса.",
       "speak_position": "Читать позицию",
       "speak_position_desc": "Читает строку, столбец и позицию, если доступно."
+    },
+    "homebrew": {
+      "show": "Show homebrew",
+      "show_desc": "List .nro files from the card. Applies when the menu restarts.",
+      "files": "Files on the card",
+      "none": "No .nro files found on the card.",
+      "hide_desc": "Hidden entries stay on the card, just not in the grid.",
+      "delete": "Delete this file",
+      "applies_on_restart": "Applies the next time the menu starts.",
+      "deleted": "File deleted.",
+      "delete_failed": "The file could not be deleted."
     }
   },
   "userselect": {
@@ -559,5 +571,10 @@
       "test": "Тест",
       "skip_all_banner": "Нажмите  +  чтобы пропустить настройку"
     }
+  },
+  "dialog": {
+    "homebrew_delete_title": "Delete this homebrew?",
+    "homebrew_delete_body": "This deletes the file from the microSD card. It cannot be undone, and any shortcut another homebrew created for it will stop working. To only take it out of the menu, hide it instead.",
+    "homebrew_delete_confirm": "Delete"
   }
 }

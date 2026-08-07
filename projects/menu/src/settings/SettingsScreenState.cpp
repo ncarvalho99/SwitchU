@@ -15,6 +15,8 @@ void SettingsScreen::buildTabs() {
     m_tabs.push_back(settings::tabs::AudioTab::build(*this));
     DebugLog::log("[settings]   DisplayTab...");
     m_tabs.push_back(settings::tabs::DisplayTab::build(*this));
+    DebugLog::log("[settings]   HomebrewTab...");
+    m_tabs.push_back(settings::tabs::HomebrewTab::build(*this));
     DebugLog::log("[settings]   InternetTab...");
     m_tabs.push_back(settings::tabs::InternetTab::build(*this));
     DebugLog::log("[settings]   ControllersTab...");

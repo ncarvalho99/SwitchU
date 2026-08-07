@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
+#include <vector>
 #include <string>
 
 struct AppConfig {
@@ -52,6 +54,27 @@ struct AppConfig {
     // as an applet and leaves nothing suspended, so the page it was on has
     // to survive the menu restarting by itself.
     std::uint64_t homebrewReturnTitleId = 0;
+    // Paths of .nro files kept out of the grid. Some homebrew install a
+    // forwarder for what they run -- PortNX gives Ocarina of Time its real
+    // name and icon -- and the emulator behind it then shows up a second
+    // time under its own name. Which of the two anyone wants is not
+    // something to guess at, so it is a choice that is remembered.
+    std::vector<std::string> hiddenHomebrew;
+
+    bool isHomebrewHidden(const std::string& path) const {
+        for (const auto& p : hiddenHomebrew)
+            if (p == path) return true;
+        return false;
+    }
+    void setHomebrewHidden(const std::string& path, bool hidden) {
+        for (std::size_t i = 0; i < hiddenHomebrew.size(); ++i) {
+            if (hiddenHomebrew[i] == path) {
+                if (!hidden) hiddenHomebrew.erase(hiddenHomebrew.begin() + (long)i);
+                return;
+            }
+        }
+        if (hidden) hiddenHomebrew.push_back(path);
+    }
 
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better

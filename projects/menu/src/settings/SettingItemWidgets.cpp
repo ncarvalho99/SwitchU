@@ -106,6 +106,11 @@ public:
         m_left->addChild(m_label);
 
         m_desc = std::make_shared<nxui::Label>(item.description);
+        // Always wrapped. The row already reserves the control's width and
+        // gives the text the rest, but a single-line label draws straight past
+        // its own rect -- so a long description ran over the selector beside
+        // it instead of stopping at it.
+        m_desc->setMultiline(true);
         m_desc->setScale(0.74f);
         m_desc->setHAlign(nxui::Label::HAlign::Left);
         m_desc->setVAlign(nxui::Label::VAlign::Top);
@@ -166,6 +171,9 @@ protected:
         // known here. Measured against the same width the row was sized with.
         if (m_item.wrapLabel)
             m_labelMeasure = m_label->measureWrappedText(leftRect.width);
+
+        if (m_cachedShowDesc)
+            m_descMeasure = m_desc->measureWrappedText(leftRect.width);
 
         float totalTextH = m_labelMeasure.y;
         if (m_cachedShowDesc)
