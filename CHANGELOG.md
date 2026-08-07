@@ -1,56 +1,179 @@
-# Não publicado / Unreleased
+# SwitchU 1.1.0+fork.3
 
 ## English
 
-**Themes**
+Third release of this fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. All the original work is his, and it stays credited in the About page.
 
-- The theme shop is now just **Themes** in the sidebar, in every language
+This one is about the crash people have been reporting, and about putting the
+settings where they are actually looked for.
+
+**The reported crash — attempt one, not confirmed**
+
+A crash report finally arrived with symbols that match the build it came from.
+It resolves to `WiiUMenuApp::onUpdate` branching to an address in no module at
+all: a call through a pointer to an object that had already been destroyed.
+
+Rebuilding the grid frees every icon, and two places kept using them afterwards.
+The focus managers hold raw pointers and call `onFocusLost()` on whatever they
+believe is focused; edit mode holds two more and dereferences both without
+checking. Both are told now.
+
+That explains the shape of the reports: a title installed while the menu is open
+makes the grid genuinely different, so it is rebuilt — and the crash lands during
+the rebuild, which is why the new shortcut is missing and only appears after a
+restart. On a fresh install the same thing happens repeatedly while the icon
+cache is still cold.
+
+**It is not confirmed fixed.** It has never reproduced here, and both changes
+come from reading code against crash reports rather than from watching it stop.
+
+### If it still crashes
+
+Two things, and neither needs any technical knowledge:
+
+1. Turn the console off. Put the microSD card in a computer, open the folder
+   `atmosphere/crash_reports`, and send whatever is inside — the `.log` files
+   there are plain text and contain no personal information.
+2. Say which version you were running. It is on the About page in Settings,
+   and it should read **1.1.0+fork.3**.
+
+That is everything. The other file needed to read those reports is
+`SwitchU-1.1.0-fork.3-symbols.zip`, attached to this release — you do not need
+to download it, and it is here rather than left in the build system because
+build artifacts are deleted after 90 days and a report that arrives later than
+that cannot be read without it.
+
+Without the crash reports there is nothing to go on: the console shows an
+error code that says a crash happened and nothing about where.
+
+**Glass**
+
+- Lowering glass sharpness turned the panels into visible squares. The blur
+  takes nine samples spaced by its radius, so at the low end they landed 9 to
+  36 texels apart with nothing read between them — sampling a grid rather than
+  blurring it. Width now comes from repeating the pass instead of spreading it
+- The account and power dialogs read sharper than the settings screen with the
+  same setting. Refraction was displacing in panel-relative units, so it bent
+  proportionally more behind a large panel than a small one. It is measured in
+  pixels now, and a small window looks like a large one
+
+**Appearance settings**
+
+- New defaults, chosen after looking at them on a console rather than here:
+  glass sharpness 40%, background animation speed 35%, background blur 5%.
+  Defaults only apply to a fresh install — an existing one keeps what it has
 - Glass sharpness, background animation speed and background blur moved out of
-  Settings > Display and into the Themes screen, next to the other controls that
-  change how the menu looks. They exist in one place now, not two
+  Settings, Display and into the theme screen, next to the rest of what changes
+  how the menu looks. They were in two places at once; now they are in one
+- "Theme Shop" is now just **Themes**, in all eight languages
 
-**Crash on a fresh install — attempt 1, unconfirmed**
+**Accounts**
 
-A reporter sees the menu crash twice on a clean install and work from the third
-boot on. The focus manager was calling `onFocusLost()` on icons that a refresh
-had already destroyed, and the guard written for exactly that case
-(`invalidateWidget`) had never been called. It is called now.
+- The top avatar opens the account list, with a tile for creating a new user
+- The accounts dialog can be reached with the controller, not only by touch
 
-This is the first attempt and it is **not confirmed to be the fix**. The crash
-has never reproduced here, and the diagnosis comes from reading the code against
-one report rather than from a crash report resolved to these lines. It stays open
-until someone who could reproduce it says it stopped.
+**Tutorial**
 
-If it still happens, `sdmc:/atmosphere/crash_reports/` plus the
-`SwitchU-symbols-sysmodule-release` artifact from the *same* build are what make
-the next attempt better than a guess.
+- Skipping was one line in a corner panel at half size, indistinguishable from
+  "skip step". It has its own centred prompt now, at nearly twice the scale,
+  translated everywhere
+
+**Under the hood**
+
+- Cached names are terminated on read as well as on write, so a truncated cache
+  file cannot walk off the end of one
+- The devkitA64 toolchain exposes portlibs, which is what a local build needs to
+  find the libraries it links against. No effect on the console
 
 ---
 
 ## Português
 
-**Temas**
+Terceira versão deste fork do [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. Todo o trabalho original é dele, e o crédito continua na página Sobre.
 
-- A loja de temas agora é só **Temas** na barra lateral, em todos os idiomas
+Esta é sobre o crash que vem sendo relatado, e sobre colocar as configurações
+onde as pessoas realmente procuram por elas.
+
+**O crash relatado — tentativa um, não confirmada**
+
+Chegou finalmente um crash report com símbolos que batem com a build que o
+gerou. Ele resolve para `WiiUMenuApp::onUpdate` saltando para um endereço que
+não existe em módulo nenhum: chamada através de um ponteiro para um objeto já
+destruído.
+
+Reconstruir a grade libera todos os ícones, e dois lugares continuavam usando-os
+depois disso. Os gerenciadores de foco guardam ponteiros crus e chamam
+`onFocusLost()` no que julgam estar focado; o modo de edição guarda mais dois e
+desreferencia ambos sem verificar. Os dois passam a ser avisados.
+
+Isso explica o formato dos relatos: um título instalado com o menu aberto torna
+a grade de fato diferente, então ela é reconstruída — e o crash acontece durante
+a reconstrução, que é por isso que o atalho novo não aparece e só surge depois de
+reiniciar. Em instalação limpa a mesma coisa se repete enquanto o cache de
+ícones ainda está frio.
+
+**Não está confirmado como corrigido.** Nunca reproduziu aqui, e as duas
+mudanças vêm de ler código contra crash reports, não de ver o problema parar.
+
+### Se continuar crashando
+
+Duas coisas, e nenhuma delas exige conhecimento técnico:
+
+1. Desligue o console. Coloque o cartão microSD num computador, abra a pasta
+   `atmosphere/crash_reports` e mande o que estiver lá dentro — os arquivos
+   `.log` são texto puro e não contêm nenhuma informação pessoal.
+2. Diga qual versão você estava usando. Ela aparece na página Sobre, dentro de
+   Configurações, e deve estar como **1.1.0+fork.3**.
+
+É só isso. O outro arquivo necessário para ler esses relatórios é o
+`SwitchU-1.1.0-fork.3-symbols.zip`, anexado a esta release — você não precisa
+baixá-lo, e ele está aqui em vez de ficar no sistema de build porque artefatos
+de build são apagados depois de 90 dias, e um relato que chegue depois disso
+não teria como ser lido.
+
+Sem os crash reports não há por onde começar: o console mostra um código de
+erro que diz que houve um crash e nada sobre onde.
+
+**Vidro**
+
+- Baixar a nitidez do vidro deixava os painéis quadriculados. O desfoque tira
+  nove amostras espaçadas pelo seu raio, então no mínimo elas caíam a 9 e 36
+  texels de distância sem ler nada entre elas — amostrando uma grade em vez de
+  borrá-la. A largura agora vem de repetir o passe, não de espalhá-lo
+- As janelas de contas e de energia apareciam mais nítidas que a de
+  configurações com o mesmo ajuste. A refração deslocava em unidades relativas
+  ao painel, e por isso desviava proporcionalmente mais atrás de um painel
+  grande. Agora é medida em pixels, e uma janela pequena fica igual a uma grande
+
+**Configurações de aparência**
+
+- Novos padrões, escolhidos olhando no console e não aqui: nitidez do vidro 40%,
+  velocidade da animação de fundo 35%, desfoque de fundo 5%. Padrões só valem
+  para instalação nova — quem já tem configuração salva mantém a dele
 - Nitidez do vidro, velocidade da animação de fundo e desfoque de fundo saíram de
-  Configurações > Tela e foram para a tela de Temas, junto dos outros controles
-  que mudam a aparência do menu. Agora existem num lugar só, não em dois
+  Configurações, Tela e foram para a tela de temas, junto do resto do que muda a
+  aparência do menu. Estavam em dois lugares ao mesmo tempo; agora estão em um
+- "Loja de temas" agora é só **Temas**, nos oito idiomas
 
-**Crash em instalação limpa — tentativa 1, não confirmada**
+**Contas**
 
-Um usuário relata o menu quebrando duas vezes em instalação limpa e funcionando
-a partir do terceiro boot. O gerenciador de foco chamava `onFocusLost()` em
-ícones que um refresh já havia destruído, e a proteção escrita exatamente para
-esse caso (`invalidateWidget`) nunca havia sido chamada. Agora é.
+- O avatar do topo abre a lista de contas, com um bloco para criar um usuário novo
+- O diálogo de contas passa a ser alcançável pelo controle, não só por toque
 
-Esta é a primeira tentativa e **não está confirmada como a correção**. O crash
-nunca reproduziu aqui, e o diagnóstico vem de ler o código contra um relato, não
-de um crash report resolvido até estas linhas. Fica em aberto até alguém que
-conseguia reproduzir dizer que parou.
+**Tutorial**
 
-Se continuar acontecendo, `sdmc:/atmosphere/crash_reports/` mais o artefato
-`SwitchU-symbols-sysmodule-release` do *mesmo* build são o que faz a próxima
-tentativa ser melhor que um chute.
+- Pular era uma linha num painel de canto, em metade do tamanho, idêntica a
+  "pular passo". Agora tem aviso próprio e centralizado, quase o dobro da escala,
+  traduzido em todos os idiomas
+
+**Por baixo**
+
+- Nomes em cache são terminados na leitura além da escrita, para que um arquivo
+  de cache truncado não possa passar do fim de um deles
+- O toolchain devkitA64 expõe portlibs, que é o que um build local precisa para
+  achar as bibliotecas que linka. Sem efeito no console
 
 ---
 

@@ -644,6 +644,26 @@ void Renderer::applyBlurBetween(int a, int b, float radius, int passes) {
     if (!m_gpu.offscreenReady()) return;
     if (a < 0 || b < 0 || a >= GpuDevice::NUM_OFFSCREEN || b >= GpuDevice::NUM_OFFSCREEN) return;
 
+    // The shader takes nine samples spaced `radius` texels apart, so it is only
+    // a Gaussian while those samples are near neighbours. At radius 9 they land
+    // 9, 18, 27 and 36 texels out with nothing read between, which is point
+    // sampling a grid rather than blurring, and repeating it reinforces that
+    // grid into the visible squares reported when the glass sharpness slider
+    // goes down.
+    //
+    // Width comes from passes instead: sigma grows with the square root of the
+    // count, so the spread is capped where the kernel still overlaps itself and
+    // the rest is bought in repetitions. The cap on those keeps a slider at its
+    // softest from turning one panel open into a visible hitch -- past it the
+    // result is smooth but stops getting softer, which is the better failure.
+    constexpr float kMaxSpread = 2.5f;
+    constexpr int   kMaxPasses = 24;
+    if (radius > kMaxSpread && passes > 0) {
+        const float widen = radius / kMaxSpread;
+        passes = std::min(kMaxPasses, (int)std::ceil(passes * widen * widen));
+        radius = kMaxSpread;
+    }
+
     m_frameBlurPasses += passes * 2;
 
     const float offW = (float)GpuDevice::offscreenWidth(a);
