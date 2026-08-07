@@ -151,6 +151,30 @@ target("espeak-ng")
     add_cflags("-fwrapv", "-fvisibility=hidden", {force = true})
 target_end()
 
+target("switchu-hbloader")
+    set_kind("phony")
+    set_default(false)
+    if not is_plat("cross") then return end
+
+    -- Built here rather than vendored as a binary: it carries a SwitchU
+    -- modification, so shipping bytes nobody in this repository produced
+    -- would make the source and the artifact impossible to tie together.
+    on_build(function (target)
+        local src = path.join(os.projectdir(), "lib/switchu-hbloader")
+        local out = path.join(src, "hbl.nsp")
+        local dst = path.join(os.projectdir(), "romfs/homebrew/hbl.nsp")
+
+        os.execv("make", {"-C", "lib/switchu-hbloader"})
+        if not os.isfile(out) then
+            raise("switchu-hbloader produced no hbl.nsp")
+        end
+
+        os.mkdir(path.directory(dst))
+        os.cp(out, dst)
+        cprint("${color.build.target}built${clear} hbloader → romfs/homebrew/hbl.nsp")
+    end)
+target_end()
+
 target("atmosphere-stratosphere")
     set_kind("phony")
     set_default(false)
@@ -208,7 +232,7 @@ target("SwitchU")
 
     add_defines(version_define)
     add_defines(upstream_define)
-    add_deps("espeak-ng")
+    add_deps("espeak-ng", "switchu-hbloader")
     add_includedirs("lib/espeak-ng/src/include")
     add_syslinks("m")
 

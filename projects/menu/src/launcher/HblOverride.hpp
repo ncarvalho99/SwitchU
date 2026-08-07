@@ -25,23 +25,25 @@ int hostAppletId(AppletHost host);
 struct Status {
     bool       overrideActive = false;  // our program_id_N is in the file
     AppletHost activeHost     = AppletHost::ParentalControls;
-    bool       hblPresent     = false;  // /atmosphere/hbl.nsp exists
-    bool       hblIsOurs      = false;  // we put it there, so we may remove it
+    bool       loaderPresent  = false;  // our loader is installed on the card
 };
 
 Status inspect();
 
-// Adds our entry in the first free program_id slot, leaving every other line --
-// including anyone else's overrides and the global path -- exactly as found.
-// The previous file is copied to override_config.ini.switchu.bak first.
+// Adds our entry in the first free program_id slot, leaving everyone else's
+// overrides as found, and points the global loader path at SwitchU's loader.
+// The previous file goes to override_config.ini.switchu.bak, and the previous
+// loader path is kept separately so disable() can hand it back.
 //
-// Writes /atmosphere/hbl.nsp only when nothing is there: an existing one is
-// very likely newer than what shipped here, and replacing it would silently
-// downgrade a working setup.
+// Nobody's hbl.nsp is overwritten: Atmosphere holds one loader path for the
+// whole system, so ours is pointed at rather than copied over theirs. That
+// also means this is the console's loader until it is turned off, which
+// docs/homebrew-recovery.md states outright.
 bool enable(AppletHost host, std::string& error);
 
-// Removes only the lines this wrote, and the hbl.nsp only if this created it.
-// Turning the setting off is meant to be the whole recovery procedure.
+// Removes only the lines this wrote and restores the loader path that was in
+// force before. Turning the setting off is meant to be the whole recovery
+// procedure.
 bool disable(std::string& error);
 
 } // namespace homebrew

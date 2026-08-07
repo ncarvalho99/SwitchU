@@ -1,33 +1,42 @@
-# Vendored nx-hbloader
+# The loader that ships beside the menu
 
-`hbl.nsp` is a prebuilt release binary of [nx-hbloader], not something this
-repository builds. It is committed rather than downloaded so that a clean
-checkout builds offline and the exact bytes that ship are the exact bytes in
-git history.
+`hbl.nsp` is **not committed**. It is produced by the build from
+`lib/switchu-hbloader/`, a vendored and modified copy of [nx-hbloader], and
+lands here on its way into the install layout.
+
+It carries a SwitchU change, so shipping a binary nobody in this repository
+produced would leave no way to tie the artifact to the source it came from. The
+xmake target `switchu-hbloader` runs its Makefile and copies the result here;
+`.gitignore` treats it as the build output it is.
 
 | | |
 | --- | --- |
-| Source | https://github.com/switchbrew/nx-hbloader |
-| Release | v2.4.5, published 2025-11-15 |
-| File | `hbl.nsp`, 40946 bytes, PFS0 |
-| Licence | ISC — see `LICENSE-nx-hbloader.md` beside it |
+| Source | `lib/switchu-hbloader/` |
+| Upstream | https://github.com/switchbrew/nx-hbloader |
+| Base | `82b95122` (v2.4.5), recorded in `lib/switchu-hbloader/UPSTREAM_COMMIT` |
+| Licence | ISC — `LICENSE-nx-hbloader.md` here, and `LICENSE.md` with the source |
 
-The ISC licence permits redistribution provided the copyright and permission
-notice travel with the software, which is why `LICENSE-nx-hbloader.md` sits in
-this directory and is installed to the SD card next to the binary rather than
-being left behind in the repository.
+## What the change does
 
-## How it is used
+Stock nx-hbloader always opens `sdmc:/hbmenu.nro` when started as an applet:
+the path it runs is only ever set by homebrew already running, through the
+`envSetNextLoad` ABI, so a menu launching it has no way to name a target.
 
-It is copied to `sdmc:/atmosphere/hbl.nsp` **only when nothing is there
-already**. A loader the user installed themselves is very likely newer than this
-one or patched for their setup, and replacing it would silently downgrade a
-working console. See `projects/menu/src/launcher/HblOverride.cpp` and
-`docs/homebrew-recovery.md`.
+The fork reads one line from `sdmc:/config/SwitchU/next_nro.txt`, deletes it,
+and falls back to hbmenu exactly as upstream does when there is no request. The
+diff is confined to `loadNro()` and one helper above it.
 
-## Updating it
+## Why the licence is here as well as with the source
 
-Replace both files from a newer release and update the table above. Nothing
-else refers to the version, so a stale table is the only way this goes wrong.
+ISC asks that the copyright and permission notice travel with the software.
+Whoever receives the release zip does not receive this repository, so the notice
+is installed to the SD card next to the binary.
+
+## Updating against upstream
+
+Diff `lib/switchu-hbloader/source/main.c` against the recorded base commit,
+rebase the change onto the new release, and update `UPSTREAM_COMMIT` and the
+table above. The modification is marked in the source with `SwitchU
+modification` comments at both sites.
 
 [nx-hbloader]: https://github.com/switchbrew/nx-hbloader
