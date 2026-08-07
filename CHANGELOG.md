@@ -27,9 +27,25 @@ cache is still cold.
 
 **It is not confirmed fixed.** It has never reproduced here, and both changes
 come from reading code against crash reports rather than from watching it stop.
-If it still happens, `sdmc:/atmosphere/crash_reports/` plus the
-`SwitchU-symbols-sysmodule-release` artifact from the *same* build is what makes
-the next attempt better than a guess.
+
+### If it still crashes
+
+Two things, and neither needs any technical knowledge:
+
+1. Turn the console off. Put the microSD card in a computer, open the folder
+   `atmosphere/crash_reports`, and send whatever is inside — the `.log` files
+   there are plain text and contain no personal information.
+2. Say which version you were running. It is on the About page in Settings,
+   and it should read **1.1.0+fork.3**.
+
+That is everything. The other file needed to read those reports is
+`SwitchU-1.1.0-fork.3-symbols.zip`, attached to this release — you do not need
+to download it, and it is here rather than left in the build system because
+build artifacts are deleted after 90 days and a report that arrives later than
+that cannot be read without it.
+
+Without the crash reports there is nothing to go on: the console shows an
+error code that says a crash happened and nothing about where.
 
 **Appearance settings**
 
@@ -85,10 +101,26 @@ reiniciar. Em instalação limpa a mesma coisa se repete enquanto o cache de
 ícones ainda está frio.
 
 **Não está confirmado como corrigido.** Nunca reproduziu aqui, e as duas
-mudanças vêm de ler código contra crash reports, não de ver o problema parar. Se
-continuar acontecendo, `sdmc:/atmosphere/crash_reports/` mais o artefato
-`SwitchU-symbols-sysmodule-release` da *mesma* build são o que faz a próxima
-tentativa ser melhor que um chute.
+mudanças vêm de ler código contra crash reports, não de ver o problema parar.
+
+### Se continuar crashando
+
+Duas coisas, e nenhuma delas exige conhecimento técnico:
+
+1. Desligue o console. Coloque o cartão microSD num computador, abra a pasta
+   `atmosphere/crash_reports` e mande o que estiver lá dentro — os arquivos
+   `.log` são texto puro e não contêm nenhuma informação pessoal.
+2. Diga qual versão você estava usando. Ela aparece na página Sobre, dentro de
+   Configurações, e deve estar como **1.1.0+fork.3**.
+
+É só isso. O outro arquivo necessário para ler esses relatórios é o
+`SwitchU-1.1.0-fork.3-symbols.zip`, anexado a esta release — você não precisa
+baixá-lo, e ele está aqui em vez de ficar no sistema de build porque artefatos
+de build são apagados depois de 90 dias, e um relato que chegue depois disso
+não teria como ser lido.
+
+Sem os crash reports não há por onde começar: o console mostra um código de
+erro que diz que houve um crash e nada sobre onde.
 
 **Configurações de aparência**
 
