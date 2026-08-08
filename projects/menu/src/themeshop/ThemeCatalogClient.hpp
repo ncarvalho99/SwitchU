@@ -39,7 +39,14 @@ public:
     // his work — but his index describes themes built for his build, and the
     // shop has to point somewhere we can add to. Themes download on demand, so
     // none of this is in the package.
-    static constexpr const char* kDefaultCatalogUrl = "https://raw.githubusercontent.com/ncarvalho99/SwitchU/themes/index.json";
+    // Off the code repository on purpose. Content complaints act on whole
+    // repositories, so a catalog served from the same one as the source puts
+    // the code behind a claim about a wallpaper. Mirrored at
+    // github.com/ncarvalho99/SwitchU-themes.
+    //
+    // Every path in the catalog resolves against the directory this URL sits
+    // in, so the tree works the same served from a domain root or a subfolder.
+    static constexpr const char* kDefaultCatalogUrl = "https://themes.nclabs.dev/index.json";
 
     // PoloNX's catalogue is read alongside ours rather than replaced by it: his
     // themes work here, and there is no reason to offer fewer of them. Ours is

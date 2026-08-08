@@ -233,7 +233,7 @@ void GpuDevice::resetImagePool() {
 }
 
 bool GpuDevice::uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
-                              uint32_t w, uint32_t h)
+                              uint32_t w, uint32_t h, uint64_t expectedBytes)
 {
     // deko3d does not report a bad upload, it calls svcBreak: a crash report
     // resolving to dk::detail::RaiseError under ImageLayout::calcLevelOffset is
@@ -247,10 +247,11 @@ bool GpuDevice::uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
                      w, h, size, pixels);
         return false;
     }
-    if (size < (uint64_t)w * h * 4) {
+    const uint64_t wanted = expectedBytes ? expectedBytes : (uint64_t)w * h * 4;
+    if (size < wanted) {
         std::fprintf(stderr,
                      "[GpuDevice] refusing texture upload %ux%u: %u bytes is short of %llu\n",
-                     w, h, size, (unsigned long long)((uint64_t)w * h * 4));
+                     w, h, size, (unsigned long long)wanted);
         return false;
     }
 

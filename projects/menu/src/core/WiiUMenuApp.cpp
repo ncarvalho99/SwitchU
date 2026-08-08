@@ -285,6 +285,25 @@ bool WiiUMenuApp::onCreate() {
 
 
 
+    // How much room this process actually has, asked of the kernel rather than
+    // assumed. The 32 MB image budget is a number chosen in nxui, not a limit
+    // anything reported: if the process holds far more than it spends, theme
+    // animations can be sharper, and if it does not, that settles it.
+    {
+        u64 total = 0, used = 0;
+        const Result rt = svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+        const Result ru = svcGetInfo(&used,  InfoType_UsedMemorySize,  CUR_PROCESS_HANDLE, 0);
+        if (R_SUCCEEDED(rt) && R_SUCCEEDED(ru)) {
+            DebugLog::log("[mem] process has %.1f MB, using %.1f MB, %.1f MB free "
+                          "-- image budget is %.1f MB of that",
+                          total / 1048576.0, used / 1048576.0,
+                          (double)(total - used) / 1048576.0,
+                          nxui::GpuDevice::kDefaultImageBudget / 1048576.0);
+        } else {
+            DebugLog::log("[mem] svcGetInfo failed (total=0x%x used=0x%x)", rt, ru);
+        }
+    }
+
     DebugLog::log("[init] loadResources...");
     loadResources();
     DebugLog::log("[init] buildGrid...");

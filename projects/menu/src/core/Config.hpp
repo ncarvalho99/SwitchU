@@ -36,6 +36,11 @@ struct AppConfig {
     // the theme's own pace read as restless behind a menu people sit in.
     float backgroundSpeed = 0.35f;
 
+    // Whether the slider above was ever moved by hand. An animated theme runs
+    // at the speed of its clip until it was, because 0.35 is a default chosen
+    // for shapes and would be a wrong answer for footage rather than a taste.
+    bool backgroundSpeedChosen = false;
+
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better
     // dark, and a first boot into white is a jolt on a handheld.
