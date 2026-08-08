@@ -88,7 +88,7 @@ bool hasKnownAssetExtension(const std::string& path) {
 
     const std::string ext = name.substr(dot + 1);
     static constexpr const char* kAssetExtensions[] = {
-        "png", "jpg", "jpeg", "webp", "bmp", "gif",
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "dds",
         "wav", "mp3", "ogg", "flac",
         "ttf", "otf",
         "json"

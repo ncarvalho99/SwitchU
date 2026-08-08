@@ -217,7 +217,11 @@ std::string sourceLabel(ThemePresetSource source) {
 }
 
 std::string defaultThemeRef() {
-    return "builtin:Default Light";
+    // Default Dark carries the animated wallpaper, so this is what a fresh
+    // install shows. It costs 28 MB of the image budget and one extra
+    // full-screen quad a frame; anyone who wants the old cost back can stop it
+    // with the background-speed slider or pick Default Light.
+    return "builtin:Default Dark";
 }
 
 } // namespace
@@ -565,6 +569,7 @@ void WiiUMenuApp::createThemeShop() {
     });
     m_themeShop->onBackgroundSpeedChange([this](float v) {
         m_config.backgroundSpeed = v;
+        m_config.backgroundSpeedChosen = true;
         if (m_background) m_background->setSpeedScale(v * 2.f);
         if (m_background) m_background->setWallpaperSpeedScale(v);
     });
@@ -1155,7 +1160,14 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         m_background->setConfig(backgroundConfig);
         m_background->setBlurStrength(m_config.backgroundBlur);
         m_background->setSpeedScale(m_config.backgroundSpeed * 2.f);
-        m_background->setWallpaperSpeedScale(m_config.backgroundSpeed);
+        // 0.35 was picked for drifting shapes, which have no speed of their own
+        // to be wrong about. A frame sequence does: it was filmed at a rate, and
+        // 0.35 plays a ten second loop over twenty-nine. So an animated theme
+        // starts at the speed of its clip, until somebody moves the slider --
+        // after which their choice is theirs, and applies to any theme.
+        m_background->setWallpaperSpeedScale(
+            (wantsFrames && !m_config.backgroundSpeedChosen) ? 1.f
+                                                            : m_config.backgroundSpeed);
 
         if (backgroundImageNeedsReload) {
             // A theme that lists frames gets the moving wallpaper; one that

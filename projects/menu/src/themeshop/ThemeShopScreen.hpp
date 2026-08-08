@@ -95,7 +95,7 @@ public:
 
 protected:
     void buildTabs() override;
-    bool usesCustomContentLayout() const override { return m_tabIndex < 2; }
+    bool usesCustomContentLayout() const override { return m_tabIndex < 3; }
     void drawCustomContent(nxui::Renderer& ren, const nxui::Rect& panel, const nxui::Rect& content, float opacity) override;
     void updateCustomContent(float dt) override;
     bool handleCustomPressA() override;
@@ -163,6 +163,7 @@ private:
     bool pollCommunityCatalog();
     void syncCommunityCatalog(const ThemeCatalogClient::Snapshot& snapshot);
     bool isCommunityTab() const;
+    bool isAnimatedTab() const;
     int currentEntryCount() const;
     int currentSelectedIndex() const;
     void setCurrentSelectedIndex(int idx);

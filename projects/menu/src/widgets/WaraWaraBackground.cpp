@@ -150,23 +150,56 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
     if (paths.empty())
         return false;
 
-    // Capped on memory rather than on a frame count, because that is the thing
-    // that actually runs out -- and it leaves the theme free to spend the
-    // allowance on whichever of size or smoothness its clip needs.
-    //
-    // For soft footage that is emphatically smoothness. Stretching this theme's
-    // frames to the screen from 224x126 costs 0.46/255 against the 720p source,
-    // and from 480x270 it costs 0.31: a difference nobody can see, for four
-    // times the memory and a quarter of the frame rate.
-    //
-    // 14 MB of the 32 MB image budget. The rest belongs to game icons, and
-    // exhausting that budget is what produced the crash reports this project
+    // The wallpaper's share of the image budget. The rest belongs to game icons,
+    // and exhausting that budget is what produced the crash reports this project
     // spent days on -- a wallpaper does not get to reopen it.
-    constexpr uint64_t kFrameMemoryBudget = 14ull * 1024ull * 1024ull;
-    uint64_t used = 0;
+    //
+    // The console reports 458 MB to this process with 220 MB free, so this is
+    // nowhere near what the hardware allows; it is what a background is worth.
+    constexpr uint64_t kFrameMemoryBudget = 32ull * 1024ull * 1024ull;
 
-    m_frames.reserve(std::min<size_t>(paths.size(), 160));
-    for (size_t i = 0; i < paths.size(); ++i) {
+    auto frameCost = [](const nxui::Texture& tex) -> uint64_t {
+        // What the GPU actually holds. Not width*height*4: a compressed frame
+        // is a fraction of that, and a tiled one is more than its pixels.
+        const uint64_t reported = tex.gpuBytes();
+        return reported ? reported : (uint64_t)tex.width() * tex.height() * 4;
+    };
+
+    // The first frame is loaded to be measured, because only the device knows
+    // what a frame really costs once tiled -- 640x360 of BC1 is 115200 bytes of
+    // data and 163840 bytes of image.
+    nxui::Texture first;
+    if (!first.loadFromFile(gpu, ren, paths[0], 0)) {
+        DebugLog::log("[background] first frame failed to load (%s)", paths[0].c_str());
+        return false;
+    }
+
+    const uint64_t cost = frameCost(first);
+    size_t affordable = (cost > 0) ? (size_t)(kFrameMemoryBudget / cost) : paths.size();
+    if (affordable < 1)
+        affordable = 1;
+
+    // When the whole sequence will not fit, take every Nth frame rather than the
+    // first N. Both drop frames; only one keeps the loop.
+    //
+    // Truncating leaves the animation ending wherever the budget ran out and
+    // snapping back to the start, mid-motion, every time round. That shipped
+    // once: a 120 frame loop silently became 89, and it read as a glitch in the
+    // video rather than as a theme that did not fit. Sampling instead covers the
+    // same span more coarsely, which looks like a lower frame rate -- honest
+    // about what was lost.
+    size_t stride = 1;
+    if (affordable < paths.size()) {
+        stride = (paths.size() + affordable - 1) / affordable;
+        DebugLog::log("[background] %zu frames at %.2f MB each exceed the %.0f MB share; "
+                      "taking every %zu to keep the loop whole",
+                      paths.size(), cost / 1048576.0,
+                      kFrameMemoryBudget / 1048576.0, stride);
+    }
+
+    m_frames.reserve(paths.size() / stride + 1);
+    m_frames.push_back(std::move(first));
+    for (size_t i = stride; i < paths.size(); i += stride) {
         nxui::Texture tex;
         if (!tex.loadFromFile(gpu, ren, paths[i], 0)) {
             // Stopping here rather than carrying on: a sequence missing a frame
@@ -176,16 +209,6 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
                           i, paths[i].c_str(), m_frames.size());
             break;
         }
-
-        const uint64_t cost = (uint64_t)tex.width() * tex.height() * 4;
-        if (!m_frames.empty() && used + cost > kFrameMemoryBudget) {
-            DebugLog::log("[background] stopping at %zu frames of %zu: %.1f MB is "
-                          "the share this may take of the image budget",
-                          m_frames.size(), paths.size(),
-                          kFrameMemoryBudget / 1048576.0);
-            break;
-        }
-        used += cost;
         m_frames.push_back(std::move(tex));
     }
 
@@ -195,7 +218,9 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
     m_backgroundImage = nxui::Texture{};
     m_frameIndex = 0;
     m_frameTimer = 0.f;
-    m_frameInterval = (fps > 0.f && m_frames.size() > 1) ? (1.f / fps) : 0.f;
+    // Scaled by the stride, so a sampled sequence still plays at the speed the
+    // clip was filmed instead of racing through it.
+    m_frameInterval = (fps > 0.f && m_frames.size() > 1) ? ((float)stride / fps) : 0.f;
 
     DebugLog::log("[background] %zu frames at %.1f fps (%dx%d)",
                   m_frames.size(), fps,

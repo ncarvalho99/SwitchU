@@ -237,9 +237,17 @@ void ThemeShopScreen::applySearchFilter() {
             m_themeShopEntries.push_back(entry);
     }
 
+    // One fetch feeds two tabs. Entries remember which index they came from,
+    // so the split is a filter here rather than a second catalogue client and
+    // a second download.
+    const bool wantAnimated = isAnimatedTab();
     m_communityEntries.clear();
     m_communityEntries.reserve(m_allCommunityEntries.size());
     for (const auto& entry : m_allCommunityEntries) {
+        const bool fromOurs =
+            entry.catalogUrl == ThemeCatalogClient::kDefaultCatalogUrl;
+        if (fromOurs != wantAnimated)
+            continue;
         if (matchesSearch(entry, needleLower))
             m_communityEntries.push_back(entry);
     }
