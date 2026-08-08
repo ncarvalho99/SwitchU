@@ -155,16 +155,19 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
     // exhausting it is what produced the crash reports this project spent days
     // on. Twelve is enough for a loop that reads as motion and leaves the
     // larger share of the budget where it was.
-    constexpr size_t kMaxFrames = 12;
-    const size_t wanted = std::min(paths.size(), kMaxFrames);
-    if (paths.size() > kMaxFrames) {
-        DebugLog::log("[background] %zu frames offered, loading %zu -- the image "
-                      "budget is shared with icons",
-                      paths.size(), kMaxFrames);
-    }
+    // Capped on memory rather than on a frame count, because that is the thing
+    // that actually runs out. Twelve was a guess made when frames were assumed
+    // to be full screen; at 320x180 a frame is 0.23 MB and sixty of them cover
+    // a ten second clip for less than the twelve larger ones cost.
+    //
+    // 14 MB of the 32 MB image budget. The rest belongs to game icons, and
+    // exhausting that budget is what produced the crash reports this project
+    // spent days on -- a wallpaper does not get to reopen it.
+    constexpr uint64_t kFrameMemoryBudget = 14ull * 1024ull * 1024ull;
+    uint64_t used = 0;
 
-    m_frames.reserve(wanted);
-    for (size_t i = 0; i < wanted; ++i) {
+    m_frames.reserve(std::min<size_t>(paths.size(), 64));
+    for (size_t i = 0; i < paths.size(); ++i) {
         nxui::Texture tex;
         if (!tex.loadFromFile(gpu, ren, paths[i], 0)) {
             // Stopping here rather than carrying on: a sequence missing a frame
@@ -174,6 +177,16 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
                           i, paths[i].c_str(), m_frames.size());
             break;
         }
+
+        const uint64_t cost = (uint64_t)tex.width() * tex.height() * 4;
+        if (!m_frames.empty() && used + cost > kFrameMemoryBudget) {
+            DebugLog::log("[background] stopping at %zu frames of %zu: %.1f MB is "
+                          "the share this may take of the image budget",
+                          m_frames.size(), paths.size(),
+                          kFrameMemoryBudget / 1048576.0);
+            break;
+        }
+        used += cost;
         m_frames.push_back(std::move(tex));
     }
 
@@ -182,6 +195,7 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
 
     m_backgroundImage = nxui::Texture{};
     m_frameIndex = 0;
+    m_frameForward = true;
     m_frameTimer = 0.f;
     m_frameInterval = (fps > 0.f && m_frames.size() > 1) ? (1.f / fps) : 0.f;
 
@@ -301,7 +315,20 @@ void WaraWaraBackground::onUpdate(float dt) {
         m_frameTimer += dt;
         while (m_frameTimer >= m_frameInterval) {
             m_frameTimer -= m_frameInterval;
-            m_frameIndex = (m_frameIndex + 1) % (int)m_frames.size();
+            // Ping-pong rather than wrapping to the start. Twelve frames is all
+            // the image budget allows, and wrapping made a one-second clip that
+            // jumped at the seam every time -- reported as a video stuck on the
+            // same second. Playing back down the sequence doubles the loop for
+            // nothing and removes the jump: the turn happens at a frame that
+            // matches itself.
+            const int last = (int)m_frames.size() - 1;
+            if (m_frameForward) {
+                if (m_frameIndex >= last) { m_frameIndex = last - 1; m_frameForward = false; }
+                else ++m_frameIndex;
+            } else {
+                if (m_frameIndex <= 0) { m_frameIndex = 1; m_frameForward = true; }
+                else --m_frameIndex;
+            }
         }
     }
     for (auto& s : m_shapes) {

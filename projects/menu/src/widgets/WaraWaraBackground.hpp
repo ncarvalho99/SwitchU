@@ -125,6 +125,7 @@ private:
     float m_frameInterval = 0.f;   // seconds; 0 disables cycling
     float m_frameTimer    = 0.f;
     int   m_frameIndex    = 0;
+    bool  m_frameForward  = true;
     float m_time = 0.f;
     float m_blurStrength = 0.f;
     float m_speedScale = 1.f;
