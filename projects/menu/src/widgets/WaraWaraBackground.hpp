@@ -93,6 +93,15 @@ public:
     void setSpeedScale(float v) { m_speedScale = v < 0.f ? 0.f : (v > 3.f ? 3.f : v); }
     float speedScale() const { return m_speedScale; }
 
+    // The same slider, but without the factor the shapes carry. Callers double
+    // the value above because the authored shape speeds were tuned expecting
+    // it; a frame sequence has no such calibration -- it has a real duration,
+    // and doubling it plays the clip at twice the speed it was filmed. So the
+    // wallpaper is given the slider as the user set it.
+    void setWallpaperSpeedScale(float v) {
+        m_frameSpeedScale = v < 0.f ? 0.f : (v > 3.f ? 3.f : v);
+    }
+
 protected:
     void onUpdate(float dt) override;
     void onRender(nxui::Renderer& ren) override;
@@ -133,5 +142,6 @@ private:
     float m_time = 0.f;
     float m_blurStrength = 0.f;
     float m_speedScale = 1.f;
+    float m_frameSpeedScale = 1.f;
 };
 
