@@ -151,9 +151,13 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
         return false;
 
     // Capped on memory rather than on a frame count, because that is the thing
-    // that actually runs out. Twelve was a guess made when frames were assumed
-    // to be full screen; at 320x180 a frame is 0.23 MB and sixty of them cover
-    // a ten second clip for less than the twelve larger ones cost.
+    // that actually runs out -- and it leaves the theme free to spend the
+    // allowance on whichever of size or smoothness its clip needs.
+    //
+    // For soft footage that is emphatically smoothness. Stretching this theme's
+    // frames to the screen from 224x126 costs 0.46/255 against the 720p source,
+    // and from 480x270 it costs 0.31: a difference nobody can see, for four
+    // times the memory and a quarter of the frame rate.
     //
     // 14 MB of the 32 MB image budget. The rest belongs to game icons, and
     // exhausting that budget is what produced the crash reports this project
@@ -161,7 +165,7 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
     constexpr uint64_t kFrameMemoryBudget = 14ull * 1024ull * 1024ull;
     uint64_t used = 0;
 
-    m_frames.reserve(std::min<size_t>(paths.size(), 64));
+    m_frames.reserve(std::min<size_t>(paths.size(), 160));
     for (size_t i = 0; i < paths.size(); ++i) {
         nxui::Texture tex;
         if (!tex.loadFromFile(gpu, ren, paths[i], 0)) {
