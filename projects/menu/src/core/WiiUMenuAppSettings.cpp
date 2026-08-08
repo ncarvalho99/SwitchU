@@ -1035,9 +1035,16 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
 
     const bool imageExists = !backgroundImagePath.empty() && pathExists(backgroundImagePath);
     const bool wantsBackgroundImage = imageExists;
+    // A frames-only theme has no imagePath, so both sides of the path check are
+    // empty and this decided nothing needed loading -- the frames never loaded
+    // and the wallpaper came up blank. The gate has to know about the sequence
+    // as well as the single image.
+    const bool wantsFrames = !preset.background.imageFrames.empty();
+    const bool hasFramesLoaded = m_background && m_background->hasAnimatedBackground();
     const bool backgroundImageNeedsReload = forceResourceReload
         || m_loadedBackgroundImagePath != backgroundImagePath
-        || m_backgroundImageLoaded != wantsBackgroundImage;
+        || m_backgroundImageLoaded != wantsBackgroundImage
+        || wantsFrames != hasFramesLoaded;
 
     const bool needsGpuResourceReload = regularFontNeedsReload
         || smallFontNeedsReload
