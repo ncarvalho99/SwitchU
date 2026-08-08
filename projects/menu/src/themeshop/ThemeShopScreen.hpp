@@ -15,6 +15,7 @@
 namespace themeshop::tabs {
 class InstalledTab;
 class CommunityTab;
+class AnimatedTab;
 class OptionsTab;
 }
 
@@ -115,6 +116,7 @@ protected:
 private:
     friend class themeshop::tabs::InstalledTab;
     friend class themeshop::tabs::CommunityTab;
+    friend class themeshop::tabs::AnimatedTab;
     friend class themeshop::tabs::OptionsTab;
 
     enum class PreviewPhase {
