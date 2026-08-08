@@ -324,7 +324,18 @@ void WiiUMenuApp::quiesceWritersForPowerAction() {
         m_themePackageTransferFuture.wait();
     if (m_layoutDirty)
         saveMenuLayout();
-    DebugLog::log("[menu] writers quiesced for power action");
+
+    // Waiting for the writes is not the same as the card having them. fsdev
+    // returns before the FAT is updated, so a reboot here leaves the card
+    // inconsistent -- hekate then comes up unable to find nyx, and the CFW
+    // files have to be restored by hand. Reported after rebooting from the
+    // power menu, more than once.
+    //
+    // This function exists to be the last thing that runs before power is cut,
+    // which makes it the one place the commit cannot be skipped.
+    switchu::commitSdCard("power action");
+
+    DebugLog::log("[menu] writers quiesced and card committed for power action");
 }
 
 
