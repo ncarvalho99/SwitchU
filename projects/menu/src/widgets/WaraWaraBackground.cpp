@@ -323,13 +323,16 @@ void WaraWaraBackground::onUpdate(float dt) {
     // Scaling time rather than each speed keeps drift, wobble and spin in step
     // with one another, so the layer slows down as a whole instead of the
     // shapes sliding while still spinning at the authored rate.
+    const float wallpaperDt = dt * m_frameSpeedScale;
     dt *= m_speedScale;
     m_time += dt;
 
-    // Scaled dt on purpose: the background-speed slider should move the
-    // wallpaper as well as the shapes, or the two would drift apart.
+    // Deliberately not the shape-scaled dt. The slider still moves the
+    // wallpaper, but through its own factor: the shapes carry a x2 their
+    // authored speeds were tuned around, and applying that here played a ten
+    // second clip in five.
     if (m_frameInterval > 0.f && m_frames.size() > 1) {
-        m_frameTimer += dt;
+        m_frameTimer += wallpaperDt;
         while (m_frameTimer >= m_frameInterval) {
             m_frameTimer -= m_frameInterval;
             // Wrap to the start. This used to ping-pong, back when the sequence

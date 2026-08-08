@@ -566,6 +566,7 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->onBackgroundSpeedChange([this](float v) {
         m_config.backgroundSpeed = v;
         if (m_background) m_background->setSpeedScale(v * 2.f);
+        if (m_background) m_background->setWallpaperSpeedScale(v);
     });
     m_themeShop->onBackgroundBlurChange([this](float v) {
         m_config.backgroundBlur = v;
@@ -1154,6 +1155,7 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         m_background->setConfig(backgroundConfig);
         m_background->setBlurStrength(m_config.backgroundBlur);
         m_background->setSpeedScale(m_config.backgroundSpeed * 2.f);
+        m_background->setWallpaperSpeedScale(m_config.backgroundSpeed);
 
         if (backgroundImageNeedsReload) {
             // A theme that lists frames gets the moving wallpaper; one that
