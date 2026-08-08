@@ -75,6 +75,11 @@ public:
     void clearImage();
     bool hasAnimatedBackground() const { return m_frames.size() > 1; }
     const nxui::Texture* currentBackground() const;
+    // The frame after the current one, and how far along we are between the two.
+    // Together they let the renderer dissolve from one to the next instead of
+    // stepping, which is what buys smooth motion out of few frames.
+    const nxui::Texture* nextBackground() const;
+    float frameBlend() const;
 
     void regenerate(int count = 50) override;
 
@@ -125,7 +130,6 @@ private:
     float m_frameInterval = 0.f;   // seconds; 0 disables cycling
     float m_frameTimer    = 0.f;
     int   m_frameIndex    = 0;
-    bool  m_frameForward  = true;
     float m_time = 0.f;
     float m_blurStrength = 0.f;
     float m_speedScale = 1.f;

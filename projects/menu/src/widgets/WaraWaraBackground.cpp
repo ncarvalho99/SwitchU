@@ -150,11 +150,6 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
     if (paths.empty())
         return false;
 
-    // Each frame is a full-screen texture held for as long as the theme is on.
-    // The image budget is 32 MB and is shared with every game icon on screen;
-    // exhausting it is what produced the crash reports this project spent days
-    // on. Twelve is enough for a loop that reads as motion and leaves the
-    // larger share of the budget where it was.
     // Capped on memory rather than on a frame count, because that is the thing
     // that actually runs out. Twelve was a guess made when frames were assumed
     // to be full screen; at 320x180 a frame is 0.23 MB and sixty of them cover
@@ -195,7 +190,6 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
 
     m_backgroundImage = nxui::Texture{};
     m_frameIndex = 0;
-    m_frameForward = true;
     m_frameTimer = 0.f;
     m_frameInterval = (fps > 0.f && m_frames.size() > 1) ? (1.f / fps) : 0.f;
 
@@ -220,6 +214,29 @@ const nxui::Texture* WaraWaraBackground::currentBackground() const {
     if (!m_frames.empty())
         return &m_frames[(size_t)m_frameIndex];
     return m_backgroundImage.valid() ? &m_backgroundImage : nullptr;
+}
+
+// Six frames a second is a step every 166ms, and no amount of image quality
+// hides that -- it reads as a stutter. More frames is not available: twelve a
+// second across this clip would be 122 textures and 27 MB, most of the image
+// budget, for a wallpaper.
+//
+// So the frames are dissolved into one another instead. Motion becomes
+// continuous at whatever rate the display runs, the memory cost is unchanged,
+// and it works here because the content is a soft gradient: blending two of
+// them looks like the real intermediate frame. Sharp footage would smear, and
+// this would be the wrong trick for it.
+const nxui::Texture* WaraWaraBackground::nextBackground() const {
+    if (m_frames.size() < 2)
+        return nullptr;
+    return &m_frames[((size_t)m_frameIndex + 1) % m_frames.size()];
+}
+
+float WaraWaraBackground::frameBlend() const {
+    if (m_frameInterval <= 0.f || m_frames.size() < 2)
+        return 0.f;
+    const float t = m_frameTimer / m_frameInterval;
+    return t < 0.f ? 0.f : (t > 1.f ? 1.f : t);
 }
 
 WaraWaraBackground::ShapeType WaraWaraBackground::pickShapeType() const {
@@ -315,20 +332,17 @@ void WaraWaraBackground::onUpdate(float dt) {
         m_frameTimer += dt;
         while (m_frameTimer >= m_frameInterval) {
             m_frameTimer -= m_frameInterval;
-            // Ping-pong rather than wrapping to the start. Twelve frames is all
-            // the image budget allows, and wrapping made a one-second clip that
-            // jumped at the seam every time -- reported as a video stuck on the
-            // same second. Playing back down the sequence doubles the loop for
-            // nothing and removes the jump: the turn happens at a frame that
-            // matches itself.
-            const int last = (int)m_frames.size() - 1;
-            if (m_frameForward) {
-                if (m_frameIndex >= last) { m_frameIndex = last - 1; m_frameForward = false; }
-                else ++m_frameIndex;
-            } else {
-                if (m_frameIndex <= 0) { m_frameIndex = 1; m_frameForward = true; }
-                else --m_frameIndex;
-            }
+            // Wrap to the start. This used to ping-pong, back when the sequence
+            // was one second of a ten second clip and wrapping jumped visibly at
+            // the seam. Covering the whole clip removed the reason: a background
+            // video is authored to loop, so its last frame already matches its
+            // first, and reversing direction is what made a slow drift read as
+            // hurried -- the gradient shuttled instead of flowing.
+            //
+            // A sequence that does not loop cleanly will show a seam here. That
+            // is a property of the clip, and the fix belongs to whoever chooses
+            // it, not to the player.
+            if (++m_frameIndex >= (int)m_frames.size()) m_frameIndex = 0;
         }
     }
     for (auto& s : m_shapes) {
@@ -416,9 +430,21 @@ void WaraWaraBackground::renderLayer(nxui::Renderer& ren, bool intoOffscreen) {
 
     const nxui::Texture* bg = currentBackground();
     if (bg && bg->valid() && m_config.imageOpacity > 0.f) {
-        ren.drawTexture(bg,
-                        backgroundImageRect(),
-                        nxui::Color::white().withAlpha(m_config.imageOpacity * m_opacity));
+        const float alpha = m_config.imageOpacity * m_opacity;
+        const nxui::Rect rect = backgroundImageRect();
+        ren.drawTexture(bg, rect, nxui::Color::white().withAlpha(alpha));
+
+        // Then the frame it is turning into, faded in on top. At full opacity
+        // the two draws compose to exactly a linear cross-fade; below that the
+        // blend drifts slightly, which is invisible on a wallpaper already
+        // being faded into whatever is behind it.
+        const float blend = frameBlend();
+        if (blend > 0.f) {
+            if (const nxui::Texture* nextFrame = nextBackground()) {
+                ren.drawTexture(nextFrame, rect,
+                                nxui::Color::white().withAlpha(alpha * blend));
+            }
+        }
     }
 
     for (const auto& s : m_shapes)

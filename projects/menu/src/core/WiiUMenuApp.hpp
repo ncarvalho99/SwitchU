@@ -87,8 +87,6 @@ private:
     // the entries that would need a daemon round trip to answer.
     // Branch-only: times texture uploads so the video-background question
     // is answered by the console rather than by estimate.
-    void measureUploadCost();
-    void measureDecodeCost();
     void showIconOptions();
     void showSoftwareInformation(std::uint64_t titleId, const std::string& title);
     void confirmDeleteSoftware(std::uint64_t titleId, const std::string& title);
