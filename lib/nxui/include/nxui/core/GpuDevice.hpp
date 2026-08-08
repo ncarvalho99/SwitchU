@@ -154,10 +154,20 @@ public:
     dk::UniqueMemBlock allocImageMemory(uint32_t size);
     void freeImageMemory(uint32_t size);
 
-    static constexpr uint64_t kDefaultImageBudget = 32u * 1024u * 1024u;
+    // Icons and theme artwork together. Raised from 32 MB once the console was
+    // asked instead of assumed: the menu process holds 458 MB and had 220 MB
+    // free, so the old figure was bounding nothing the hardware cared about.
+    // It still bounds something worth bounding -- runaway image allocation is
+    // what the User Break crash reports came from.
+    static constexpr uint64_t kDefaultImageBudget = 64u * 1024u * 1024u;
     uint64_t imageMemoryUsed() const { return m_imageMemUsed; }
 
-    bool uploadTexture(dk::Image& dst, const void* pixels, uint32_t size, uint32_t width, uint32_t height);
+    // expectedBytes is what the caller says this image should occupy; 0 means
+    // the uncompressed w*h*4. It exists because the short-buffer check below is
+    // the guard that turns a bad upload into a failure instead of an svcBreak,
+    // and a block-compressed image legitimately carries a fraction of that.
+    bool uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
+                       uint32_t width, uint32_t height, uint64_t expectedBytes = 0);
 
     // Two classes of offscreen target, because the two users want opposite
     // things. The icon and sidebar glass recapture the scene every single

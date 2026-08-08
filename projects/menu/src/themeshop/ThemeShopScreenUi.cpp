@@ -510,8 +510,14 @@ std::string transferLabel(const ThemeTransferState& state) {
 
 } // namespace
 
+// Both catalogue tabs render the same way and read the same list; what tells
+// them apart is which entries survive the filter below.
 bool ThemeShopScreen::isCommunityTab() const {
-    return m_tabIndex == 1;
+    return m_tabIndex == 1 || m_tabIndex == 2;
+}
+
+bool ThemeShopScreen::isAnimatedTab() const {
+    return m_tabIndex == 2;
 }
 
 int ThemeShopScreen::currentEntryCount() const {

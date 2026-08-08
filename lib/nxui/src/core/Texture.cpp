@@ -9,6 +9,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <algorithm>
+#include <vector>
 
 namespace nxui {
 
@@ -19,6 +20,17 @@ Texture::~Texture() {
 
 bool Texture::loadFromPixels(GpuDevice& gpu, Renderer& ren,
                              const uint8_t* rgba, int w, int h)
+{
+    return loadImageData(gpu, ren, rgba, (uint64_t)w * h * 4, w, h,
+                         DkImageFormat_RGBA8_Unorm);
+}
+
+// One body for every format, because this is the allocation path that answered
+// failure with svcBreak until it was fixed. A second copy of it for compressed
+// images would be a second copy of that bug waiting to be reintroduced.
+bool Texture::loadImageData(GpuDevice& gpu, Renderer& ren,
+                            const uint8_t* data, uint64_t dataSize,
+                            int w, int h, uint32_t format)
 {
     m_gpu = &gpu;
     int oldSlot = m_slot;
@@ -33,7 +45,7 @@ bool Texture::loadFromPixels(GpuDevice& gpu, Renderer& ren,
     dk::ImageLayout layout;
     dk::ImageLayoutMaker{gpu.device()}
         .setFlags(0)
-        .setFormat(DkImageFormat_RGBA8_Unorm)
+        .setFormat((DkImageFormat)format)
         .setDimensions(w, h)
         .initialize(layout);
 
@@ -77,7 +89,7 @@ bool Texture::loadFromPixels(GpuDevice& gpu, Renderer& ren,
 
     m_image.initialize(layout, m_mem, 0);
 
-    if (!gpu.uploadTexture(m_image, rgba, w * h * 4, w, h)) {
+    if (!gpu.uploadTexture(m_image, data, (uint32_t)dataSize, w, h, dataSize)) {
         std::printf("[Texture] uploadTexture FAILED (%dx%d)\n", w, h);
         // Half a texture is worse than none: it can still be bound and drawn.
         m_valid = false;
@@ -147,7 +159,58 @@ bool Texture::loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
     return true;
 }
 
+// A DDS holding BC1 blocks, which the GPU samples without unpacking. Four bytes
+// a pixel is what forced theme animations down to 224x126, where a frame
+// stretched to the screen looks like blocks; BC1 is half a byte a pixel, so the
+// same memory holds 640x360 and the stretch drops from 5.7x to 2x.
+//
+// Only the layout ffmpeg and the theme tooling produce is accepted: no mipmaps,
+// no cubemaps, no other fourCC. Anything else is a file this was not asked to
+// read, and guessing at it is how a loader ends up handing deko3d something it
+// answers with svcBreak.
+bool Texture::loadBc1File(GpuDevice& gpu, Renderer& ren, const std::string& path) {
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+
+    uint8_t head[128];
+    if (std::fread(head, 1, sizeof(head), f) != sizeof(head)) { std::fclose(f); return false; }
+
+    auto u32 = [&](int off) {
+        return (uint32_t)head[off] | ((uint32_t)head[off+1] << 8)
+             | ((uint32_t)head[off+2] << 16) | ((uint32_t)head[off+3] << 24);
+    };
+    const uint32_t fourCC = u32(84);
+    const int      hh     = (int)u32(12);
+    const int      ww     = (int)u32(16);
+    if (u32(0) != 0x20534444u /* "DDS " */ || fourCC != 0x31545844u /* "DXT1" */) {
+        std::printf("[Texture] not a DXT1 dds: %s\n", path.c_str());
+        std::fclose(f);
+        return false;
+    }
+    // BC1 stores a 4x4 block in 8 bytes, so the dimensions have to be whole
+    // blocks -- a partial block would leave the GPU reading past the data.
+    if (ww <= 0 || hh <= 0 || (ww & 3) || (hh & 3)) {
+        std::printf("[Texture] dds %dx%d is not a multiple of 4: %s\n", ww, hh, path.c_str());
+        std::fclose(f);
+        return false;
+    }
+
+    const size_t blocks = (size_t)(ww / 4) * (hh / 4) * 8;
+    std::vector<uint8_t> data(blocks);
+    const size_t got = std::fread(data.data(), 1, blocks, f);
+    std::fclose(f);
+    if (got != blocks) {
+        std::printf("[Texture] dds truncated: %zu of %zu bytes in %s\n", got, blocks, path.c_str());
+        return false;
+    }
+
+    return loadImageData(gpu, ren, data.data(), blocks, ww, hh, DkImageFormat_RGB_BC1);
+}
+
 bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide) {
+    if (path.size() > 4 && path.compare(path.size() - 4, 4, ".dds") == 0)
+        return loadBc1File(gpu, ren, path);
+
     int w, h, ch;
     uint8_t* data = stbi_load(path.c_str(), &w, &h, &ch, 4);
     if (!data) {
