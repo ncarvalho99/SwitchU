@@ -22,6 +22,26 @@ public:
         std::string path;
         std::string manifest;
         std::string cover;
+        // Um zip com o tema inteiro, quando o catalogo oferece. Vazio faz o
+        // instalador voltar a baixar arquivo por arquivo, que e o que todo
+        // catalogo publicado antes deste campo continua servindo.
+        std::string package;
+        std::uint64_t packageBytes = 0;
+        // A mesma animacao em 1280x720, que e a resolucao exata da tela: o
+        // bloco de 4x4 do BC1 vira 4x4 pixels em vez de ser esticado 1.4x.
+        // Custa o dobro em todo lugar -- 147 MB de cartao contra 68, 183 MB de
+        // GPU contra 66 -- entao e uma escolha oferecida, nao uma troca.
+        std::string packageHd;
+        std::uint64_t packageHdBytes = 0;
+        // Miniatura animada: uma folha de sprites com os quadros em grade.
+        // Vazio faz o cartao usar a capa parada, que e o que todo catalogo
+        // sem estes campos continua servindo.
+        std::string thumbSheet;
+        // A mesma animacao em celulas maiores, para quando o tema e expandido.
+        std::string thumbSheetHd;
+        int thumbCols = 0;
+        int thumbRows = 0;
+        float thumbFps = 10.f;
         std::vector<std::string> screenshots;
         // Which index this came from. Entries carry relative paths, so once two
         // catalogues are merged the resolving base can no longer be a single
