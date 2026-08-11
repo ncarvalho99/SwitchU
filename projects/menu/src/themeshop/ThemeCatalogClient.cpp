@@ -16,6 +16,7 @@
 #include <switch.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <stdexcept>
 
@@ -49,6 +50,16 @@ void readStringArrayOpt(const nlohmann::json& j, const char* key, std::vector<st
 
 bool startsWith(const std::string& value, const std::string& prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
+}
+
+bool safeThemeId(const std::string& value) {
+    if (value.size() < 2 || value.size() > 64)
+        return false;
+    for (unsigned char ch : value) {
+        if (!std::islower(ch) && !std::isdigit(ch) && ch != '_' && ch != '-')
+            return false;
+    }
+    return true;
 }
 
 std::string trimSlashes(std::string value) {
@@ -388,7 +399,9 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
         readStringOpt(item, "screenshot", screenshot);
         appendUniqueString(entry.screenshots, screenshot);
 
-        if (entry.id.empty() || entry.name.empty())
+        // The id eventually becomes a directory name on the SD card. Do not
+        // retain an entry that could alter that destination.
+        if (!safeThemeId(entry.id) || entry.name.empty())
             continue;
         if (entry.manifest.empty())
             entry.manifest = deriveManifestPath(entry.path);

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -244,11 +245,22 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
 
     std::error_code ec;
     std::filesystem::create_directories(destinationDir, ec);
+    if (ec) {
+        std::fclose(f);
+        result.error = "could not create extraction directory";
+        return result;
+    }
     const std::filesystem::path destRoot =
         std::filesystem::weakly_canonical(std::filesystem::path(destinationDir), ec);
+    if (ec || destRoot.empty()) {
+        std::fclose(f);
+        result.error = "could not resolve extraction directory";
+        return result;
+    }
 
     std::uint64_t walker = 0;
     std::uint8_t localHeader[30];
+    std::unordered_set<std::string> seenPaths;
 
     for (int i = 0; i < entryCount; ++i) {
         if (walker + 46 > dir.size() || read32(dir.data() + walker) != kCentralFileHeader) {
@@ -283,6 +295,10 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
             result.error = "refusing file type: " + relative;
             break;
         }
+        if (!seenPaths.insert(relative).second) {
+            result.error = "archive has duplicate file: " + relative;
+            break;
+        }
         if (plain > kMaxEntryBytes || result.bytesWritten + plain > kMaxTotalBytes) {
             result.error = "package is larger than a theme is allowed to be";
             break;
@@ -313,8 +329,9 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
         // Belt and braces after the path checks: refuse to write anywhere that
         // is not genuinely inside the destination.
         const std::filesystem::path resolved = std::filesystem::weakly_canonical(target, ec);
-        if (!ec && !destRoot.empty()
-            && resolved.string().compare(0, destRoot.string().size(), destRoot.string()) != 0) {
+        const std::filesystem::path relativeToRoot = resolved.lexically_relative(destRoot);
+        if (ec || relativeToRoot.empty() || relativeToRoot == "."
+            || relativeToRoot.native().rfind("..", 0) == 0) {
             result.error = "entry would write outside the destination: " + relative;
             break;
         }
