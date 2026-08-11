@@ -27,12 +27,6 @@ public:
         // catalogo publicado antes deste campo continua servindo.
         std::string package;
         std::uint64_t packageBytes = 0;
-        // A mesma animacao em 1280x720, que e a resolucao exata da tela: o
-        // bloco de 4x4 do BC1 vira 4x4 pixels em vez de ser esticado 1.4x.
-        // Custa o dobro em todo lugar -- 147 MB de cartao contra 68, 183 MB de
-        // GPU contra 66 -- entao e uma escolha oferecida, nao uma troca.
-        std::string packageHd;
-        std::uint64_t packageHdBytes = 0;
         // Miniatura animada: uma folha de sprites com os quadros em grade.
         // Vazio faz o cartao usar a capa parada, que e o que todo catalogo
         // sem estes campos continua servindo.

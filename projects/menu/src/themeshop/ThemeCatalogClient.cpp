@@ -372,9 +372,6 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
         readStringOpt(item, "package", entry.package);
         if (auto it = item.find("packageBytes"); it != item.end() && it->is_number_unsigned())
             entry.packageBytes = it->get<std::uint64_t>();
-        readStringOpt(item, "packageHd", entry.packageHd);
-        if (auto it = item.find("packageHdBytes"); it != item.end() && it->is_number_unsigned())
-            entry.packageHdBytes = it->get<std::uint64_t>();
         readStringOpt(item, "thumbSheet", entry.thumbSheet);
         readStringOpt(item, "thumbSheetHd", entry.thumbSheetHd);
         {

@@ -475,58 +475,21 @@ void WiiUMenuApp::createThemeShop() {
             : ThemePackageInstaller::Mode::InstallOnly;
         std::string destination = ThemePackageInstaller::destinationRootFor(entryCopy.id, mode);
 
-        // Uma so funcao para as duas versoes: o instalador nao precisa saber
-        // que existem duas, basta receber a entrada com o pacote escolhido.
-        auto startTransfer = [this, entryCopy, applyAfterInstall](bool hd) {
-            ThemeCatalogClient::Entry escolha = entryCopy;
-            if (hd && !escolha.packageHd.empty()) {
-                escolha.package = escolha.packageHd;
-                escolha.packageBytes = escolha.packageHdBytes;
-            }
-            startThemePackageTransfer(escolha, applyAfterInstall);
-        };
-
-        // Qual das duas resolucoes, quando o tema tem as duas. Perguntado uma
-        // vez, antes de baixar, porque a diferenca e grande demais para ser
-        // decidida por padrao: 720p e a resolucao da tela e nao amplia nada,
-        // mas ocupa 147 MB no cartao contra 68 e quase todo o orcamento de
-        // imagem do menu.
-        auto askResolution = [this, entryCopy, startTransfer]() {
-            auto& i18n = nxui::I18n::instance();
-            if (entryCopy.packageHd.empty() || !m_dialog) {
-                startTransfer(false);
-                return;
-            }
-            const auto mb = [](std::uint64_t b) {
-                return std::to_string(b / 1048576) + " MB";
-            };
-            m_dialogReturnFocus = focusManager().current();
-            m_dialog->show(
-                i18n.tr("themeshop.community.quality_title", "Theme Quality"),
-                i18n.tr("themeshop.community.quality_message",
-                        "Standard fits more themes on the card. High matches the screen "
-                        "resolution exactly and looks sharper, at twice the size."),
-                {
-                    {i18n.tr("themeshop.community.quality_standard", "Standard")
-                         + " (" + mb(entryCopy.packageBytes) + ")",
-                     [startTransfer]() { startTransfer(false); }, true},
-                    {i18n.tr("themeshop.community.quality_high", "High")
-                         + " (" + mb(entryCopy.packageHdBytes) + ")",
-                     [startTransfer]() { startTransfer(true); }, true}
-                },
-                0,
-                {});
-            focusManager().setFocus(m_dialog.get());
+        // The catalog now publishes one definitive package: BC7 at 912x512.
+        // It fixes BC1 artifacts in dark scenes while retaining the complete
+        // animation at 30 fps inside the measured image-memory budget.
+        auto startTransfer = [this, entryCopy, applyAfterInstall]() {
+            startThemePackageTransfer(entryCopy, applyAfterInstall);
         };
 
         if (!pathExists(destination)) {
-            askResolution();
+            startTransfer();
             return;
         }
 
         auto& i18n = nxui::I18n::instance();
         if (!m_dialog) {
-            startTransfer(false);
+            startTransfer();
             return;
         }
 
@@ -542,7 +505,7 @@ void WiiUMenuApp::createThemeShop() {
                           "A package with this theme ID is already installed. Replace it with the version from GitHub?"),
             {
                 {i18n.tr("button.cancel", "Cancel"), {}, true},
-                {i18n.tr("button.replace", "Replace"), [askResolution]() { askResolution(); }, true}
+                {i18n.tr("button.replace", "Replace"), [startTransfer]() { startTransfer(); }, true}
             },
             1,
             {});
