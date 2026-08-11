@@ -1,6 +1,7 @@
 #include "ThemePackageInstaller.hpp"
 
 #include "ThemeHttp.hpp"
+#include "ZipReader.hpp"
 
 #include "core/DebugLog.hpp"
 
@@ -21,6 +22,7 @@
 #include <list>
 #include <stdexcept>
 #include <system_error>
+#include <sys/statvfs.h>
 #include <utility>
 #include <vector>
 
@@ -88,7 +90,7 @@ bool hasKnownAssetExtension(const std::string& path) {
 
     const std::string ext = name.substr(dot + 1);
     static constexpr const char* kAssetExtensions[] = {
-        "png", "jpg", "jpeg", "webp", "bmp", "gif",
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "dds",
         "wav", "mp3", "ogg", "flac",
         "ttf", "otf",
         "json"
@@ -203,10 +205,46 @@ bool ensureDirectoryRecursive(const std::string& path) {
     return true;
 }
 
+// Quanto ainda cabe no cartao. Zero quando nao da para saber, e ai quem chama
+// segue em frente em vez de recusar por falta de informacao.
+std::uint64_t sdFreeBytes() {
+    struct statvfs st{};
+    if (statvfs("sdmc:/", &st) != 0)
+        return 0;
+    return (std::uint64_t)st.f_bavail * (std::uint64_t)st.f_frsize;
+}
+
 bool removeDirectoryRecursive(const std::string& path) {
     std::error_code ec;
     std::filesystem::remove_all(path, ec);
     return !ec;
+}
+
+// Do not erase a working theme until its replacement was fully unpacked.
+bool replaceDirectoryFromStaging(const std::string& destination,
+                                 const std::string& staging) {
+    const std::string previous = destination + ".previous";
+    removeDirectoryRecursive(previous);
+
+    std::error_code ec;
+    const bool hadPrevious = pathExists(destination);
+    if (hadPrevious) {
+        std::filesystem::rename(destination, previous, ec);
+        if (ec)
+            return false;
+    }
+
+    std::filesystem::rename(staging, destination, ec);
+    if (!ec) {
+        removeDirectoryRecursive(previous);
+        return true;
+    }
+
+    if (hadPrevious) {
+        std::error_code restoreEc;
+        std::filesystem::rename(previous, destination, restoreEc);
+    }
+    return false;
 }
 
 std::string joinUrl(const std::string& baseUrl, const std::string& relativePath) {
@@ -611,6 +649,113 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
                        ? i18n.tr("themeshop.transfer.prepare_apply", "Preparing download + apply...")
                        : i18n.tr("themeshop.transfer.prepare_install", "Preparing download + install..."),
                    0.f);
+    }
+
+    // One request instead of one per file. An animated theme is around three
+    // hundred frames, so the file-by-file path means three hundred connections:
+    // slow, and every one of them a chance to fail halfway and leave a theme
+    // that is missing frames without anything saying so.
+    //
+    // Falls through to the old path when the catalogue does not offer a
+    // package, which is every catalogue published before this field existed.
+    if (!entry.package.empty()) {
+        const std::string stagingPath = result.destinationPath + ".installing";
+        removeDirectoryRecursive(stagingPath);
+        if (!ensureDirectoryRecursive(stagingPath))
+            throw std::runtime_error("Failed to prepare installation staging area: " + stagingPath);
+
+        const std::string packageUrl = joinUrl(catalogUrl, trimSlashes(entry.package));
+        auto& i18n = nxui::I18n::instance();
+        if (onProgress)
+            onProgress(i18n.tr("themeshop.transfer.downloading_package", "Downloading theme"), 0.05f);
+
+        // Straight to disk, never through memory. Held as bytes, a 40 MB
+        // package peaked past 150 MB once curl's buffer and its copies were
+        // counted, and the download died with "Failed writing body".
+        const std::string archivePath = stagingPath + ".part";
+        DebugLog::log("[themeshop] package download: %s", packageUrl.c_str());
+
+        std::uint64_t downloaded = 0;
+        try {
+            downloaded = themeshop::http::getToFile(
+                packageUrl, archivePath,
+                [&](std::uint64_t received, std::uint64_t) {
+                    if (onProgress && (received % (2u << 20)) < 16384) {
+                        onProgress(i18n.tr("themeshop.transfer.downloading_package", "Downloading theme")
+                                       + " (" + std::to_string(received / 1048576) + " MB)",
+                                   0.05f + 0.5f * (float)received / 52428800.f);
+                    }
+                });
+        } catch (...) {
+            std::remove(archivePath.c_str());
+            throw;
+        }
+        if (downloaded == 0) {
+            std::remove(archivePath.c_str());
+            throw std::runtime_error("Theme package download was empty");
+        }
+
+        // Antes de escrever coisa alguma. Um cartao cheio deixava a extracao ir
+        // ate o fim do espaco e falhar no primeiro arquivo que nao coubesse --
+        // que foi o theme.mp3, o ultimo da ordem -- e o relato saia como
+        // "could not unpack media/music/theme.mp3", que manda quem investiga
+        // procurar defeito no audio, no pacote e no formato antes do disco.
+        //
+        // O quanto o pacote ocupa depois de aberto nao esta escrito nele, entao
+        // e estimado: os quadros comprimem cerca de 2.2x no zip, e 2.5 mais uma
+        // margem cobre isso sem recusar instalacao que caberia.
+        {
+            const std::uint64_t livre = sdFreeBytes();
+            const std::uint64_t preciso = downloaded * 5 / 2 + 32ull * 1024ull * 1024ull;
+            if (livre > 0 && livre < preciso) {
+                std::remove(archivePath.c_str());
+                removeDirectoryRecursive(stagingPath);
+                DebugLog::log("[themeshop] espaco insuficiente: %llu MB livres, "
+                              "estimados %llu MB para abrir o pacote",
+                              (unsigned long long)(livre / 1048576),
+                              (unsigned long long)(preciso / 1048576));
+                throw std::runtime_error(
+                    i18n.tr("themeshop.transfer.no_space",
+                            "Not enough space on the SD card for this theme")
+                    + " (" + std::to_string(livre / 1048576) + " MB / "
+                    + std::to_string(preciso / 1048576) + " MB)");
+            }
+        }
+
+        if (onProgress)
+            onProgress(i18n.tr("themeshop.transfer.extracting", "Extracting theme"), 0.55f);
+
+        auto extracted = themeshop::extractZipFile(
+            archivePath, stagingPath,
+            [&](int done, int total) {
+                if (onProgress && total > 0 && (done % 32 == 0 || done == total)) {
+                    onProgress(i18n.tr("themeshop.transfer.extracting", "Extracting theme"),
+                               0.55f + 0.4f * (float)done / (float)total);
+                }
+            });
+
+        std::remove(archivePath.c_str());   // o pacote nao fica no cartao
+
+        if (!extracted.success) {
+            // The temporary directory is disposable; keep the known-good theme.
+            removeDirectoryRecursive(stagingPath);
+            // O espaco livre vai junto: se a extracao morreu por disco, este
+            // numero responde na hora em vez de mandar procurar no pacote.
+            DebugLog::log("[themeshop] extracao falhou (%s), %llu MB livres no cartao",
+                          extracted.error.c_str(),
+                          (unsigned long long)(sdFreeBytes() / 1048576));
+            throw std::runtime_error("Theme package could not be unpacked: " + extracted.error);
+        }
+
+        if (!replaceDirectoryFromStaging(result.destinationPath, stagingPath)) {
+            removeDirectoryRecursive(stagingPath);
+            throw std::runtime_error("Theme package was extracted but could not replace the installed theme");
+        }
+
+        if (onProgress)
+            onProgress(i18n.tr("themeshop.transfer.finishing", "Finishing"), 1.f);
+        result.success = true;
+        return result;
     }
 
     if (pathExists(result.destinationPath))

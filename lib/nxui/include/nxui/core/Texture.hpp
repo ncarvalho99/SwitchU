@@ -27,15 +27,18 @@ public:
         , m_slot(o.m_slot), m_valid(o.m_valid)
         , m_allocSize(o.m_allocSize)
         , m_gpu(o.m_gpu)
+        , m_ren(o.m_ren)
     {
         o.m_width = o.m_height = 0;
         o.m_slot = -1;
         o.m_valid = false;
         o.m_allocSize = 0;
         o.m_gpu = nullptr;
+        o.m_ren = nullptr;
     }
     Texture& operator=(Texture&& o) noexcept {
         if (this != &o) {
+            releaseSlot();
             if (m_gpu && m_mem && m_allocSize > 0)
                 m_gpu->freeImageMemory(m_allocSize);
             m_mem   = nullptr;
@@ -45,11 +48,13 @@ public:
             m_slot  = o.m_slot;   m_valid  = o.m_valid;
             m_allocSize = o.m_allocSize;
             m_gpu = o.m_gpu;
+            m_ren = o.m_ren;
             o.m_width = o.m_height = 0;
             o.m_slot = -1;
             o.m_valid = false;
             o.m_allocSize = 0;
             o.m_gpu = nullptr;
+            o.m_ren = nullptr;
         }
         return *this;
     }
@@ -77,6 +82,18 @@ public:
     bool loadFromMemory(GpuDevice& gpu, Renderer& ren,
                         const uint8_t* data, size_t dataSize, int maxSide = 0);
 
+#ifdef NXUI_BACKEND_DEKO3D
+    // A DDS of BC1 blocks, uploaded compressed and sampled by the GPU as-is.
+    // Reached automatically by loadFromFile for a ".dds" path.
+    bool loadBc1File(GpuDevice& gpu, Renderer& ren, const std::string& path);
+
+    // The same DDS with the file already read. The two halves cost very
+    // different things -- reading a frame sequence off the card is tens of
+    // megabytes of I/O, uploading it is microseconds -- and only the upload has
+    // to happen on the render thread. Split so the reading can go elsewhere.
+    bool loadBc1Memory(GpuDevice& gpu, Renderer& ren, const uint8_t* data, size_t size);
+#endif
+
     // Load from SDL_Surface-style data (RGBA8, row pitch may differ)
     bool loadFromSurface(GpuDevice& gpu, Renderer& ren,
                          const uint8_t* data, int w, int h, int pitch);
@@ -84,6 +101,15 @@ public:
     int  width()  const { return m_width; }
     int  height() const { return m_height; }
     bool valid()  const { return m_valid; }
+
+    // What this actually occupies on the GPU. Not width*height*4: a compressed
+    // texture is a fraction of that, and a caller budgeting by the arithmetic
+    // would refuse frames it has room for. 0 when the memory came from a pool.
+#ifdef NXUI_BACKEND_DEKO3D
+    uint32_t gpuBytes() const { return m_allocSize; }
+#else
+    uint32_t gpuBytes() const { return 0; }
+#endif
 
     // Descriptor slot in the renderer's image descriptor set
     int  descriptorSlot() const { return m_slot; }
@@ -96,11 +122,23 @@ public:
 #endif
 
 private:
+    void releaseSlot();
+
+#ifdef NXUI_BACKEND_DEKO3D
+    // Shared by every format: allocation, budget accounting and descriptor
+    // registration live here once.
+    bool loadImageData(GpuDevice& gpu, Renderer& ren,
+                       const uint8_t* data, uint64_t dataSize,
+                       int w, int h, uint32_t format);
+#endif
 #ifdef NXUI_BACKEND_DEKO3D
     dk::Image          m_image;
     dk::UniqueMemBlock m_mem;
     uint32_t m_allocSize = 0;
     GpuDevice* m_gpu = nullptr;
+    // Guardado para devolver o slot de descritor ao morrer. Sem isso cada
+    // textura destruida deixava o seu slot perdido para sempre.
+    Renderer* m_ren = nullptr;
 #else
     SDL_Texture* m_sdlTex = nullptr;
     GpuDevice*   m_gpu = nullptr;

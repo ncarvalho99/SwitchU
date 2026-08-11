@@ -324,6 +324,16 @@ void readThemeBackgroundFromObject(const nlohmann::json& j, ThemeBackgroundConfi
                 background.imagePath = imageIt->get<std::string>();
             } else if (imageIt->is_object()) {
                 readJsonAliases(*imageIt, {"path", "file", "src"}, background.imagePath);
+                // "frames": ["a.jpg", "b.jpg", ...] alongside "fps". A theme
+                // with a single still is unaffected and costs what it always
+                // did; this only adds a way to say there is more than one.
+                if (auto fr = imageIt->find("frames");
+                    fr != imageIt->end() && fr->is_array()) {
+                    for (const auto& v : *fr)
+                        if (v.is_string())
+                            background.imageFrames.push_back(v.get<std::string>());
+                }
+                readJsonAliases(*imageIt, {"fps", "rate"}, background.imageFps);
                 readJsonAliases(*imageIt, {"opacity", "alpha"}, background.imageOpacity);
                 readJsonAliases(*imageIt, {"cover", "fill"}, background.imageCover);
 
@@ -553,11 +563,30 @@ bool loadThemePresetFromManifest(const std::string& manifestPath,
     if (themeIt != j.end() && themeIt->is_object())
         readJsonAliases(*themeIt, {"mode", "themeMode", "theme_mode", "variant"}, mode);
 
-    auto audioIt = j.find("audio");
+    // No topo ou dentro de "theme". Os temas embutidos escrevem no topo e o
+    // gerador em lote escreveu dentro -- lendo so um dos dois, os 56 temas do
+    // catalogo declararam trilha que nunca foi lida, e a musica do preset
+    // continuava tocando sem nada no log dizendo por que.
+    const nlohmann::json* audioNode = nullptr;
+    if (auto it = j.find("audio"); it != j.end() && it->is_object()) {
+        audioNode = &(*it);
+    } else if (themeIt != j.end() && themeIt->is_object()) {
+        if (auto nested = themeIt->find("audio");
+            nested != themeIt->end() && nested->is_object()) {
+            audioNode = &(*nested);
+        }
+    }
     bool bundledAudio = false;
-    if (audioIt != j.end() && audioIt->is_object()) {
-        readJsonAliases(*audioIt, {"preset", "soundPreset", "sound_preset"}, preset.soundPreset);
-        readJsonAliases(*audioIt, {"bundled", "useBundled", "use_bundled"}, bundledAudio);
+    if (audioNode) {
+        readJsonAliases(*audioNode, {"preset", "soundPreset", "sound_preset"}, preset.soundPreset);
+        readJsonAliases(*audioNode, {"bundled", "useBundled", "use_bundled"}, bundledAudio);
+        auto musicIt = audioNode->find("music");
+        if (musicIt != audioNode->end() && musicIt->is_array()) {
+            for (const auto& track : *musicIt) {
+                if (track.is_string() && !track.get<std::string>().empty())
+                    preset.music.push_back(track.get<std::string>());
+            }
+        }
     }
 
     if (preset.id.empty())
@@ -664,6 +693,39 @@ static std::vector<ThemePreset> makeBuiltInPresets() {
             preset = makeLegacyBuiltInPreset(def.dirName, def.mode);
         }
         v.push_back(std::move(preset));
+    }
+
+    // Anything else that is a theme folder, discovered rather than declared.
+    // The two above stay first and stay named here because they are what the
+    // config falls back to; but a list of exactly two meant that dropping a
+    // theme into this directory did nothing at all, with no error to explain
+    // why -- which is precisely what happened with a test theme.
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(kBuiltInThemesDir, ec)) {
+        if (ec)
+            break;
+        if (!entry.is_directory(ec))
+            continue;
+
+        const std::string dirName = entry.path().filename().string();
+        const bool alreadyListed = std::any_of(std::begin(defs), std::end(defs),
+            [&](const auto& def) { return dirName == def.dirName; });
+        if (alreadyListed)
+            continue;
+
+        const std::string themeDir = std::string(kBuiltInThemesDir) + "/" + dirName;
+        ThemePreset preset;
+        // No fallback here: a folder without a readable manifest is not a theme,
+        // and inventing one from the directory name would put a broken entry in
+        // front of somebody instead of leaving it out.
+        if (loadThemePresetFromManifest(themeDir + "/theme.json",
+                                        ThemePresetSource::BuiltIn,
+                                        dirName,
+                                        nxui::ThemeMode::Dark,
+                                        themeDir,
+                                        preset)) {
+            v.push_back(std::move(preset));
+        }
     }
 
     return v;

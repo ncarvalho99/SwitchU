@@ -214,6 +214,28 @@ void Application::run() {
     uint64_t prevTick = armGetSystemTick();
 
     while (m_running) {
+        // Serve a fila de mensagens do applet.
+        //
+        // Isto nao existia: o laco era while(m_running) puro, e nada nunca lia
+        // as mensagens que o sistema envia -- foco, modo de operacao, pedido de
+        // encerramento. Um applet que nao atende sua fila e um applet que o
+        // sistema pode fechar a forca, e foi o que apareceu nos registros: uma
+        // sessao a 60 fps, sem erro, sem relatorio de falha, terminando no meio
+        // de uma linha e sem o "log end" que uma saida limpa escreve.
+        //
+        // Atendendo a fila, um pedido de encerramento vira saida ordenada: o
+        // menu grava o que tem, comita o cartao e sai.
+        if (!appletMainLoop()) {
+            static const char kMsg[] = "[nxui] applet exit requested by the system";
+            svcOutputDebugString(kMsg, sizeof(kMsg) - 1);
+            // E tambem no log que alguem le. Sem isso, uma saida pedida pelo
+            // sistema e uma queda sao a mesma coisa vista de fora: o registro
+            // termina no meio e o daemon relanca o menu.
+            if (m_logSink) m_logSink(kMsg);
+            m_running = false;
+            break;
+        }
+
         uint64_t nowTick = armGetSystemTick();
         float dt = static_cast<float>(nowTick - prevTick)
                  / static_cast<float>(armGetSystemTickFreq());

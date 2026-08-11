@@ -134,9 +134,25 @@ void OverlayDialog::buildWidgetTree() {
         btn->setGrow(1.f);
 
         auto lbl = std::make_shared<nxui::Label>(m_buttons[i].label);
-        lbl->setFont(bodyFont ? bodyFont : titleFont);
+        nxui::Font* labelFont = bodyFont ? bodyFont : titleFont;
+        lbl->setFont(labelFont);
         lbl->setTextColor(textPrimary);
-        lbl->setScale(0.94f);
+
+        // Buttons split the row evenly, so a long label is a label wider than
+        // its button -- and the text simply drew past the edge. English hides
+        // this ("Cancel", "OK"); "Informações do software" does not, and every
+        // translated build was one long word away from the same break.
+        //
+        // Shrink to fit rather than clip or ellipsize: the whole label still
+        // reads, which matters most on the button that deletes something.
+        float labelScale = 0.94f;
+        if (labelFont && !m_buttons[i].label.empty()) {
+            const float available = btnW - kButtonLabelPadding * 2.f;
+            const float natural = labelFont->measure(m_buttons[i].label).x;
+            if (natural > 0.f && available > 0.f && natural * labelScale > available)
+                labelScale = std::max(kButtonLabelMinScale, available / natural);
+        }
+        lbl->setScale(labelScale);
         lbl->setHAlign(nxui::Label::HAlign::Center);
         lbl->setVAlign(nxui::Label::VAlign::Center);
         lbl->setRect({0, 0, btnW, kButtonH});

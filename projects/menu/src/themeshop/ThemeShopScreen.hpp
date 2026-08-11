@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ThemeCatalogClient.hpp"
+#include <unordered_set>
 #include "settings/TabbedOverlayScreen.hpp"
 
 #include <nxui/core/Texture.hpp>
@@ -15,6 +16,7 @@
 namespace themeshop::tabs {
 class InstalledTab;
 class CommunityTab;
+class AnimatedTab;
 class OptionsTab;
 }
 
@@ -95,7 +97,7 @@ public:
 
 protected:
     void buildTabs() override;
-    bool usesCustomContentLayout() const override { return m_tabIndex < 2; }
+    bool usesCustomContentLayout() const override { return m_tabIndex < 3; }
     void drawCustomContent(nxui::Renderer& ren, const nxui::Rect& panel, const nxui::Rect& content, float opacity) override;
     void updateCustomContent(float dt) override;
     bool handleCustomPressA() override;
@@ -115,6 +117,7 @@ protected:
 private:
     friend class themeshop::tabs::InstalledTab;
     friend class themeshop::tabs::CommunityTab;
+    friend class themeshop::tabs::AnimatedTab;
     friend class themeshop::tabs::OptionsTab;
 
     enum class PreviewPhase {
@@ -163,6 +166,7 @@ private:
     bool pollCommunityCatalog();
     void syncCommunityCatalog(const ThemeCatalogClient::Snapshot& snapshot);
     bool isCommunityTab() const;
+    bool isAnimatedTab() const;
     int currentEntryCount() const;
     int currentSelectedIndex() const;
     void setCurrentSelectedIndex(int idx);
@@ -199,6 +203,7 @@ private:
     void primeVisibleCommunityPreviews();
     void syncFinishedCommunityPreviewLoads();
     void clearCommunityPreviewCache();
+    std::unordered_set<std::string> wantedCommunityPreviewUrls() const;
     void trimCommunityPreviewCache();
 
     BoolCb m_musicEnabledCb;
@@ -246,6 +251,7 @@ private:
     std::uint64_t m_communityRevision = 0;
     bool m_detailOpen = false;
     bool m_detailFullscreen = false;
+    std::string m_lastLoggedDetailPath;
     ContentFocusArea m_contentFocusArea = ContentFocusArea::Grid;
     DetailFocusArea m_detailFocusArea = DetailFocusArea::Buttons;
     int m_headerButtonIndex = 0;
@@ -259,6 +265,7 @@ private:
     int m_communityScrollRow = 0;
     int m_lastCustomTabIndex = -1;
     std::string m_lastPreviewPrimeKey;
+    float m_previewTrimTimer = 0.f;
     ThemeTouchTarget m_themeTouchTarget = ThemeTouchTarget::None;
     int m_themeTouchIndex = -1;
     float m_themeTouchStartX = 0.f;

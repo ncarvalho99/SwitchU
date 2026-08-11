@@ -40,6 +40,11 @@ enum class ThemeBackgroundSymmetry {
 
 struct ThemeBackgroundConfig {
     std::string imagePath;
+    // A wallpaper that moves. Frames are decoded once when the theme is
+    // applied and then only swapped, because decoding per frame was measured
+    // on hardware and is not affordable at any resolution.
+    std::vector<std::string> imageFrames;
+    float imageFps = 12.f;
     float imageOpacity = 0.f;
     bool imageCover = true;
     ThemeBackgroundLayout layout = ThemeBackgroundLayout::Floating;
@@ -84,6 +89,12 @@ struct ThemePreset {
     bool            builtIn = true;
     ThemePresetSource source = ThemePresetSource::BuiltIn;
     std::string     soundPreset;
+
+    // Faixas que o proprio tema traz, relativas a pasta dele. Vazio significa
+    // usar o conjunto de sons do preset, que era a unica opcao antes: musica
+    // era propriedade do preset de audio e nao do tema, entao trocar de tema
+    // deixava a trilha anterior tocando.
+    std::vector<std::string> music;
     std::string     installPath;
 
     nxui::Theme toTheme() const;

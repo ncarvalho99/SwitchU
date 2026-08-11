@@ -2,6 +2,7 @@
 #include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <nxui/core/Input.hpp>
+#include <functional>
 #include <memory>
 
 namespace nxui {
@@ -21,6 +22,13 @@ class Application {
 public:
     Application() = default;
     ~Application();
+
+    /// Onde a Application relata o que acontece fora do controle dela. O
+    /// pedido de encerramento do sistema so ia para svcOutputDebugString, que
+    /// nao esta em lugar nenhum quando se abre o log depois: o menu saia
+    /// limpo, o daemon relancava, e o registro terminava sem uma palavra --
+    /// indistinguivel de uma queda.
+    void setLogSink(std::function<void(const char*)> sink) { m_logSink = std::move(sink); }
 
     /// Attach the main activity. Must be called before initialize().
     void setActivity(std::unique_ptr<Activity> activity);
@@ -62,6 +70,7 @@ private:
     std::unique_ptr<Activity> m_activity;
     std::unique_ptr<Activity> m_pendingActivity;
     bool m_running = true;
+    std::function<void(const char*)> m_logSink;
     bool m_renderEnabled = true;
     int  m_navDebounce = 0;
     // Frames a direction has been held for. Navigation used to fire only on the

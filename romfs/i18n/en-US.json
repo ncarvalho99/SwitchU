@@ -160,7 +160,8 @@
     "voice": "Voice",
     "sort_custom": "My order",
     "sort_alpha": "A-Z",
-    "sort_recent": "Recent"
+    "sort_recent": "Recent",
+    "options": "Options"
   },
   "settings": {
     "tabs": {
@@ -262,7 +263,9 @@
       "glass_sharpness": "Glass sharpness",
       "glass_sharpness_desc": "How clearly the screen behind menus shows through them.",
       "background_speed": "Background animation speed",
-      "background_speed_desc": "How fast the shapes drift. Centre is the theme's own pace."
+      "background_speed_desc": "How fast the shapes drift. Centre is the theme's own pace.",
+      "grid_columns": "Home Grid Columns",
+      "grid_rows": "Home Grid Rows"
     },
     "internet": {
       "wifi_ssid": "WiFi Network",
@@ -320,7 +323,18 @@
       "media_sleep": "Sleep While Playing Media",
       "media_sleep_desc": "Allow the console to auto-sleep even during media playback.",
       "wake_power": "Wake at Power State Change",
-      "wake_power_desc": "Wake the console when the AC adapter is connected or disconnected."
+      "wake_power_desc": "Wake the console when the AC adapter is connected or disconnected.",
+      "power_actions": "Power",
+      "auto_sleep": "Auto-Sleep",
+      "sleep_now": "Sleep",
+      "sleep_now_desc": "Put the console into sleep mode.",
+      "sleep_confirm": "Put the console into sleep mode?",
+      "reboot": "Reboot",
+      "reboot_desc": "Restart the console.",
+      "reboot_confirm": "Restart the console?",
+      "shutdown": "Shutdown",
+      "shutdown_desc": "Completely power off the console.",
+      "shutdown_confirm": "Power off the console?"
     },
     "theme": {
       "preset": "Preset",
@@ -375,7 +389,10 @@
       "used": "Used",
       "summary": "Summary",
       "details": "Details",
-      "delete": "Delete"
+      "delete": "Delete",
+      "manage_title": "Manage Software",
+      "title_id": "Title ID",
+      "homebrew_library_unavailable": "Installed software management is unavailable in homebrew mode."
     },
     "about": {
       "version": "Version",
@@ -454,7 +471,8 @@
     },
     "tabs": {
       "installed": "Installed",
-      "community": "Community",
+      "community": "Static Themes",
+      "animated": "Animated Themes",
       "options": "Options"
     },
     "accessibility": {
@@ -524,7 +542,12 @@
       "overwrite_apply_title": "Replace And Apply Theme",
       "overwrite_apply_message": "A package with this theme ID is already installed. Replace it with the GitHub version, then apply it?",
       "overwrite_install_title": "Replace Installed Theme",
-      "overwrite_install_message": "A package with this theme ID is already installed. Replace it with the version from GitHub?"
+      "overwrite_install_message": "A package with this theme ID is already installed. Replace it with the version from GitHub?",
+      "offline": "No connection. Check the internet and try again.",
+      "quality_title": "Theme Quality",
+      "quality_message": "Standard fits more themes on the card. High matches the screen resolution exactly and looks sharper, at twice the size.",
+      "quality_standard": "Standard",
+      "quality_high": "High"
     },
     "transfer": {
       "prepare_apply": "Preparing download + apply...",
@@ -538,7 +561,11 @@
       "installed_applying": "Theme installed. Applying it now...",
       "installed": "Theme installed.",
       "installed_applied": "Theme installed and applied.",
-      "installed_apply_failed": "Theme installed, but it could not be applied automatically."
+      "installed_apply_failed": "Theme installed, but it could not be applied automatically.",
+      "downloading_package": "Downloading theme",
+      "extracting": "Extracting theme",
+      "finishing": "Finishing",
+      "no_space": "Not enough space on the SD card for this theme"
     },
     "preview": {
       "loading": "Loading screenshot...",
@@ -546,6 +573,14 @@
       "missing": "No screenshot",
       "prev": "Prev",
       "next": "Next"
+    },
+    "page": {
+      "next": "Next",
+      "prev": "Previous"
+    },
+    "animated": {
+      "title": "Animated Themes",
+      "subtitle": "Moving wallpapers, with sound when the theme brings it."
     }
   },
   "dialog": {

@@ -31,7 +31,7 @@
     },
     "system": {
       "firmware": "Версия прошивки",
-      "custom_firmware": "Custom Firmware",
+      "custom_firmware": "Кастомная прошивка",
       "not_detected": "Не обнаружено",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Неактивно / SysNAND",
@@ -53,9 +53,9 @@
       "region_south_korea": "Южная Корея",
       "auto_update": "Автообновление",
       "error_reporting": "Отправка ошибок",
-      "default_profile": "Default Profile",
-      "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time",
+      "default_profile": "Профиль по умолчанию",
+      "default_profile_desc": "Запускать игры с этим профилем, когда это возможно.",
+      "default_profile_ask": "Спрашивать каждый раз",
       "clock_12h": "12-часовой формат",
       "clock_12h_desc": "Показывать время в 12-часовом формате.",
       "add_user": "Добавить пользователя",
@@ -99,7 +99,9 @@
       "glass_sharpness": "Чёткость стекла",
       "glass_sharpness_desc": "Насколько чётко экран за меню виден сквозь них.",
       "background_speed": "Скорость анимации фона",
-      "background_speed_desc": "Насколько быстро плывут фигуры. Середина — темп самой темы."
+      "background_speed_desc": "Насколько быстро плывут фигуры. Середина — темп самой темы.",
+      "grid_columns": "Столбцы сетки",
+      "grid_rows": "Строки сетки"
     },
     "internet": {
       "wifi_ssid": "WiFi-сеть",
@@ -135,8 +137,8 @@
       "unpair": "Разорвать связь",
       "pair_connect": "Сопрячь и подключить",
       "device_actions": "Действия с устройством",
-      "connected": "Connected",
-      "not_connected": "Not connected"
+      "connected": "Подключено",
+      "not_connected": "Не подключено"
     },
     "sleep": {
       "1min": "1 мин",
@@ -157,7 +159,18 @@
       "media_sleep": "Сон при воспроизведении медиа",
       "media_sleep_desc": "Разрешить автосон во время воспроизведения медиа.",
       "wake_power": "Пробуждение при питании",
-      "wake_power_desc": "Пробуждать консоль при подключении или отключении адаптера питания."
+      "wake_power_desc": "Пробуждать консоль при подключении или отключении адаптера питания.",
+      "power_actions": "Питание",
+      "auto_sleep": "Автоматический сон",
+      "sleep_now": "Сон",
+      "sleep_now_desc": "Переводит консоль в спящий режим.",
+      "sleep_confirm": "Перевести консоль в спящий режим?",
+      "reboot": "Перезапуск",
+      "reboot_desc": "Перезапускает консоль.",
+      "reboot_confirm": "Перезапустить консоль?",
+      "shutdown": "Выключение",
+      "shutdown_desc": "Полностью выключает консоль.",
+      "shutdown_confirm": "Выключить консоль?"
     },
     "theme": {
       "preset": "Пресет",
@@ -212,7 +225,10 @@
       "used": "Использовано",
       "summary": "Сводка",
       "details": "Подробности",
-      "delete": "Удалить"
+      "delete": "Удалить",
+      "manage_title": "Управление ПО",
+      "title_id": "ID игры",
+      "homebrew_library_unavailable": "Управление установленным ПО недоступно в режиме homebrew."
     },
     "about": {
       "version": "Версия",
@@ -293,8 +309,8 @@
     "ok": "OK",
     "cancel": "Отмена",
     "delete": "Удалить",
-    "close": "Close",
-    "replace": "Replace"
+    "close": "Закрыть",
+    "replace": "Заменить"
   },
   "themeshop": {
     "source": {
@@ -306,7 +322,8 @@
     },
     "tabs": {
       "installed": "Установленные",
-      "community": "Сообщество",
+      "community": "Статичные темы",
+      "animated": "Анимированные темы",
       "options": "Опции"
     },
     "search": {
@@ -359,7 +376,12 @@
       "overwrite_apply_title": "Заменить и применить тему",
       "overwrite_apply_message": "Пакет с этим ID темы уже установлен. Заменить версией с GitHub и применить?",
       "overwrite_install_title": "Заменить установленную тему",
-      "overwrite_install_message": "Пакет с этим ID темы уже установлен. Заменить версией с GitHub?"
+      "overwrite_install_message": "Пакет с этим ID темы уже установлен. Заменить версией с GitHub?",
+      "offline": "Нет соединения. Проверьте сеть и повторите попытку.",
+      "quality_title": "Качество темы",
+      "quality_message": "Стандартное вмещает больше тем на карту. Высокое точно соответствует разрешению экрана и выглядит чётче, но занимает вдвое больше.",
+      "quality_standard": "Стандартное",
+      "quality_high": "Высокое"
     },
     "transfer": {
       "prepare_apply": "Подготовка скачать + применить...",
@@ -373,7 +395,11 @@
       "installed_applying": "Тема установлена. Применение...",
       "installed": "Тема установлена.",
       "installed_applied": "Тема установлена и применена.",
-      "installed_apply_failed": "Тема установлена, но не применена автоматически."
+      "installed_apply_failed": "Тема установлена, но не применена автоматически.",
+      "downloading_package": "Загрузка темы",
+      "extracting": "Распаковка темы",
+      "finishing": "Завершение",
+      "no_space": "На SD-карте недостаточно места для этой темы"
     },
     "preview": {
       "loading": "Загрузка скриншота...",
@@ -398,6 +424,14 @@
       "pagination_actions": "Влево и вправо меняют кнопку. A, сменить страницу. Вверх к сетке.",
       "no_theme": "Нет темы",
       "grid_actions": "Крестовина для навигации. A, открыть детали. B, назад к вкладкам."
+    },
+    "page": {
+      "next": "Далее",
+      "prev": "Назад"
+    },
+    "animated": {
+      "title": "Анимированные темы",
+      "subtitle": "Движущиеся обои, со звуком, если тема его содержит."
     }
   },
   "hint": {
@@ -420,7 +454,8 @@
     "voice": "Голос",
     "sort_custom": "Мой порядок",
     "sort_alpha": "А-Я",
-    "sort_recent": "Недавние"
+    "sort_recent": "Недавние",
+    "options": "Опции"
   },
   "accessibility": {
     "speech": {

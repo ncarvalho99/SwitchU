@@ -25,7 +25,10 @@ struct AppConfig {
     // Softens the wallpaper and the shapes drifting over it. Barely on: enough
     // to take the hard edge off the shapes without anyone noticing a blur, and
     // the value asked for after people looked at it on real hardware.
-    float backgroundBlur = 0.05f;
+    // Zero, nao 0.05: o desfoque custa meia resolucao do papel de parede, e
+    // 0.05 dava um borrao invisivel em troca disso. Quem quiser desfoque pede
+    // nas opcoes e sabe o que esta trocando.
+    float backgroundBlur = 0.f;
 
     // How sharply the scene reads through the glass panels. Capturing that
     // scene at full resolution made it sharper than it had ever been, which
@@ -37,6 +40,11 @@ struct AppConfig {
     // the speed the theme asked for, 1 doubles it. Below centre by default --
     // the theme's own pace read as restless behind a menu people sit in.
     float backgroundSpeed = 0.35f;
+
+    // Whether the slider above was ever moved by hand. An animated theme runs
+    // at the speed of its clip until it was, because 0.35 is a default chosen
+    // for shapes and would be a wrong answer for footage rather than a taste.
+    bool backgroundSpeedChosen = false;
 
     // Dark by default. The light preset was the one that shipped, and the
     // request to change it came with a reason: the interface reads better

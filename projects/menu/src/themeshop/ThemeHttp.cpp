@@ -195,6 +195,69 @@ std::vector<std::uint8_t> getBytes(const std::string& url,
     return performBytes(url, headers);
 }
 
+std::uint64_t getToFile(const std::string& url,
+                        const std::string& destinationPath,
+                        const std::function<void(std::uint64_t, std::uint64_t)>& onProgress) {
+    std::lock_guard<std::mutex> lk(g_themeHttpMutex);
+
+    std::string lastError = "Theme package download failed";
+    for (int attempt = 1; attempt <= kRequestAttemptCount; ++attempt) {
+        if (!initializeRuntimeLocked())
+            throw std::runtime_error("Theme Shop HTTP runtime is unavailable");
+        ensureInternetConnectionReady(url);
+
+        std::FILE* out = std::fopen(destinationPath.c_str(), "wb");
+        if (!out)
+            throw std::runtime_error("Could not open " + destinationPath + " for writing");
+
+        std::uint64_t written = 0;
+        bool writeFailed = false;
+        try {
+            curlpp::Easy request;
+            std::ostringstream discard;              // configureRequest quer um fluxo
+            configureRequest(request, url, discard, {});
+            // Sem limite de tempo total: um pacote de dezenas de megabytes por
+            // WiFi passa dos 30 segundos que serve para JSON. O tempo de conexao
+            // continua valendo, entao um servidor fora do ar ainda falha rapido.
+            request.setOpt<curlpp::options::Timeout>(0L);
+            request.setOpt<curlpp::options::LowSpeedLimit>(1024L);
+            request.setOpt<curlpp::options::LowSpeedTime>(30L);
+            request.setOpt<curlpp::options::WriteFunction>(
+                [&](char* buffer, std::size_t size, std::size_t count) -> std::size_t {
+                    const std::size_t bytes = size * count;
+                    if (std::fwrite(buffer, 1, bytes, out) != bytes) {
+                        writeFailed = true;
+                        return 0;                    // aborta a transferencia
+                    }
+                    written += bytes;
+                    if (onProgress)
+                        onProgress(written, 0);
+                    return bytes;
+                });
+            request.perform();
+
+            const long statusCode = curlpp::infos::ResponseCode::get(request);
+            if (statusCode < 200 || statusCode >= 300)
+                throw std::runtime_error("HTTP error " + std::to_string(statusCode));
+
+            std::fclose(out);
+            if (writeFailed)
+                throw std::runtime_error("Could not write to " + destinationPath);
+            return written;
+        } catch (const std::exception& ex) {
+            std::fclose(out);
+            std::remove(destinationPath.c_str());    // nada pela metade fica no cartao
+            lastError = ex.what();
+            DebugLog::log("[themeshop] package download failed (%d/%d): %s -> %s",
+                          attempt, kRequestAttemptCount, url.c_str(), lastError.c_str());
+            if (attempt < kRequestAttemptCount)
+                shutdownRuntimeLocked();
+        }
+    }
+
+    throw std::runtime_error(lastError);
+}
+
 std::string getText(const std::string& url,
                     const std::list<std::string>& headers) {
     auto bytes = performBytes(url, headers);
