@@ -479,7 +479,10 @@ void drawThemePreview(nxui::Renderer& ren,
                       const std::string& placeholderLabel,
                       bool loading,
                       float time,
-                      float opacity) {
+                      float opacity,
+                      int sheetCols = 0,
+                      int sheetRows = 0,
+                      float sheetFps = 10.f) {
     if (!theme)
         return;
 
@@ -488,6 +491,25 @@ void drawThemePreview(nxui::Renderer& ren,
         ren.drawRoundedRectOutline(rect, theme->panelBorder.withAlpha(0.18f * opacity), 14.f, 1.f);
         nxui::Rect inner = {rect.x + 4.f, rect.y + 4.f, rect.width - 8.f, rect.height - 8.f};
         ren.drawRoundedRect(inner, nxui::Color(0.f, 0.f, 0.f, 0.14f * opacity), 12.f);
+        if (sheetCols > 0 && sheetRows > 0) {
+            // A folha traz os quadros em grade; o cartao percorre um por vez.
+            // Anima sem baixar nada alem da propria imagem, e sem guardar um
+            // laco inteiro de texturas para uma miniatura.
+            const int total = sheetCols * sheetRows;
+            const int frame = ((int)(time * sheetFps)) % total;
+            const float cw = (float)texture->width() / (float)sheetCols;
+            const float ch = (float)texture->height() / (float)sheetRows;
+            const nxui::Rect src{(frame % sheetCols) * cw, (frame / sheetCols) * ch, cw, ch};
+            // O destino usa a proporcao de uma celula, nao da folha inteira.
+            const float cellAspect = cw / ch;
+            float dw = inner.width, dh = inner.width / cellAspect;
+            if (dh > inner.height) { dh = inner.height; dw = inner.height * cellAspect; }
+            const nxui::Rect dest{inner.x + (inner.width - dw) * 0.5f,
+                                  inner.y + (inner.height - dh) * 0.5f, dw, dh};
+            ren.drawTextureRoundedSub(texture, src, dest, 12.f,
+                                      nxui::Color(1.f, 1.f, 1.f, opacity));
+            return;
+        }
         ren.drawTextureRounded(texture,
                                fitTextureRect(inner, texture),
                                12.f,
@@ -517,7 +539,7 @@ bool ThemeShopScreen::isCommunityTab() const {
 }
 
 bool ThemeShopScreen::isAnimatedTab() const {
-    return m_tabIndex == 2;
+    return m_tabIndex == 1;
 }
 
 int ThemeShopScreen::currentEntryCount() const {
@@ -734,11 +756,29 @@ void ThemeShopScreen::updateCustomContent(float dt) {
         m_lastCustomTabIndex = m_tabIndex;
         m_contentFocusArea = ContentFocusArea::Grid;
         closeDetail();
+
+        // Both catalogue tabs read one merged list and are told apart by which
+        // index each entry came from -- and that split happens in the filter.
+        // Without re-running it here the list stayed as whatever the previous
+        // tab produced, so Community and Animated showed each other's themes
+        // until somebody pressed refresh.
+        applySearchFilter();
     }
 
     if (currentEntryCount() <= 0) {
-        if (m_focusArea == FocusArea::Content)
-            m_focusArea = FocusArea::Tabs;
+        // An empty list used to push focus onto the tab bar, which put the
+        // refresh button out of reach of the controller: the one screen where
+        // refresh is the only useful action was the one where only touch could
+        // press it. So focus is allowed to stay in the content area, landing on
+        // the header instead of on a grid with nothing in it.
+        //
+        // Allowed, not forced. Forcing it stole focus back from the tab bar on
+        // every frame while a catalogue was still loading, which read as the
+        // selector being stuck between tabs until the download finished.
+        if (m_focusArea == FocusArea::Content) {
+            m_contentFocusArea = ContentFocusArea::Header;
+            m_headerButtonIndex = 0;
+        }
         currentScrollRowRef() = 0;
         closeDetail();
         if (isCommunityTab()) {
@@ -764,11 +804,30 @@ void ThemeShopScreen::updateCustomContent(float dt) {
             + "|" + m_communitySelectedId
             + "|" + std::to_string(m_communityScrollRow)
             + "|" + std::to_string(m_detailOpen ? 1 : 0)
+            // A tela cheia pede outra imagem que o detalhe -- a folha grande no
+            // lugar da pequena -- e nao constava aqui. Sem isso a chave nao
+            // mudava ao expandir, primeVisibleCommunityPreviews nao rodava, e a
+            // folha HD ficava em Idle: nunca pedida, e por isso "captura
+            // indisponivel" para sempre.
+            //
+            // Medido no console: "tela cheia pede .../preview_sheet_hd.jpg
+            // (estado=0 celulas=5x4)" -- estado 0 e Idle.
+            + "|" + std::to_string(m_detailFullscreen ? 1 : 0)
             + "|" + std::to_string(m_detailScreenshotIndex);
         if (primeKey != m_lastPreviewPrimeKey) {
             m_lastPreviewPrimeKey = std::move(primeKey);
             trimCommunityPreviewCache();
             primeVisibleCommunityPreviews();
+        } else {
+            // Tambem sem nada mudar. A poda so acontecia quando a chave mudava,
+            // entao quem abria a aba e esperava as previas carregarem nunca
+            // podava nada -- e e exatamente ai que elas chegam. A sessao que
+            // derrubou o menu teve zero podas.
+            m_previewTrimTimer += dt;
+            if (m_previewTrimTimer >= 1.f) {
+                m_previewTrimTimer = 0.f;
+                trimCommunityPreviewCache();
+            }
         }
     } else if (isCommunityTab()) {
         clearCommunityPreviewCache();
@@ -1527,12 +1586,20 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     layout.pageNextButton.y += slideOffset;
     layout.grid.y += slideOffset;
 
-    std::string title = isCommunityTab()
-        ? i18n.tr("themeshop.community.title", "Browse Community Themes")
-        : i18n.tr("themeshop.installed.title", "Installed Theme Library");
-    std::string subtitle = isCommunityTab()
-        ? i18n.tr("themeshop.community.subtitle", "A visual catalog, not a settings selector.")
-        : i18n.tr("themeshop.installed.subtitle", "Your local themes in a gallery layout.");
+    // As duas abas de catalogo compartilham a renderizacao, mas nao o assunto:
+    // uma traz os temas animados deste projeto e a outra os estaticos do
+    // PoloNX. O cabecalho dizia "comunidade" nas duas.
+    std::string title, subtitle;
+    if (isAnimatedTab()) {
+        title = i18n.tr("themeshop.animated.title", "Animated Themes");
+        subtitle = i18n.tr("themeshop.animated.subtitle", "Moving wallpapers, with sound when the theme brings it.");
+    } else if (isCommunityTab()) {
+        title = i18n.tr("themeshop.community.title", "Browse Community Themes");
+        subtitle = i18n.tr("themeshop.community.subtitle", "A visual catalog, not a settings selector.");
+    } else {
+        title = i18n.tr("themeshop.installed.title", "Installed Theme Library");
+        subtitle = i18n.tr("themeshop.installed.subtitle", "Your local themes in a gallery layout.");
+    }
 
     ren.drawText(title, {layout.header.x, layout.header.y + 2.f}, m_font,
                  m_theme->textPrimary.withAlpha(contentOpacity), 1.00f);
@@ -1766,6 +1833,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         PreviewPhase previewPhase = PreviewPhase::Failed;
         bool previewRequested = false;
         bool activeTheme = false;
+        int sheetCols = 0, sheetRows = 0;
+        float sheetFps = 10.f;
 
         if (isCommunityTab()) {
             const auto& entry = m_communityEntries[(size_t)globalIndex];
@@ -1774,7 +1843,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             versionText = entry.version;
             previewTexture = communityPreviewTexture(entry);
             previewPhase = communityPreviewPhase(entry);
-            previewRequested = !entry.cover.empty();
+            previewRequested = !entry.cover.empty() || !entry.thumbSheet.empty();
+            sheetCols = entry.thumbCols;
+            sheetRows = entry.thumbRows;
+            sheetFps  = entry.thumbFps;
         } else {
             const auto& entry = m_themeShopEntries[(size_t)globalIndex];
             titleText = entry.name;
@@ -1813,7 +1885,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          previewLabel,
                          previewLoading,
                          m_uiTime,
-                         rowOpacity);
+                         rowOpacity,
+                         sheetCols, sheetRows, sheetFps);
 
         if (!versionText.empty()) {
             float chipWidth = std::max(74.f, std::min(108.f, 32.f + measureTextCached(m_smallFont, versionText).x * 0.64f));
@@ -1890,6 +1963,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     drawLiquidGlassPanel(ren, m_theme, dialog, 24.f, detailOpacity, 1.4f);
 
     nxui::Rect preview = detailPreviewRect(dialog);
+    int detailSheetCols = 0, detailSheetRows = 0;
+    float detailSheetFps = 4.f;
     std::string detailTitle;
     std::string detailSubtitle;
     std::string detailInfoA;
@@ -1913,6 +1988,34 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             + (entry->manifest.empty() ? i18n.tr("themeshop.community.manifest_missing", "Not provided") : entry->manifest);
         detailScreenshotTotal = std::max(0, (int)entry->screenshots.size());
         std::string detailPreviewPath = currentDetailCommunityPreviewPath();
+        // A folha tambem no detalhe e na tela cheia. Ela e a unica coisa que se
+        // move: as capturas do tema sao imagens paradas, e um tema animado
+        // apresentado por uma foto parada nao mostra o que ele e.
+        if (const auto* selected = selectedCommunityThemeEntry()) {
+            // As duas folhas, nao so a pequena. A grande tem a mesma grade de
+            // celulas -- muda o tamanho de cada uma -- e comparar so com
+            // thumbSheet deixava a tela cheia sem colunas nem linhas, o que faz
+            // o desenho tratar a folha inteira como uma imagem so e mostrar as
+            // vinte celulas de uma vez.
+            const bool isSheet =
+                (!selected->thumbSheet.empty()   && detailPreviewPath == selected->thumbSheet)
+             || (!selected->thumbSheetHd.empty() && detailPreviewPath == selected->thumbSheetHd);
+            if (isSheet) {
+                detailSheetCols = selected->thumbCols;
+                detailSheetRows = selected->thumbRows;
+                detailSheetFps  = selected->thumbFps;
+            }
+        }
+
+        // Qual imagem a tela cheia pediu e em que estado ela esta. A previa
+        // sumia sem deixar rastro: "captura indisponivel" e o log sem uma
+        // palavra sobre qual arquivo foi pedido.
+        if (m_detailFullscreen && detailPreviewPath != m_lastLoggedDetailPath) {
+            m_lastLoggedDetailPath = detailPreviewPath;
+            DebugLog::log("[themeshop] tela cheia pede %s (estado=%d celulas=%dx%d)",
+                          detailPreviewPath.c_str(), (int)communityPreviewPhase(detailPreviewPath),
+                          detailSheetCols, detailSheetRows);
+        }
         detailPreviewTexture = communityPreviewTexture(detailPreviewPath);
         detailPreviewPhase = communityPreviewPhase(detailPreviewPath);
         detailPreviewRequested = !detailPreviewPath.empty();
@@ -1965,7 +2068,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      detailPreviewLabel,
                      detailPreviewLoading,
                      m_uiTime,
-                     detailOpacity);
+                     detailOpacity,
+                     detailSheetCols, detailSheetRows, detailSheetFps);
 
     if (isCommunityTab() && detailPreviewRequested) {
         auto previewButtons = detailPreviewControlRects(previewControls, preview, detailScreenshotTotal);
@@ -2086,7 +2190,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          detailPreviewLabel,
                          detailPreviewLoading,
                          m_uiTime,
-                         detailOpacity);
+                         detailOpacity,
+                         detailSheetCols, detailSheetRows, detailSheetFps);
 
         drawActionButtonChip(ren,
                              m_smallFont,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ThemeCatalogClient.hpp"
+#include <unordered_set>
 #include "settings/TabbedOverlayScreen.hpp"
 
 #include <nxui/core/Texture.hpp>
@@ -202,6 +203,7 @@ private:
     void primeVisibleCommunityPreviews();
     void syncFinishedCommunityPreviewLoads();
     void clearCommunityPreviewCache();
+    std::unordered_set<std::string> wantedCommunityPreviewUrls() const;
     void trimCommunityPreviewCache();
 
     BoolCb m_musicEnabledCb;
@@ -249,6 +251,7 @@ private:
     std::uint64_t m_communityRevision = 0;
     bool m_detailOpen = false;
     bool m_detailFullscreen = false;
+    std::string m_lastLoggedDetailPath;
     ContentFocusArea m_contentFocusArea = ContentFocusArea::Grid;
     DetailFocusArea m_detailFocusArea = DetailFocusArea::Buttons;
     int m_headerButtonIndex = 0;
@@ -262,6 +265,7 @@ private:
     int m_communityScrollRow = 0;
     int m_lastCustomTabIndex = -1;
     std::string m_lastPreviewPrimeKey;
+    float m_previewTrimTimer = 0.f;
     ThemeTouchTarget m_themeTouchTarget = ThemeTouchTarget::None;
     int m_themeTouchIndex = -1;
     float m_themeTouchStartX = 0.f;

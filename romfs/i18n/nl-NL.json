@@ -31,7 +31,7 @@
     },
     "system": {
       "firmware": "Firmwareversie",
-      "custom_firmware": "Custom Firmware",
+      "custom_firmware": "Aangepaste firmware",
       "not_detected": "Niet gedetecteerd",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inactief / SysNAND",
@@ -53,9 +53,9 @@
       "region_south_korea": "Zuid-Korea",
       "auto_update": "Automatische update",
       "error_reporting": "Foutmelding",
-      "default_profile": "Default Profile",
-      "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time",
+      "default_profile": "Standaardprofiel",
+      "default_profile_desc": "Start games waar mogelijk met dit profiel.",
+      "default_profile_ask": "Elke keer vragen",
       "clock_12h": "12-uursklok",
       "clock_12h_desc": "Toon de tijd in 12-uursformaat.",
       "add_user": "Gebruiker toevoegen",
@@ -99,7 +99,9 @@
       "glass_sharpness": "Glashelderheid",
       "glass_sharpness_desc": "Hoe duidelijk het scherm achter menu's erdoorheen zichtbaar is.",
       "background_speed": "Snelheid van achtergrondanimatie",
-      "background_speed_desc": "Hoe snel de vormen zweven. Het midden is het tempo van het thema zelf."
+      "background_speed_desc": "Hoe snel de vormen zweven. Het midden is het tempo van het thema zelf.",
+      "grid_columns": "Rasterkolommen",
+      "grid_rows": "Rasterrijen"
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",
@@ -135,8 +137,8 @@
       "unpair": "Ontkoppelen",
       "pair_connect": "Koppelen & verbinden",
       "device_actions": "Apparaatacties",
-      "connected": "Connected",
-      "not_connected": "Not connected"
+      "connected": "Verbonden",
+      "not_connected": "Niet verbonden"
     },
     "sleep": {
       "1min": "1 min",
@@ -157,7 +159,18 @@
       "media_sleep": "Slaapstand tijdens media",
       "media_sleep_desc": "Sta automatische slaapstand toe tijdens mediagebruik.",
       "wake_power": "Wakker worden bij stroom",
-      "wake_power_desc": "Maak de console wakker bij aansluiten of loskoppelen van de adapter."
+      "wake_power_desc": "Maak de console wakker bij aansluiten of loskoppelen van de adapter.",
+      "power_actions": "Energie",
+      "auto_sleep": "Automatische slaapstand",
+      "sleep_now": "Slaapstand",
+      "sleep_now_desc": "Zet de console in slaapstand.",
+      "sleep_confirm": "Console in slaapstand zetten?",
+      "reboot": "Herstarten",
+      "reboot_desc": "Start de console opnieuw op.",
+      "reboot_confirm": "Console opnieuw opstarten?",
+      "shutdown": "Uitschakelen",
+      "shutdown_desc": "Schakelt de console volledig uit.",
+      "shutdown_confirm": "Console uitschakelen?"
     },
     "theme": {
       "preset": "Voorinstelling",
@@ -212,7 +225,10 @@
       "used": "Gebruikt",
       "summary": "Samenvatting",
       "details": "Details",
-      "delete": "Verwijderen"
+      "delete": "Verwijderen",
+      "manage_title": "Software beheren",
+      "title_id": "Titel-ID",
+      "homebrew_library_unavailable": "Beheer van geïnstalleerde software is niet beschikbaar in homebrew-modus."
     },
     "about": {
       "version": "Versie",
@@ -293,8 +309,8 @@
     "ok": "OK",
     "cancel": "Annuleren",
     "delete": "Verwijderen",
-    "close": "Close",
-    "replace": "Replace"
+    "close": "Sluiten",
+    "replace": "Vervangen"
   },
   "themeshop": {
     "source": {
@@ -306,7 +322,7 @@
     },
     "tabs": {
       "installed": "Geïnstalleerd",
-      "community": "Community",
+      "community": "Statische thema’s",
       "animated": "Geanimeerde thema’s",
       "options": "Opties"
     },
@@ -360,7 +376,12 @@
       "overwrite_apply_title": "Thema vervangen en toepassen",
       "overwrite_apply_message": "Er is al een pakket met deze thema-ID. Vervangen door de GitHub-versie en toepassen?",
       "overwrite_install_title": "Geïnstalleerd thema vervangen",
-      "overwrite_install_message": "Er is al een pakket met deze thema-ID. Vervangen door de GitHub-versie?"
+      "overwrite_install_message": "Er is al een pakket met deze thema-ID. Vervangen door de GitHub-versie?",
+      "offline": "Geen verbinding. Controleer het netwerk en probeer opnieuw.",
+      "quality_title": "Themakwaliteit",
+      "quality_message": "Standaard laat ruimte voor meer themas. Hoog komt exact overeen met de schermresolutie en oogt scherper, maar is twee keer zo groot.",
+      "quality_standard": "Standaard",
+      "quality_high": "Hoog"
     },
     "transfer": {
       "prepare_apply": "Download + toepassen voorbereiden...",
@@ -374,7 +395,11 @@
       "installed_applying": "Thema geïnstalleerd. Toepassen...",
       "installed": "Thema geïnstalleerd.",
       "installed_applied": "Thema geïnstalleerd en toegepast.",
-      "installed_apply_failed": "Thema geïnstalleerd, maar niet automatisch toegepast."
+      "installed_apply_failed": "Thema geïnstalleerd, maar niet automatisch toegepast.",
+      "downloading_package": "Thema downloaden",
+      "extracting": "Thema uitpakken",
+      "finishing": "Afronden",
+      "no_space": "Onvoldoende ruimte op de SD-kaart voor dit thema"
     },
     "preview": {
       "loading": "Screenshot laden...",
@@ -399,6 +424,14 @@
       "pagination_actions": "Links en rechts wisselen knop. A wisselt pagina. Omhoog naar het raster.",
       "no_theme": "Geen thema",
       "grid_actions": "Richtingsknoppen om te navigeren. A opent details. B terug naar tabs."
+    },
+    "page": {
+      "next": "Volgende",
+      "prev": "Vorige"
+    },
+    "animated": {
+      "title": "Geanimeerde thema’s",
+      "subtitle": "Bewegende achtergronden, met geluid als het thema dat meebrengt."
     }
   },
   "hint": {
@@ -418,7 +451,8 @@
     "profile": "Profiel",
     "search": "Zoeken",
     "repeat": "Herhalen",
-    "voice": "Stem"
+    "voice": "Stem",
+    "options": "Opties"
   },
   "accessibility": {
     "speech": {
