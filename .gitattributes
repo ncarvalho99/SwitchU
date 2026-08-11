@@ -1,0 +1,8 @@
+# Keep source files portable between Windows contributors and CI/Linux builds.
+* text=auto eol=lf
+
+# Theme frames and Horizon binaries must never be line-ending normalized.
+*.dds binary
+*.nso binary
+*.npdm binary
+*.pyc binary
