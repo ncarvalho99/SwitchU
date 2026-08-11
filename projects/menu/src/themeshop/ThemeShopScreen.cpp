@@ -30,7 +30,26 @@ constexpr int kCommunityPreviewVisibleRows = 2;
 constexpr int kCommunityPreviewEntriesPerPage = kCommunityPreviewGridCols * kCommunityPreviewVisibleRows;
 constexpr int kMaxPreviewUploadsPerFrame = 1;
 constexpr int kMaxPreviewDownloadsInFlight = kCommunityPreviewEntriesPerPage;
-constexpr int kCommunityPreviewMaxSide = 960;
+
+// Quantas previas guardam os bytes comprimidos depois de sair da tela. Cada
+// uma custa dezenas de kilobytes de RAM e evita uma requisicao de rede; a
+// textura decodificada, que custa cerca de um megabyte, e liberada de todo
+// jeito.
+constexpr int kMaxCachedPreviewBytesEntries = 64;
+// A previa era guardada com 960 de lado e desenhada num cartao de ~340: cada
+// pixel na tela lia texels espalhados, sem mipmap, e a loja gastava 20 ms de
+// GPU por quadro contra 10 na home. 640 continua acima do cartao e corta a
+// amostragem pela metade.
+constexpr int kCommunityPreviewMaxSide = 640;
+
+// A folha e uma grade, nao uma foto: reduzi-la a 640 encolhe cada celula junto
+// e a tela cheia vira mosaico. Ela ja e gerada no tamanho certo, entao vai
+// inteira.
+constexpr int kPreviewSheetMaxSide = 2560;   // a folha HD tem 2560x1152
+
+bool isPreviewSheetPath(const std::string& path) {
+    return path.find("preview_sheet") != std::string::npos;
+}
 
 bool startsWith(const std::string& value, const std::string& prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
@@ -83,6 +102,17 @@ bool matchesSearch(const ThemeCatalogClient::Entry& entry, const std::string& ne
         || containsInsensitive(entry.id, needleLower)
         || containsInsensitive(entry.version, needleLower)
         || containsInsensitive(entry.author, needleLower);
+}
+
+// Qual imagem representa a entrada na grade: a folha de miniaturas quando o
+// catalogo oferece, a capa quando nao.
+//
+// Uma regra so, num lugar so. Ela nasceu espalhada -- o download pedia a capa,
+// o desenho aplicava recortes de folha, a poda retinha pela capa, a fase
+// consultava outra ainda -- e cada divergencia dessas apareceu como um sintoma
+// diferente na tela, corrigido um de cada vez ao longo de varias builds.
+std::string gridPreviewPathOf(const ThemeCatalogClient::Entry& entry) {
+    return entry.thumbSheet.empty() ? entry.cover : entry.thumbSheet;
 }
 
 } // namespace
@@ -193,6 +223,26 @@ std::string ThemeShopScreen::currentDetailCommunityPreviewPath() const {
     if (!entry)
         return {};
 
+    // A folha tambem em tela cheia, agora que a celula tem 256x144 e amplia 4.5x
+    // em vez de 7x. Um tema animado apresentado por foto parada nao mostra o que
+    // ele e, e essa era a tela onde mais se olha.
+    //
+    // Isto decide tanto o que se pede quanto o que se desenha: quando os dois
+    // discordavam, o detalhe pedia a capa e tentava desenhar a folha, e a tela
+    // dizia "captura indisponivel". E ampliar uma celula de 160x90 para a tela
+    // inteira vira mosaico -- em tela cheia o que interessa e a imagem, nao o
+    // movimento.
+    // Em tela cheia, a folha grande. Ela tem celulas de 512x288 contra 256x144
+    // da folha da grade, entao amplia 2.2x em vez de 4.5x -- e ali so um tema
+    // esta na tela, o que torna os 11.8 MB dela pagaveis. Os quadros reais do
+    // tema seriam 67 MB de download para uma previa.
+    if (m_detailScreenshotIndex <= 0) {
+        if (m_detailFullscreen && !entry->thumbSheetHd.empty())
+            return entry->thumbSheetHd;
+        if (!entry->thumbSheet.empty())
+            return entry->thumbSheet;
+    }
+
     if (!entry->screenshots.empty()) {
         int index = std::clamp(m_detailScreenshotIndex, 0, (int)entry->screenshots.size() - 1);
         return entry->screenshots[(size_t)index];
@@ -237,9 +287,17 @@ void ThemeShopScreen::applySearchFilter() {
             m_themeShopEntries.push_back(entry);
     }
 
+    // One fetch feeds two tabs. Entries remember which index they came from,
+    // so the split is a filter here rather than a second catalogue client and
+    // a second download.
+    const bool wantAnimated = isAnimatedTab();
     m_communityEntries.clear();
     m_communityEntries.reserve(m_allCommunityEntries.size());
     for (const auto& entry : m_allCommunityEntries) {
+        const bool fromOurs =
+            entry.catalogUrl == ThemeCatalogClient::kDefaultCatalogUrl;
+        if (fromOurs != wantAnimated)
+            continue;
         if (matchesSearch(entry, needleLower))
             m_communityEntries.push_back(entry);
     }
@@ -318,7 +376,7 @@ bool ThemeShopScreen::pollCommunityCatalog() {
 }
 
 std::string ThemeShopScreen::resolveCommunityPreviewUrl(const ThemeCatalogClient::Entry& entry) const {
-    return resolveCommunityPreviewUrl(entry.cover);
+    return resolveCommunityPreviewUrl(gridPreviewPathOf(entry));
 }
 
 std::string ThemeShopScreen::resolveCommunityPreviewUrl(const std::string& previewPath) const {
@@ -346,7 +404,7 @@ std::shared_ptr<ThemeShopScreen::PreviewImageState> ThemeShopScreen::communityPr
 }
 
 std::shared_ptr<ThemeShopScreen::PreviewImageState> ThemeShopScreen::communityPreviewState(const ThemeCatalogClient::Entry& entry) const {
-    return communityPreviewState(entry.cover);
+    return communityPreviewState(gridPreviewPathOf(entry));
 }
 
 ThemeShopScreen::PreviewPhase ThemeShopScreen::communityPreviewPhase(const std::string& previewPath) const {
@@ -359,7 +417,9 @@ ThemeShopScreen::PreviewPhase ThemeShopScreen::communityPreviewPhase(const std::
 }
 
 ThemeShopScreen::PreviewPhase ThemeShopScreen::communityPreviewPhase(const ThemeCatalogClient::Entry& entry) const {
-    return communityPreviewPhase(entry.cover);
+    // Pela mesma imagem que se pede e se desenha. Consultando a fase da capa,
+    // o cartao relatava o estado de um arquivo que ninguem baixou.
+    return communityPreviewPhase(gridPreviewPathOf(entry));
 }
 
 const nxui::Texture* ThemeShopScreen::communityPreviewTexture(const std::string& previewPath) const {
@@ -374,7 +434,7 @@ const nxui::Texture* ThemeShopScreen::communityPreviewTexture(const std::string&
 }
 
 const nxui::Texture* ThemeShopScreen::communityPreviewTexture(const ThemeCatalogClient::Entry& entry) const {
-    return communityPreviewTexture(entry.cover);
+    return communityPreviewTexture(gridPreviewPathOf(entry));
 }
 
 ThemeShopScreen::PreviewPhase ThemeShopScreen::installedPreviewPhase(const std::string& previewPath) const {
@@ -425,7 +485,9 @@ void ThemeShopScreen::primeInstalledPreview(const std::string& previewPath) {
     }
 
     nxui::Texture uploaded;
-    bool ok = uploaded.loadFromFile(*m_gpu, *m_renderer, previewPath, kCommunityPreviewMaxSide);
+    bool ok = uploaded.loadFromFile(*m_gpu, *m_renderer, previewPath,
+                                    isPreviewSheetPath(previewPath)
+                                        ? kPreviewSheetMaxSide : kCommunityPreviewMaxSide);
     std::lock_guard<std::mutex> lk(slot->mutex);
     if (ok) {
         slot->texture = std::move(uploaded);
@@ -481,8 +543,13 @@ void ThemeShopScreen::primeCommunityPreview(const std::string& previewPath) {
         if (!state)
             continue;
 
+        // Loading only. Downloaded used to be counted too, which was harmless
+        // while it meant "waiting to upload, briefly" -- but it now also means
+        // "bytes kept from a page you left", and those held every download slot
+        // so nothing on the next page could start. That reads as a broken
+        // preview, not as a busy one.
         std::lock_guard<std::mutex> lk(state->mutex);
-        if (state->phase == PreviewPhase::Loading || state->phase == PreviewPhase::Downloaded)
+        if (state->phase == PreviewPhase::Loading)
             ++inFlightDownloads;
     }
 
@@ -546,7 +613,7 @@ void ThemeShopScreen::primeCommunityPreview(const std::string& previewPath) {
 }
 
 void ThemeShopScreen::primeCommunityPreview(const ThemeCatalogClient::Entry& entry) {
-    primeCommunityPreview(entry.cover);
+    primeCommunityPreview(gridPreviewPathOf(entry));
 }
 
 void ThemeShopScreen::primeVisibleCommunityPreviews() {
@@ -569,15 +636,21 @@ void ThemeShopScreen::primeVisibleCommunityPreviews() {
                 queuePreview(current);
         }
 
-        if (!selected->cover.empty())
-            queuePreview(selected->cover);
+        const std::string selectedPath = gridPreviewPathOf(*selected);
+        if (!selectedPath.empty())
+            queuePreview(selectedPath);
     }
 
     int scrollRow = m_communityScrollRow;
     int start = scrollRow * kCommunityPreviewGridCols;
     int end = std::min((int)m_communityEntries.size(), start + kCommunityPreviewEntriesPerPage);
     for (int i = start; i < end; ++i)
-        queuePreview(m_communityEntries[(size_t)i].cover);
+        // Esta e a funcao que de fato baixa para a pagina visivel, e pedia a
+        // capa. Todo o resto ja usava a folha -- desenho, detalhe, poda,
+        // sincronizacao -- e nada disso adiantava com o download apontando para
+        // outro arquivo. A grade mostrava "indisponivel" ate alguem abrir um
+        // tema, porque so o caminho do detalhe pedia a folha.
+        queuePreview(gridPreviewPathOf(m_communityEntries[(size_t)i]));
 }
 
 void ThemeShopScreen::syncFinishedCommunityPreviewLoads() {
@@ -586,6 +659,17 @@ void ThemeShopScreen::syncFinishedCommunityPreviewLoads() {
 
     bool hasPendingWork = false;
     int uploadsThisFrame = 0;
+    // So sobe para a GPU o que esta em uso agora. Antes este laco subia
+    // qualquer entrada do cache que tivesse bytes, e o cache guarda ate 64
+    // delas: a poda liberava a textura de uma previa fora da tela, marcava a
+    // entrada como Downloaded para reaproveitar os bytes, e este passo a subia
+    // de novo no quadro seguinte. Liberar e re-subir se alimentavam.
+    //
+    // Medido no console, percorrendo as abas parado: a memoria de imagem subia
+    // 12.7 MB a cada 2 segundos ate 108 MB, e o menu morria. Nao era vazamento
+    // -- a contabilidade devolvia certo -- era o cache inteiro querendo estar
+    // na GPU ao mesmo tempo.
+    const std::unordered_set<std::string> wanted = wantedCommunityPreviewUrls();
     for (auto& entry : m_communityPreviewCache) {
         auto state = entry.second;
         if (!state)
@@ -617,10 +701,18 @@ void ThemeShopScreen::syncFinishedCommunityPreviewLoads() {
         {
             std::lock_guard<std::mutex> lk(state->mutex);
             if (state->phase == PreviewPhase::Downloaded) {
-                if (uploadsThisFrame >= kMaxPreviewUploadsPerFrame) {
+                if (wanted.find(entry.first) == wanted.end()) {
+                    // Fora de uso: os bytes ficam, a textura nao nasce. Quando
+                    // voltar a ser preciso, sobe sem ir a rede.
+                } else if (uploadsThisFrame >= kMaxPreviewUploadsPerFrame) {
                     hasPendingWork = true;
                 } else {
-                    bytes = std::move(state->bytes);
+                    // Copied, not moved. The compressed bytes are what lets a
+                    // preview come back without going to the network again;
+                    // they are tens of kilobytes against the megabyte the
+                    // decoded texture occupies, so they are the half worth
+                    // keeping when the texture has to go.
+                    bytes = state->bytes;
                 }
             }
         }
@@ -630,9 +722,10 @@ void ThemeShopScreen::syncFinishedCommunityPreviewLoads() {
 
         ++uploadsThisFrame;
         nxui::Texture uploaded;
-        bool ok = uploaded.loadFromMemory(*m_gpu, *m_renderer, bytes.data(), bytes.size(), kCommunityPreviewMaxSide);
+        bool ok = uploaded.loadFromMemory(*m_gpu, *m_renderer, bytes.data(), bytes.size(),
+                                          isPreviewSheetPath(state->url)
+                                              ? kPreviewSheetMaxSide : kCommunityPreviewMaxSide);
         std::lock_guard<std::mutex> lk(state->mutex);
-        state->bytes.clear();
         if (ok) {
             state->texture = std::move(uploaded);
             state->failureCount = 0;
@@ -640,6 +733,17 @@ void ThemeShopScreen::syncFinishedCommunityPreviewLoads() {
         } else {
             state->failureCount += 1;
             state->phase = PreviewPhase::Failed;
+            // Sem esta linha a previa some sem deixar rastro: os bytes chegaram,
+            // a decodificacao passou, e o que falhou foi a alocacao de imagem --
+            // que so escreve no stderr, onde nada le. O relato vira "captura
+            // indisponivel" e o log nao tem uma palavra sobre o assunto.
+            //
+            // Com o fundo animado como padrao, 71 dos 112 MB de imagem ja estao
+            // gastos antes de a loja abrir, entao os numeros vao junto.
+            DebugLog::log("[themeshop] previa nao subiu (%zu KB): imagem em %.1f de %.1f MB",
+                          bytes.size() / 1024,
+                          m_gpu->imageMemoryUsed() / 1048576.0,
+                          nxui::GpuDevice::imageBudget() / 1048576.0);
         }
     }
 
@@ -668,6 +772,31 @@ void ThemeShopScreen::clearCommunityPreviewCache() {
     m_hasPendingCommunityPreviewWork = false;
 }
 
+// O que esta em uso neste instante: a pagina visivel, o selecionado e, com o
+// detalhe aberto, a imagem que ele mostra. Uma regra so, porque ter duas foi o
+// que produziu a maioria dos defeitos desta tela -- pedir por um caminho e
+// reter por outro apaga exatamente o que acabou de chegar.
+std::unordered_set<std::string> ThemeShopScreen::wantedCommunityPreviewUrls() const {
+    std::unordered_set<std::string> urls;
+    auto want = [&](const std::string& previewPath) {
+        std::string url = resolveCommunityPreviewUrl(previewPath);
+        if (!url.empty())
+            urls.insert(std::move(url));
+    };
+
+    int start = m_communityScrollRow * kCommunityPreviewGridCols;
+    int end = std::min((int)m_communityEntries.size(), start + kCommunityPreviewEntriesPerPage);
+    for (int i = start; i < end; ++i)
+        want(gridPreviewPathOf(m_communityEntries[(size_t)i]));
+
+    if (const auto* selected = selectedCommunityThemeEntry()) {
+        want(gridPreviewPathOf(*selected));
+        if (m_detailOpen)
+            want(currentDetailCommunityPreviewPath());
+    }
+    return urls;
+}
+
 void ThemeShopScreen::trimCommunityPreviewCache() {
     if (m_communityPreviewCache.empty())
         return;
@@ -677,24 +806,8 @@ void ThemeShopScreen::trimCommunityPreviewCache() {
         return;
     }
 
-    std::unordered_set<std::string> retainedUrls;
-    auto retainPreview = [&](const std::string& previewPath) {
-        std::string url = resolveCommunityPreviewUrl(previewPath);
-        if (!url.empty())
-            retainedUrls.insert(std::move(url));
-    };
+    std::unordered_set<std::string> retainedUrls = wantedCommunityPreviewUrls();
 
-    int start = m_communityScrollRow * kCommunityPreviewGridCols;
-    int end = std::min((int)m_communityEntries.size(), start + kCommunityPreviewEntriesPerPage);
-    for (int i = start; i < end; ++i)
-        retainPreview(m_communityEntries[(size_t)i].cover);
-
-    const auto* selected = selectedCommunityThemeEntry();
-    if (selected) {
-        retainPreview(selected->cover);
-        if (m_detailOpen)
-            retainPreview(currentDetailCommunityPreviewPath());
-    }
 
     bool willErase = false;
     for (auto it = m_communityPreviewCache.begin(); it != m_communityPreviewCache.end();) {
@@ -708,19 +821,54 @@ void ThemeShopScreen::trimCommunityPreviewCache() {
     if (willErase && m_gpu)
         m_gpu->waitIdle();
 
+    // Leaving a page used to erase the entry outright, which threw away the
+    // downloaded bytes along with the texture -- so paging back fetched the
+    // same image over the network a second time. Now the texture goes and the
+    // bytes stay: the picture comes straight back, and the GPU memory it was
+    // holding is still released, which is what the eviction was for.
+    //
+    // Bounded so a large catalogue does not accumulate indefinitely. Past the
+    // cap the old behaviour applies and the entry is dropped for real.
     int erased = 0;
+    int retainedBytes = 0;
     for (auto it = m_communityPreviewCache.begin(); it != m_communityPreviewCache.end();) {
-        if (retainedUrls.find(it->first) == retainedUrls.end()) {
-            if (it->second) {
-                std::lock_guard<std::mutex> lk(it->second->mutex);
+        if (retainedUrls.find(it->first) != retainedUrls.end()) {
+            ++it;
+            continue;
+        }
+
+        bool keepBytes = false;
+        if (it->second) {
+            std::lock_guard<std::mutex> lk(it->second->mutex);
+            const bool hasBytes = !it->second->bytes.empty();
+            const bool settled = it->second->phase == PreviewPhase::Ready
+                              || it->second->phase == PreviewPhase::Downloaded;
+            keepBytes = hasBytes && settled && retainedBytes < kMaxCachedPreviewBytesEntries;
+            if (keepBytes) {
+                // Back to Downloaded: the upload step picks it up again when
+                // the preview is next needed, without a request.
+                //
+                // And it has to be told there is work, because that step is
+                // gated on a flag that only the download path used to raise.
+                // Without this the revived entry sits at Downloaded forever and
+                // the preview reads as loading and never arrives -- which is
+                // exactly what this cache change first shipped as.
+                it->second->texture = nxui::Texture();
+                it->second->phase = PreviewPhase::Downloaded;
+                m_hasPendingCommunityPreviewWork = true;
+                ++retainedBytes;
+            } else {
                 it->second->cancelled = true;
                 it->second->bytes.clear();
                 it->second->texture = nxui::Texture();
             }
+        }
+
+        if (keepBytes) {
+            ++it;
+        } else {
             it = m_communityPreviewCache.erase(it);
             ++erased;
-        } else {
-            ++it;
         }
     }
 
@@ -738,6 +886,25 @@ void ThemeShopScreen::syncCommunityCatalog(const ThemeCatalogClient::Snapshot& s
 
     std::unordered_set<std::string> validUrls;
     for (const auto& entry : m_allCommunityEntries) {
+        // A folha entra na lista de validas. Sem isso, cada sincronizacao do
+        // catalogo apagava do cache exatamente a imagem que a grade usa -- e o
+        // catalogo sincroniza varias vezes seguidas, entao a previa era apagada
+        // antes de terminar de chegar e a tela ja abria com "indisponivel".
+        //
+        // Quarto lugar onde pedido e retencao discordavam: desenho, detalhe,
+        // poda por pagina e agora a sincronizacao. A regra de qual imagem
+        // representa a entrada vive em gridPreviewPathOf; todos passam por la.
+        std::string sheetUrl = resolveCommunityPreviewUrl(gridPreviewPathOf(entry));
+        if (!sheetUrl.empty())
+            validUrls.insert(std::move(sheetUrl));
+
+        // A folha grande tambem: ela e usada so em tela cheia, e sem constar
+        // aqui a sincronizacao do catalogo a apagaria do cache assim que
+        // chegasse.
+        std::string hdUrl = resolveCommunityPreviewUrl(entry.thumbSheetHd);
+        if (!hdUrl.empty())
+            validUrls.insert(std::move(hdUrl));
+
         std::string coverUrl = resolveCommunityPreviewUrl(entry.cover);
         if (!coverUrl.empty())
             validUrls.insert(std::move(coverUrl));

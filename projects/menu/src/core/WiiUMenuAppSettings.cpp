@@ -217,7 +217,11 @@ std::string sourceLabel(ThemePresetSource source) {
 }
 
 std::string defaultThemeRef() {
-    return "builtin:Default Light";
+    // Default Dark carries the animated wallpaper, so this is what a fresh
+    // install shows. It costs 28 MB of the image budget and one extra
+    // full-screen quad a frame; anyone who wants the old cost back can stop it
+    // with the background-speed slider or pick Default Light.
+    return "builtin:Default Dark";
 }
 
 } // namespace
@@ -471,18 +475,58 @@ void WiiUMenuApp::createThemeShop() {
             : ThemePackageInstaller::Mode::InstallOnly;
         std::string destination = ThemePackageInstaller::destinationRootFor(entryCopy.id, mode);
 
-        auto startTransfer = [this, entryCopy, applyAfterInstall]() {
-            startThemePackageTransfer(entryCopy, applyAfterInstall);
+        // Uma so funcao para as duas versoes: o instalador nao precisa saber
+        // que existem duas, basta receber a entrada com o pacote escolhido.
+        auto startTransfer = [this, entryCopy, applyAfterInstall](bool hd) {
+            ThemeCatalogClient::Entry escolha = entryCopy;
+            if (hd && !escolha.packageHd.empty()) {
+                escolha.package = escolha.packageHd;
+                escolha.packageBytes = escolha.packageHdBytes;
+            }
+            startThemePackageTransfer(escolha, applyAfterInstall);
+        };
+
+        // Qual das duas resolucoes, quando o tema tem as duas. Perguntado uma
+        // vez, antes de baixar, porque a diferenca e grande demais para ser
+        // decidida por padrao: 720p e a resolucao da tela e nao amplia nada,
+        // mas ocupa 147 MB no cartao contra 68 e quase todo o orcamento de
+        // imagem do menu.
+        auto askResolution = [this, entryCopy, startTransfer]() {
+            auto& i18n = nxui::I18n::instance();
+            if (entryCopy.packageHd.empty() || !m_dialog) {
+                startTransfer(false);
+                return;
+            }
+            const auto mb = [](std::uint64_t b) {
+                return std::to_string(b / 1048576) + " MB";
+            };
+            m_dialogReturnFocus = focusManager().current();
+            m_dialog->show(
+                i18n.tr("themeshop.community.quality_title", "Theme Quality"),
+                i18n.tr("themeshop.community.quality_message",
+                        "Standard fits more themes on the card. High matches the screen "
+                        "resolution exactly and looks sharper, at twice the size."),
+                {
+                    {i18n.tr("themeshop.community.quality_standard", "Standard")
+                         + " (" + mb(entryCopy.packageBytes) + ")",
+                     [startTransfer]() { startTransfer(false); }, true},
+                    {i18n.tr("themeshop.community.quality_high", "High")
+                         + " (" + mb(entryCopy.packageHdBytes) + ")",
+                     [startTransfer]() { startTransfer(true); }, true}
+                },
+                0,
+                {});
+            focusManager().setFocus(m_dialog.get());
         };
 
         if (!pathExists(destination)) {
-            startTransfer();
+            askResolution();
             return;
         }
 
         auto& i18n = nxui::I18n::instance();
         if (!m_dialog) {
-            startTransfer();
+            startTransfer(false);
             return;
         }
 
@@ -498,7 +542,7 @@ void WiiUMenuApp::createThemeShop() {
                           "A package with this theme ID is already installed. Replace it with the version from GitHub?"),
             {
                 {i18n.tr("button.cancel", "Cancel"), {}, true},
-                {i18n.tr("button.replace", "Replace"), [startTransfer]() { startTransfer(); }, true}
+                {i18n.tr("button.replace", "Replace"), [askResolution]() { askResolution(); }, true}
             },
             1,
             {});
@@ -565,7 +609,9 @@ void WiiUMenuApp::createThemeShop() {
     });
     m_themeShop->onBackgroundSpeedChange([this](float v) {
         m_config.backgroundSpeed = v;
+        m_config.backgroundSpeedChosen = true;
         if (m_background) m_background->setSpeedScale(v * 2.f);
+        if (m_background) m_background->setWallpaperSpeedScale(v);
     });
     m_themeShop->onBackgroundBlurChange([this](float v) {
         m_config.backgroundBlur = v;
@@ -943,6 +989,7 @@ void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSoun
     rebuildThemeFromColors();
     DebugLog::log("[theme-apply] rebuildThemeFromColors done: preset=%s", presetRef.c_str());
 
+
     if (applyBundledSound && !preset->soundPreset.empty()) {
         DebugLog::log("[theme-apply] changeSoundPreset queued: preset=%s sound=%s",
                       presetRef.c_str(),
@@ -964,6 +1011,31 @@ void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSoun
         m_themeShop->requestRenderDiagnostics(6);
     m_audio.playSfx(Sfx::ThemeToggle);
     DebugLog::log("[theme-apply] complete preset=%s", presetRef.c_str());
+}
+
+// Troca a trilha pela do tema. Fica separado de changeSoundPreset porque as
+// duas coisas nao andam juntas: o preset governa os efeitos e continua valendo,
+// enquanto as faixas passam a ser propriedade do tema.
+void WiiUMenuApp::applyThemeMusic(const std::vector<std::string>& tracks) {
+    if (m_audioFuture.valid())
+        m_audioFuture.get();   // o audio carrega em outra linha; sem isto as
+                               // faixas do preset chegariam depois destas
+    if (tracks.empty()) {
+        DebugLog::log("[audio] theme declared music but none of it exists");
+        return;
+    }
+
+    const bool wasPlaying = m_audio.isPlaying();
+    m_audio.stop();
+    m_audio.clearTracks();
+    for (const auto& track : tracks)
+        m_audio.loadTrack(track);
+    DebugLog::log("[audio] %zu track(s) from the theme", tracks.size());
+
+    // So volta a tocar se ja estava: trocar de tema nao e motivo para ligar
+    // musica em quem a desligou.
+    if (wasPlaying && m_config.musicEnabled)
+        m_audio.play();
 }
 
 void WiiUMenuApp::applyUiLanguage() {
@@ -997,6 +1069,27 @@ ThemePreset WiiUMenuApp::buildEffectiveThemePreset() {
 }
 
 void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
+    // A trilha do tema decidida aqui, e nao no caminho de aplicar manualmente.
+    // Este e o unico ponto por onde os dois passam: no boot o tema e carregado
+    // direto por aqui, entao a musica so trocava quando alguem aplicava a mao,
+    // e reiniciar o console devolvia a trilha do preset.
+    //
+    // Definida sempre, inclusive vazia: um tema sem trilha precisa devolver a
+    // musica ao preset, e isso tem de estar resolvido antes de changeSoundPreset
+    // ser disparado, porque ele carrega em outra thread e le este valor.
+    m_themeMusicTracks.clear();
+    if (!preset.music.empty()) {
+        for (const auto& track : preset.music) {
+            std::string path = resolveThemeAssetPath(preset, track);
+            std::error_code ec;
+            if (!path.empty() && std::filesystem::exists(path, ec))
+                m_themeMusicTracks.push_back(std::move(path));
+            else
+                DebugLog::log("[theme-apply] theme track missing: %s", safeLogPath(path));
+        }
+        applyThemeMusic(m_themeMusicTracks);
+    }
+
     auto& gpu = app().gpu();
     auto& ren = app().renderer();
     const bool forceResourceReload = m_forceThemeResourceReload;
@@ -1035,9 +1128,16 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
 
     const bool imageExists = !backgroundImagePath.empty() && pathExists(backgroundImagePath);
     const bool wantsBackgroundImage = imageExists;
+    // A frames-only theme has no imagePath, so both sides of the path check are
+    // empty and this decided nothing needed loading -- the frames never loaded
+    // and the wallpaper came up blank. The gate has to know about the sequence
+    // as well as the single image.
+    const bool wantsFrames = !preset.background.imageFrames.empty();
+    const bool hasFramesLoaded = m_background && m_background->hasAnimatedBackground();
     const bool backgroundImageNeedsReload = forceResourceReload
         || m_loadedBackgroundImagePath != backgroundImagePath
-        || m_backgroundImageLoaded != wantsBackgroundImage;
+        || m_backgroundImageLoaded != wantsBackgroundImage
+        || wantsFrames != hasFramesLoaded;
 
     const bool needsGpuResourceReload = regularFontNeedsReload
         || smallFontNeedsReload
@@ -1147,9 +1247,38 @@ void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
         m_background->setConfig(backgroundConfig);
         m_background->setBlurStrength(m_config.backgroundBlur);
         m_background->setSpeedScale(m_config.backgroundSpeed * 2.f);
+        // 0.35 was picked for drifting shapes, which have no speed of their own
+        // to be wrong about. A frame sequence does: it was filmed at a rate, and
+        // 0.35 plays a ten second loop over twenty-nine. So an animated theme
+        // starts at the speed of its clip, until somebody moves the slider --
+        // after which their choice is theirs, and applies to any theme.
+        m_background->setWallpaperSpeedScale(
+            (wantsFrames && !m_config.backgroundSpeedChosen) ? 1.f
+                                                            : m_config.backgroundSpeed);
 
         if (backgroundImageNeedsReload) {
-            const bool imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);
+            // A theme that lists frames gets the moving wallpaper; one that
+            // names a single image keeps the still, and pays exactly what it
+            // paid before. Frames are resolved against the theme's own folder,
+            // the same way its single image is.
+            bool imageLoaded = false;
+            if (!preset.background.imageFrames.empty()) {
+                std::vector<std::string> framePaths;
+                framePaths.reserve(preset.background.imageFrames.size());
+                for (const auto& rel : preset.background.imageFrames) {
+                    std::string abs = resolveThemeAssetPath(preset, rel);
+                    if (!abs.empty() && pathExists(abs))
+                        framePaths.push_back(std::move(abs));
+                }
+                imageLoaded = !framePaths.empty() &&
+                              m_background->loadImageSequence(gpu, ren, framePaths,
+                                                              preset.background.imageFps);
+                DebugLog::log("[theme-apply] background frames: listed=%zu found=%zu loaded=%d",
+                              preset.background.imageFrames.size(),
+                              framePaths.size(), imageLoaded ? 1 : 0);
+            }
+            if (!imageLoaded)
+                imageLoaded = imageExists && m_background->loadImage(gpu, ren, backgroundImagePath);
             DebugLog::log("[theme-apply] background image: path=%s exists=%d reloaded=%d loaded=%d",
                           safeLogPath(backgroundImagePath),
                           imageExists ? 1 : 0,

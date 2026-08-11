@@ -6,6 +6,7 @@
 #include <nxui/Application.hpp>
 #include <fmt/format.h>
 #ifdef SWITCHU_MENU
+#include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <switchu/smi_protocol.hpp>
 #include <switchu/file_log.hpp>
@@ -34,6 +35,8 @@ extern "C" {
     u32 __nx_applet_type = AppletType_LibraryApplet;
     u32 __nx_fs_num_sessions = 1;
 
+    // Ignorado enquanto __libnx_initheap existir logo abaixo; fica como o
+    // ultimo degrau da escada de recuo, que e o valor que sempre funcionou.
     size_t __nx_heap_size = kMenuAppletHeapSize;
 
     TimeServiceType __nx_time_service_type = TimeServiceType_Menu;
@@ -44,6 +47,52 @@ extern "C" {
     void __nx_win_exit(void);
 #endif
 }
+
+#ifndef SWITCHU_HOMEBREW
+// Quanto do que o console concede o menu de fato pede.
+//
+// Eram 224 MB fixos, e tudo sai dali: memoria de imagem, framebuffers, fontes,
+// icones, espeak, o heap do C++. O kernel concede 458 MB a este processo -- o
+// [mem] do arranque mede isso -- entao havia mais de 200 MB nunca pedidos, e o
+// muro de ~108 MB de imagem que derrubou o menu era este teto, nao o hardware.
+//
+// Em degraus, e nao um valor unico, porque o menu e um applet: a memoria vem de
+// um bolso compartilhado, e ele sobe com um jogo suspenso na memoria. Pedir
+// demais numa hora ruim faz svcSetHeapSize falhar, e uma falha aqui e o menu
+// nao abrir. Descendo degrau a degrau, o pior caso e exatamente o que se tinha
+// antes.
+namespace {
+constexpr size_t kHeapLadder[] = {
+    352u * 1024u * 1024u,
+    320u * 1024u * 1024u,
+    288u * 1024u * 1024u,
+    256u * 1024u * 1024u,
+    kMenuAppletHeapSize,
+};
+}  // namespace
+
+// Preenchido no arranque, lido depois: nao da para registrar daqui, porque isto
+// roda antes de existir heap, log ou cartao montado.
+extern "C" size_t g_switchuHeapSize = 0;
+
+extern "C" void __libnx_initheap(void) {
+    extern char* fake_heap_start;
+    extern char* fake_heap_end;
+
+    void*  addr = nullptr;
+    size_t size = 0;
+    for (size_t want : kHeapLadder) {
+        if (R_SUCCEEDED(svcSetHeapSize(&addr, want))) {
+            size = want;
+            break;
+        }
+    }
+
+    g_switchuHeapSize = size;
+    fake_heap_start = static_cast<char*>(addr);
+    fake_heap_end   = static_cast<char*>(addr) + size;
+}
+#endif
 
 #ifdef SWITCHU_HOMEBREW
 extern "C" void userAppInit(void) {
@@ -231,6 +280,8 @@ int main(int argc, char* argv[]) {
         else
             app.setActivity(std::make_unique<TutorialActivity>(makeMenuActivity));
         DebugLog::log("[hb] app.initialize...");
+        app.setLogSink([](const char* msg) { DebugLog::log("%s", msg); });
+        nxui::GpuDevice::setDebugSink([](const char* msg) { DebugLog::log("%s", msg); });
         if (app.initialize()) {
             DebugLog::log("[hb] app.run...");
             app.run();
@@ -253,6 +304,8 @@ int main(int argc, char* argv[]) {
         else
             app.setActivity(std::make_unique<TutorialActivity>(makeMenuActivity));
         DebugLog::log("[menu] app.initialize...");
+        app.setLogSink([](const char* msg) { DebugLog::log("%s", msg); });
+        nxui::GpuDevice::setDebugSink([](const char* msg) { DebugLog::log("%s", msg); });
         if (app.initialize()) {
             DebugLog::log("[menu] app.run...");
             app.run();

@@ -95,6 +95,11 @@ private:
     void buildUserAvatarBar();
     void applyTheme();
     void applyThemeResources(const ThemePreset& preset);
+    void applyThemeMusic(const std::vector<std::string>& tracks);
+    // Faixas que o tema atual traz. O preset de som carrega em outra thread e
+    // chegava depois, sobrescrevendo o que o tema tinha posto -- entao quem
+    // carrega o preset precisa saber que nao deve tocar na musica.
+    std::vector<std::string> m_themeMusicTracks;
     void applyUiLanguage();
     void rebuildThemeFromColors();
     ThemePreset buildEffectiveThemePreset();
@@ -246,6 +251,11 @@ private:
     int   m_perfFrames = 0;
     float m_perfWorstDt = 0.f;
     bool  m_probeSceneHidden = false;
+
+    // Vale so para a amostragem de memoria: a loja de temas e onde o menu saiu
+    // duas vezes sem deixar rastro, e medir o tempo todo encheria o log.
+    bool  inThemeShopForMemorySampling() const;
+    float m_memSampleTimer = 0.f;
 
     int  m_touchHitIndex     = -1;
     bool m_touchOnFocused    = false;
