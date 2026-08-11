@@ -114,6 +114,23 @@ bool hasParentTraversal(const std::string& path) {
     return false;
 }
 
+bool isSafeThemeId(const std::string& value) {
+    if (value.size() < 2 || value.size() > 64)
+        return false;
+    for (unsigned char ch : value) {
+        if (!std::islower(ch) && !std::isdigit(ch) && ch != '_' && ch != '-')
+            return false;
+    }
+    return true;
+}
+
+bool isSafeRelativePath(const std::string& value) {
+    if (value.empty() || value.size() > 240 || value.front() == '/' || value.front() == '\\'
+        || value.find(':') != std::string::npos || value.find('\\') != std::string::npos)
+        return false;
+    return !hasParentTraversal(value);
+}
+
 std::string urlEncodeComponent(const std::string& value) {
     static constexpr char kHex[] = "0123456789ABCDEF";
     std::string encoded;
@@ -633,6 +650,13 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
                                                          const ThemeCatalogClient::Entry& entry,
                                                          Mode mode,
                                                          ProgressCallback onProgress) {
+    if (!isSafeThemeId(entry.id))
+        throw std::runtime_error("Catalog entry has an unsafe theme id");
+    if ((!entry.path.empty() && !isSafeRelativePath(trimSlashes(entry.path)))
+        || (!entry.manifest.empty() && !isSafeRelativePath(trimSlashes(entry.manifest)))
+        || (!entry.package.empty() && !isSafeRelativePath(trimSlashes(entry.package))))
+        throw std::runtime_error("Catalog entry has an unsafe package path");
+
     Result result;
     result.themeId = entry.id;
     result.installed = true;
