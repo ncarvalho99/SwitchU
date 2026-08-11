@@ -31,7 +31,7 @@
     },
     "system": {
       "firmware": "Versione firmware",
-      "custom_firmware": "Custom Firmware",
+      "custom_firmware": "Firmware personalizzato",
       "not_detected": "Non rilevato",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inattivo / SysNAND",
@@ -53,9 +53,9 @@
       "region_south_korea": "Corea del Sud",
       "auto_update": "Aggiornamento automatico",
       "error_reporting": "Segnalazione errori",
-      "default_profile": "Default Profile",
-      "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time",
+      "default_profile": "Profilo predefinito",
+      "default_profile_desc": "Avvia i giochi con questo profilo quando possibile.",
+      "default_profile_ask": "Chiedi ogni volta",
       "clock_12h": "Orologio 12 ore",
       "clock_12h_desc": "Mostra l’ora in formato 12 ore.",
       "add_user": "Aggiungi Utente",
@@ -99,7 +99,9 @@
       "glass_sharpness": "Nitidezza del vetro",
       "glass_sharpness_desc": "Quanto lo schermo dietro i menu traspare attraverso di essi.",
       "background_speed": "Velocità dell'animazione di sfondo",
-      "background_speed_desc": "Quanto si muovono le forme. Al centro è il ritmo del tema stesso."
+      "background_speed_desc": "Quanto si muovono le forme. Al centro è il ritmo del tema stesso.",
+      "grid_columns": "Colonne della griglia",
+      "grid_rows": "Righe della griglia"
     },
     "internet": {
       "wifi_ssid": "Rete WiFi",
@@ -135,8 +137,8 @@
       "unpair": "Dissocia",
       "pair_connect": "Associa e connetti",
       "device_actions": "Azioni dispositivo",
-      "connected": "Connected",
-      "not_connected": "Not connected"
+      "connected": "Connesso",
+      "not_connected": "Non connesso"
     },
     "sleep": {
       "1min": "1 min",
@@ -157,7 +159,18 @@
       "media_sleep": "Sospensione durante i media",
       "media_sleep_desc": "Consente la sospensione automatica durante la riproduzione di media.",
       "wake_power": "Riattiva al cambio alimentazione",
-      "wake_power_desc": "Riattiva la console quando l'adattatore AC viene collegato o scollegato."
+      "wake_power_desc": "Riattiva la console quando l'adattatore AC viene collegato o scollegato.",
+      "power_actions": "Alimentazione",
+      "auto_sleep": "Sospensione automatica",
+      "sleep_now": "Sospendi",
+      "sleep_now_desc": "Mette la console in sospensione.",
+      "sleep_confirm": "Mettere la console in sospensione?",
+      "reboot": "Riavvia",
+      "reboot_desc": "Riavvia la console.",
+      "reboot_confirm": "Riavviare la console?",
+      "shutdown": "Spegni",
+      "shutdown_desc": "Spegne completamente la console.",
+      "shutdown_confirm": "Spegnere la console?"
     },
     "theme": {
       "preset": "Preset",
@@ -212,7 +225,10 @@
       "used": "Usato",
       "summary": "Riepilogo",
       "details": "Dettagli",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "manage_title": "Gestisci software",
+      "title_id": "ID del titolo",
+      "homebrew_library_unavailable": "La gestione del software installato non è disponibile in modalità homebrew."
     },
     "about": {
       "version": "Versione",
@@ -293,8 +309,8 @@
     "ok": "OK",
     "cancel": "Annulla",
     "delete": "Elimina",
-    "close": "Close",
-    "replace": "Replace"
+    "close": "Chiudi",
+    "replace": "Sostituisci"
   },
   "themeshop": {
     "source": {
@@ -306,7 +322,7 @@
     },
     "tabs": {
       "installed": "Installati",
-      "community": "Community",
+      "community": "Temi statici",
       "animated": "Temi animati",
       "options": "Opzioni"
     },
@@ -360,7 +376,12 @@
       "overwrite_apply_title": "Sostituisci e applica tema",
       "overwrite_apply_message": "Esiste già un pacchetto con questo ID tema. Sostituirlo con la versione GitHub e applicarlo?",
       "overwrite_install_title": "Sostituisci tema installato",
-      "overwrite_install_message": "Esiste già un pacchetto con questo ID tema. Sostituirlo con la versione GitHub?"
+      "overwrite_install_message": "Esiste già un pacchetto con questo ID tema. Sostituirlo con la versione GitHub?",
+      "offline": "Nessuna connessione. Controlla la rete e riprova.",
+      "quality_title": "Qualità del Tema",
+      "quality_message": "Standard lascia spazio per più temi. Alta usa la risoluzione esatta dello schermo ed è più nitida, occupando il doppio.",
+      "quality_standard": "Standard",
+      "quality_high": "Alta"
     },
     "transfer": {
       "prepare_apply": "Preparazione scarica + applica...",
@@ -374,7 +395,11 @@
       "installed_applying": "Tema installato. Applicazione...",
       "installed": "Tema installato.",
       "installed_applied": "Tema installato e applicato.",
-      "installed_apply_failed": "Tema installato, ma non applicato automaticamente."
+      "installed_apply_failed": "Tema installato, ma non applicato automaticamente.",
+      "downloading_package": "Download del tema",
+      "extracting": "Estrazione del tema",
+      "finishing": "Completamento",
+      "no_space": "Spazio insufficiente sulla scheda SD per questo tema"
     },
     "preview": {
       "loading": "Caricamento screenshot...",
@@ -399,6 +424,14 @@
       "pagination_actions": "Sinistra e destra cambiano pulsante. A cambia pagina. Su alla griglia.",
       "no_theme": "Nessun tema",
       "grid_actions": "Croce direzionale per navigare. A apre dettagli. B torna alle schede."
+    },
+    "page": {
+      "next": "Avanti",
+      "prev": "Indietro"
+    },
+    "animated": {
+      "title": "Temi animati",
+      "subtitle": "Sfondi in movimento, con audio quando il tema lo include."
     }
   },
   "hint": {
@@ -418,7 +451,8 @@
     "profile": "Profilo",
     "search": "Cerca",
     "repeat": "Ripeti",
-    "voice": "Voce"
+    "voice": "Voce",
+    "options": "Opzioni"
   },
   "accessibility": {
     "speech": {

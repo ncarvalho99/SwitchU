@@ -4,6 +4,7 @@
 
 #include "core/DebugLog.hpp"
 
+#include <nxui/core/I18n.hpp>
 #include <nxui/core/ThreadPool.hpp>
 
 #include <curlpp/Easy.hpp>
@@ -243,7 +244,10 @@ void ThemeCatalogClient::refresh(nxui::ThreadPool& pool) {
         std::lock_guard<std::mutex> lk(m_mutex);
         urls = m_catalogUrls;
         url = urls.empty() ? std::string() : urls.front();
-        m_loading.begin("Loading theme catalog...");
+        // Traduzida na origem: esta mensagem e escrita no estado da
+        // transferencia e desenhada tal e qual, sem passar por i18n depois.
+        m_loading.begin(nxui::I18n::instance().tr("themeshop.community.loading",
+                                                  "Loading theme catalog..."));
         ++m_revision;
     }
 
@@ -277,8 +281,14 @@ void ThemeCatalogClient::refresh(nxui::ThreadPool& pool) {
         }
 
         try {
-            if (okSources == 0)
-                throw std::runtime_error(lastError.empty() ? "No catalog reachable" : lastError);
+            if (okSources == 0) {
+                // Mensagem para quem le, nao o texto da excecao. Ela ecoava o erro
+                // cru -- em ingles e citando a URL do catalogo que falhou por
+                // ultimo, que podia ser o da outra aba. O detalhe continua no log.
+                throw std::runtime_error(nxui::I18n::instance().tr(
+                    "themeshop.community.offline",
+                    "No connection. Check the internet and try again."));
+            }
             loaded.loading.succeed();
             DebugLog::log("[themeshop] catalog refresh done: %d entries from %d source(s)",
                           (int)loaded.entries.size(), okSources);
@@ -335,6 +345,7 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
         throw std::runtime_error("Catalog is missing the themes array");
 
     snapshot.entries.reserve(themesIt->size());
+    bool previewFallbackDisabled = false;
     for (const auto& item : *themesIt) {
         if (!item.is_object())
             continue;
@@ -347,6 +358,29 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
         readStringOpt(item, "path", entry.path);
         readStringOpt(item, "manifest", entry.manifest);
         readStringOpt(item, "cover", entry.cover);
+        readStringOpt(item, "package", entry.package);
+        if (auto it = item.find("packageBytes"); it != item.end() && it->is_number_unsigned())
+            entry.packageBytes = it->get<std::uint64_t>();
+        readStringOpt(item, "packageHd", entry.packageHd);
+        if (auto it = item.find("packageHdBytes"); it != item.end() && it->is_number_unsigned())
+            entry.packageHdBytes = it->get<std::uint64_t>();
+        readStringOpt(item, "thumbSheet", entry.thumbSheet);
+        readStringOpt(item, "thumbSheetHd", entry.thumbSheetHd);
+        {
+            auto readInt = [&](const char* key, int& out) {
+                auto it = item.find(key);
+                if (it != item.end() && it->is_number_integer()) out = it->get<int>();
+            };
+            readInt("thumbCols", entry.thumbCols);
+            readInt("thumbRows", entry.thumbRows);
+            auto fpsIt = item.find("thumbFps");
+            if (fpsIt != item.end() && fpsIt->is_number())
+                entry.thumbFps = fpsIt->get<float>();
+        }
+        // Uma folha sem grade valida nao anima; melhor cair na capa parada do
+        // que percorrer recortes inventados.
+        if (entry.thumbCols < 1 || entry.thumbRows < 1)
+            entry.thumbSheet.clear();
         readStringArrayOpt(item, "screenshots", entry.screenshots);
         entry.catalogUrl = url;
 
@@ -358,7 +392,18 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
             continue;
         if (entry.manifest.empty())
             entry.manifest = deriveManifestPath(entry.path);
-        if ((entry.cover.empty() || entry.screenshots.empty()) && !entry.manifest.empty()) {
+        // Only when there is no cover at all.
+        //
+        // This used to fire when either the cover or the screenshots were
+        // missing, and a catalogue that lists covers but not screenshots -- ours
+        // does -- made it fetch all 56 manifests on every refresh. With the
+        // network down that became 112 failing requests, each tearing down and
+        // rebuilding the HTTP stack, on the thread drawing the menu. It looked
+        // like the console had frozen applying a theme.
+        //
+        // Extra screenshots are a nicety. A missing cover is the only thing
+        // worth a round trip, because without it the entry has nothing to show.
+        if (entry.cover.empty() && !entry.manifest.empty() && !previewFallbackDisabled) {
             try {
                 PreviewData preview = derivePreviewDataFromManifest(url, entry);
                 if (entry.cover.empty())
@@ -366,7 +411,12 @@ ThemeCatalogClient::Snapshot ThemeCatalogClient::loadCatalog(const std::string& 
                 for (auto& screenshotPath : preview.screenshots)
                     appendUniqueString(entry.screenshots, std::move(screenshotPath));
             } catch (const std::exception& ex) {
-                DebugLog::log("[themeshop] manifest preview fallback failed for %s: %s",
+                // One failure stops the rest. If the network is down for this
+                // entry it is down for the other fifty-five, and retrying each
+                // of them is how a missing connection turned into a frozen menu.
+                previewFallbackDisabled = true;
+                DebugLog::log("[themeshop] manifest preview fallback failed for %s: %s "
+                              "(skipping the rest)",
                               entry.id.c_str(),
                               ex.what());
             }

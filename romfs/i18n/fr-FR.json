@@ -157,7 +157,8 @@
     "profile": "Profil",
     "search": "Rechercher",
     "repeat": "Répéter",
-    "voice": "Voix"
+    "voice": "Voix",
+    "options": "Options"
   },
   "settings": {
     "tabs": {
@@ -176,7 +177,7 @@
     },
     "system": {
       "firmware": "Version du firmware",
-      "custom_firmware": "Custom Firmware",
+      "custom_firmware": "Firmware personnalisé",
       "not_detected": "Non détecté",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inactif / SysNAND",
@@ -200,9 +201,9 @@
       "region_south_korea": "Corée du Sud",
       "auto_update": "Mise à jour automatique",
       "error_reporting": "Rapports d'erreurs",
-      "default_profile": "Default Profile",
-      "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time",
+      "default_profile": "Profil par défaut",
+      "default_profile_desc": "Lance les jeux avec ce profil lorsque c’est possible.",
+      "default_profile_ask": "Demander à chaque fois",
       "add_user": "Ajouter un Utilisateur",
       "add_user_desc": "Crée un nouveau compte utilisateur sur cette console."
     },
@@ -259,7 +260,9 @@
       "glass_sharpness": "Netteté du verre",
       "glass_sharpness_desc": "À quel point l'écran derrière les menus transparaît.",
       "background_speed": "Vitesse de l'animation de fond",
-      "background_speed_desc": "À quelle vitesse les formes dérivent. Le centre est le rythme du thème."
+      "background_speed_desc": "À quelle vitesse les formes dérivent. Le centre est le rythme du thème.",
+      "grid_columns": "Colonnes de la grille",
+      "grid_rows": "Lignes de la grille"
     },
     "internet": {
       "wifi_ssid": "Réseau WiFi",
@@ -295,8 +298,8 @@
       "unpair": "Dissocier",
       "pair_connect": "Associer et connecter",
       "device_actions": "Actions de l'appareil",
-      "connected": "Connected",
-      "not_connected": "Not connected"
+      "connected": "Connecté",
+      "not_connected": "Non connecté"
     },
     "sleep": {
       "1min": "1 min",
@@ -317,7 +320,18 @@
       "media_sleep": "Veille pendant les médias",
       "media_sleep_desc": "Permet la mise en veille automatique pendant la lecture de médias.",
       "wake_power": "Réveil au changement d'alimentation",
-      "wake_power_desc": "Réveille la console quand l'adaptateur secteur est connecté ou déconnecté."
+      "wake_power_desc": "Réveille la console quand l'adaptateur secteur est connecté ou déconnecté.",
+      "power_actions": "Alimentation",
+      "auto_sleep": "Veille automatique",
+      "sleep_now": "Veille",
+      "sleep_now_desc": "Met la console en veille.",
+      "sleep_confirm": "Mettre la console en veille ?",
+      "reboot": "Redémarrer",
+      "reboot_desc": "Redémarre la console.",
+      "reboot_confirm": "Redémarrer la console ?",
+      "shutdown": "Éteindre",
+      "shutdown_desc": "Éteint complètement la console.",
+      "shutdown_confirm": "Éteindre la console ?"
     },
     "theme": {
       "preset": "Preset",
@@ -372,7 +386,10 @@
       "used": "Utilisé",
       "summary": "Résumé",
       "details": "Détails",
-      "delete": "Supprimer"
+      "delete": "Supprimer",
+      "manage_title": "Gérer les logiciels",
+      "title_id": "ID du titre",
+      "homebrew_library_unavailable": "La gestion des logiciels installés est indisponible en mode homebrew."
     },
     "about": {
       "version": "Version",
@@ -438,8 +455,8 @@
     "ok": "OK",
     "cancel": "Annuler",
     "delete": "Supprimer",
-    "close": "Close",
-    "replace": "Replace"
+    "close": "Fermer",
+    "replace": "Remplacer"
   },
   "themeshop": {
     "source": {
@@ -451,7 +468,7 @@
     },
     "tabs": {
       "installed": "Installés",
-      "community": "Communauté",
+      "community": "Thèmes statiques",
       "animated": "Thèmes animés",
       "options": "Options"
     },
@@ -522,7 +539,12 @@
       "overwrite_apply_title": "Remplacer et appliquer le thème",
       "overwrite_apply_message": "Un paquet avec cet ID de thème est déjà installé. Le remplacer par la version GitHub, puis l’appliquer ?",
       "overwrite_install_title": "Remplacer le thème installé",
-      "overwrite_install_message": "Un paquet avec cet ID de thème est déjà installé. Le remplacer par la version GitHub ?"
+      "overwrite_install_message": "Un paquet avec cet ID de thème est déjà installé. Le remplacer par la version GitHub ?",
+      "offline": "Pas de connexion. Vérifiez le réseau et réessayez.",
+      "quality_title": "Qualité du Thème",
+      "quality_message": "La standard laisse de la place pour plus de thèmes. La haute utilise la résolution exacte de l'écran et paraît plus nette, pour le double de taille.",
+      "quality_standard": "Standard",
+      "quality_high": "Haute"
     },
     "transfer": {
       "prepare_apply": "Préparation du téléchargement + application...",
@@ -536,7 +558,11 @@
       "installed_applying": "Thème installé. Application en cours...",
       "installed": "Thème installé.",
       "installed_applied": "Thème installé et appliqué.",
-      "installed_apply_failed": "Thème installé, mais il n’a pas pu être appliqué automatiquement."
+      "installed_apply_failed": "Thème installé, mais il n’a pas pu être appliqué automatiquement.",
+      "downloading_package": "Téléchargement du thème",
+      "extracting": "Extraction du thème",
+      "finishing": "Finalisation",
+      "no_space": "Espace insuffisant sur la carte SD pour ce thème"
     },
     "preview": {
       "loading": "Chargement de la capture...",
@@ -544,6 +570,14 @@
       "missing": "Aucune capture",
       "prev": "Préc.",
       "next": "Suiv."
+    },
+    "page": {
+      "next": "Suivant",
+      "prev": "Précédent"
+    },
+    "animated": {
+      "title": "Thèmes animés",
+      "subtitle": "Fonds animés, avec le son quand le thème en apporte."
     }
   },
   "dialog": {

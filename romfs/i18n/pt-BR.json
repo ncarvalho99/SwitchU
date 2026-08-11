@@ -31,7 +31,7 @@
     },
     "system": {
       "firmware": "Versão do Firmware",
-      "custom_firmware": "Custom Firmware",
+      "custom_firmware": "Firmware personalizado",
       "not_detected": "Não detectado",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inativo / SysNAND",
@@ -53,9 +53,9 @@
       "region_south_korea": "Coreia do Sul",
       "auto_update": "Atualização Automática",
       "error_reporting": "Relatório de Erros",
-      "default_profile": "Default Profile",
-      "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time",
+      "default_profile": "Perfil padrão",
+      "default_profile_desc": "Inicia os jogos com este perfil quando possível.",
+      "default_profile_ask": "Perguntar sempre",
       "clock_12h": "Relógio 12h",
       "clock_12h_desc": "Mostra a hora no formato de 12 horas.",
       "add_user": "Adicionar Usuário",
@@ -99,7 +99,9 @@
       "glass_sharpness": "Nitidez do vidro",
       "glass_sharpness_desc": "O quanto a tela atrás dos menus aparece através deles.",
       "background_speed": "Velocidade da animação de fundo",
-      "background_speed_desc": "O quanto as formas se movem. O centro é o ritmo do próprio tema."
+      "background_speed_desc": "O quanto as formas se movem. O centro é o ritmo do próprio tema.",
+      "grid_columns": "Colunas da grade",
+      "grid_rows": "Linhas da grade"
     },
     "internet": {
       "wifi_ssid": "Rede WiFi",
@@ -135,8 +137,8 @@
       "unpair": "Desparear",
       "pair_connect": "Parear e Conectar",
       "device_actions": "Ações do Dispositivo",
-      "connected": "Connected",
-      "not_connected": "Not connected"
+      "connected": "Conectado",
+      "not_connected": "Não conectado"
     },
     "sleep": {
       "1min": "1 min",
@@ -157,7 +159,18 @@
       "media_sleep": "Descanso Durante Reprodução de Mídia",
       "media_sleep_desc": "Permite que o console entre em descanso automático mesmo durante a reprodução de mídia.",
       "wake_power": "Despertar ao Mudar Estado de Energia",
-      "wake_power_desc": "Desperta o console quando o adaptador AC é conectado ou desconectado."
+      "wake_power_desc": "Desperta o console quando o adaptador AC é conectado ou desconectado.",
+      "power_actions": "Energia",
+      "auto_sleep": "Suspensão automática",
+      "sleep_now": "Suspender",
+      "sleep_now_desc": "Coloca o console em suspensão.",
+      "sleep_confirm": "Colocar o console em suspensão?",
+      "reboot": "Reiniciar",
+      "reboot_desc": "Reinicia o console.",
+      "reboot_confirm": "Reiniciar o console?",
+      "shutdown": "Desligar",
+      "shutdown_desc": "Desliga o console completamente.",
+      "shutdown_confirm": "Desligar o console?"
     },
     "theme": {
       "preset": "Predefinição",
@@ -212,7 +225,10 @@
       "used": "Usado",
       "summary": "Resumo",
       "details": "Detalhes",
-      "delete": "Excluir"
+      "delete": "Excluir",
+      "manage_title": "Gerenciar softwares",
+      "title_id": "ID do título",
+      "homebrew_library_unavailable": "O gerenciamento de softwares instalados não está disponível no modo homebrew."
     },
     "about": {
       "version": "Versão",
@@ -293,8 +309,8 @@
     "ok": "OK",
     "cancel": "Cancelar",
     "delete": "Excluir",
-    "close": "Close",
-    "replace": "Replace"
+    "close": "Fechar",
+    "replace": "Substituir"
   },
   "themeshop": {
     "source": {
@@ -306,7 +322,7 @@
     },
     "tabs": {
       "installed": "Instalados",
-      "community": "Comunidade",
+      "community": "Temas Estáticos",
       "animated": "Temas Animados",
       "options": "Opções"
     },
@@ -360,7 +376,12 @@
       "overwrite_apply_title": "Substituir e aplicar tema",
       "overwrite_apply_message": "Já existe um pacote com este ID de tema. Substituir pela versão do GitHub e aplicar?",
       "overwrite_install_title": "Substituir tema instalado",
-      "overwrite_install_message": "Já existe um pacote com este ID de tema. Substituir pela versão do GitHub?"
+      "overwrite_install_message": "Já existe um pacote com este ID de tema. Substituir pela versão do GitHub?",
+      "offline": "Sem conexão. Verifique a internet e tente de novo.",
+      "quality_title": "Qualidade do Tema",
+      "quality_message": "A padrão cabe mais temas no cartão. A alta usa exatamente a resolução da tela e fica mais nítida, ocupando o dobro.",
+      "quality_standard": "Padrão",
+      "quality_high": "Alta"
     },
     "transfer": {
       "prepare_apply": "Preparando baixar + aplicar...",
@@ -374,7 +395,11 @@
       "installed_applying": "Tema instalado. Aplicando...",
       "installed": "Tema instalado.",
       "installed_applied": "Tema instalado e aplicado.",
-      "installed_apply_failed": "Tema instalado, mas não foi aplicado automaticamente."
+      "installed_apply_failed": "Tema instalado, mas não foi aplicado automaticamente.",
+      "downloading_package": "Baixando tema",
+      "extracting": "Extraindo tema",
+      "finishing": "Concluindo",
+      "no_space": "Espaço insuficiente no cartão SD para este tema"
     },
     "preview": {
       "loading": "Carregando captura...",
@@ -399,6 +424,14 @@
       "pagination_actions": "Esquerda e direita mudam botão. A muda página. Cima para a grade.",
       "no_theme": "Nenhum tema",
       "grid_actions": "Direcional para navegar. A abre detalhes. B volta para abas."
+    },
+    "page": {
+      "next": "Próxima",
+      "prev": "Anterior"
+    },
+    "animated": {
+      "title": "Temas Animados",
+      "subtitle": "Fundos em movimento, com som quando o tema traz."
     }
   },
   "hint": {
@@ -418,7 +451,8 @@
     "profile": "Perfil",
     "search": "Buscar",
     "repeat": "Repetir",
-    "voice": "Voz"
+    "voice": "Voz",
+    "options": "Opções"
   },
   "accessibility": {
     "speech": {

@@ -31,7 +31,7 @@
     },
     "system": {
       "firmware": "Versión del firmware",
-      "custom_firmware": "Custom Firmware",
+      "custom_firmware": "Firmware personalizado",
       "not_detected": "No detectado",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inactivo / SysNAND",
@@ -99,7 +99,9 @@
       "glass_sharpness": "Nitidez del cristal",
       "glass_sharpness_desc": "Cuánto se ve la pantalla detrás de los menús a través de ellos.",
       "background_speed": "Velocidad de la animación de fondo",
-      "background_speed_desc": "Cuánto se mueven las formas. El centro es el ritmo del propio tema."
+      "background_speed_desc": "Cuánto se mueven las formas. El centro es el ritmo del propio tema.",
+      "grid_columns": "Columnas de la cuadrícula",
+      "grid_rows": "Filas de la cuadrícula"
     },
     "internet": {
       "wifi_ssid": "Red WiFi",
@@ -157,7 +159,18 @@
       "media_sleep": "Suspender durante medios",
       "media_sleep_desc": "Permite suspender automáticamente durante reproducción de medios.",
       "wake_power": "Despertar al cambiar energía",
-      "wake_power_desc": "Despierta la consola al conectar o desconectar el adaptador AC."
+      "wake_power_desc": "Despierta la consola al conectar o desconectar el adaptador AC.",
+      "power_actions": "Energía",
+      "auto_sleep": "Suspensión automática",
+      "sleep_now": "Suspender",
+      "sleep_now_desc": "Pone la consola en suspensión.",
+      "sleep_confirm": "¿Poner la consola en suspensión?",
+      "reboot": "Reiniciar",
+      "reboot_desc": "Reinicia la consola.",
+      "reboot_confirm": "¿Reiniciar la consola?",
+      "shutdown": "Apagar",
+      "shutdown_desc": "Apaga la consola por completo.",
+      "shutdown_confirm": "¿Apagar la consola?"
     },
     "theme": {
       "preset": "Preajuste",
@@ -212,7 +225,10 @@
       "used": "Usado",
       "summary": "Resumen",
       "details": "Detalles",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "manage_title": "Gestionar software",
+      "title_id": "ID del título",
+      "homebrew_library_unavailable": "La gestión de software instalado no está disponible en modo homebrew."
     },
     "about": {
       "version": "Versión",
@@ -306,7 +322,7 @@
     },
     "tabs": {
       "installed": "Instalados",
-      "community": "Comunidad",
+      "community": "Temas estáticos",
       "animated": "Temas animados",
       "options": "Opciones"
     },
@@ -360,7 +376,12 @@
       "overwrite_apply_title": "Reemplazar y aplicar tema",
       "overwrite_apply_message": "Ya hay un paquete con este ID de tema. ¿Reemplazarlo por la versión de GitHub y aplicarlo?",
       "overwrite_install_title": "Reemplazar tema instalado",
-      "overwrite_install_message": "Ya hay un paquete con este ID de tema. ¿Reemplazarlo por la versión de GitHub?"
+      "overwrite_install_message": "Ya hay un paquete con este ID de tema. ¿Reemplazarlo por la versión de GitHub?",
+      "offline": "Sin conexión. Comprueba la red e inténtalo de nuevo.",
+      "quality_title": "Calidad del Tema",
+      "quality_message": "La estándar deja espacio para más temas. La alta usa la resolución exacta de la pantalla y se ve más nítida, ocupando el doble.",
+      "quality_standard": "Estándar",
+      "quality_high": "Alta"
     },
     "transfer": {
       "prepare_apply": "Preparando descarga + aplicación...",
@@ -374,7 +395,11 @@
       "downloading_file": "Descargando",
       "finalize_apply": "Terminando instalación antes de aplicar...",
       "finalize_install": "Terminando instalación...",
-      "installed_applying": "Tema instalado. Aplicando..."
+      "installed_applying": "Tema instalado. Aplicando...",
+      "downloading_package": "Descargando tema",
+      "extracting": "Extrayendo tema",
+      "finishing": "Finalizando",
+      "no_space": "No hay espacio suficiente en la tarjeta SD para este tema"
     },
     "preview": {
       "loading": "Cargando captura...",
@@ -399,6 +424,14 @@
       "pagination_actions": "Izquierda y derecha cambian botón. A cambia página. Arriba a la cuadrícula.",
       "no_theme": "Ningún tema",
       "grid_actions": "Cruz direccional para navegar. A abre detalles. B vuelve a las pestañas."
+    },
+    "page": {
+      "next": "Siguiente",
+      "prev": "Anterior"
+    },
+    "animated": {
+      "title": "Temas animados",
+      "subtitle": "Fondos en movimiento, con sonido cuando el tema lo trae."
     }
   },
   "hint": {
@@ -418,7 +451,8 @@
     "profile": "Perfil",
     "search": "Buscar",
     "repeat": "Repetir",
-    "voice": "Voz"
+    "voice": "Voz",
+    "options": "Opciones"
   },
   "accessibility": {
     "speech": {
