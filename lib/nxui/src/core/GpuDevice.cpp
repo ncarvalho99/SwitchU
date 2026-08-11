@@ -5,8 +5,28 @@
 
 namespace nxui {
 
+namespace {
+
+// Sem este retorno o deko3d nao tem para onde falar, e uma alocacao recusada
+// derruba o processo sem uma linha em lugar nenhum -- que e exatamente a forma
+// das mortes que investigamos: o log do menu termina no meio e o daemon
+// relanca. Com ele, o motivo fica escrito.
+void deviceDebug(void* userData, const char* context, DkResult result, const char* message) {
+    (void)userData;
+    char buf[320];
+    std::snprintf(buf, sizeof(buf), "[deko3d] %s: resultado=%d %s",
+                  context ? context : "?", (int)result, message ? message : "");
+    svcOutputDebugString(buf, std::strlen(buf));
+    if (GpuDevice::debugSink())
+        GpuDevice::debugSink()(buf);
+}
+
+}  // namespace
+
+GpuDevice::DebugSink GpuDevice::s_debugSink = nullptr;
+
 bool GpuDevice::initialize() {
-    m_dev   = dk::DeviceMaker{}.create();
+    m_dev   = dk::DeviceMaker{}.setCbDebug(deviceDebug).create();
     m_queue = dk::QueueMaker{m_dev}.setFlags(DkQueueFlags_Graphics).create();
 
     for (int i = 0; i < NUM_FB; ++i) {
@@ -168,12 +188,14 @@ void GpuDevice::waitIdle() {
     if (m_queue) m_queue.waitIdle();
 }
 
+uint64_t GpuDevice::s_imageBudget = GpuDevice::kDefaultImageBudget;
+
 dk::UniqueMemBlock GpuDevice::allocImageMemory(uint32_t size) {
     size = (size + kGpuAlign - 1) & ~(kGpuAlign - 1);
-    if (m_imageMemUsed + size > kDefaultImageBudget) {
+    if (m_imageMemUsed + size > s_imageBudget) {
         std::fprintf(stderr, "[GpuDevice] image budget exceeded (%llu + %u > %llu), skipping\n",
                      (unsigned long long)m_imageMemUsed, size,
-                     (unsigned long long)kDefaultImageBudget);
+                     (unsigned long long)s_imageBudget);
         return {};  // return empty MemBlock — caller should check validity
     }
     auto blk = dk::MemBlockMaker{m_dev, size}
@@ -194,10 +216,10 @@ void GpuDevice::freeImageMemory(uint32_t size) {
 GpuDevice::ImageAlloc GpuDevice::allocImageFromPool(uint32_t size, uint32_t alignment) {
     if (alignment < kGpuAlign) alignment = kGpuAlign;
     size = (size + kGpuAlign - 1) & ~(kGpuAlign - 1);
-    if (m_imageMemUsed + size > kDefaultImageBudget) {
+    if (m_imageMemUsed + size > s_imageBudget) {
         std::fprintf(stderr, "[GpuDevice] pool budget exceeded (%llu + %u > %llu)\n",
                      (unsigned long long)m_imageMemUsed, size,
-                     (unsigned long long)kDefaultImageBudget);
+                     (unsigned long long)s_imageBudget);
         return {};
     }
     // Try to fit in an existing chunk

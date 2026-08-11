@@ -5,6 +5,11 @@
 #include <nxui/core/Animation.hpp>
 #include <nxui/core/I18n.hpp>
 #include "DebugLog.hpp"
+
+// Definido em main.cpp: quanto heap a escada conseguiu no arranque.
+#ifndef SWITCHU_HOMEBREW
+extern "C" size_t g_switchuHeapSize;
+#endif
 #include "bluetooth/BluetoothManager.hpp"
 #include <switch.h>
 #ifdef SWITCHU_MENU
@@ -294,11 +299,28 @@ bool WiiUMenuApp::onCreate() {
         const Result rt = svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
         const Result ru = svcGetInfo(&used,  InfoType_UsedMemorySize,  CUR_PROCESS_HANDLE, 0);
         if (R_SUCCEEDED(rt) && R_SUCCEEDED(ru)) {
+            // O heap e o teto de verdade: toda imagem sai dele, junto com
+            // framebuffers, fontes, icones e o heap do C++. Medido no console,
+            // com 224 MB de heap o processo morria por volta de 108 MB de
+            // imagem, ou seja o resto ocupava cerca de 115 MB.
+            //
+            // Entao o orcamento e o que sobra do heap concedido depois de
+            // reservar essa parte, e nao um numero escolhido a mao: com 224 MB
+            // reproduz os 112 de antes, com 352 MB sobe para 232.
+#ifndef SWITCHU_HOMEBREW
+            {
+                constexpr uint64_t kNonImageReserve = 120ull * 1024ull * 1024ull;
+                const uint64_t heap = g_switchuHeapSize;
+                if (heap > kNonImageReserve + nxui::GpuDevice::kDefaultImageBudget)
+                    nxui::GpuDevice::setImageBudget(heap - kNonImageReserve);
+                DebugLog::log("[mem] heap concedido %.1f MB", heap / 1048576.0);
+            }
+#endif
             DebugLog::log("[mem] process has %.1f MB, using %.1f MB, %.1f MB free "
                           "-- image budget is %.1f MB of that",
                           total / 1048576.0, used / 1048576.0,
                           (double)(total - used) / 1048576.0,
-                          nxui::GpuDevice::kDefaultImageBudget / 1048576.0);
+                          nxui::GpuDevice::imageBudget() / 1048576.0);
         } else {
             DebugLog::log("[mem] svcGetInfo failed (total=0x%x used=0x%x)", rt, ru);
         }
@@ -1382,6 +1404,18 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
     m_audio.loadSfx(Sfx::ConfirmPositive, sfxPath("sfx/confirm.wav"));
     m_audio.loadSfx(Sfx::Volume,          sfxPath("sfx/volume.wav"));
 
+    // O tema manda na musica quando traz a propria. Os efeitos continuam do
+    // preset: um tema nao deveria ter de embarcar um som de clique para ter
+    // direito a trilha.
+    if (!m_themeMusicTracks.empty()) {
+        m_audio.clearTracks();
+        for (const auto& track : m_themeMusicTracks)
+            m_audio.loadTrack(track);
+        DebugLog::log("[audio] %zu track(s) from the theme (preset music skipped)",
+                      m_themeMusicTracks.size());
+        return;
+    }
+
     std::string musicDir = musicBase + "/music";
     std::error_code ec;
     if (std::filesystem::is_directory(musicDir, ec)) {
@@ -1580,7 +1614,39 @@ void WiiUMenuApp::finalizeRefresh() {
 
 #endif
 
+bool WiiUMenuApp::inThemeShopForMemorySampling() const {
+    return m_themeShop && m_themeShop->isActive();
+}
+
 void WiiUMenuApp::onUpdate(float dt) {
+    // O restante da sequencia de fundo entra por aqui, alguns quadros por vez.
+    // Ler os 71 MB onde o tema e aplicado custava 3.4 dos 4.1 segundos de
+    // retorno de um jogo; agora o menu abre no primeiro quadro e o resto chega
+    // enquanto ele ja esta na mao de quem usa.
+    if (m_background)
+        m_background->pumpImageSequence(app().gpu(), app().renderer());
+
+    // Amostrado enquanto a loja de temas esta aberta, que e onde o menu morreu
+    // duas vezes sem deixar rastro. O daemon registrou "menu exited (reason=0)"
+    // -- saida limpa, nao queda -- e uma saida limpa pedida pelo sistema tem
+    // cara de pressao de memoria. Sem medir durante, isso fica em suposicao.
+    if (inThemeShopForMemorySampling()) {
+        m_memSampleTimer += dt;
+        if (m_memSampleTimer >= 2.f) {
+            m_memSampleTimer = 0.f;
+            u64 total = 0, used = 0;
+            if (R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0))
+             && R_SUCCEEDED(svcGetInfo(&used,  InfoType_UsedMemorySize,  CUR_PROCESS_HANDLE, 0))) {
+                DebugLog::log("[mem] processo %.1f de %.1f MB  imagem %.1f de %.1f MB",
+                              used / 1048576.0, total / 1048576.0,
+                              app().gpu().imageMemoryUsed() / 1048576.0,
+                              nxui::GpuDevice::imageBudget() / 1048576.0);
+            }
+        }
+    } else {
+        m_memSampleTimer = 0.f;
+    }
+
 #ifdef SWITCHU_MENU
     // Stay unbuffered for the first few seconds of the run loop, not just up to
     // the first frame. The deferred icon and sidebar uploads run on frame one,
@@ -1599,7 +1665,15 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
     // A hard power-off still loses whatever came after the last flush, so
     // drain on a timer as the daemon does.
-    switchu::FileLog::flushIfStale();
+    //
+    // One second while the theme screen is open, two otherwise. Every crash
+    // reported so far happened in there -- applying a theme, or seconds after a
+    // catalogue loaded -- and every one of them arrived with the last lines
+    // still in RAM. Three investigations ran on logs that stopped before the
+    // interesting part; the difference in cost is one flush a second.
+    const bool inThemeScreen = m_themeShop && m_themeShop->isActive();
+    switchu::FileLog::flushIfStale(inThemeScreen ? 1 : 2);
+
 
     // Skip rendering the home scene while the settings overlay is settled.
     // The A/B probe measured it: with the occluded scene rendered the frame
@@ -2015,6 +2089,12 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             add(buttonGlyph(nxui::Button::A), i18n.tr("hint.open", "Open"));
 #endif
             add(buttonGlyph(nxui::Button::Y), i18n.tr("hint.move", "Move"));
+#ifdef SWITCHU_MENU
+            // The options menu was reachable and unannounced: every other
+            // button on this icon is listed here, so somebody who never pressed
+            // + had no way to learn that software information and delete exist.
+            add(buttonGlyph(nxui::Button::Plus), i18n.tr("hint.options", "Options"));
+#endif
         }
     } else if (cur) {
         for (const auto& btn : m_sidebar.leftButtons()) {
