@@ -27,15 +27,18 @@ public:
         , m_slot(o.m_slot), m_valid(o.m_valid)
         , m_allocSize(o.m_allocSize)
         , m_gpu(o.m_gpu)
+        , m_ren(o.m_ren)
     {
         o.m_width = o.m_height = 0;
         o.m_slot = -1;
         o.m_valid = false;
         o.m_allocSize = 0;
         o.m_gpu = nullptr;
+        o.m_ren = nullptr;
     }
     Texture& operator=(Texture&& o) noexcept {
         if (this != &o) {
+            releaseSlot();
             if (m_gpu && m_mem && m_allocSize > 0)
                 m_gpu->freeImageMemory(m_allocSize);
             m_mem   = nullptr;
@@ -45,11 +48,13 @@ public:
             m_slot  = o.m_slot;   m_valid  = o.m_valid;
             m_allocSize = o.m_allocSize;
             m_gpu = o.m_gpu;
+            m_ren = o.m_ren;
             o.m_width = o.m_height = 0;
             o.m_slot = -1;
             o.m_valid = false;
             o.m_allocSize = 0;
             o.m_gpu = nullptr;
+            o.m_ren = nullptr;
         }
         return *this;
     }
@@ -81,6 +86,12 @@ public:
     // A DDS of BC1 blocks, uploaded compressed and sampled by the GPU as-is.
     // Reached automatically by loadFromFile for a ".dds" path.
     bool loadBc1File(GpuDevice& gpu, Renderer& ren, const std::string& path);
+
+    // The same DDS with the file already read. The two halves cost very
+    // different things -- reading a frame sequence off the card is tens of
+    // megabytes of I/O, uploading it is microseconds -- and only the upload has
+    // to happen on the render thread. Split so the reading can go elsewhere.
+    bool loadBc1Memory(GpuDevice& gpu, Renderer& ren, const uint8_t* data, size_t size);
 #endif
 
     // Load from SDL_Surface-style data (RGBA8, row pitch may differ)
@@ -111,6 +122,8 @@ public:
 #endif
 
 private:
+    void releaseSlot();
+
 #ifdef NXUI_BACKEND_DEKO3D
     // Shared by every format: allocation, budget accounting and descriptor
     // registration live here once.
@@ -123,6 +136,9 @@ private:
     dk::UniqueMemBlock m_mem;
     uint32_t m_allocSize = 0;
     GpuDevice* m_gpu = nullptr;
+    // Guardado para devolver o slot de descritor ao morrer. Sem isso cada
+    // textura destruida deixava o seu slot perdido para sempre.
+    Renderer* m_ren = nullptr;
 #else
     SDL_Texture* m_sdlTex = nullptr;
     GpuDevice*   m_gpu = nullptr;

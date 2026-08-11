@@ -475,18 +475,58 @@ void WiiUMenuApp::createThemeShop() {
             : ThemePackageInstaller::Mode::InstallOnly;
         std::string destination = ThemePackageInstaller::destinationRootFor(entryCopy.id, mode);
 
-        auto startTransfer = [this, entryCopy, applyAfterInstall]() {
-            startThemePackageTransfer(entryCopy, applyAfterInstall);
+        // Uma so funcao para as duas versoes: o instalador nao precisa saber
+        // que existem duas, basta receber a entrada com o pacote escolhido.
+        auto startTransfer = [this, entryCopy, applyAfterInstall](bool hd) {
+            ThemeCatalogClient::Entry escolha = entryCopy;
+            if (hd && !escolha.packageHd.empty()) {
+                escolha.package = escolha.packageHd;
+                escolha.packageBytes = escolha.packageHdBytes;
+            }
+            startThemePackageTransfer(escolha, applyAfterInstall);
+        };
+
+        // Qual das duas resolucoes, quando o tema tem as duas. Perguntado uma
+        // vez, antes de baixar, porque a diferenca e grande demais para ser
+        // decidida por padrao: 720p e a resolucao da tela e nao amplia nada,
+        // mas ocupa 147 MB no cartao contra 68 e quase todo o orcamento de
+        // imagem do menu.
+        auto askResolution = [this, entryCopy, startTransfer]() {
+            auto& i18n = nxui::I18n::instance();
+            if (entryCopy.packageHd.empty() || !m_dialog) {
+                startTransfer(false);
+                return;
+            }
+            const auto mb = [](std::uint64_t b) {
+                return std::to_string(b / 1048576) + " MB";
+            };
+            m_dialogReturnFocus = focusManager().current();
+            m_dialog->show(
+                i18n.tr("themeshop.community.quality_title", "Theme Quality"),
+                i18n.tr("themeshop.community.quality_message",
+                        "Standard fits more themes on the card. High matches the screen "
+                        "resolution exactly and looks sharper, at twice the size."),
+                {
+                    {i18n.tr("themeshop.community.quality_standard", "Standard")
+                         + " (" + mb(entryCopy.packageBytes) + ")",
+                     [startTransfer]() { startTransfer(false); }, true},
+                    {i18n.tr("themeshop.community.quality_high", "High")
+                         + " (" + mb(entryCopy.packageHdBytes) + ")",
+                     [startTransfer]() { startTransfer(true); }, true}
+                },
+                0,
+                {});
+            focusManager().setFocus(m_dialog.get());
         };
 
         if (!pathExists(destination)) {
-            startTransfer();
+            askResolution();
             return;
         }
 
         auto& i18n = nxui::I18n::instance();
         if (!m_dialog) {
-            startTransfer();
+            startTransfer(false);
             return;
         }
 
@@ -502,7 +542,7 @@ void WiiUMenuApp::createThemeShop() {
                           "A package with this theme ID is already installed. Replace it with the version from GitHub?"),
             {
                 {i18n.tr("button.cancel", "Cancel"), {}, true},
-                {i18n.tr("button.replace", "Replace"), [startTransfer]() { startTransfer(); }, true}
+                {i18n.tr("button.replace", "Replace"), [askResolution]() { askResolution(); }, true}
             },
             1,
             {});
@@ -949,6 +989,7 @@ void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSoun
     rebuildThemeFromColors();
     DebugLog::log("[theme-apply] rebuildThemeFromColors done: preset=%s", presetRef.c_str());
 
+
     if (applyBundledSound && !preset->soundPreset.empty()) {
         DebugLog::log("[theme-apply] changeSoundPreset queued: preset=%s sound=%s",
                       presetRef.c_str(),
@@ -970,6 +1011,31 @@ void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSoun
         m_themeShop->requestRenderDiagnostics(6);
     m_audio.playSfx(Sfx::ThemeToggle);
     DebugLog::log("[theme-apply] complete preset=%s", presetRef.c_str());
+}
+
+// Troca a trilha pela do tema. Fica separado de changeSoundPreset porque as
+// duas coisas nao andam juntas: o preset governa os efeitos e continua valendo,
+// enquanto as faixas passam a ser propriedade do tema.
+void WiiUMenuApp::applyThemeMusic(const std::vector<std::string>& tracks) {
+    if (m_audioFuture.valid())
+        m_audioFuture.get();   // o audio carrega em outra linha; sem isto as
+                               // faixas do preset chegariam depois destas
+    if (tracks.empty()) {
+        DebugLog::log("[audio] theme declared music but none of it exists");
+        return;
+    }
+
+    const bool wasPlaying = m_audio.isPlaying();
+    m_audio.stop();
+    m_audio.clearTracks();
+    for (const auto& track : tracks)
+        m_audio.loadTrack(track);
+    DebugLog::log("[audio] %zu track(s) from the theme", tracks.size());
+
+    // So volta a tocar se ja estava: trocar de tema nao e motivo para ligar
+    // musica em quem a desligou.
+    if (wasPlaying && m_config.musicEnabled)
+        m_audio.play();
 }
 
 void WiiUMenuApp::applyUiLanguage() {
@@ -1003,6 +1069,27 @@ ThemePreset WiiUMenuApp::buildEffectiveThemePreset() {
 }
 
 void WiiUMenuApp::applyThemeResources(const ThemePreset& preset) {
+    // A trilha do tema decidida aqui, e nao no caminho de aplicar manualmente.
+    // Este e o unico ponto por onde os dois passam: no boot o tema e carregado
+    // direto por aqui, entao a musica so trocava quando alguem aplicava a mao,
+    // e reiniciar o console devolvia a trilha do preset.
+    //
+    // Definida sempre, inclusive vazia: um tema sem trilha precisa devolver a
+    // musica ao preset, e isso tem de estar resolvido antes de changeSoundPreset
+    // ser disparado, porque ele carrega em outra thread e le este valor.
+    m_themeMusicTracks.clear();
+    if (!preset.music.empty()) {
+        for (const auto& track : preset.music) {
+            std::string path = resolveThemeAssetPath(preset, track);
+            std::error_code ec;
+            if (!path.empty() && std::filesystem::exists(path, ec))
+                m_themeMusicTracks.push_back(std::move(path));
+            else
+                DebugLog::log("[theme-apply] theme track missing: %s", safeLogPath(path));
+        }
+        applyThemeMusic(m_themeMusicTracks);
+    }
+
     auto& gpu = app().gpu();
     auto& ren = app().renderer();
     const bool forceResourceReload = m_forceThemeResourceReload;

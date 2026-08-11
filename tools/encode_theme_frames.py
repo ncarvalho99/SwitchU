@@ -29,7 +29,12 @@ from PIL import Image
 # What the frames together may cost. Mirrors kFrameMemoryBudget in
 # WaraWaraBackground.cpp; if that moves, this has to move with it, or the tool
 # blesses a sequence the console then samples down.
-FRAME_BUDGET_MB = 32.0
+#
+# There is a second ceiling on the console that is not about bytes: each frame
+# is its own GPU memory block, and 600 of them crashed the menu mid-load. The
+# runtime caps the count at 320 -- a sequence longer than that plays sampled.
+MAX_FRAMES = 320
+FRAME_BUDGET_MB = 80.0
 
 
 def gpu_bytes(w, h):
@@ -70,12 +75,39 @@ def to_565(c):
     return packed, decoded
 
 
-def encode_bc1(img):
+# Bayer 4x4, do tamanho exato de um bloco BC1.
+BAYER = np.array([[0, 8, 2, 10],
+                  [12, 4, 14, 6],
+                  [3, 11, 1, 9],
+                  [15, 7, 13, 5]], dtype=np.float32)
+BAYER = (BAYER + 0.5) / 16.0 - 0.5     # -0.5 .. +0.5
+
+
+def encode_bc1(img, refine=1, dither=0.5):
     """Encode to BC1 blocks.
 
-    Endpoints come from the extremes along each block's principal axis rather
-    than from its per-channel min and max. The cheap version costs about 10%
-    more error on real footage, measured, for the same bytes.
+    Duas coisas alem de escolher o eixo principal, porque o BC1 da quatro cores
+    a cada bloco de 4x4 e um gradiente suave nao cabe em quatro:
+
+    - Os extremos do eixo sao sensiveis a outlier: um pixel claro estica a reta
+      e os outros quinze passam a ser quantizados grosso. Com os indices ja
+      escolhidos, o par de extremos que minimiza o erro sai de um sistema 2x2, e
+      o resultado realimenta a escolha dos indices.
+    - O arredondamento do indice recebe um deslocamento em padrao Bayer, o que
+      troca degrau por ruido fino. O olho perdoa ruido e nao perdoa degrau.
+
+    Medido num quadro de "Miles Morales Purple Neon", que e o pior caso do
+    catalogo -- neon suave sobre preto:
+
+        extremos do eixo        34.46 dB   49.5% dos blocos com <=2 cores
+        refit 1x + dither 0.5   35.51 dB   46.0%
+        refit 2x + dither 0.5   35.76 dB   46.5%
+
+    Uma iteracao, nao duas: a segunda rende 0.25 dB e custa 35% mais tempo, o
+    que num catalogo de 14 mil quadros e quase uma hora por um quarto de dB.
+
+    O dither piora o PSNR de proposito: ele troca erro concentrado por erro
+    espalhado, e e o concentrado que se ve como quadrado.
     """
     a = np.asarray(img.convert('RGB'), dtype=np.float32)
     h, w, _ = a.shape
@@ -90,20 +122,53 @@ def encode_bc1(img):
     centred = blocks - mean
     axis = np.linalg.svd(centred, full_matrices=False)[2][:, 0, :][:, None, :]
     proj = (centred * axis).sum(-1)
-    p_hi, hi = to_565(mean[:, 0] + axis[:, 0] * proj.max(1, keepdims=True))
-    p_lo, lo = to_565(mean[:, 0] + axis[:, 0] * proj.min(1, keepdims=True))
+    hi = mean[:, 0] + axis[:, 0] * proj.max(1, keepdims=True)
+    lo = mean[:, 0] + axis[:, 0] * proj.min(1, keepdims=True)
+
+    W = np.array([1.0, 0.0, 2 / 3, 1 / 3], dtype=np.float32)   # peso de hi por indice
+    for _ in range(max(0, refine)):
+        _, dhi = to_565(hi)
+        _, dlo = to_565(lo)
+        palette = np.stack([dhi, dlo, (2 * dhi + dlo) / 3, (dhi + 2 * dlo) / 3], 1)
+        idx = ((blocks[:, None] - palette[:, :, None]) ** 2).sum(-1).argmin(1)
+
+        wgt = W[idx]
+        one = 1.0 - wgt
+        A = (wgt * wgt).sum(1)
+        B = (wgt * one).sum(1)
+        C = (one * one).sum(1)
+        X = (wgt[..., None] * blocks).sum(1)
+        Y = (one[..., None] * blocks).sum(1)
+        det = A * C - B * B
+        ok = np.abs(det) > 1e-6
+        safe = np.where(ok, det, 1.0)[:, None]
+        hi = np.clip(np.where(ok[:, None], (C[:, None] * X - B[:, None] * Y) / safe, hi), 0, 255)
+        lo = np.clip(np.where(ok[:, None], (A[:, None] * Y - B[:, None] * X) / safe, lo), 0, 255)
+
+    p_hi, dhi = to_565(hi)
+    p_lo, dlo = to_565(lo)
 
     # BC1 reads the four-colour palette only when colour0 sorts above colour1;
     # the other order means "three colours and a transparent slot", which would
     # punch holes in an opaque wallpaper.
     swap = p_hi < p_lo
-    hi, lo = np.where(swap[:, None], lo, hi), np.where(swap[:, None], hi, lo)
+    dhi, dlo = np.where(swap[:, None], dlo, dhi), np.where(swap[:, None], dhi, dlo)
     p_hi, p_lo = np.where(swap, p_lo, p_hi), np.where(swap, p_hi, p_lo)
 
-    palette = np.stack([hi, lo, (2 * hi + lo) / 3, (hi + 2 * lo) / 3], 1)
-    idx = ((blocks[:, None] - palette[:, :, None]) ** 2).sum(-1).argmin(1)
-    # A degenerate block has one colour; index 0 is that colour either way, and
-    # anything else would select an interpolant that does not exist.
+    d = dhi - dlo
+    denom = (d * d).sum(-1, keepdims=True)
+    denom[denom == 0] = 1.0
+    t = ((blocks - dlo[:, None]) * d[:, None]).sum(-1) / denom[:, 0][:, None]
+    level = np.clip(t, 0.0, 1.0) * 3.0
+    if dither > 0:
+        offs = np.tile(BAYER.reshape(1, 16), (len(blocks), 1)) * dither
+        # Bloco de uma cor so nao tem reta: mexer nele so inventa ruido.
+        offs[p_hi == p_lo] = 0.0
+        level = level + offs
+    q = np.clip(np.rint(level), 0, 3).astype(np.int64)
+
+    # Ordem dos indices do BC1: 0=hi, 1=lo, 2=(2hi+lo)/3, 3=(hi+2lo)/3.
+    idx = np.array([1, 3, 2, 0], dtype=np.int64)[q]
     idx[p_hi == p_lo] = 0
 
     idx = idx.reshape(-1, 4, 4)
@@ -113,7 +178,6 @@ def encode_bc1(img):
     out = np.empty(len(blocks), dtype=[('c0', '<u2'), ('c1', '<u2'), ('i', '<u4')])
     out['c0'], out['c1'], out['i'] = p_hi, p_lo, packed.astype(np.uint32)
     return out.tobytes()
-
 
 def dds_header(w, h, payload):
     """The 128 byte DDS header for an uncompressed-mipmap DXT1 surface."""

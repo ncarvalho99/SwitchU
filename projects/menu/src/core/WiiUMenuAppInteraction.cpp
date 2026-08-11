@@ -927,7 +927,10 @@ void WiiUMenuApp::showIconOptions() {
              [this, titleId, title]() { showSoftwareInformation(titleId, title); }, true},
             {i18n.tr("dialog.icon_options_delete", "Delete software"),
              [this, titleId, title]() { confirmDeleteSoftware(titleId, title); }, false},
-            {i18n.tr("button.cancel", "Cancel"), [this]() {}, false},
+            // closeOnPress, not an action. Cancel had it false with an empty
+            // callback, which is a button that does nothing at all: the dialog
+            // stayed open and the only way out was B.
+            {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
         },
         0, {});
     focusManager().setFocus(m_dialog.get());

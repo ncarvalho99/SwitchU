@@ -89,6 +89,12 @@ struct ThemePreset {
     bool            builtIn = true;
     ThemePresetSource source = ThemePresetSource::BuiltIn;
     std::string     soundPreset;
+
+    // Faixas que o proprio tema traz, relativas a pasta dele. Vazio significa
+    // usar o conjunto de sons do preset, que era a unica opcao antes: musica
+    // era propriedade do preset de audio e nao do tema, entao trocar de tema
+    // deixava a trilha anterior tocando.
+    std::vector<std::string> music;
     std::string     installPath;
 
     nxui::Theme toTheme() const;
