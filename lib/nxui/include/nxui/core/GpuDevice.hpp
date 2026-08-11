@@ -154,12 +154,40 @@ public:
     dk::UniqueMemBlock allocImageMemory(uint32_t size);
     void freeImageMemory(uint32_t size);
 
-    // Icons and theme artwork together. Raised from 32 MB once the console was
-    // asked instead of assumed: the menu process holds 458 MB and had 220 MB
-    // free, so the old figure was bounding nothing the hardware cared about.
-    // It still bounds something worth bounding -- runaway image allocation is
-    // what the User Break crash reports came from.
-    static constexpr uint64_t kDefaultImageBudget = 64u * 1024u * 1024u;
+    // Icons and theme artwork together. Raised from the original 32 MB once the
+    // console was asked instead of assumed: the menu process holds 458 MB and
+    // had 220 MB free, so that figure was bounding nothing the hardware cared
+    // about. It still bounds something worth bounding -- runaway image
+    // allocation is what the User Break crash reports came from.
+    //
+    // 112 e a beira, nao um numero folgado. Medido no console, percorrendo o
+    // catalogo de temas com o teto temporariamente em 144:
+    //
+    //   imagem 101.7 MB   sobrevive
+    //   imagem 108.1 MB   o processo morre, sem relatorio de falha
+    //
+    // Subir o teto nao deu memoria ao console: so tirou a recusa que impedia de
+    // chegar la. As previas da loja pararam de falhar e passaram a derrubar o
+    // menu, que e a troca errada.
+    //
+    // O papel de parede animado leva 71 destes 112, entao o que sobra para
+    // fontes, icones de 120 jogos e as imagens do catalogo e pouco. O que fez
+    // isso caber nao foi mexer no teto e sim parar de manter o cache de previas
+    // inteiro na GPU -- ver syncFinishedCommunityPreviewLoads.
+    static constexpr uint64_t kDefaultImageBudget = 112u * 1024u * 1024u;
+
+    // O teto em uso. Comeca no valor acima e o dono do processo pode subi-lo
+    // depois de saber quanto heap conseguiu -- e o heap que manda, nao um
+    // numero escolhido aqui: toda imagem sai dele.
+    // Para onde o deko3d relata os erros dele. Sem isso eles matam o processo
+    // em silencio.
+    using DebugSink = void (*)(const char*);
+    static DebugSink debugSink()            { return s_debugSink; }
+    static void setDebugSink(DebugSink s)   { s_debugSink = s; }
+
+    static uint64_t imageBudget()          { return s_imageBudget; }
+    static void setImageBudget(uint64_t b) { s_imageBudget = b; }
+
     uint64_t imageMemoryUsed() const { return m_imageMemUsed; }
 
     // expectedBytes is what the caller says this image should occupy; 0 means
@@ -260,6 +288,8 @@ private:
     uint32_t m_imgDescOff = 0;
     uint32_t m_samDescOff = 0;
 
+    static uint64_t s_imageBudget;
+    static DebugSink s_debugSink;
     uint64_t m_imageMemUsed = 0;
     uint64_t m_poolMemUsed  = 0;
 

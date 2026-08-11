@@ -162,13 +162,26 @@ int Renderer::registerTexture(const dk::ImageView& view) {
                      m_nextDescSlot, GpuDevice::MAX_TEXTURES);
         return -1;
     }
-    int slot = m_nextDescSlot++;
+    int slot;
+    if (!m_freeDescSlots.empty()) {
+        slot = m_freeDescSlots.back();
+        m_freeDescSlots.pop_back();
+    } else {
+        slot = m_nextDescSlot++;
+    }
     dk::ImageDescriptor desc;
     desc.initialize(view);
     auto* base = static_cast<dk::ImageDescriptor*>(m_gpu.imgDescCpuAddr());
     base[slot] = desc;
     m_descDirty = true;   // GPU descriptor cache must be invalidated before next draw
     return slot;
+}
+
+void Renderer::releaseTextureSlot(int slot) {
+    // Os slots reservados no inicio (o branco e os offscreen) nunca voltam.
+    if (slot <= 0 || slot >= m_nextDescSlot)
+        return;
+    m_freeDescSlots.push_back(slot);
 }
 
 void Renderer::updateTexture(int slot, const dk::ImageView& view) {
@@ -928,6 +941,25 @@ void Renderer::drawTextureRounded(const Texture* tex, const Rect& dest, float ra
     bindTexture(tex->descriptorSlot());
     drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
                       tint, Rect{0.f, 0.f, 1.f, 1.f});
+}
+
+// Um recorte da textura, com o mesmo corte de canto do desenho inteiro.
+// Existe para a miniatura animada: os quadros vem numa folha unica e sao
+// percorridos por UV, sem canto quadrado sobre o painel arredondado.
+void Renderer::drawTextureRoundedSub(const Texture* tex, const Rect& src,
+                                     const Rect& dest, float radius, const Color& tint) {
+    if (!tex) return;
+    const float tw = (float)tex->width(), th = (float)tex->height();
+    if (tw <= 0.f || th <= 0.f) return;
+    const Rect uv{src.x / tw, src.y / th, src.width / tw, src.height / th};
+    bindTexture(tex->descriptorSlot());
+    if (radius <= 0.f) {
+        addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
+                uv.x, uv.y, uv.right(), uv.bottom(), tint);
+        return;
+    }
+    drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
+                      tint, uv);
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,

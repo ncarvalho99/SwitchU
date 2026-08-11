@@ -13,7 +13,14 @@
 
 namespace nxui {
 
+void Texture::releaseSlot() {
+    if (m_ren && m_slot >= 0)
+        m_ren->releaseTextureSlot(m_slot);
+    m_slot = -1;
+}
+
 Texture::~Texture() {
+    releaseSlot();
     if (m_gpu && m_mem && m_allocSize > 0)
         m_gpu->freeImageMemory(m_allocSize);
 }
@@ -33,6 +40,7 @@ bool Texture::loadImageData(GpuDevice& gpu, Renderer& ren,
                             int w, int h, uint32_t format)
 {
     m_gpu = &gpu;
+    m_ren = &ren;
     int oldSlot = m_slot;
     uint32_t oldAllocSize = m_allocSize;
 
@@ -118,6 +126,7 @@ bool Texture::loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
                                     const uint8_t* rgba, int w, int h)
 {
     m_gpu = &gpu;
+    m_ren = &ren;
     m_valid = false;
     m_slot  = -1;
     m_width  = w;
@@ -171,9 +180,23 @@ bool Texture::loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
 bool Texture::loadBc1File(GpuDevice& gpu, Renderer& ren, const std::string& path) {
     std::FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) return false;
+    std::fseek(f, 0, SEEK_END);
+    const long end = std::ftell(f);
+    std::fseek(f, 0, SEEK_SET);
+    if (end <= 128) { std::fclose(f); return false; }
 
-    uint8_t head[128];
-    if (std::fread(head, 1, sizeof(head), f) != sizeof(head)) { std::fclose(f); return false; }
+    std::vector<uint8_t> file((size_t)end);
+    const size_t read = std::fread(file.data(), 1, file.size(), f);
+    std::fclose(f);
+    if (read != file.size()) {
+        std::printf("[Texture] dds truncated: %zu of %zu bytes in %s\n", read, file.size(), path.c_str());
+        return false;
+    }
+    return loadBc1Memory(gpu, ren, file.data(), file.size());
+}
+
+bool Texture::loadBc1Memory(GpuDevice& gpu, Renderer& ren, const uint8_t* head, size_t size) {
+    if (!head || size <= 128) return false;
 
     auto u32 = [&](int off) {
         return (uint32_t)head[off] | ((uint32_t)head[off+1] << 8)
@@ -182,29 +205,53 @@ bool Texture::loadBc1File(GpuDevice& gpu, Renderer& ren, const std::string& path
     const uint32_t fourCC = u32(84);
     const int      hh     = (int)u32(12);
     const int      ww     = (int)u32(16);
-    if (u32(0) != 0x20534444u /* "DDS " */ || fourCC != 0x31545844u /* "DXT1" */) {
-        std::printf("[Texture] not a DXT1 dds: %s\n", path.c_str());
-        std::fclose(f);
+    if (u32(0) != 0x20534444u /* "DDS " */) {
+        std::printf("[Texture] not a dds\n");
         return false;
     }
-    // BC1 stores a 4x4 block in 8 bytes, so the dimensions have to be whole
-    // blocks -- a partial block would leave the GPU reading past the data.
+
+    // Dois formatos, e a diferenca esta em quanto cada bloco de 4x4 ocupa.
+    //
+    // O DXT1 tem fourCC proprio e cabe no cabecalho antigo. O BC7 nao tem, e se
+    // declara pelo bloco DX10 que vem depois dos 128 bytes, com o numero do
+    // formato DXGI -- por isso os dados dele comecam 20 bytes mais adiante.
+    DkImageFormat format;
+    size_t blockBytes;
+    size_t offset;
+    if (fourCC == 0x31545844u /* "DXT1" */) {
+        format = DkImageFormat_RGB_BC1;
+        blockBytes = 8;
+        offset = 128;
+    } else if (fourCC == 0x30315844u /* "DX10" */) {
+        if (size <= 148) return false;
+        const uint32_t dxgi = u32(128);
+        if (dxgi != 98 /* BC7_UNORM */ && dxgi != 99 /* BC7_UNORM_SRGB */) {
+            std::printf("[Texture] dds DX10 com formato %u, nao BC7\n", dxgi);
+            return false;
+        }
+        format = DkImageFormat_RGBA_BC7_Unorm;
+        blockBytes = 16;
+        offset = 148;
+    } else {
+        std::printf("[Texture] dds nem DXT1 nem DX10\n");
+        return false;
+    }
+
+    // Os dois guardam blocos de 4x4, entao as dimensoes tem de ser blocos
+    // inteiros -- um bloco parcial deixaria a GPU lendo depois dos dados.
     if (ww <= 0 || hh <= 0 || (ww & 3) || (hh & 3)) {
-        std::printf("[Texture] dds %dx%d is not a multiple of 4: %s\n", ww, hh, path.c_str());
-        std::fclose(f);
+        std::printf("[Texture] dds %dx%d is not a multiple of 4\n", ww, hh);
         return false;
     }
 
-    const size_t blocks = (size_t)(ww / 4) * (hh / 4) * 8;
-    std::vector<uint8_t> data(blocks);
-    const size_t got = std::fread(data.data(), 1, blocks, f);
-    std::fclose(f);
-    if (got != blocks) {
-        std::printf("[Texture] dds truncated: %zu of %zu bytes in %s\n", got, blocks, path.c_str());
+    const size_t blocks = (size_t)(ww / 4) * (hh / 4) * blockBytes;
+    if (size < offset + blocks) {
+        std::printf("[Texture] dds short: %zu bytes for %zu of pixel data\n",
+                    size - offset, blocks);
         return false;
     }
 
-    return loadImageData(gpu, ren, data.data(), blocks, ww, hh, DkImageFormat_RGB_BC1);
+    return loadImageData(gpu, ren, head + offset, blocks, ww, hh, format);
 }
 
 bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide) {

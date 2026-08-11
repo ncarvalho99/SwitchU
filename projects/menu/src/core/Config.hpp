@@ -23,7 +23,10 @@ struct AppConfig {
     // Softens the wallpaper and the shapes drifting over it. Barely on: enough
     // to take the hard edge off the shapes without anyone noticing a blur, and
     // the value asked for after people looked at it on real hardware.
-    float backgroundBlur = 0.05f;
+    // Zero, nao 0.05: o desfoque custa meia resolucao do papel de parede, e
+    // 0.05 dava um borrao invisivel em troca disso. Quem quiser desfoque pede
+    // nas opcoes e sabe o que esta trocando.
+    float backgroundBlur = 0.f;
 
     // How sharply the scene reads through the glass panels. Capturing that
     // scene at full resolution made it sharper than it had ever been, which

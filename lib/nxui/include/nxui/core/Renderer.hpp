@@ -133,6 +133,8 @@ public:
     void drawTexture(const Texture* tex, const Rect& dest, const Color& tint = Color::white());
     void drawTextureSub(const Texture* tex, const Rect& src, const Rect& dest, const Color& tint = Color::white());
     void drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint = Color::white());
+    void drawTextureRoundedSub(const Texture* tex, const Rect& src, const Rect& dest,
+                               float radius, const Color& tint = Color::white());
     void drawText(const std::string& text, const Vec2& pos, Font* font, const Color& color, float scale = 1.f);
 
     // Post-processing
@@ -186,6 +188,10 @@ public:
     // Texture descriptor management
 #ifdef NXUI_BACKEND_DEKO3D
     int registerTexture(const dk::ImageView& view);
+    // Devolve o slot para reuso. Sem isto o registrador so avancava: cada tema
+    // aplicado consumia um slot por quadro e nunca os liberava, entao a sexta
+    // troca de tema esgotava os 2048 e as texturas seguintes nasciam invalidas.
+    void releaseTextureSlot(int slot);
     void updateTexture(int slot, const dk::ImageView& view);
 #endif
     void bindTexture(int slot);
@@ -274,6 +280,7 @@ private:
 
     // Texture descriptor tracking
     int m_nextDescSlot = 0;
+    std::vector<int> m_freeDescSlots;
     static constexpr int WHITE_TEX_SLOT = 0;
 
     // Offscreen target descriptor slots

@@ -190,6 +190,11 @@ private:
     static constexpr float kButtonH      = 50.f;
     static constexpr float kButtonRadius = 16.f;
     static constexpr float kButtonGap    = 14.f;
+    // Breathing room inside a button, and how far a label may be shrunk to fit
+    // one. Below this it stops being readable at couch distance, and a label
+    // that small is a sign the dialog needs fewer buttons, not smaller text.
+    static constexpr float kButtonLabelPadding  = 12.f;
+    static constexpr float kButtonLabelMinScale = 0.62f;
     static constexpr float kTitleMsgGap  = 14.f;
     static constexpr float kMsgBtnGap    = 24.f;
     static constexpr float kUserAvatarSize = 96.f;
