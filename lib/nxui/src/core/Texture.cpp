@@ -9,10 +9,18 @@
 #include <cstring>
 #include <cstdlib>
 #include <algorithm>
+#include <vector>
 
 namespace nxui {
 
+void Texture::releaseSlot() {
+    if (m_ren && m_slot >= 0)
+        m_ren->releaseTextureSlot(m_slot);
+    m_slot = -1;
+}
+
 Texture::~Texture() {
+    releaseSlot();
     if (m_gpu && m_mem && m_allocSize > 0)
         m_gpu->freeImageMemory(m_allocSize);
 }
@@ -20,7 +28,19 @@ Texture::~Texture() {
 bool Texture::loadFromPixels(GpuDevice& gpu, Renderer& ren,
                              const uint8_t* rgba, int w, int h)
 {
+    return loadImageData(gpu, ren, rgba, (uint64_t)w * h * 4, w, h,
+                         DkImageFormat_RGBA8_Unorm);
+}
+
+// One body for every format, because this is the allocation path that answered
+// failure with svcBreak until it was fixed. A second copy of it for compressed
+// images would be a second copy of that bug waiting to be reintroduced.
+bool Texture::loadImageData(GpuDevice& gpu, Renderer& ren,
+                            const uint8_t* data, uint64_t dataSize,
+                            int w, int h, uint32_t format)
+{
     m_gpu = &gpu;
+    m_ren = &ren;
     int oldSlot = m_slot;
     uint32_t oldAllocSize = m_allocSize;
 
@@ -33,7 +53,7 @@ bool Texture::loadFromPixels(GpuDevice& gpu, Renderer& ren,
     dk::ImageLayout layout;
     dk::ImageLayoutMaker{gpu.device()}
         .setFlags(0)
-        .setFormat(DkImageFormat_RGBA8_Unorm)
+        .setFormat((DkImageFormat)format)
         .setDimensions(w, h)
         .initialize(layout);
 
@@ -77,7 +97,7 @@ bool Texture::loadFromPixels(GpuDevice& gpu, Renderer& ren,
 
     m_image.initialize(layout, m_mem, 0);
 
-    if (!gpu.uploadTexture(m_image, rgba, w * h * 4, w, h)) {
+    if (!gpu.uploadTexture(m_image, data, (uint32_t)dataSize, w, h, dataSize)) {
         std::printf("[Texture] uploadTexture FAILED (%dx%d)\n", w, h);
         // Half a texture is worse than none: it can still be bound and drawn.
         m_valid = false;
@@ -106,6 +126,7 @@ bool Texture::loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
                                     const uint8_t* rgba, int w, int h)
 {
     m_gpu = &gpu;
+    m_ren = &ren;
     m_valid = false;
     m_slot  = -1;
     m_width  = w;
@@ -147,7 +168,96 @@ bool Texture::loadFromPixelsPooled(GpuDevice& gpu, Renderer& ren,
     return true;
 }
 
+// A DDS holding BC1 blocks, which the GPU samples without unpacking. Four bytes
+// a pixel is what forced theme animations down to 224x126, where a frame
+// stretched to the screen looks like blocks; BC1 is half a byte a pixel, so the
+// same memory holds 640x360 and the stretch drops from 5.7x to 2x.
+//
+// Only the layout ffmpeg and the theme tooling produce is accepted: no mipmaps,
+// no cubemaps, no other fourCC. Anything else is a file this was not asked to
+// read, and guessing at it is how a loader ends up handing deko3d something it
+// answers with svcBreak.
+bool Texture::loadBc1File(GpuDevice& gpu, Renderer& ren, const std::string& path) {
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::fseek(f, 0, SEEK_END);
+    const long end = std::ftell(f);
+    std::fseek(f, 0, SEEK_SET);
+    if (end <= 128) { std::fclose(f); return false; }
+
+    std::vector<uint8_t> file((size_t)end);
+    const size_t read = std::fread(file.data(), 1, file.size(), f);
+    std::fclose(f);
+    if (read != file.size()) {
+        std::printf("[Texture] dds truncated: %zu of %zu bytes in %s\n", read, file.size(), path.c_str());
+        return false;
+    }
+    return loadBc1Memory(gpu, ren, file.data(), file.size());
+}
+
+bool Texture::loadBc1Memory(GpuDevice& gpu, Renderer& ren, const uint8_t* head, size_t size) {
+    if (!head || size <= 128) return false;
+
+    auto u32 = [&](int off) {
+        return (uint32_t)head[off] | ((uint32_t)head[off+1] << 8)
+             | ((uint32_t)head[off+2] << 16) | ((uint32_t)head[off+3] << 24);
+    };
+    const uint32_t fourCC = u32(84);
+    const int      hh     = (int)u32(12);
+    const int      ww     = (int)u32(16);
+    if (u32(0) != 0x20534444u /* "DDS " */) {
+        std::printf("[Texture] not a dds\n");
+        return false;
+    }
+
+    // Dois formatos, e a diferenca esta em quanto cada bloco de 4x4 ocupa.
+    //
+    // O DXT1 tem fourCC proprio e cabe no cabecalho antigo. O BC7 nao tem, e se
+    // declara pelo bloco DX10 que vem depois dos 128 bytes, com o numero do
+    // formato DXGI -- por isso os dados dele comecam 20 bytes mais adiante.
+    DkImageFormat format;
+    size_t blockBytes;
+    size_t offset;
+    if (fourCC == 0x31545844u /* "DXT1" */) {
+        format = DkImageFormat_RGB_BC1;
+        blockBytes = 8;
+        offset = 128;
+    } else if (fourCC == 0x30315844u /* "DX10" */) {
+        if (size <= 148) return false;
+        const uint32_t dxgi = u32(128);
+        if (dxgi != 98 /* BC7_UNORM */ && dxgi != 99 /* BC7_UNORM_SRGB */) {
+            std::printf("[Texture] dds DX10 com formato %u, nao BC7\n", dxgi);
+            return false;
+        }
+        format = DkImageFormat_RGBA_BC7_Unorm;
+        blockBytes = 16;
+        offset = 148;
+    } else {
+        std::printf("[Texture] dds nem DXT1 nem DX10\n");
+        return false;
+    }
+
+    // Os dois guardam blocos de 4x4, entao as dimensoes tem de ser blocos
+    // inteiros -- um bloco parcial deixaria a GPU lendo depois dos dados.
+    if (ww <= 0 || hh <= 0 || (ww & 3) || (hh & 3)) {
+        std::printf("[Texture] dds %dx%d is not a multiple of 4\n", ww, hh);
+        return false;
+    }
+
+    const size_t blocks = (size_t)(ww / 4) * (hh / 4) * blockBytes;
+    if (size < offset + blocks) {
+        std::printf("[Texture] dds short: %zu bytes for %zu of pixel data\n",
+                    size - offset, blocks);
+        return false;
+    }
+
+    return loadImageData(gpu, ren, head + offset, blocks, ww, hh, format);
+}
+
 bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide) {
+    if (path.size() > 4 && path.compare(path.size() - 4, 4, ".dds") == 0)
+        return loadBc1File(gpu, ren, path);
+
     int w, h, ch;
     uint8_t* data = stbi_load(path.c_str(), &w, &h, &ch, 4);
     if (!data) {

@@ -1,3 +1,67 @@
+# SwitchU 1.1.0+fork.5
+
+## English
+
+Fifth release of this fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. It builds on fork.4 with animated backgrounds that are practical on the
+Switch, a package-based theme catalogue, and fixes found through console tests.
+
+**Animated backgrounds and themes**
+
+- Animated wallpapers are pre-encoded as DDS/BC1 frames and streamed to the GPU;
+  no video is decoded while the menu is rendering.
+- The menu obtains a larger applet heap when the system can grant it, then derives
+  a safe image budget from that heap. Background loading is incremental so a return
+  from a game does not stall while every frame is uploaded.
+- Theme Shop has an Animated Themes tab, animated preview sheets, package metadata,
+  and an explicit Standard/High quality choice when the catalogue offers both.
+- Theme packages download as one archive, are checked against available SD space,
+  and are unpacked transactionally: a failed install keeps the working theme.
+
+**Stability and responsiveness**
+
+- The catalogue no longer requests every manifest when optional screenshots are
+  absent, avoiding a network failure that could look like a frozen menu.
+- Community preview textures are pruned continuously and only visible candidates
+  are uploaded, preventing GPU-memory churn while browsing.
+- The daemon now throttles application-view refreshes after title events. The
+  previous 200 ms scan loop could cause severe launcher lag after a game exit.
+  Zelda: Tears of the Kingdom was launched and returned to the menu successfully
+  on the console after this fix.
+
+---
+
+## Português
+
+Quinta versão desta fork de [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.1.0. Ela evolui a fork.4 com fundos animados viáveis no Switch, catálogo de
+temas por pacote e correções encontradas nos testes no console.
+
+**Fundos animados e temas**
+
+- Os fundos animados usam quadros DDS/BC1 pré-codificados e enviados em fluxo à
+  GPU; não há decodificação de vídeo durante a renderização do menu.
+- O menu obtém um heap de applet maior quando o sistema o concede e calcula dele
+  um orçamento seguro para imagens. O carregamento é incremental, evitando travar
+  ao voltar de um jogo para enviar todos os quadros de uma vez.
+- A Loja de Temas traz a aba Temas Animados, folhas de prévias animadas, metadados
+  de pacote e escolha explícita entre qualidade Padrão e Alta quando disponível.
+- Cada tema é baixado em um único pacote, verifica o espaço livre no cartão e é
+  instalado de modo transacional: uma falha preserva o tema que já funcionava.
+
+**Estabilidade e resposta**
+
+- A consulta ao catálogo não busca mais todos os manifestos quando só faltam
+  capturas opcionais, evitando que uma falha de rede pareça congelar o menu.
+- As texturas de prévia da comunidade são podadas continuamente e só candidatas
+  visíveis são enviadas à GPU, evitando desperdício de memória ao navegar.
+- O daemon agora limita a atualização das views de aplicativos após eventos de
+  títulos. A varredura anterior a cada 200 ms podia causar lag extremo no launcher
+  após a saída de um jogo. Zelda: Tears of the Kingdom abriu e retornou ao menu
+  normalmente no console depois desta correção.
+
+---
+
 # SwitchU 1.1.0+fork.4
 
 ## English

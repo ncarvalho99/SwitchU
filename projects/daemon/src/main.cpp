@@ -192,6 +192,11 @@ static std::atomic<Result> g_eventGcMountRc{0};
 static bool g_initialEventSkipped = false;
 static int  g_eventPollCountdown  = 0;
 static int  g_eventPollsRemaining = 0;
+// mainLoop sleeps 10 ms. Querying application views opens enough NS state to
+// make the menu visibly stutter, so this must never become a 200 ms loop after
+// a game exits or crashes.
+constexpr int kViewPollIntervalTicks = 200; // 2 seconds
+constexpr int kViewPollAttempts      = 6;   // observe settling without a storm
 static int  g_menuRelaunchCooldown = 0;
 static int  g_menuFastExitCount = 0;
 static s32      g_lastRecordCount = 0;
@@ -648,9 +653,25 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
     // half-finished when the console goes down. The menu quiesces its own
     // writer before it sends the request.
     //
-    // Still nothing else touches the filesystem here: no logging, no commit.
-    // An interrupted commit leaves worse FAT state than no commit at all.
     stopControlCacheWorker();
+
+    // And then commit, which this deliberately did not do before.
+    //
+    // The reasoning against it was that an interrupted commit leaves worse FAT
+    // state than none. That is true of a commit racing the power cut -- but
+    // this one runs before spsm is asked for anything, synchronously, with the
+    // cache worker already stopped and joined. Nothing can interrupt it,
+    // because power has not been requested yet.
+    //
+    // Not committing is not the safe option: it is the option that guarantees
+    // the metadata stays dirty. The menu commits its own writes before sending
+    // the request, and that was not enough -- the daemon holds a separate fsdev
+    // handle, and everything it wrote (its log, the control cache, the app
+    // lists) is still outstanding at this point. A reboot from the menu came
+    // back to hekate unable to find nyx with "card committed for power action"
+    // sitting in the menu log, because the process that committed was not the
+    // process with the dirty writes.
+    switchu::commitSdCard("power sequence");
 
     switch (action) {
         case smi::SystemMessage::EnterSleep:
@@ -1240,7 +1261,7 @@ static void mainLoop() {
     bool didWork = false;
 
     if (g_eventRefreshPending.load() && shouldDeferViewPolling()) {
-        g_eventPollCountdown = 20;
+        g_eventPollCountdown = kViewPollIntervalTicks;
         g_eventPollsRemaining = 1;
     } else if (g_eventRefreshPending.exchange(false)) {
         if (!g_initialEventSkipped) {
@@ -1249,8 +1270,8 @@ static void mainLoop() {
             switchu::FileLog::log("[views] skipping initial catch-up event");
         } else {
             switchu::FileLog::log("[views] app record event — starting poll");
-            g_eventPollCountdown  = 10;
-            g_eventPollsRemaining = 50;
+            g_eventPollCountdown  = kViewPollIntervalTicks;
+            g_eventPollsRemaining = kViewPollAttempts;
         }
     }
 
@@ -1296,7 +1317,7 @@ static void mainLoop() {
         didWork = true;
     }
     if (g_eventPollsRemaining > 0 && shouldDeferViewPolling()) {
-        g_eventPollCountdown = 20;
+        g_eventPollCountdown = kViewPollIntervalTicks;
     } else if (g_eventPollsRemaining > 0 && --g_eventPollCountdown == 0) {
         bool needFullReload = sendViewFlagsUpdates();
         if (needFullReload) {
@@ -1306,7 +1327,7 @@ static void mainLoop() {
         } else {
             --g_eventPollsRemaining;
             if (g_eventPollsRemaining > 0)
-                g_eventPollCountdown = 20;
+                g_eventPollCountdown = kViewPollIntervalTicks;
         }
     }
     if (g_eventGcMountFailure.exchange(false)) {

@@ -53,9 +53,9 @@
       "region_south_korea": "Südkorea",
       "auto_update": "Automatisches Update",
       "error_reporting": "Fehlerinformationen senden",
-      "default_profile": "Default Profile",
-      "default_profile_desc": "Launch games with this profile when possible.",
-      "default_profile_ask": "Ask each time",
+      "default_profile": "Standardprofil",
+      "default_profile_desc": "Startet Spiele nach Möglichkeit mit diesem Profil.",
+      "default_profile_ask": "Jedes Mal fragen",
       "clock_12h": "12-Stunden-Uhr",
       "clock_12h_desc": "Zeit im 12-Stunden-Format anzeigen.",
       "add_user": "Benutzer hinzufügen",
@@ -99,7 +99,9 @@
       "glass_sharpness": "Glasschärfe",
       "glass_sharpness_desc": "Wie deutlich der Bildschirm hinter den Menüs durchscheint.",
       "background_speed": "Geschwindigkeit der Hintergrundanimation",
-      "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes."
+      "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes.",
+      "grid_columns": "Rasterspalten",
+      "grid_rows": "Rasterzeilen"
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",
@@ -135,8 +137,8 @@
       "unpair": "Entkoppeln",
       "pair_connect": "Koppeln & Verbinden",
       "device_actions": "Geräteaktionen",
-      "connected": "Connected",
-      "not_connected": "Not connected"
+      "connected": "Verbunden",
+      "not_connected": "Nicht verbunden"
     },
     "sleep": {
       "1min": "1 Min.",
@@ -157,7 +159,18 @@
       "media_sleep": "Standby-Modus während Medienwiedergabe",
       "media_sleep_desc": "Erlaubt den automatischen Standby-Modus auch bei der Medienwiedergabe.",
       "wake_power": "Aufwachen bei Stromzufuhr",
-      "wake_power_desc": "Konsole aufwecken, wenn das Netzteil an- oder abgesteckt wird."
+      "wake_power_desc": "Konsole aufwecken, wenn das Netzteil an- oder abgesteckt wird.",
+      "power_actions": "Energie",
+      "auto_sleep": "Automatischer Ruhezustand",
+      "sleep_now": "Ruhezustand",
+      "sleep_now_desc": "Versetzt die Konsole in den Ruhezustand.",
+      "sleep_confirm": "Konsole in den Ruhezustand versetzen?",
+      "reboot": "Neu starten",
+      "reboot_desc": "Startet die Konsole neu.",
+      "reboot_confirm": "Konsole neu starten?",
+      "shutdown": "Ausschalten",
+      "shutdown_desc": "Schaltet die Konsole vollständig aus.",
+      "shutdown_confirm": "Konsole ausschalten?"
     },
     "theme": {
       "preset": "Voreinstellung",
@@ -212,7 +225,10 @@
       "used": "Verwendet",
       "summary": "Zusammenfassung",
       "details": "Details",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "manage_title": "Software verwalten",
+      "title_id": "Titel-ID",
+      "homebrew_library_unavailable": "Die Verwaltung installierter Software ist im Homebrew-Modus nicht verfügbar."
     },
     "about": {
       "version": "Version",
@@ -293,8 +309,8 @@
     "ok": "OK",
     "cancel": "Abbrechen",
     "delete": "Löschen",
-    "close": "Close",
-    "replace": "Replace"
+    "close": "Schließen",
+    "replace": "Ersetzen"
   },
   "themeshop": {
     "source": {
@@ -306,7 +322,8 @@
     },
     "tabs": {
       "installed": "Installiert",
-      "community": "Community",
+      "community": "Statische Themes",
+      "animated": "Animierte Themes",
       "options": "Optionen"
     },
     "search": {
@@ -359,7 +376,12 @@
       "overwrite_apply_title": "Theme ersetzen und anwenden",
       "overwrite_apply_message": "Ein Paket mit dieser Theme-ID ist bereits installiert. Durch die GitHub-Version ersetzen und anwenden?",
       "overwrite_install_title": "Installiertes Theme ersetzen",
-      "overwrite_install_message": "Ein Paket mit dieser Theme-ID ist bereits installiert. Durch die GitHub-Version ersetzen?"
+      "overwrite_install_message": "Ein Paket mit dieser Theme-ID ist bereits installiert. Durch die GitHub-Version ersetzen?",
+      "offline": "Keine Verbindung. Netzwerk prüfen und erneut versuchen.",
+      "quality_title": "Themenqualität",
+      "quality_message": "Standard lässt Platz für mehr Themes. Hoch entspricht genau der Bildschirmauflösung und wirkt schärfer, bei doppelter Größe.",
+      "quality_standard": "Standard",
+      "quality_high": "Hoch"
     },
     "transfer": {
       "prepare_apply": "Laden + Anwenden wird vorbereitet...",
@@ -373,7 +395,11 @@
       "installed_applying": "Theme installiert. Wird angewendet...",
       "installed": "Theme installiert.",
       "installed_applied": "Theme installiert und angewendet.",
-      "installed_apply_failed": "Theme installiert, konnte aber nicht automatisch angewendet werden."
+      "installed_apply_failed": "Theme installiert, konnte aber nicht automatisch angewendet werden.",
+      "downloading_package": "Theme wird geladen",
+      "extracting": "Theme wird entpackt",
+      "finishing": "Abschließen",
+      "no_space": "Nicht genug Speicherplatz auf der SD-Karte für dieses Thema"
     },
     "preview": {
       "loading": "Screenshot wird geladen...",
@@ -398,6 +424,14 @@
       "pagination_actions": "Links und rechts wechseln die Taste. A wechselt die Seite. Hoch zum Raster.",
       "no_theme": "Kein Theme",
       "grid_actions": "Steuerkreuz zum Navigieren. A öffnet Details. B zurück zu den Tabs."
+    },
+    "page": {
+      "next": "Weiter",
+      "prev": "Zurück"
+    },
+    "animated": {
+      "title": "Animierte Themes",
+      "subtitle": "Bewegte Hintergründe, mit Ton wenn das Theme welchen mitbringt."
     }
   },
   "hint": {
@@ -420,7 +454,8 @@
     "voice": "Sprache",
     "sort_custom": "Meine Reihenfolge",
     "sort_alpha": "A-Z",
-    "sort_recent": "Zuletzt"
+    "sort_recent": "Zuletzt",
+    "options": "Optionen"
   },
   "accessibility": {
     "speech": {
