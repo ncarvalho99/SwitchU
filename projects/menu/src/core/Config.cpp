@@ -56,6 +56,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "themePreset", themePreset);
     readJsonOpt(j, "lastPageTitleId", lastPageTitleId);
     readJsonOpt(j, "sortMode", sortMode);
+    readJsonOpt(j, "lastOpenedSequence", lastOpenedSequence);
     lastOpened.clear();
     if (auto it = j.find("lastOpened"); it != j.end() && it->is_object()) {
         for (auto& [k, v] : it->items()) {
@@ -110,6 +111,7 @@ bool AppConfig::save() const {
     j["themePreset"] = themePreset;
     j["lastPageTitleId"] = lastPageTitleId;
     j["sortMode"] = sortMode;
+    j["lastOpenedSequence"] = lastOpenedSequence;
     {
         nlohmann::json opened = nlohmann::json::object();
         char key[17];
