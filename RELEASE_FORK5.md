@@ -65,3 +65,13 @@ original continua creditado na tela Sobre.
   manualmente.
 - Abertura de Zelda: Tears of the Kingdom e retorno ao launcher depois da correção
   de atualização do daemon.
+
+---
+
+## Installation / Instalação
+
+Extract `SwitchU-1.1.0-fork.5.zip` at the root of the microSD card, replacing the
+existing `atmosphere` and `switch` files. Requires Atmosphère.
+
+Extraia `SwitchU-1.1.0-fork.5.zip` na raiz do cartão microSD, substituindo os
+arquivos existentes em `atmosphere` e `switch`. Requer Atmosphère.
