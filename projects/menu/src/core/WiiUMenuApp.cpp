@@ -567,11 +567,30 @@ void WiiUMenuApp::reflowHomeGrid() {
         byId.emplace(entry.titleId, entry);
     }
 
+    // Recent must start from the personal arrangement. When there is no play
+    // history yet, falling back to A-Z made it visually indistinguishable
+    // from the preceding mode and made R appear broken.
+    if (m_config.sortMode == 2 && !m_layoutSlots.empty()) {
+        std::vector<uint64_t> customOrder;
+        std::unordered_set<uint64_t> seen;
+        customOrder.reserve(appOrder.size());
+        seen.reserve(appOrder.size());
+        for (uint64_t tid : m_layoutSlots) {
+            if (tid != 0 && byId.count(tid) && seen.insert(tid).second)
+                customOrder.push_back(tid);
+        }
+        for (uint64_t tid : appOrder) {
+            if (seen.insert(tid).second)
+                customOrder.push_back(tid);
+        }
+        appOrder = std::move(customOrder);
+    }
+
     // Sorting replaces the saved arrangement rather than editing it: the
     // hand-made layout is kept on disk untouched, so switching back to it
     // restores exactly what the owner built instead of an approximation.
     if (m_config.sortMode != 0) {
-        std::sort(appOrder.begin(), appOrder.end(),
+        std::stable_sort(appOrder.begin(), appOrder.end(),
                   [&](uint64_t a, uint64_t b) {
             if (m_config.sortMode == 2) {
                 const auto ta = m_config.lastOpenedAt(a);
@@ -579,6 +598,10 @@ void WiiUMenuApp::reflowHomeGrid() {
                 // Never-opened titles sort last rather than first, which is
                 // what a zero timestamp would otherwise do.
                 if (ta != tb) return ta > tb;
+                // Keep the personal order for equal timestamps. In particular
+                // it makes the first use of Recent useful before any title has
+                // been opened by this version of SwitchU.
+                return false;
             }
             const auto& ea = byId.at(a);
             const auto& eb = byId.at(b);
@@ -633,6 +656,22 @@ void WiiUMenuApp::reflowHomeGrid() {
     int roundedSlots = ((minSlots + perPage - 1) / perPage) * perPage;
     if ((int)slots.size() < roundedSlots)
         slots.resize(roundedSlots, 0);
+
+    std::string orderSample;
+    int sampleCount = 0;
+    for (uint64_t tid : slots) {
+        if (tid == 0)
+            continue;
+        const auto it = byId.find(tid);
+        if (it == byId.end())
+            continue;
+        if (!orderSample.empty())
+            orderSample += " | ";
+        orderSample += it->second.title;
+        if (++sampleCount >= 4)
+            break;
+    }
+    DebugLog::log("[grid] sort=%d first=%s", m_config.sortMode, orderSample.c_str());
 
     // Automatic views are temporary projections of the saved layout. Writing
     // them back here replaced the user's custom order every time R was used.

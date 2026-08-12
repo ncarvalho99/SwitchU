@@ -15,7 +15,10 @@
 #include <switch.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cctype>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -238,28 +241,43 @@ bool removeDirectoryRecursive(const std::string& path) {
 }
 
 // Do not erase a working theme until its replacement was fully unpacked.
-bool replaceDirectoryFromStaging(const std::string& destination,
-                                 const std::string& staging) {
-    const std::string previous = destination + ".previous";
-    removeDirectoryRecursive(previous);
+bool renameDirectory(const std::string& from, const std::string& to,
+                     std::string& error) {
+    // std::filesystem::rename is not reliable on libnx's sdmc: filesystem.
+    // The C runtime rename maps directly to the filesystem service instead.
+    if (std::rename(from.c_str(), to.c_str()) == 0)
+        return true;
 
-    std::error_code ec;
+    error = std::strerror(errno);
+    DebugLog::log("[themeshop] rename failed: %s -> %s (%d: %s)",
+                  from.c_str(), to.c_str(), errno, error.c_str());
+    return false;
+}
+
+bool replaceDirectoryFromStaging(const std::string& destination,
+                                 const std::string& staging,
+                                 std::string& error) {
+    const std::string previous = destination + ".previous";
+    if (!removeDirectoryRecursive(previous) && pathExists(previous)) {
+        error = "could not clear the previous installation";
+        return false;
+    }
+
     const bool hadPrevious = pathExists(destination);
     if (hadPrevious) {
-        std::filesystem::rename(destination, previous, ec);
-        if (ec)
+        if (!renameDirectory(destination, previous, error))
             return false;
     }
 
-    std::filesystem::rename(staging, destination, ec);
-    if (!ec) {
+    if (renameDirectory(staging, destination, error)) {
         removeDirectoryRecursive(previous);
         return true;
     }
 
     if (hadPrevious) {
-        std::error_code restoreEc;
-        std::filesystem::rename(previous, destination, restoreEc);
+        std::string restoreError;
+        if (!renameDirectory(previous, destination, restoreError))
+            DebugLog::log("[themeshop] could not restore previous theme: %s", restoreError.c_str());
     }
     return false;
 }
@@ -700,6 +718,7 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
         DebugLog::log("[themeshop] package download: %s", packageUrl.c_str());
 
         std::uint64_t downloaded = 0;
+        const std::uint64_t expectedBytes = entry.packageBytes;
         try {
             downloaded = themeshop::http::getToFile(
                 packageUrl, archivePath,
@@ -707,7 +726,12 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
                     if (onProgress && (received % (2u << 20)) < 16384) {
                         onProgress(i18n.tr("themeshop.transfer.downloading_package", "Downloading theme")
                                        + " (" + std::to_string(received / 1048576) + " MB)",
-                                   0.05f + 0.5f * (float)received / 52428800.f);
+                                   expectedBytes > 0
+                                       ? 0.05f + 0.5f * (float)std::min(received, expectedBytes)
+                                                   / (float)expectedBytes
+                                       // Legacy catalogues do not declare a size. Keep their
+                                       // meter below extraction rather than jumping backward.
+                                       : std::min(0.54f, 0.05f + 0.5f * (float)received / 52428800.f));
                     }
                 });
         } catch (...) {
@@ -772,9 +796,12 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
                                              "Theme package could not be unpacked."));
         }
 
-        if (!replaceDirectoryFromStaging(result.destinationPath, stagingPath)) {
+        std::string replaceError;
+        if (!replaceDirectoryFromStaging(result.destinationPath, stagingPath, replaceError)) {
             removeDirectoryRecursive(stagingPath);
-            throw std::runtime_error("Theme package was extracted but could not replace the installed theme");
+            DebugLog::log("[themeshop] installation replacement failed: %s", replaceError.c_str());
+            throw std::runtime_error(i18n.tr("themeshop.transfer.replace_failed",
+                                             "Theme package could not be installed."));
         }
 
         if (onProgress)

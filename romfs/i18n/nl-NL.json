@@ -399,6 +399,7 @@
       "downloading_package": "Thema downloaden",
       "extracting": "Thema uitpakken",
       "unpack_failed": "Het themapakket kon niet worden uitgepakt.",
+      "replace_failed": "Het themapakket kon niet worden geïnstalleerd.",
       "finishing": "Afronden",
       "no_space": "Onvoldoende ruimte op de SD-kaart voor dit thema"
     },
