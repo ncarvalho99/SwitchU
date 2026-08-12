@@ -565,6 +565,7 @@
       "downloading_package": "Downloading theme",
       "extracting": "Extracting theme",
       "unpack_failed": "Theme package could not be unpacked.",
+      "replace_failed": "Theme package could not be installed.",
       "finishing": "Finishing",
       "no_space": "Not enough space on the SD card for this theme"
     },
