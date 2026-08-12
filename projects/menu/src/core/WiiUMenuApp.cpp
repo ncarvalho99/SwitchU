@@ -713,6 +713,21 @@ void WiiUMenuApp::reflowHomeGrid() {
         }
     }
 
+    // setup() replaces m_allIcons.  Both focus managers keep raw Widget*
+    // entries, so an icon whose title moved would otherwise be destroyed
+    // while one of those entries still pointed to it.  The next R can then
+    // make FocusManager call onFocusLost() through a freed vtable.  This was
+    // the Data Abort at FocusManager::changeFocusTo after several sorts.
+    // Invalidate before setup() so it never observes an old icon as current.
+    for (const auto& icon : oldIcons) {
+        if (!icon)
+            continue;
+        focusManager().invalidateWidget(icon.get());
+        m_grid->focusManager().invalidateWidget(icon.get());
+    }
+    m_editBoundIcon = nullptr;
+    m_editSourceIcon = nullptr;
+
     m_model = std::move(rebuiltModel);
 
     // IconStreamer associates its GPU slots with grid indices. Reusing that
@@ -724,6 +739,14 @@ void WiiUMenuApp::reflowHomeGrid() {
         if (icon)
             icon->setTexture(nullptr);
     }
+
+    // A Texture owns both a deko3d descriptor and the GPU memory behind it.
+    // The preceding frame may still be sampling an icon when R is handled, so
+    // clearing the streamer immediately can free that memory while the queue
+    // is using it.  That presents as a frame of corrupted tiles followed by a
+    // User Break and an automatic menu relaunch.  Sorting is deliberately an
+    // infrequent operation, making one queue drain here the safe trade-off.
+    app().gpu().waitIdle();
     m_iconStreamer.clear();
     m_iconStreamer.init(m_model.count());
     m_iconStreamer.setIconDataLoader(AppListLoader::loadIconData);
