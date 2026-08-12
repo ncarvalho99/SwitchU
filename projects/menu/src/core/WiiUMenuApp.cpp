@@ -634,7 +634,9 @@ void WiiUMenuApp::reflowHomeGrid() {
     if ((int)slots.size() < roundedSlots)
         slots.resize(roundedSlots, 0);
 
-    if (slots != m_layoutSlots) {
+    // Automatic views are temporary projections of the saved layout. Writing
+    // them back here replaced the user's custom order every time R was used.
+    if (m_config.sortMode == 0 && slots != m_layoutSlots) {
         m_layoutSlots = slots;
         m_layoutDirty = true;
     }
@@ -799,6 +801,11 @@ void WiiUMenuApp::saveMenuLayout() {
 }
 
 void WiiUMenuApp::applyMenuLayoutToPending(std::vector<PendingApp>& apps) {
+    // Only the custom view consumes the saved slot arrangement. This lets a
+    // refresh keep the complete list available to the A-Z and recent views.
+    if (m_config.sortMode != 0)
+        return;
+
     const int cols = std::clamp(m_config.gridColumns, 3, 8);
     const int rows = std::clamp(m_config.gridRows, 2, 5);
     const int perPage = std::max(1, cols * rows);

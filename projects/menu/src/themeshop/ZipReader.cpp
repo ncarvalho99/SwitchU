@@ -250,14 +250,6 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
         result.error = "could not create extraction directory";
         return result;
     }
-    const std::filesystem::path destRoot =
-        std::filesystem::weakly_canonical(std::filesystem::path(destinationDir), ec);
-    if (ec || destRoot.empty()) {
-        std::fclose(f);
-        result.error = "could not resolve extraction directory";
-        return result;
-    }
-
     std::uint64_t walker = 0;
     std::uint8_t localHeader[30];
     std::unordered_set<std::string> seenPaths;
@@ -325,16 +317,14 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
 
         const std::filesystem::path target = std::filesystem::path(destinationDir) / relative;
         std::filesystem::create_directories(target.parent_path(), ec);
-
-        // Belt and braces after the path checks: refuse to write anywhere that
-        // is not genuinely inside the destination.
-        const std::filesystem::path resolved = std::filesystem::weakly_canonical(target, ec);
-        const std::filesystem::path relativeToRoot = resolved.lexically_relative(destRoot);
-        if (ec || relativeToRoot.empty() || relativeToRoot == "."
-            || relativeToRoot.native().rfind("..", 0) == 0) {
-            result.error = "entry would write outside the destination: " + relative;
+        if (ec) {
+            result.error = "could not create parent directory for " + relative;
             break;
         }
+
+        // safeRelativePath() rejects absolute paths, drive prefixes, and dot
+        // segments before this point. Do not use weakly_canonical here: the
+        // libnx filesystem does not reliably resolve sdmc: paths.
 
         std::uint64_t written = 0;
         if (!copyEntry(f, dataOffset, compressed, plain,

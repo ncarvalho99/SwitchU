@@ -398,6 +398,7 @@
       "installed_apply_failed": "Theme installiert, konnte aber nicht automatisch angewendet werden.",
       "downloading_package": "Theme wird geladen",
       "extracting": "Theme wird entpackt",
+      "unpack_failed": "Das Themenpaket konnte nicht entpackt werden.",
       "finishing": "Abschließen",
       "no_space": "Nicht genug Speicherplatz auf der SD-Karte für dieses Thema"
     },

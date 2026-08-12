@@ -564,6 +564,7 @@
       "installed_apply_failed": "Theme installed, but it could not be applied automatically.",
       "downloading_package": "Downloading theme",
       "extracting": "Extracting theme",
+      "unpack_failed": "Theme package could not be unpacked.",
       "finishing": "Finishing",
       "no_space": "Not enough space on the SD card for this theme"
     },
