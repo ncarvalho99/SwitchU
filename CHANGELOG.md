@@ -3,62 +3,86 @@
 ## English
 
 Fifth release of this fork of [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
-1.1.0. It builds on fork.4 with animated backgrounds that are practical on the
-Switch, a package-based theme catalogue, and fixes found through console tests.
+1.1.0. It builds on fork.4 with animated backgrounds, a package-based theme
+catalogue, persistent game sorting, and fixes validated on a real console.
 
-**Animated backgrounds and themes**
+**Animated themes**
 
-- Animated wallpapers are pre-encoded as DDS/BC1 frames and streamed to the GPU;
-  no video is decoded while the menu is rendering.
-- The menu obtains a larger applet heap when the system can grant it, then derives
-  a safe image budget from that heap. Background loading is incremental so a return
-  from a game does not stall while every frame is uploaded.
-- Theme Shop has an Animated Themes tab, animated preview sheets, package metadata,
-  and an explicit Standard/High quality choice when the catalogue offers both.
-- Theme packages download as one archive, are checked against available SD space,
-  and are unpacked transactionally: a failed install keeps the working theme.
+- Theme Shop adds an **Animated Themes** tab. The catalogue and packages are
+  downloaded directly from [themes.nclabs.dev](https://themes.nclabs.dev), the
+  default HTTPS catalogue configured in SwitchU.
+- Animated wallpapers are pre-encoded as DDS **BC7** frames at 912×512 and streamed
+  to the GPU; no video is decoded while the menu is rendering. This is the single,
+  definitive package quality, selected to stay inside the Switch applet memory budget.
+- The menu requests a larger applet heap when available, derives a safe image budget
+  from it, and uploads background frames incrementally. Returning from a game no
+  longer waits for every animation frame to upload at once.
+- Theme packages are checked for safe catalogue paths, archive limits and free SD
+  space. Installation is transactional and reliably replaces an existing package:
+  a failed install preserves the working theme.
+- Download and extraction progress now remain monotonic, and the new Theme Shop
+  messages are translated in all bundled languages.
 
-**Stability and responsiveness**
+**Home screen and stability**
 
-- The catalogue no longer requests every manifest when optional screenshots are
-  absent, avoiding a network failure that could look like a frozen menu.
-- Community preview textures are pruned continuously and only visible candidates
-  are uploaded, preventing GPU-memory churn while browsing.
-- The daemon now throttles application-view refreshes after title events. The
-  previous 200 ms scan loop could cause severe launcher lag after a game exit.
-  Zelda: Tears of the Kingdom was launched and returned to the menu successfully
-  on the console after this fix.
+- Press **R** to cycle between **My order**, **A–Z**, and **Recent**. Manual icon
+  moves are saved as My order; Recent uses actual launches and uses the personal
+  order only to break ties.
+- Fixed the sort view so icon artwork moves with its title. Repeated sorting no
+  longer exposes freed GPU textures or stale focus pointers, which caused artifacts
+  and menu crashes during console testing.
+- Community previews are pruned continuously and only visible candidates upload to
+  the GPU. The catalogue also avoids unnecessary manifest requests when optional
+  screenshots are absent.
+- The daemon throttles application-view refreshes after title events. The former
+  200 ms scan loop could cause severe launcher lag after a game exit; Zelda: Tears
+  of the Kingdom was launched and returned to the menu successfully after this fix.
+- The theme website was split into maintainable HTML, CSS and JavaScript assets and
+  hardened with restrictive server security headers and safer client-side rendering.
 
 ---
 
 ## Português
 
 Quinta versão desta fork de [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
-1.1.0. Ela evolui a fork.4 com fundos animados viáveis no Switch, catálogo de
-temas por pacote e correções encontradas nos testes no console.
+1.1.0. Ela evolui a fork.4 com fundos animados, catálogo de temas por pacote,
+ordenação persistente dos jogos e correções validadas em um console real.
 
-**Fundos animados e temas**
+**Temas animados**
 
-- Os fundos animados usam quadros DDS/BC1 pré-codificados e enviados em fluxo à
-  GPU; não há decodificação de vídeo durante a renderização do menu.
-- O menu obtém um heap de applet maior quando o sistema o concede e calcula dele
-  um orçamento seguro para imagens. O carregamento é incremental, evitando travar
-  ao voltar de um jogo para enviar todos os quadros de uma vez.
-- A Loja de Temas traz a aba Temas Animados, folhas de prévias animadas, metadados
-  de pacote e escolha explícita entre qualidade Padrão e Alta quando disponível.
-- Cada tema é baixado em um único pacote, verifica o espaço livre no cartão e é
-  instalado de modo transacional: uma falha preserva o tema que já funcionava.
+- A Loja de Temas traz a aba **Temas Animados**. O catálogo e os pacotes são
+  baixados diretamente de [themes.nclabs.dev](https://themes.nclabs.dev), o
+  catálogo HTTPS padrão configurado no SwitchU.
+- Os fundos animados usam quadros DDS em **BC7** a 912×512 enviados em fluxo à GPU;
+  não há decodificação de vídeo durante a renderização do menu. Esta é a qualidade
+  única e definitiva dos pacotes, escolhida para respeitar a memória de applet.
+- O menu pede um heap de applet maior quando o sistema o concede, calcula dele um
+  orçamento seguro para imagens e envia os quadros de forma incremental. Voltar de
+  um jogo não espera mais o upload de todos os quadros de uma vez.
+- Os pacotes verificam caminhos seguros no catálogo, limites do arquivo e espaço
+  livre no cartão. A instalação é transacional e substitui corretamente um tema já
+  instalado: se falhar, o tema que funcionava é preservado.
+- O progresso de download e extração agora é contínuo, e as novas mensagens da Loja
+  de Temas foram traduzidas para todos os idiomas incluídos.
 
-**Estabilidade e resposta**
+**Tela inicial e estabilidade**
 
-- A consulta ao catálogo não busca mais todos os manifestos quando só faltam
-  capturas opcionais, evitando que uma falha de rede pareça congelar o menu.
-- As texturas de prévia da comunidade são podadas continuamente e só candidatas
-  visíveis são enviadas à GPU, evitando desperdício de memória ao navegar.
+- Pressione **R** para alternar entre **Minha ordem**, **A–Z** e **Recentes**.
+  Movimentos manuais dos ícones são salvos em Minha ordem; Recentes usa aberturas
+  reais dos jogos e usa a ordem pessoal somente para desempates.
+- Corrigida a ordenação para que a arte do ícone acompanhe seu jogo. Alternar a
+  ordem repetidamente não deixa mais texturas de GPU ou ponteiros de foco obsoletos,
+  que causavam artefatos e crashes nos testes no console.
+- As texturas de prévia da comunidade são podadas continuamente e somente candidatas
+  visíveis chegam à GPU. O catálogo também evita buscar manifestos sem necessidade
+  quando capturas opcionais estão ausentes.
 - O daemon agora limita a atualização das views de aplicativos após eventos de
   títulos. A varredura anterior a cada 200 ms podia causar lag extremo no launcher
-  após a saída de um jogo. Zelda: Tears of the Kingdom abriu e retornou ao menu
-  normalmente no console depois desta correção.
+  após sair de um jogo; Zelda: Tears of the Kingdom abriu e retornou ao menu
+  normalmente após esta correção.
+- O site de temas foi separado em HTML, CSS e JavaScript mais fáceis de manter e
+  reforçado com cabeçalhos de segurança restritivos e renderização mais segura no
+  cliente.
 
 ---
 
