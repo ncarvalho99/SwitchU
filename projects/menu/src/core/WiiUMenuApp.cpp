@@ -714,7 +714,18 @@ void WiiUMenuApp::reflowHomeGrid() {
     }
 
     m_model = std::move(rebuiltModel);
-    m_iconStreamer.resize(m_model.count());
+
+    // IconStreamer associates its GPU slots with grid indices. Reusing that
+    // mapping after a sort kept the old artwork at each physical index while
+    // the title/focus model had already moved, so the cursor moved but the
+    // visible icons appeared not to. Sorting is infrequent; rebuild this small
+    // page cache from title IDs so the artwork follows its title exactly.
+    for (const auto& icon : oldIcons) {
+        if (icon)
+            icon->setTexture(nullptr);
+    }
+    m_iconStreamer.clear();
+    m_iconStreamer.init(m_model.count());
     m_iconStreamer.setIconDataLoader(AppListLoader::loadIconData);
     for (int i = 0; i < m_model.count(); ++i)
         m_iconStreamer.setTitleId(i, m_model.at(i).titleId);
@@ -743,6 +754,7 @@ void WiiUMenuApp::reflowHomeGrid() {
     m_iconStreamer.onPageChanged(m_grid->currentPage(), m_grid->iconsPerPage(),
                                  app().gpu(), app().renderer(),
                                  m_grid->allIcons());
+    DebugLog::log("[grid] icon cache rebuilt for sort=%d", m_config.sortMode);
 
     const bool overlayActive =
         (m_dialog && m_dialog->isActive()) ||
