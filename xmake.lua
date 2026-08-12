@@ -10,7 +10,7 @@ add_rules("mode.debug", "mode.release")
 -- sorts equal to 1.1.0 rather than below it the way a "-fork.N" prerelease
 -- would. Rebasing onto an upstream 1.2.0 makes this 1.2.0+fork.1.
 local upstream_version = "1.1.0"
-local fork_revision = "4"
+local fork_revision = "5"
 local version = upstream_version .. "+fork." .. fork_revision
 local version_define = string.format('SWITCHU_VERSION="%s"', version)
 local upstream_define = string.format('SWITCHU_UPSTREAM_VERSION="%s"', upstream_version)
