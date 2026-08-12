@@ -398,6 +398,7 @@
       "installed_apply_failed": "Tema installato, ma non applicato automaticamente.",
       "downloading_package": "Download del tema",
       "extracting": "Estrazione del tema",
+      "unpack_failed": "Impossibile estrarre il pacchetto del tema.",
       "finishing": "Completamento",
       "no_space": "Spazio insufficiente sulla scheda SD per questo tema"
     },

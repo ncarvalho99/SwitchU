@@ -768,7 +768,8 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
             DebugLog::log("[themeshop] extracao falhou (%s), %llu MB livres no cartao",
                           extracted.error.c_str(),
                           (unsigned long long)(sdFreeBytes() / 1048576));
-            throw std::runtime_error("Theme package could not be unpacked: " + extracted.error);
+            throw std::runtime_error(i18n.tr("themeshop.transfer.unpack_failed",
+                                             "Theme package could not be unpacked."));
         }
 
         if (!replaceDirectoryFromStaging(result.destinationPath, stagingPath)) {

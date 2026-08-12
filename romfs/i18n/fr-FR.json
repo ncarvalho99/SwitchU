@@ -563,7 +563,8 @@
       "installed_applied": "Thème installé et appliqué.",
       "installed_apply_failed": "Thème installé, mais il n’a pas pu être appliqué automatiquement.",
       "downloading_package": "Téléchargement du thème",
-      "extracting": "Extraction du thème",
+     "extracting": "Extraction du thème",
+      "unpack_failed": "Le paquet du th\u00e8me n'a pas pu \u00eatre d\u00e9compress\u00e9.",
       "finishing": "Finalisation",
       "no_space": "Espace insuffisant sur la carte SD pour ce thème"
     },

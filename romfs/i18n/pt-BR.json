@@ -398,6 +398,7 @@
       "installed_apply_failed": "Tema instalado, mas não foi aplicado automaticamente.",
       "downloading_package": "Baixando tema",
       "extracting": "Extraindo tema",
+      "unpack_failed": "N\u00e3o foi poss\u00edvel descompactar o pacote do tema.",
       "finishing": "Concluindo",
       "no_space": "Espaço insuficiente no cartão SD para este tema"
     },
