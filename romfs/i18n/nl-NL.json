@@ -398,6 +398,7 @@
       "installed_apply_failed": "Thema geïnstalleerd, maar niet automatisch toegepast.",
       "downloading_package": "Thema downloaden",
       "extracting": "Thema uitpakken",
+      "unpack_failed": "Het themapakket kon niet worden uitgepakt.",
       "finishing": "Afronden",
       "no_space": "Onvoldoende ruimte op de SD-kaart voor dit thema"
     },
