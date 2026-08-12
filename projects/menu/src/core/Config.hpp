@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <limits>
 #include <utility>
 #include <vector>
 #include <string>
@@ -66,6 +67,10 @@ struct AppConfig {
     // same question and puts a game patched this morning above one played
     // every day for a year.
     std::vector<std::pair<std::uint64_t, std::uint64_t>> lastOpened;
+    // A persisted sequence rather than a system/boot clock. The console can
+    // start without a valid wall clock and armGetSystemTick resets on reboot;
+    // neither can provide a reliable "most recently opened" order.
+    std::uint64_t lastOpenedSequence = 0;
 
     std::uint64_t lastOpenedAt(std::uint64_t titleId) const {
         for (const auto& e : lastOpened)
@@ -77,6 +82,14 @@ struct AppConfig {
             if (e.first == titleId) { e.second = when; return; }
         }
         lastOpened.emplace_back(titleId, when);
+    }
+    std::uint64_t nextLastOpenedAt() {
+        for (const auto& e : lastOpened)
+            if (e.second > lastOpenedSequence)
+                lastOpenedSequence = e.second;
+        if (lastOpenedSequence != std::numeric_limits<std::uint64_t>::max())
+            ++lastOpenedSequence;
+        return lastOpenedSequence;
     }
 
     std::string themePreset = "Default Dark";

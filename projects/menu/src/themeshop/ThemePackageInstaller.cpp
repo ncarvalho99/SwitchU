@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -26,6 +27,8 @@
 #include <stdexcept>
 #include <system_error>
 #include <sys/statvfs.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -184,8 +187,8 @@ void appendUniquePath(std::vector<std::string>& paths, std::string path) {
 }
 
 bool pathExists(const std::string& path) {
-    std::error_code ec;
-    return std::filesystem::exists(path, ec);
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0;
 }
 
 bool ensureDirectoryRecursive(const std::string& path) {
@@ -235,9 +238,49 @@ std::uint64_t sdFreeBytes() {
 }
 
 bool removeDirectoryRecursive(const std::string& path) {
-    std::error_code ec;
-    std::filesystem::remove_all(path, ec);
-    return !ec;
+    struct stat st{};
+    if (stat(path.c_str(), &st) != 0)
+        return errno == ENOENT;
+
+    if (!S_ISDIR(st.st_mode)) {
+        if (std::remove(path.c_str()) == 0 || errno == ENOENT)
+            return true;
+        DebugLog::log("[themeshop] could not remove file %s (%d: %s)",
+                      path.c_str(), errno, std::strerror(errno));
+        return false;
+    }
+
+    DIR* dir = opendir(path.c_str());
+    if (!dir) {
+        DebugLog::log("[themeshop] could not open directory %s (%d: %s)",
+                      path.c_str(), errno, std::strerror(errno));
+        return false;
+    }
+
+    bool ok = true;
+    while (const dirent* entry = readdir(dir)) {
+        const char* name = entry->d_name;
+        if (std::strcmp(name, ".") == 0 || std::strcmp(name, "..") == 0)
+            continue;
+        std::string child = path;
+        if (!child.empty() && child.back() != '/')
+            child.push_back('/');
+        child += name;
+        if (!removeDirectoryRecursive(child)) {
+            ok = false;
+            break;
+        }
+    }
+    closedir(dir);
+
+    if (!ok)
+        return false;
+    if (rmdir(path.c_str()) == 0 || errno == ENOENT)
+        return true;
+
+    DebugLog::log("[themeshop] could not remove directory %s (%d: %s)",
+                  path.c_str(), errno, std::strerror(errno));
+    return false;
 }
 
 // Do not erase a working theme until its replacement was fully unpacked.
