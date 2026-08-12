@@ -671,7 +671,11 @@ void WiiUMenuApp::reflowHomeGrid() {
         if (++sampleCount >= 4)
             break;
     }
-    DebugLog::log("[grid] sort=%d first=%s", m_config.sortMode, orderSample.c_str());
+    int recentCount = 0;
+    for (uint64_t tid : appOrder)
+        recentCount += m_config.lastOpenedAt(tid) != 0 ? 1 : 0;
+    DebugLog::log("[grid] sort=%d recent=%d first=%s",
+                  m_config.sortMode, recentCount, orderSample.c_str());
 
     // Automatic views are temporary projections of the saved layout. Writing
     // them back here replaced the user's custom order every time R was used.
@@ -1010,8 +1014,13 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
                     [this](uint64_t id, AccountUid u) { // ns records last_updated, which is when a title was installed or
  // patched. "Last played" is a different question and only the menu is
  // in a position to answer it.
- m_config.noteOpened(id, armGetSystemTick());
- m_config.save();
+ const std::uint64_t openedAt = m_config.nextLastOpenedAt();
+ m_config.noteOpened(id, openedAt);
+ if (!m_config.save())
+     DebugLog::log("[menu] could not save last-opened title=%016lX", id);
+ switchu::commitSdCard("last opened");
+ DebugLog::log("[menu] last-opened title=%016lX at=%llu", id,
+               (unsigned long long)openedAt);
  m_launcher.launchApplication(id, u); });
             };
             if (entry) {
