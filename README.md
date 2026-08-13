@@ -86,8 +86,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-image.ps1 -Pul
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-local.ps1 -Mode release -Variant sysmodule
 ```
 
-The resulting archive is `artifacts/SwitchU-sysmodule-release.zip`. Extract its
-`atmosphere` and `switch` directories to the root of the microSD card.
+The resulting archive is `artifacts/SwitchU-sysmodule-release.zip`. When the
+Switch microSD card is connected as `E:`, a successful sysmodule build copies
+`atmosphere` and `switch` to it automatically and verifies the main binaries by
+SHA-256. Use `-SkipConsoleDeploy` to keep a build local. Read hardware logs
+directly with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\read-console-logs.ps1
+```
 
 ## Know issues
 - Some settings are not implemented yet
