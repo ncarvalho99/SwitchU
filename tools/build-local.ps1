@@ -8,7 +8,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-local.ps1 -Mod
 [CmdletBinding()]
 param(
     [ValidateSet('release', 'debug')] [string] $Mode = 'release',
-    [ValidateSet('sysmodule', 'homebrew')] [string] $Variant = 'sysmodule'
+    [ValidateSet('sysmodule', 'homebrew')] [string] $Variant = 'sysmodule',
+    [ValidatePattern('^[A-Za-z]:$')] [string] $ConsoleDrive = 'E:',
+    [switch] $SkipConsoleDeploy
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,8 +25,13 @@ if (-not (Test-Path -LiteralPath $docker)) {
 # installation may omit this directory from PATH, which breaks anonymous pulls.
 $env:PATH = "$dockerRoot;$env:PATH"
 
-& $docker image inspect switchu-build 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
+$buildImage = 'switchu-build:latest'
+# `docker image inspect switchu-build` can transiently report "No such image"
+# while Docker Desktop is finishing its local-image refresh. Listing the image
+# is quiet both when it exists and when it does not, so it is safe under the
+# script's strict error mode.
+$buildImageId = @(& $docker image ls --quiet $buildImage | Select-Object -First 1)
+if ($buildImageId.Count -eq 0 -or [string]::IsNullOrWhiteSpace($buildImageId[0])) {
     throw "A imagem local 'switchu-build' nao existe. Execute .\tools\build-image.ps1 -PullBase primeiro."
 }
 
@@ -33,7 +40,68 @@ $logsDirectory = Join-Path $repo '.logs'
 New-Item -ItemType Directory -Force -Path $logsDirectory | Out-Null
 $log = Join-Path $logsDirectory 'build-local.log'
 
-if (& $docker ps -q --filter ancestor=switchu-build) {
+function Copy-TreeToConsole {
+    param(
+        [Parameter(Mandatory)] [string] $Source,
+        [Parameter(Mandatory)] [string] $Destination,
+        [Parameter(Mandatory)] [string] $Label
+    )
+
+    & robocopy $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Host
+    $copyExitCode = $LASTEXITCODE
+    # Robocopy uses 0–7 for success, including files copied or metadata changed.
+    if ($copyExitCode -gt 7) {
+        throw "Falha ao copiar $Label para o cartao (robocopy exit $copyExitCode)."
+    }
+}
+
+function Deploy-SysmoduleToConsole {
+    if ($SkipConsoleDeploy) {
+        Write-Host 'implantacao no console ignorada por parametro' -ForegroundColor Yellow
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $ConsoleDrive)) {
+        Write-Host "cartao do console ($ConsoleDrive) nao conectado; ZIP local mantido" -ForegroundColor Yellow
+        return
+    }
+
+    $sourceRoot = Join-Path $repo ("dist\{0}\{1}" -f $Variant, $Mode)
+    $sourceAtmosphere = Join-Path $sourceRoot 'atmosphere'
+    $sourceSwitch = Join-Path $sourceRoot 'switch'
+    $destinationAtmosphere = Join-Path $ConsoleDrive 'atmosphere'
+    $destinationSwitch = Join-Path $ConsoleDrive 'switch'
+    $consoleSwitchU = Join-Path $destinationSwitch 'SwitchU'
+
+    if (-not (Test-Path -LiteralPath $sourceAtmosphere) -or
+        -not (Test-Path -LiteralPath $sourceSwitch)) {
+        throw "Layout de build sysmodule incompleto em $sourceRoot; nao foi copiado."
+    }
+    if (-not (Test-Path -LiteralPath $destinationAtmosphere) -or
+        -not (Test-Path -LiteralPath $consoleSwitchU)) {
+        throw "$ConsoleDrive esta montado, mas nao possui o layout esperado do cartao Switch; copia cancelada."
+    }
+
+    Write-Host "implantando sysmodule no cartao $ConsoleDrive ..." -ForegroundColor Cyan
+    Copy-TreeToConsole -Source $sourceAtmosphere -Destination $destinationAtmosphere -Label 'atmosphere'
+    Copy-TreeToConsole -Source $sourceSwitch -Destination $destinationSwitch -Label 'switch'
+
+    $checks = @(
+        @{ Source = Join-Path $sourceAtmosphere 'contents\0100000000001000\exefs.nsp'; Destination = Join-Path $destinationAtmosphere 'contents\0100000000001000\exefs.nsp' },
+        @{ Source = Join-Path $sourceSwitch 'SwitchU\bin\menu\main'; Destination = Join-Path $destinationSwitch 'SwitchU\bin\menu\main' },
+        @{ Source = Join-Path $sourceSwitch 'SwitchU\bin\menu\main.npdm'; Destination = Join-Path $destinationSwitch 'SwitchU\bin\menu\main.npdm' }
+    )
+    foreach ($check in $checks) {
+        $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $check.Source).Hash
+        $destinationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $check.Destination).Hash
+        if ($sourceHash -ne $destinationHash) {
+            throw "Verificacao SHA-256 falhou para $($check.Destination)."
+        }
+    }
+    Write-Host "cartao $ConsoleDrive atualizado e verificado; ejete-o com seguranca antes de usar no Switch" -ForegroundColor Green
+}
+
+if (& $docker ps -q --filter "ancestor=$buildImage") {
     throw 'Ja existe um build SwitchU rodando. Espere ele terminar antes de iniciar outro.'
 }
 
@@ -45,7 +113,7 @@ $started = Get-Date
 # every --rm run would make later builds incorrectly think dependencies exist.
 $ErrorActionPreference = 'Continue'
 & $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake `
-    switchu-build bash /src/tools/build-inside.sh $Mode $Variant |
+    $buildImage bash /src/tools/build-inside.sh $Mode $Variant |
     Tee-Object -FilePath $log
 $rc = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
@@ -56,6 +124,11 @@ $elapsed = if ($minutes -gt 0) { "${minutes}m $($seconds % 60)s" } else { "${sec
 
 if ($rc -eq 0) {
     Write-Host "ok em $elapsed" -ForegroundColor Green
+    if ($Variant -eq 'sysmodule') {
+        Deploy-SysmoduleToConsole
+    } else {
+        Write-Host 'build homebrew nao e implantado automaticamente no cartao' -ForegroundColor Yellow
+    }
 } else {
     Write-Host "falhou (exit $rc) em $elapsed -- log completo em $log" -ForegroundColor Red
 }
