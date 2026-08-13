@@ -75,6 +75,20 @@ xmake clean
 
 Build outputs are generated under `build/cross/aarch64/<mode>/`.
 
+### Local Windows build with Docker
+
+The reproducible local environment is defined in `tools/Dockerfile.build`; it
+pins the devkitPro base image used to make SwitchU. After installing Docker
+Desktop, create it once and then build the installable sysmodule archive:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-image.ps1 -PullBase
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-local.ps1 -Mode release -Variant sysmodule
+```
+
+The resulting archive is `artifacts/SwitchU-sysmodule-release.zip`. Extract its
+`atmosphere` and `switch` directories to the root of the microSD card.
+
 ## Know issues
 - Some settings are not implemented yet
 - Current icons are very ugly, feel free to replace them with better ones

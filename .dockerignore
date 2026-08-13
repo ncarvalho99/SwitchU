@@ -1,0 +1,24 @@
+# The build image installs tools only; it never COPYs application sources.
+# Keep its context tiny so recreating the image does not upload build outputs,
+# cache directories or the bundled animated-theme assets to Docker.
+.git
+.compilado_autor
+.compilado_fork
+.download
+.features
+.logs
+.xmake
+artifacts
+build
+dist
+fps
+lib
+projects
+romfs
+screenshots
+shaders
+web
+*.md
+*.json
+*.sh
+xmake.lua
