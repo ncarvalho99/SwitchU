@@ -40,6 +40,11 @@ catalogue, persistent game sorting, and fixes validated on a real console.
 - The theme website was split into maintainable HTML, CSS and JavaScript assets and
   hardened with restrictive server security headers and safer client-side rendering.
 
+**Validation**
+
+- The definitive 912×512 BC7 animated-background format was validated on both the
+  handheld display and TV.
+
 ---
 
 ## Português
@@ -83,6 +88,11 @@ ordenação persistente dos jogos e correções validadas em um console real.
 - O site de temas foi separado em HTML, CSS e JavaScript mais fáceis de manter e
   reforçado com cabeçalhos de segurança restritivos e renderização mais segura no
   cliente.
+
+**Validação**
+
+- O formato definitivo de fundo animado em BC7 a 912×512 foi validado tanto na
+  tela portátil quanto na TV.
 
 ---
 

@@ -27,6 +27,7 @@ original project remains credited in the About screen.
 ### Validated on console
 
 - Animated-theme download, installation, replacement and application.
+- Animated-background quality at 912×512 BC7 on both the handheld display and TV.
 - Repeated switching among all three game-order modes, including manual icon moves.
 - Zelda: Tears of the Kingdom launch and return to the launcher after the refresh
   throttling fix.
@@ -61,6 +62,7 @@ original continua creditado na tela Sobre.
 ### Validado no console
 
 - Download, instalação, substituição e aplicação de tema animado.
+- Qualidade do fundo animado em 912×512 BC7 na tela portátil e na TV.
 - Alternância repetida entre os três modos de ordem, inclusive após mover ícones
   manualmente.
 - Abertura de Zelda: Tears of the Kingdom e retorno ao launcher depois da correção

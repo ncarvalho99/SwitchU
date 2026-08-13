@@ -1,0 +1,19 @@
+# Local build environment for SwitchU.
+#
+# Keep the devkitPro base digest fixed: the toolchain is part of the output, so
+# silently picking up a new `latest` image would make a local rebuild hard to
+# reproduce (and could make crash-report symbols no longer match a release).
+FROM devkitpro/devkita64@sha256:1fc388c3a0d34bd2045a6dadcb1020e069d5f876a187fd705de14b4440c00282
+
+USER root
+
+# The base already provides the devkitPro toolchain, CMake, Ninja, Git and zip.
+# xmake is supplied by Debian bookworm-backports in this image; zstd is needed
+# by the current upstream SDL package and keeps local/CI dependencies aligned.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends xmake zstd \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/devkitpro/devkitA64/bin:/opt/devkitpro/tools/bin:${PATH}"
+
+WORKDIR /src
