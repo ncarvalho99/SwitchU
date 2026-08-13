@@ -58,6 +58,31 @@ static inline void ensureSaveData(uint64_t app_id, uint64_t owner_id,
         switchu::FileLog::log("[app] ensureSaveData type=%d FAIL: 0x%X", static_cast<int>(type), rc);
 }
 
+// Temporary storage is not a normal save-data filesystem. In particular, its
+// creation metadata must be empty; giving it the thumbnail metadata used by
+// account/device saves makes fs reject the request (0x402 on affected titles).
+// Use libnx's dedicated wrapper so its exact FS contract stays in one place.
+static inline void ensureTemporaryStorage(uint64_t app_id, uint64_t owner_id,
+                                          uint64_t storage_size) {
+    if (storage_size == 0)
+        return;
+
+    FsSaveDataAttribute attr = {};
+    attr.application_id = app_id;
+    attr.save_data_type = FsSaveDataType_Temporary;
+
+    FsFileSystem fs;
+    if (R_SUCCEEDED(fsOpenSaveDataFileSystem(&fs, FsSaveDataSpaceId_Temporary, &attr))) {
+        fsFsClose(&fs);
+        return;
+    }
+
+    Result rc = fsCreate_TemporaryStorage(app_id, owner_id,
+                                          static_cast<s64>(storage_size), 0);
+    if (R_FAILED(rc))
+        switchu::FileLog::log("[app] ensureTemporaryStorage FAIL: 0x%X", rc);
+}
+
 static inline void ensureApplicationSaveData(uint64_t title_id, AccountUid uid) {
     switchu::control_cache::Meta meta{};
     if (!switchu::control_cache::readMeta(title_id, meta)) {
@@ -83,9 +108,8 @@ static inline void ensureApplicationSaveData(uint64_t title_id, AccountUid uid) 
                    meta.device_save_data_size,
                    meta.device_save_data_journal_size);
 
-    ensureSaveData(title_id, meta.save_data_owner_id, emptyUid,
-                   FsSaveDataType_Temporary, FsSaveDataSpaceId_Temporary,
-                   meta.temporary_storage_size, 0);
+    ensureTemporaryStorage(title_id, meta.save_data_owner_id,
+                           meta.temporary_storage_size);
 
     ensureSaveData(title_id, meta.save_data_owner_id, emptyUid,
                    FsSaveDataType_Cache, FsSaveDataSpaceId_User,
