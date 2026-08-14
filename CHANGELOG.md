@@ -96,6 +96,22 @@ baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
 - O payload sysmodule de release foi testado com sucesso no console, incluindo
   as opções redesenhadas de jogo e o fluxo de artes.
 
+<details>
+  <summary><b>Capturas da fork.6 / Fork.6 screenshots</b></summary>
+
+![](./screenshots/2.jpg)
+![](./screenshots/3.jpg)
+![](./screenshots/4.jpg)
+![](./screenshots/5.jpg)
+![](./screenshots/6.jpg)
+![](./screenshots/7.jpg)
+![](./screenshots/8.jpg)
+![](./screenshots/9.jpg)
+![](./screenshots/10.jpg)
+![](./screenshots/11.jpg)
+
+</details>
+
 ---
 
 # SwitchU 1.1.0+fork.5
