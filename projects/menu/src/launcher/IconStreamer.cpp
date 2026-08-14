@@ -4,6 +4,7 @@
 #include <nxui/third_party/stb/stb_image.h>
 #include <switch.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <future>
@@ -15,10 +16,15 @@ void IconStreamer::init(int appCount) {
     m_compressed.resize(appCount);
     m_titleIds.assign(appCount, 0);
     m_appToSlot.assign(appCount, -1);
+    m_customArtwork.assign(appCount, false);
 }
 
 void IconStreamer::setIconDataLoader(IconDataLoader loader) {
     m_iconLoader = std::move(loader);
+}
+
+void IconStreamer::setArtworkDataLoader(IconDataLoader loader) {
+    m_artworkLoader = std::move(loader);
 }
 
 void IconStreamer::setTitleId(int appIndex, uint64_t titleId) {
@@ -43,6 +49,7 @@ void IconStreamer::resize(int appCount) {
     m_compressed.resize(appCount);
     m_titleIds.resize(appCount, 0);
     m_appToSlot.resize(appCount, -1);
+    m_customArtwork.resize(appCount, false);
     if (m_pinnedIndex >= appCount)
         m_pinnedIndex = -1;
     m_lastPage = -1;
@@ -62,6 +69,7 @@ void IconStreamer::clear() {
     m_compressed.clear();
     m_titleIds.clear();
     m_appToSlot.clear();
+    m_customArtwork.clear();
     m_freeSlots.clear();
     m_lastPage = -1;
     m_lastIconsPerPage = -1;
@@ -78,6 +86,11 @@ bool IconStreamer::swapIndices(int a, int b) {
         std::swap(m_compressed[a], m_compressed[b]);
     if (a < (int)m_titleIds.size() && b < (int)m_titleIds.size())
         std::swap(m_titleIds[a], m_titleIds[b]);
+    if (a < (int)m_customArtwork.size() && b < (int)m_customArtwork.size()) {
+        const bool customA = m_customArtwork[a];
+        m_customArtwork[a] = m_customArtwork[b];
+        m_customArtwork[b] = customA;
+    }
 
     if (a < (int)m_appToSlot.size() && b < (int)m_appToSlot.size()) {
         int slotA = m_appToSlot[a];
@@ -111,7 +124,8 @@ bool IconStreamer::hasData(int index) const {
 // ---------------------------------------------------------------------------
 // Decode a single compressed icon to RGBA, downscaling to kIconSize if needed.
 // ---------------------------------------------------------------------------
-IconStreamer::DecodedIcon IconStreamer::decodeAndScale(const std::vector<uint8_t>& data) const {
+IconStreamer::DecodedIcon IconStreamer::decodeAndScale(const std::vector<uint8_t>& data,
+                                                        bool customArtwork) const {
     DecodedIcon out{};
     if (data.empty()) return out;
 
@@ -119,6 +133,104 @@ IconStreamer::DecodedIcon IconStreamer::decodeAndScale(const std::vector<uint8_t
     uint8_t* full = stbi_load_from_memory(data.data(), (int)data.size(),
                                            &w, &h, &ch, 4);
     if (!full) return out;
+
+    // A square SteamGridDB grid already matches the Switch home icon. It uses
+    // the normal fast path below; only a genuinely non-square cover needs the
+    // poster composition.
+    if (customArtwork && std::abs(w - h) > 1) {
+        // SteamGridDB covers are portrait, but the Switch home grid owns a
+        // square texture budget.  Do not squash the source into that square:
+        // build a compact "poster over blurred art" composition instead.  The
+        // sharp foreground keeps the game title intact while its dark blurred
+        // copy fills the sides without an empty letterbox.
+        constexpr int side = kIconSize;
+        uint8_t* composed = (uint8_t*)std::malloc((size_t)side * side * 4);
+        if (!composed) {
+            out.rgba = full;
+            out.w = w;
+            out.h = h;
+            return out;
+        }
+
+        auto sample = [full, w, h](float sourceX, float sourceY, uint8_t* dst) {
+            sourceX = std::clamp(sourceX, 0.f, (float)(w - 1));
+            sourceY = std::clamp(sourceY, 0.f, (float)(h - 1));
+            const int x0 = (int)sourceX, y0 = (int)sourceY;
+            const int x1 = std::min(x0 + 1, w - 1), y1 = std::min(y0 + 1, h - 1);
+            const float fx = sourceX - x0, fy = sourceY - y0;
+            const uint8_t* p00 = full + ((size_t)y0 * w + x0) * 4;
+            const uint8_t* p10 = full + ((size_t)y0 * w + x1) * 4;
+            const uint8_t* p01 = full + ((size_t)y1 * w + x0) * 4;
+            const uint8_t* p11 = full + ((size_t)y1 * w + x1) * 4;
+            for (int c = 0; c < 4; ++c)
+                dst[c] = (uint8_t)(p00[c] * (1 - fx) * (1 - fy) +
+                                   p10[c] * fx       * (1 - fy) +
+                                   p01[c] * (1 - fx) * fy       +
+                                   p11[c] * fx       * fy       + 0.5f);
+        };
+
+        // Start with a centred crop only for the backdrop, then blur and dim
+        // it. The uncut source is drawn sharply below.
+        const float fillScale = std::max((float)side / w, (float)side / h);
+        for (int y = 0; y < side; ++y) {
+            for (int x = 0; x < side; ++x) {
+                uint8_t* dst = composed + ((size_t)y * side + x) * 4;
+                sample((x + 0.5f) / fillScale - 0.5f + (w - side / fillScale) * 0.5f,
+                       (y + 0.5f) / fillScale - 0.5f + (h - side / fillScale) * 0.5f, dst);
+                dst[3] = 255;
+            }
+        }
+        std::vector<uint8_t> blurred((size_t)side * side * 4);
+        constexpr int blurRadius = 5;
+        for (int y = 0; y < side; ++y) {
+            for (int x = 0; x < side; ++x) {
+                int sums[3] = {};
+                int count = 0;
+                for (int offset = -blurRadius; offset <= blurRadius; ++offset) {
+                    const int sx = std::clamp(x + offset, 0, side - 1);
+                    const uint8_t* pixel = composed + ((size_t)y * side + sx) * 4;
+                    for (int c = 0; c < 3; ++c) sums[c] += pixel[c];
+                    ++count;
+                }
+                uint8_t* dst = blurred.data() + ((size_t)y * side + x) * 4;
+                for (int c = 0; c < 3; ++c) dst[c] = (uint8_t)(sums[c] / count);
+                dst[3] = 255;
+            }
+        }
+        for (int y = 0; y < side; ++y) {
+            for (int x = 0; x < side; ++x) {
+                int sums[3] = {};
+                int count = 0;
+                for (int offset = -blurRadius; offset <= blurRadius; ++offset) {
+                    const int sy = std::clamp(y + offset, 0, side - 1);
+                    const uint8_t* pixel = blurred.data() + ((size_t)sy * side + x) * 4;
+                    for (int c = 0; c < 3; ++c) sums[c] += pixel[c];
+                    ++count;
+                }
+                uint8_t* dst = composed + ((size_t)y * side + x) * 4;
+                for (int c = 0; c < 3; ++c) dst[c] = (uint8_t)((sums[c] / count) * 0.32f);
+                dst[3] = 255;
+            }
+        }
+
+        const float posterScale = std::min((float)side / w, (float)side / h);
+        const int posterW = std::max(1, (int)std::lround(w * posterScale));
+        const int posterH = std::max(1, (int)std::lround(h * posterScale));
+        const int posterX = (side - posterW) / 2, posterY = (side - posterH) / 2;
+        for (int y = 0; y < posterH; ++y) {
+            for (int x = 0; x < posterW; ++x) {
+                uint8_t* dst = composed + ((size_t)(posterY + y) * side + posterX + x) * 4;
+                sample((x + 0.5f) / posterScale - 0.5f,
+                       (y + 0.5f) / posterScale - 0.5f, dst);
+            }
+        }
+        stbi_image_free(full);
+        out.rgba = composed;
+        out.w = side;
+        out.h = side;
+        out.scaledWithMalloc = true;
+        return out;
+    }
 
     if (w > kIconSize || h > kIconSize) {
         int dstW = kIconSize, dstH = kIconSize;
@@ -208,6 +320,8 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         if (app < cacheStartApp || app >= cacheEndApp) {
             if (app < (int)allIcons.size())
                 allIcons[app]->setTexture(nullptr);
+            if (app < (int)allIcons.size())
+                allIcons[app]->setCustomArtwork(false);
             if (app < (int)m_appToSlot.size())
                 m_appToSlot[app] = -1;
             m_pool[i]->appIndex = -1;
@@ -230,10 +344,14 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         if (validSlot) {
             if (i < (int)allIcons.size())
                 allIcons[i]->setTexture(&m_pool[slotIdx]->texture);
+            if (i < (int)allIcons.size())
+                allIcons[i]->setCustomArtwork(i < (int)m_customArtwork.size() && m_customArtwork[i]);
         } else {
             m_appToSlot[i] = -1;
             if (i < (int)allIcons.size())
                 allIcons[i]->setTexture(nullptr);
+            if (i < (int)allIcons.size())
+                allIcons[i]->setCustomArtwork(false);
         }
     }
 
@@ -253,6 +371,7 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         int appIndex = -1;
         std::vector<uint8_t> compressed;
         DecodedIcon decoded{};
+        bool customArtwork = false;
     };
     // Fixed size up front: the decode jobs below hold pointers into this.
     std::vector<PendingIcon> pending(toLoad.size());
@@ -268,9 +387,14 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
 
     for (int appIndex : toLoad) {
         std::vector<uint8_t> compressed;
-        if (appIndex < (int)m_compressed.size() && !m_compressed[appIndex].empty()) {
+        bool customArtwork = false;
+        if (appIndex < (int)m_titleIds.size() && m_titleIds[appIndex] != 0 && m_artworkLoader) {
+            compressed = m_artworkLoader(m_titleIds[appIndex]);
+            customArtwork = !compressed.empty();
+        }
+        if (compressed.empty() && appIndex < (int)m_compressed.size() && !m_compressed[appIndex].empty()) {
             compressed = m_compressed[appIndex];
-        } else if (appIndex < (int)m_titleIds.size() && m_titleIds[appIndex] != 0 && m_iconLoader) {
+        } else if (compressed.empty() && appIndex < (int)m_titleIds.size() && m_titleIds[appIndex] != 0 && m_iconLoader) {
             compressed = m_iconLoader(m_titleIds[appIndex]);
         }
 
@@ -280,12 +404,13 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         PendingIcon* job = &pending[pendingCount++];
         job->appIndex = appIndex;
         job->compressed = std::move(compressed);
+        job->customArtwork = customArtwork;
 
         if (m_threadPool) {
             // decodeAndScale is const and touches nothing shared, and each job
             // owns its own bytes and output buffer.
             decodeJobs.push_back(m_threadPool->submit([this, job]() {
-                job->decoded = decodeAndScale(job->compressed);
+                job->decoded = decodeAndScale(job->compressed, job->customArtwork);
             }));
         }
     }
@@ -301,7 +426,7 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
             job.wait();
     } else {
         for (size_t i = 0; i < pendingCount; ++i)
-            pending[i].decoded = decodeAndScale(pending[i].compressed);
+            pending[i].decoded = decodeAndScale(pending[i].compressed, pending[i].customArtwork);
     }
 
     // Compressed bytes are dead once decoded; release before the uploads.
@@ -345,8 +470,12 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
         if (slot.texture.loadFromPixels(gpu, ren, d.rgba, d.w, d.h)) {
             slot.appIndex = pending[i].appIndex;
             m_appToSlot[pending[i].appIndex] = poolIdx;
+            if (pending[i].appIndex < (int)m_customArtwork.size())
+                m_customArtwork[pending[i].appIndex] = pending[i].customArtwork;
             if (pending[i].appIndex < (int)allIcons.size())
                 allIcons[pending[i].appIndex]->setTexture(&slot.texture);
+            if (pending[i].appIndex < (int)allIcons.size())
+                allIcons[pending[i].appIndex]->setCustomArtwork(pending[i].customArtwork);
         } else {
             // Silent until now, and the icon just stayed blank -- which is what
             // "some shortcuts were blank" on a 1TB card looks like from the
@@ -360,6 +489,8 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
                           pending[i].appIndex, d.w, d.h,
                           (int)m_pool.size(), (int)m_freeSlots.size());
             slot.appIndex = -1;
+            if (pending[i].appIndex < (int)m_customArtwork.size())
+                m_customArtwork[pending[i].appIndex] = false;
             m_freeSlots.push_back(poolIdx);
         }
 

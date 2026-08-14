@@ -471,6 +471,60 @@ void drawPreviewPlaceholder(nxui::Renderer& ren,
     }
 }
 
+void drawBuiltInThemePreview(nxui::Renderer& ren,
+                             nxui::Font* smallFont,
+                             const nxui::Rect& rect,
+                             bool light,
+                             float opacity) {
+    // The original built-in themes have no wallpaper or screenshot asset.
+    // Keep their preview honest and zero-byte: a miniature of SwitchU's own
+    // chrome, painted from the dark/light palette rather than a fake photo.
+    const nxui::Color background = light ? nxui::Color(0.79f, 0.85f, 0.91f, opacity)
+                                        : nxui::Color(0.035f, 0.055f, 0.080f, opacity);
+    const nxui::Color panel = light ? nxui::Color(0.94f, 0.97f, 1.00f, 0.72f * opacity)
+                                    : nxui::Color(0.14f, 0.19f, 0.25f, 0.78f * opacity);
+    const nxui::Color accent = light ? nxui::Color(0.13f, 0.46f, 0.89f, opacity)
+                                     : nxui::Color(0.18f, 0.58f, 1.00f, opacity);
+    const nxui::Color muted = light ? nxui::Color(0.32f, 0.42f, 0.53f, 0.78f * opacity)
+                                    : nxui::Color(0.74f, 0.82f, 0.91f, 0.70f * opacity);
+
+    ren.drawRoundedRect(rect, background, 14.f);
+    ren.drawRoundedRectOutline(rect, accent.withAlpha(0.45f * opacity), 14.f, 1.f);
+    const nxui::Rect inner = rect.shrunk(7.f);
+    const nxui::Rect topBar = {inner.x, inner.y, inner.width, std::max(14.f, inner.height * 0.17f)};
+    ren.drawRoundedRect(topBar, panel, 8.f);
+    ren.drawRoundedRect({topBar.x + 8.f, topBar.y + topBar.height * 0.38f, topBar.width * 0.32f, 2.f}, accent, 1.f);
+    const nxui::Rect sidebar = {inner.x, topBar.bottom() + 5.f, std::max(17.f, inner.width * 0.14f),
+                                inner.bottom() - topBar.bottom() - 5.f};
+    ren.drawRoundedRect(sidebar, panel, 8.f);
+    const float iconSize = std::max(5.f, sidebar.width * 0.38f);
+    for (int index = 0; index < 3; ++index) {
+        const nxui::Rect icon = {sidebar.x + (sidebar.width - iconSize) * 0.5f,
+                                 sidebar.y + 9.f + index * (iconSize + 7.f), iconSize, iconSize};
+        ren.drawRoundedRect(icon, index == 0 ? accent : muted.withAlpha(0.48f * opacity), iconSize * 0.35f);
+    }
+    const nxui::Rect content = {sidebar.right() + 6.f, topBar.bottom() + 5.f,
+                                inner.right() - sidebar.right() - 6.f, inner.bottom() - topBar.bottom() - 5.f};
+    const nxui::Rect hero = {content.x, content.y, content.width, content.height * 0.58f};
+    ren.drawRoundedRect(hero, panel, 9.f);
+    ren.drawRoundedRect({hero.x + hero.width * 0.10f, hero.y + hero.height * 0.23f,
+                         hero.width * 0.64f, 3.f}, muted, 1.f);
+    ren.drawRoundedRect({hero.x + hero.width * 0.10f, hero.y + hero.height * 0.43f,
+                         hero.width * 0.43f, 2.f}, muted.withAlpha(0.70f * opacity), 1.f);
+    const float cardGap = 4.f;
+    const float cardWidth = (content.width - cardGap * 2.f) / 3.f;
+    for (int index = 0; index < 3; ++index) {
+        const nxui::Rect card = {content.x + index * (cardWidth + cardGap), hero.bottom() + 5.f,
+                                 cardWidth, std::max(8.f, content.bottom() - hero.bottom() - 5.f)};
+        ren.drawRoundedRect(card, index == 0 ? accent.withAlpha(0.72f * opacity) : panel, 5.f);
+    }
+    if (smallFont) {
+        ren.drawText("SwitchU", {inner.right() - 46.f, topBar.y + 4.f}, smallFont,
+                     light ? nxui::Color(0.08f, 0.18f, 0.29f, opacity) : nxui::Color::white().withAlpha(opacity),
+                     0.42f);
+    }
+}
+
 void drawThemePreview(nxui::Renderer& ren,
                       nxui::Font* smallFont,
                       const nxui::Theme* theme,
@@ -482,7 +536,9 @@ void drawThemePreview(nxui::Renderer& ren,
                       float opacity,
                       int sheetCols = 0,
                       int sheetRows = 0,
-                      float sheetFps = 10.f) {
+                      float sheetFps = 10.f,
+                      bool builtInDefault = false,
+                      bool builtInLight = false) {
     if (!theme)
         return;
 
@@ -514,6 +570,11 @@ void drawThemePreview(nxui::Renderer& ren,
                                fitTextureRect(inner, texture),
                                12.f,
                                nxui::Color(1.f, 1.f, 1.f, opacity));
+        return;
+    }
+
+    if (builtInDefault) {
+        drawBuiltInThemePreview(ren, smallFont, rect, builtInLight, opacity);
         return;
     }
 
@@ -1832,6 +1893,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         const nxui::Texture* previewTexture = nullptr;
         PreviewPhase previewPhase = PreviewPhase::Failed;
         bool previewRequested = false;
+        bool builtInDefaultPreview = false;
+        bool builtInLightPreview = false;
         bool activeTheme = false;
         int sheetCols = 0, sheetRows = 0;
         float sheetFps = 10.f;
@@ -1857,6 +1920,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             versionText = entry.version;
             activeTheme = entry.active;
             previewRequested = !entry.coverPath.empty();
+            builtInDefaultPreview = entry.id == "builtin:Default Dark" || entry.id == "builtin:Default Light";
+            builtInLightPreview = entry.id == "builtin:Default Light";
             if (previewRequested) {
                 primeInstalledPreview(entry.coverPath);
                 previewTexture = installedPreviewTexture(entry.coverPath);
@@ -1886,7 +1951,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          previewLoading,
                          m_uiTime,
                          rowOpacity,
-                         sheetCols, sheetRows, sheetFps);
+                         sheetCols, sheetRows, sheetFps,
+                         builtInDefaultPreview, builtInLightPreview);
 
         if (!versionText.empty()) {
             float chipWidth = std::max(74.f, std::min(108.f, 32.f + measureTextCached(m_smallFont, versionText).x * 0.64f));
@@ -1973,6 +2039,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     const nxui::Texture* detailPreviewTexture = nullptr;
     PreviewPhase detailPreviewPhase = PreviewPhase::Failed;
     bool detailPreviewRequested = false;
+    bool detailBuiltInDefaultPreview = false;
+    bool detailBuiltInLightPreview = false;
     int detailScreenshotTotal = 0;
     DetailPreviewControls previewControls = detailPreviewControls(preview);
 
@@ -2047,6 +2115,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             ? i18n.tr("themeshop.installed.remove_hint", "This theme can be removed from the console.")
             : i18n.tr("themeshop.installed.builtin_hint", "This is part of the built-in theme set.");
         detailPreviewRequested = !entry->coverPath.empty();
+        detailBuiltInDefaultPreview = entry->id == "builtin:Default Dark" || entry->id == "builtin:Default Light";
+        detailBuiltInLightPreview = entry->id == "builtin:Default Light";
         if (detailPreviewRequested) {
             primeInstalledPreview(entry->coverPath);
             detailPreviewTexture = installedPreviewTexture(entry->coverPath);
@@ -2069,7 +2139,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      detailPreviewLoading,
                      m_uiTime,
                      detailOpacity,
-                     detailSheetCols, detailSheetRows, detailSheetFps);
+                     detailSheetCols, detailSheetRows, detailSheetFps,
+                     detailBuiltInDefaultPreview, detailBuiltInLightPreview);
 
     if (isCommunityTab() && detailPreviewRequested) {
         auto previewButtons = detailPreviewControlRects(previewControls, preview, detailScreenshotTotal);

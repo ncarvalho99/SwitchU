@@ -179,6 +179,23 @@ void GlossyIcon::onContentRender(nxui::Renderer& ren) {
         iconTint.g = 0.80f;
         iconTint.b = 0.80f;
     }
+    // SteamGridDB covers are normally portrait while a Switch home icon is
+    // square. Fill the native icon shape with a centered crop: this preserves
+    // the image proportions and avoids both the squeezed look and side bars.
+    if (m_customArtwork && m_tex->height() > 0) {
+        nxui::Rect source{0.f, 0.f, (float)m_tex->width(), (float)m_tex->height()};
+        const float artworkAspect = source.width / source.height;
+        const float destinationAspect = texRect.width / texRect.height;
+        if (artworkAspect < destinationAspect) {
+            source.height = source.width / destinationAspect;
+            source.y = ((float)m_tex->height() - source.height) * 0.5f;
+        } else if (artworkAspect > destinationAspect) {
+            source.width = source.height * destinationAspect;
+            source.x = ((float)m_tex->width() - source.width) * 0.5f;
+        }
+        ren.drawTextureRoundedSub(m_tex, source, texRect, rad - 3.f, iconTint);
+        return;
+    }
     // rad - 3, not rad - inset. Matching the inset would make the bezel a
     // constant width, but it also drops the artwork to radius 16 against a
     // selection ring at 26, and the two then read as different shapes. Keeping

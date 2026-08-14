@@ -15,6 +15,7 @@ public:
 
     void setTexture(nxui::Texture* tex) { m_tex = tex; }
     nxui::Texture* texture() const      { return m_tex; }
+    void setCustomArtwork(bool custom)  { m_customArtwork = custom; }
 
     void setGameCardTexture(nxui::Texture* tex) { m_gameCardTex = tex; }
     nxui::Texture* gameCardTexture() const      { return m_gameCardTex; }
@@ -54,6 +55,7 @@ private:
     bool        m_suspended = false;
     bool        m_isGameCard = false;
     bool        m_notLaunchable = false;
+    bool        m_customArtwork = false;
     float       m_suspendPulse = 0.f;
 
     nxui::AnimatedFloat m_animScale;

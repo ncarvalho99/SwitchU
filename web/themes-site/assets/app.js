@@ -3,7 +3,12 @@
   'use strict';
   const output = document.querySelector('#out');
   const readout = document.querySelector('#readout');
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motionToggle = document.querySelector('#motion-toggle');
+  // Previews are content in this catalog, not decoration. Browser/OS reduced
+  // motion previously turned every theme into a still without a visible way
+  // to restore it. Keep the choice explicit and remember it per visitor.
+  let motionEnabled = true;
+  try { motionEnabled = localStorage.getItem('switchu-theme-motion') !== 'off'; } catch { /* storage optional */ }
   let themes = [];
 
   const element = (name, className, text) => {
@@ -43,8 +48,12 @@
     const totals = themes.reduce((value, theme) => ({ frames: value.frames + integer(theme.frameCount), bytes: value.bytes + integer(theme.bytes), animated: value.animated + Boolean(theme.animated) }), { frames: 0, bytes: 0, animated: 0 });
     appendText(readout, themes.length, 'temas'); appendText(readout, totals.animated, 'animados'); appendText(readout, totals.frames, 'quadros'); appendText(readout, megabytes(totals.bytes), ''); appendText(readout, 'src', `${location.host}/index.json`);
   }
+  function renderMotionToggle() {
+    motionToggle.setAttribute('aria-pressed', String(motionEnabled));
+    motionToggle.textContent = motionEnabled ? 'Animações: ligadas' : 'Animações: desligadas';
+  }
   function mediaFor(theme, stage = false) {
-    const video = !reducedMotion && safePath(theme.previewVideo);
+    const video = motionEnabled && safePath(theme.previewVideo);
     if (video) {
       const media = asset('video', video, { muted: true, loop: true, playsInline: true, preload: stage ? 'metadata' : 'none' });
       const poster = safePath(theme.previewPoster); if (poster) media.poster = poster;
@@ -92,5 +101,11 @@
     try { const response = await fetch(manifestPath, { cache: 'no-cache', credentials: 'same-origin' }); renderDetail(theme, response.ok ? await response.json() : {}); } catch { renderDetail(theme); }
   }
   document.addEventListener('keydown', event => { if (event.key === 'Escape') location.hash = ''; }); window.addEventListener('hashchange', route);
+  motionToggle.addEventListener('click', () => {
+    motionEnabled = !motionEnabled;
+    try { localStorage.setItem('switchu-theme-motion', motionEnabled ? 'on' : 'off'); } catch { /* storage optional */ }
+    renderMotionToggle(); route();
+  });
+  renderMotionToggle();
   fetch('review.json', { cache: 'no-cache', credentials: 'same-origin' }).then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))).then(data => { themes = Array.isArray(data?.themes) ? data.themes : []; renderReadout(); route(); }).catch(() => { clear('msg bad'); output.textContent = 'Não consegui ler o catálogo.'; });
 })();

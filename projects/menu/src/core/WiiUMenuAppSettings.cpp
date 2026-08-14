@@ -217,10 +217,9 @@ std::string sourceLabel(ThemePresetSource source) {
 }
 
 std::string defaultThemeRef() {
-    // Default Dark carries the animated wallpaper, so this is what a fresh
-    // install shows. It costs 28 MB of the image budget and one extra
-    // full-screen quad a frame; anyone who wants the old cost back can stop it
-    // with the background-speed slider or pick Default Light.
+    // Keep first-run behavior aligned with the author's original static theme.
+    // Animated wallpapers remain available only through separately installed
+    // themes, rather than inflating every SwitchU installation.
     return "builtin:Default Dark";
 }
 
@@ -338,6 +337,12 @@ void WiiUMenuApp::createSettings() {
             m_settings->setAccessibilityVoiceEnabled(enabled);
         if (m_themeShop)
             m_themeShop->setAccessibilityVoiceEnabled(enabled);
+        if (m_gameGallery)
+            m_gameGallery->setAccessibilityVoiceEnabled(enabled);
+        if (m_gameMods)
+            m_gameMods->setAccessibilityVoiceEnabled(enabled);
+        if (m_gameDetails)
+            m_gameDetails->setAccessibilityVoiceEnabled(enabled);
         if (enabled) {
             m_accessibility.setEnabled(true);
             m_accessibility.announce(nxui::I18n::instance().tr(
@@ -358,6 +363,15 @@ void WiiUMenuApp::createSettings() {
         if (m_themeShop)
             m_themeShop->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                            m_config.accessibilitySpeakPosition);
+        if (m_gameGallery)
+            m_gameGallery->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                             m_config.accessibilitySpeakPosition);
+        if (m_gameMods)
+            m_gameMods->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                          m_config.accessibilitySpeakPosition);
+        if (m_gameDetails)
+            m_gameDetails->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                              m_config.accessibilitySpeakPosition);
         if (m_dialog)
             m_dialog->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                         m_config.accessibilitySpeakPosition);
@@ -377,6 +391,15 @@ void WiiUMenuApp::createSettings() {
         if (m_themeShop)
             m_themeShop->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                            m_config.accessibilitySpeakPosition);
+        if (m_gameGallery)
+            m_gameGallery->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                             m_config.accessibilitySpeakPosition);
+        if (m_gameMods)
+            m_gameMods->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                          m_config.accessibilitySpeakPosition);
+        if (m_gameDetails)
+            m_gameDetails->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                              m_config.accessibilitySpeakPosition);
         if (m_dialog)
             m_dialog->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                         m_config.accessibilitySpeakPosition);
@@ -694,6 +717,109 @@ void WiiUMenuApp::createThemeShop() {
         }
     });
 
+}
+
+void WiiUMenuApp::createGameGallery() {
+    if (m_gameGallery)
+        return;
+
+    m_gameGallery = std::make_shared<GameGalleryScreen>();
+    if (m_overlayLayer)
+        m_overlayLayer->addChild(m_gameGallery);
+    m_gameGallery->setFont(&m_fontNormal);
+    m_gameGallery->setSmallFont(&m_fontSmall);
+    m_gameGallery->setTheme(&m_theme);
+    m_gameGallery->setThreadPool(&m_threadPool);
+    m_gameGallery->setRenderContext(&app().gpu(), &app().renderer());
+    m_gameGallery->setAccessibilityVoiceEnabled(m_config.accessibilityEnabled);
+    m_gameGallery->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                     m_config.accessibilitySpeakPosition);
+    m_gameGallery->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+    m_gameGallery->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+    m_gameGallery->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+    m_gameGallery->onAccessibilityAnnouncement([this](const std::string& text) {
+        m_accessibility.announce(text);
+    });
+    m_gameGallery->onApplyArtwork([this](std::uint64_t titleId, const std::string& title,
+                                         GameGalleryClient::Category category,
+                                         GameGalleryClient::Asset asset,
+                                         std::shared_ptr<const std::vector<std::uint8_t>> bytes) {
+        confirmGameArtwork(titleId, title, category, std::move(asset), std::move(bytes));
+    });
+    m_gameGallery->onResetArtwork([this](std::uint64_t titleId, const std::string& title,
+                                         GameGalleryClient::Category category) {
+        confirmRestoreGameArtwork(titleId, title, category);
+    });
+    m_gameGallery->onClosed([this]() {
+        if (m_gameDetails && m_gameGalleryReturnFocus == m_gameDetails.get()) {
+            m_gameDetails->resumeFromChild();
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(m_gameDetails.get());
+        } else if (isCurrentFocusableWidget(m_gameGalleryReturnFocus)) {
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(m_gameGalleryReturnFocus);
+        }
+        m_gameGalleryReturnFocus = nullptr;
+    });
+}
+
+void WiiUMenuApp::createGameDetails() {
+    if (m_gameDetails)
+        return;
+
+    m_gameDetails = std::make_shared<GameDetailsScreen>();
+    if (m_overlayLayer)
+        m_overlayLayer->addChild(m_gameDetails);
+    m_gameDetails->setFont(&m_fontNormal);
+    m_gameDetails->setSmallFont(&m_fontSmall);
+    m_gameDetails->setTheme(&m_theme);
+    m_gameDetails->setThreadPool(&m_threadPool);
+    m_gameDetails->setRenderContext(&app().gpu(), &app().renderer());
+    m_gameDetails->setAccessibilityVoiceEnabled(m_config.accessibilityEnabled);
+    m_gameDetails->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                     m_config.accessibilitySpeakPosition);
+    m_gameDetails->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+    m_gameDetails->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+    m_gameDetails->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+    m_gameDetails->onAccessibilityAnnouncement([this](const std::string& text) {
+        m_accessibility.announce(text);
+    });
+    m_gameDetails->onOpenGallery([this]() {
+        if (!m_gameDetails) return;
+        const std::uint64_t titleId = m_gameDetails->titleId();
+        const std::string title = m_gameDetails->title();
+        // Gallery takes over immediately. Its Back action must resume this
+        // dossier, not skip the whole parent flow and land on the home icon.
+        m_gameDetailsReturnFocus = nullptr;
+        m_gameDetails->hide();
+        showGameGallery(titleId, title);
+    });
+    m_gameDetails->onShowArtwork([this]() {
+        if (!m_gameDetails) return;
+        m_dialogReturnFocus = m_gameDetails.get();
+        showGameArtworkStatus(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onRestoreArtwork([this]() {
+        if (!m_gameDetails) return;
+        m_dialogReturnFocus = m_gameDetails.get();
+        showGameArtworkRestoreMenu(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onManageMods([this]() {
+        if (!m_gameDetails) return;
+        showGameMods(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onDeleteSoftware([this]() {
+        if (!m_gameDetails) return;
+        m_dialogReturnFocus = m_gameDetails.get();
+        confirmDeleteSoftware(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onClosed([this]() {
+        if (isCurrentFocusableWidget(m_gameDetailsReturnFocus)) {
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(m_gameDetailsReturnFocus);
+        }
+        m_gameDetailsReturnFocus = nullptr;
+    });
 }
 
 void WiiUMenuApp::reloadThemePresets() {
@@ -1346,6 +1472,12 @@ void WiiUMenuApp::applyTheme() {
         m_settings->setTheme(&m_theme);
     if (m_themeShop)
         m_themeShop->setTheme(&m_theme);
+    if (m_gameGallery)
+        m_gameGallery->setTheme(&m_theme);
+    if (m_gameMods)
+        m_gameMods->setTheme(&m_theme);
+    if (m_gameDetails)
+        m_gameDetails->setTheme(&m_theme);
 
     m_sidebar.applyTheme(m_theme);
     DebugLog::log("[theme-apply] widget recolor complete");

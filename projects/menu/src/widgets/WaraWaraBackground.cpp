@@ -624,9 +624,11 @@ void WaraWaraBackground::onRender(nxui::Renderer& ren) {
     // "aplicou a miniatura em vez do tema", que descreve com precisao o que
     // estava acontecendo.
     //
-    // 0.15 e onde o raio chega a 1.75 e o desfoque comeca a aparecer. Abaixo
-    // disso nao ha o que preservar, entao a nitidez ganha.
-    const bool blurred = m_blurStrength > 0.15f && ren.gpu().offscreenReady();
+    // The slider must respond from its first visible increment without
+    // collapsing the wallpaper at 5%.  A 0.75 power curve gives the first
+    // increments a visible but restrained response; zero remains the only
+    // value that skips the blur pass.
+    const bool blurred = m_blurStrength > 0.001f && ren.gpu().offscreenReady();
     if (blurred)
         ren.beginScreenSpaceTarget(nxui::GpuDevice::OFF_SCENE);
 
@@ -636,8 +638,9 @@ void WaraWaraBackground::onRender(nxui::Renderer& ren) {
         // One pass at radius 1 is barely a smudge and four is a wash; the
         // slider moves the radius and adds passes only as it gets wide, since
         // passes cost a fullscreen pair each and radius alone does not.
-        const float radius = 1.f + m_blurStrength * 5.f;
-        const int   passes = 1 + (int)(m_blurStrength * 2.99f);
+        const float response = std::pow(m_blurStrength, 0.75f);
+        const float radius = 1.15f + response * 4.85f;
+        const int   passes = 1 + (int)(response * 2.99f);
         ren.applyBlurBetween(nxui::GpuDevice::OFF_SCENE, nxui::GpuDevice::OFF_BG_BLUR,
                              radius, passes);
         ren.drawOffscreen(nxui::GpuDevice::OFF_SCENE, m_rect,

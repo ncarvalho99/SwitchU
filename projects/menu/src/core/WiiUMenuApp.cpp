@@ -362,6 +362,8 @@ void WiiUMenuApp::quiesceWritersForPowerAction() {
         m_configSaveFuture.get();
     if (m_themePackageTransferFuture.valid())
         m_themePackageTransferFuture.wait();
+    if (m_gameArtworkSaveFuture.valid())
+        m_gameArtworkSaveFuture.wait();
     if (m_layoutDirty)
         saveMenuLayout();
 
@@ -437,6 +439,10 @@ void WiiUMenuApp::loadResources() {
         m_loadedGameCardPath = gameCardPath;
 
     m_appLoader.load(m_model, m_iconStreamer);
+    // AppListLoader owns the initial native-icon setup.  Install the optional
+    // Gallery lookup immediately afterwards so custom covers work after a
+    // cold start too, not only after a sort or refresh rebuild.
+    m_iconStreamer.setArtworkDataLoader(gallery::GameArtworkStore::loadCover);
 }
 
 void WiiUMenuApp::buildUserAvatarBar() {
@@ -750,6 +756,7 @@ void WiiUMenuApp::reflowHomeGrid() {
     m_iconStreamer.clear();
     m_iconStreamer.init(m_model.count());
     m_iconStreamer.setIconDataLoader(AppListLoader::loadIconData);
+    m_iconStreamer.setArtworkDataLoader(gallery::GameArtworkStore::loadCover);
     for (int i = 0; i < m_model.count(); ++i)
         m_iconStreamer.setTitleId(i, m_model.at(i).titleId);
 
@@ -782,6 +789,9 @@ void WiiUMenuApp::reflowHomeGrid() {
     const bool overlayActive =
         (m_dialog && m_dialog->isActive()) ||
         (m_themeShop && m_themeShop->isActive()) ||
+        (m_gameGallery && m_gameGallery->isActive()) ||
+        (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameDetails && m_gameDetails->isActive()) ||
         (m_settings && m_settings->isActive()) ||
         (m_userSelect && m_userSelect->isActive());
     if (!overlayActive) {
@@ -1155,6 +1165,8 @@ void WiiUMenuApp::buildGrid() {
 
     m_background = std::make_shared<WaraWaraBackground>();
     m_background->setRect({0, 0, 1280, 720});
+    m_gameArtworkBackdrop = std::make_shared<GameArtworkBackdrop>();
+    m_gameArtworkBackdrop->setRect({0, 0, 1280, 720});
     applyThemeResources(m_effectivePreset);
 
     std::vector<std::shared_ptr<GlossyIcon>> icons;
@@ -1399,6 +1411,7 @@ void WiiUMenuApp::buildGrid() {
     m_bgLayer->setTag("bgLayer");
     m_bgLayer->setWireframeEnabled(false);
     m_bgLayer->addChild(m_background);
+    m_bgLayer->addChild(m_gameArtworkBackdrop);
 
     m_contentLayer = std::make_shared<nxui::Box>();
     m_contentLayer->setRect({0, 0, 1280, 720});
@@ -1684,6 +1697,7 @@ void WiiUMenuApp::finalizeRefresh() {
     // the pool too or the assignment would drop it.
     refreshedStreamer.setThreadPool(&m_threadPool);
     m_appLoader.finalize(refreshedModel, refreshedStreamer);
+    refreshedStreamer.setArtworkDataLoader(gallery::GameArtworkStore::loadCover);
     DebugLog::log("[refresh] found %d apps", refreshedModel.count());
 
     if (gridModelsRefreshEquivalent(m_model, refreshedModel)) {
@@ -1853,7 +1867,10 @@ void WiiUMenuApp::onUpdate(float dt) {
     {
         const bool settingsUp = m_settings && m_settings->isFullyVisible();
         const bool themeShopUp = m_themeShop && m_themeShop->isFullyVisible();
-        const bool hideScene = (settingsUp || themeShopUp) &&
+        const bool galleryUp = m_gameGallery && m_gameGallery->isFullyVisible();
+        const bool modsUp = m_gameMods && m_gameMods->isFullyVisible();
+        const bool detailsUp = m_gameDetails && m_gameDetails->isFullyVisible();
+        const bool hideScene = (settingsUp || themeShopUp || galleryUp || modsUp || detailsUp) &&
                                app().renderer().holdOffscreenCapture();
         m_probeSceneHidden = hideScene;
         // Each overlay is told only about itself: the one that is not up must
@@ -1862,6 +1879,12 @@ void WiiUMenuApp::onUpdate(float dt) {
             m_settings->setSceneHidden(hideScene && settingsUp);
         if (m_themeShop)
             m_themeShop->setSceneHidden(hideScene && themeShopUp);
+        if (m_gameGallery)
+            m_gameGallery->setSceneHidden(hideScene && galleryUp);
+        if (m_gameMods)
+            m_gameMods->setSceneHidden(hideScene && modsUp);
+        if (m_gameDetails)
+            m_gameDetails->setSceneHidden(hideScene && detailsUp);
         if (m_bgLayer) m_bgLayer->setVisible(!hideScene);
         if (m_contentLayer) m_contentLayer->setVisible(!hideScene);
     }
@@ -1925,6 +1948,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_tutorialStartupFadeTimer = std::max(0.f, m_tutorialStartupFadeTimer - dt);
 
     syncThemePackageTransfer();
+    syncGameArtworkSave();
 
     if (m_deferredInitialAssetFrames > 0) {
         --m_deferredInitialAssetFrames;
@@ -1982,6 +2006,11 @@ void WiiUMenuApp::onUpdate(float dt) {
 
     if (m_pendingNetConnect) {
         m_pendingNetConnect = false;
+        // Metadata and gallery calls run on the worker pool. Do not make the
+        // system Network settings wait for one of their HTTP timeouts while
+        // this applet is closing.
+        DebugLog::log("[launcher] cancelling HTTP for NetConnect handoff");
+        themeshop::http::cancelPendingRequests();
         m_launcher.launchNetConnect();
         return;
     }
@@ -2096,6 +2125,9 @@ void WiiUMenuApp::onUpdate(float dt) {
         && !m_launchAnim->isPlaying()
         && !(m_dialog && m_dialog->isActive())
         && !(m_themeShop && m_themeShop->isActive())
+        && !(m_gameGallery && m_gameGallery->isActive())
+        && !(m_gameMods && m_gameMods->isActive())
+        && !(m_gameDetails && m_gameDetails->isActive())
         && !(m_settings && m_settings->isActive())
         && !(m_userSelect && m_userSelect->isActive()))
     {
@@ -2108,6 +2140,16 @@ void WiiUMenuApp::onUpdate(float dt) {
 
     if (!debugTouchBlocked && m_themeShop && m_themeShop->isActive())
         m_themeShop->handleTouch(app().input());
+
+    if (!debugTouchBlocked && m_gameGallery && m_gameGallery->isActive())
+        m_gameGallery->handleTouch(app().input());
+
+    if (!debugTouchBlocked && m_gameMods && m_gameMods->isActive())
+        m_gameMods->handleTouch(app().input());
+
+    if (!debugTouchBlocked && !(m_gameMods && m_gameMods->isActive())
+        && m_gameDetails && m_gameDetails->isActive())
+        m_gameDetails->handleTouch(app().input());
 
     if (!debugTouchBlocked && m_settings && m_settings->isActive())
         m_settings->handleTouch(app().input());
@@ -2132,6 +2174,12 @@ void WiiUMenuApp::onUpdate(float dt) {
         if (!cur || !cur->isFocusable()) {
             if (m_themeShop && m_themeShop->isActive()) {
                 focusManager().setFocus(m_themeShop.get());
+            } else if (m_gameGallery && m_gameGallery->isActive()) {
+                focusManager().setFocus(m_gameGallery.get());
+            } else if (m_gameMods && m_gameMods->isActive()) {
+                focusManager().setFocus(m_gameMods.get());
+            } else if (m_gameDetails && m_gameDetails->isActive()) {
+                focusManager().setFocus(m_gameDetails.get());
             } else if (m_settings && m_settings->isActive()) {
                 focusManager().setFocus(m_settings.get());
             } else {
@@ -2208,6 +2256,36 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
         add(buttonGlyph(nxui::Button::X), i18n.tr("hint.search", "Search"));
+        addVoiceControls();
+        return hints;
+    }
+
+    if (m_gameGallery && m_gameGallery->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        if (!m_gameGallery->isFullscreen())
+            add(buttonGlyph(nxui::Button::X), i18n.tr("dialog.gallery_dimension_filter", "Change dimensions"));
+        if (m_gameGallery->isFullscreen())
+            add(buttonGlyph(nxui::Button::Plus), i18n.tr("dialog.gallery_apply", "Use image"));
+        add(buttonGlyph(nxui::Button::Minus), i18n.tr("dialog.gallery_restore", "Restore default"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
+        return hints;
+    }
+
+    if (m_gameMods && m_gameMods->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::X), i18n.tr("dialog.mods_remove", "Remove"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
+        return hints;
+    }
+
+    if (m_gameDetails && m_gameDetails->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("dialog.details_expand", "Expand image"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
         addVoiceControls();
         return hints;
     }

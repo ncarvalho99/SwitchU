@@ -52,6 +52,12 @@ def theme_id(path):
     return MANUAL_IDS.get(stem, re.sub(r'-moewalls-com$', '', stem))
 
 
+def display_name(ident):
+    """Turn a safe catalogue id into the initial human-readable theme name."""
+    return ' '.join(part.upper() if len(part) <= 3 else part.capitalize()
+                    for part in ident.replace('_', '-').split('-'))
+
+
 def gpu_bytes_per_frame():
     # Conservative layout estimate: 16-byte BC7 blocks, row tile=128 B,
     # block-row tile=128. It predicts 464 KiB for 912x512.
@@ -80,7 +86,7 @@ def frame_names(package):
         return names
 
 
-def write_package(source_package, video, output_package):
+def write_package(source_package, video, output_package, ident=None):
     names = frame_names(source_package)
     count = len(names)
     estimated = count * gpu_bytes_per_frame() / 1048576
@@ -106,8 +112,34 @@ def write_package(source_package, video, output_package):
         with zipfile.ZipFile(source_package) as source, \
              zipfile.ZipFile(temp_output, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as output:
             frame_set = set(names)
+            manifest_names = {name for name in source.namelist()
+                              if name.lower().endswith('/theme.json') or name == 'theme.json'}
+            screenshot_names = {name for name in source.namelist()
+                                if name.lower() == 'media/screenshots/00.jpg'}
             for name in source.namelist():
-                if name not in frame_set and not name.endswith('/'):
+                if (name not in frame_set and name not in manifest_names and
+                        name not in screenshot_names and not name.endswith('/')):
+                    output.writestr(name, source.read(name))
+
+            if ident:
+                manifest_name = next(iter(manifest_names), 'theme.json')
+                manifest = json.loads(source.read(manifest_name).decode('utf-8'))
+                manifest.update({
+                    'id': ident,
+                    'name': display_name(ident),
+                    'author': 'ncarvalho99',
+                    'version': '1.0.0',
+                    'license': 'origem nao declarada -- distribuicao restrita',
+                    'source': 'arquivo fornecido pela usuaria: ' + os.path.basename(video),
+                    'preview': {'screenshots': ['media/screenshots/00.jpg']},
+                })
+                output.writestr(manifest_name, json.dumps(manifest, ensure_ascii=False,
+                                                          indent=2) + '\n')
+                Image.open(pngs[0]).convert('RGB').save(
+                    os.path.join(workspace, 'preview.jpg'), quality=88, optimize=True)
+                output.write(os.path.join(workspace, 'preview.jpg'), 'media/screenshots/00.jpg')
+            else:
+                for name in manifest_names | screenshot_names:
                     output.writestr(name, source.read(name))
             for index, name in enumerate(names):
                 image = Image.open(pngs[index]).convert('RGB')
@@ -127,6 +159,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--packages', nargs='+', required=True, help='directories containing current theme ZIPs')
     parser.add_argument('--videos', nargs='+', required=True, help='directories containing source videos')
+    parser.add_argument('--template', help='existing BC7 package used for videos without a matching package id')
     parser.add_argument('--output', default='artifacts/themes-bc7')
     parser.add_argument('--only', help='build one theme id')
     parser.add_argument('--overwrite', action='store_true')
@@ -139,10 +172,15 @@ def main():
                 if name.endswith('.zip'):
                     packages.setdefault(name[:-4], os.path.join(directory, name))
     videos = discover_videos(args.videos)
-    ids = sorted(set(packages) & set(videos))
+    if args.template:
+        if not os.path.isfile(args.template):
+            raise SystemExit('template package does not exist: ' + args.template)
+        ids = sorted(videos)
+    else:
+        ids = sorted(set(packages) & set(videos))
     if args.only:
-        ids = [args.only] if args.only in packages and args.only in videos else []
-    print('%d packages, %d matching videos; BC7 %dx%d, %.0f KiB/frame' %
+        ids = [args.only] if args.only in videos and (args.template or args.only in packages) else []
+    print('%d packages, %d videos; BC7 %dx%d, %.0f KiB/frame' %
           (len(packages), len(ids), WIDTH, HEIGHT, gpu_bytes_per_frame() / 1024), flush=True)
     for number, ident in enumerate(ids, 1):
         destination = os.path.join(args.output, ident + '.zip')
@@ -150,7 +188,8 @@ def main():
             print('%3d/%d %-46s exists' % (number, len(ids), ident[:44]), flush=True)
             continue
         print('%3d/%d %s' % (number, len(ids), ident), flush=True)
-        write_package(packages[ident], videos[ident], destination)
+        write_package(packages.get(ident, args.template), videos[ident], destination,
+                      ident if ident not in packages else None)
         print('    %.1f MB zip' % (os.path.getsize(destination) / 1048576), flush=True)
 
 

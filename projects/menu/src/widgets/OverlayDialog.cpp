@@ -57,7 +57,25 @@ void OverlayDialog::buildWidgetTree() {
     nxui::Color textSecondary = m_theme ? m_theme->textSecondary
                                         : nxui::Color(0.82f, 0.82f, 0.9f, 1.f);
 
-    m_panelW = kPanelW;
+    const int btnCount = std::max(1, (int)m_buttons.size());
+    nxui::Font* labelFont = bodyFont ? bodyFont : titleFont;
+    float widestButton = 140.f;
+    if (labelFont) {
+        for (const auto& button : m_buttons) {
+            widestButton = std::max(widestButton,
+                                    labelFont->measure(button.label).x * 0.94f
+                                        + kButtonLabelPadding * 2.f);
+        }
+    }
+
+    // A dialog used to be fixed at 560 px. Adding a fourth action to the
+    // software menu left each button narrower than a translated label, so the
+    // text crossed its edge. Give all actions the room required by the widest
+    // label, up to the safe width of the 1280 px layout.
+    const float requestedPanelW = widestButton * btnCount
+                                + kButtonGap * (btnCount - 1)
+                                + kPanelPadX * 2.f;
+    m_panelW = std::clamp(requestedPanelW, kPanelW, 1120.f);
     float contentW = m_panelW - kPanelPadX * 2.f;
 
     float titleH = (titleFont && !m_title.empty())
@@ -115,7 +133,6 @@ void OverlayDialog::buildWidgetTree() {
         addChild(m_messageLabel);
     }
 
-    int  btnCount = std::max(1, (int)m_buttons.size());
     float btnW    = (contentW - kButtonGap * (btnCount - 1)) / (float)btnCount;
 
     m_buttonRow = std::make_shared<nxui::Box>(nxui::Axis::ROW);
@@ -134,7 +151,6 @@ void OverlayDialog::buildWidgetTree() {
         btn->setGrow(1.f);
 
         auto lbl = std::make_shared<nxui::Label>(m_buttons[i].label);
-        nxui::Font* labelFont = bodyFont ? bodyFont : titleFont;
         lbl->setFont(labelFont);
         lbl->setTextColor(textPrimary);
 
