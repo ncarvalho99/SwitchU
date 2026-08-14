@@ -20,6 +20,7 @@ public:
     // Prepare icon metadata for all apps after the app list has been fetched.
     void init(int appCount);
     void setIconDataLoader(IconDataLoader loader);
+    void setArtworkDataLoader(IconDataLoader loader);
 
     // Optional. When set, JPEG decoding is spread across the pool instead of
     // running inline on the calling thread. Uploads always stay on the caller,
@@ -62,13 +63,15 @@ private:
         bool scaledWithMalloc = false;
     };
 
-    DecodedIcon decodeAndScale(const std::vector<uint8_t>& data) const;
+    DecodedIcon decodeAndScale(const std::vector<uint8_t>& data, bool customArtwork) const;
 
     // Transient compressed JPEG/PNG bytes, normally only used for prefetched
     // data. App icons are otherwise fetched on demand and released after upload.
     std::vector<std::vector<uint8_t>> m_compressed;
     std::vector<uint64_t> m_titleIds;
     IconDataLoader m_iconLoader;
+    IconDataLoader m_artworkLoader;
+    std::vector<bool> m_customArtwork;
     nxui::ThreadPool* m_threadPool = nullptr;
 
     // Pool of reusable GPU textures.

@@ -605,6 +605,7 @@ void TabbedOverlayScreen::drawBackground(nxui::Renderer& ren, const nxui::Rect& 
 
 void TabbedOverlayScreen::drawTabs(nxui::Renderer& ren, const nxui::Rect& panel, float opacity) {
     if (!m_font || !m_theme || !m_tabBar) return;
+    if (hidesTabRail()) return;
     nxui::Rect tr = tabsRect(panel);
     auto* tabPanel = static_cast<nxui::GlassBox*>(m_tabBar.get());
 
@@ -663,9 +664,11 @@ void TabbedOverlayScreen::drawContent(nxui::Renderer& ren, const nxui::Rect& pan
     contentPanel->setPanelOpacity(1.f);
 
     if (usesCustomContentLayout()) {
-        contentPanel->render(ren);
-        ren.pushClipRect(cr);
-        drawCustomContent(ren, panel, cr, opacity);
+        if (drawsCustomContentPanel())
+            contentPanel->render(ren);
+        const nxui::Rect customBounds = customContentUsesPanel() ? panel : cr;
+        ren.pushClipRect(customBounds);
+        drawCustomContent(ren, panel, customBounds, opacity);
         ren.popClipRect();
         return;
     }

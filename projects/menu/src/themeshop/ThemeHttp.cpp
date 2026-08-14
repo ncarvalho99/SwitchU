@@ -10,6 +10,7 @@
 #include <switch.h>
 
 #include <cstdio>
+#include <atomic>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -20,6 +21,7 @@ std::mutex g_themeHttpMutex;
 bool g_nifmInitialized = false;
 bool g_socketInitialized = false;
 bool g_curlInitialized = false;
+std::atomic<bool> g_cancelPendingRequests{false};
 
 constexpr int kRequestAttemptCount = 2;
 
@@ -105,7 +107,7 @@ void configureRequest(curlpp::Easy& request,
     request.setOpt<curlpp::options::Url>(url);
     request.setOpt<curlpp::options::FollowLocation>(true);
     request.setOpt<curlpp::options::NoSignal>(true);
-    request.setOpt<curlpp::options::ConnectTimeout>(12L);
+    request.setOpt<curlpp::options::ConnectTimeout>(4L);
     request.setOpt<curlpp::options::Timeout>(30L);
     request.setOpt<curlpp::options::IpResolve>((long)CURL_IPRESOLVE_V4);
     request.setOpt<curlpp::options::UserAgent>(std::string("SwitchU/") + SWITCHU_VERSION);
@@ -115,20 +117,63 @@ void configureRequest(curlpp::Easy& request,
     request.setOpt<curlpp::options::WriteStream>(&response);
 }
 
+size_t appendResponse(char* data, size_t size, size_t count, void* userData) {
+    const size_t bytes = size * count;
+    auto* response = static_cast<std::string*>(userData);
+    response->append(data, bytes);
+    return bytes;
+}
+
+int cancelIfAppletHandoff(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+    return g_cancelPendingRequests.load(std::memory_order_acquire) ? 1 : 0;
+}
+
 std::vector<std::uint8_t> performRequestBytes(const std::string& url,
                                               const std::list<std::string>& headers) {
-    std::ostringstream response;
-    curlpp::Easy request;
-    configureRequest(request, url, response, headers);
-    request.perform();
+    CURL* request = curl_easy_init();
+    if (!request)
+        throw std::runtime_error("Could not create HTTP request");
 
-    long statusCode = curlpp::infos::ResponseCode::get(request);
+    std::string response;
+    curl_easy_setopt(request, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(request, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(request, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(request, CURLOPT_CONNECTTIMEOUT, 4L);
+    curl_easy_setopt(request, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(request, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    const std::string agent = std::string("SwitchU/") + SWITCHU_VERSION;
+    curl_easy_setopt(request, CURLOPT_USERAGENT, agent.c_str());
+    curl_easy_setopt(request, CURLOPT_WRITEFUNCTION, appendResponse);
+    curl_easy_setopt(request, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(request, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(request, CURLOPT_XFERINFOFUNCTION, cancelIfAppletHandoff);
+
+    struct curl_slist* requestHeaders = nullptr;
+    for (const auto& header : headers)
+        requestHeaders = curl_slist_append(requestHeaders, header.c_str());
+    if (requestHeaders)
+        curl_easy_setopt(request, CURLOPT_HTTPHEADER, requestHeaders);
+
+    const CURLcode result = curl_easy_perform(request);
+    if (requestHeaders)
+        curl_slist_free_all(requestHeaders);
+    if (result != CURLE_OK) {
+        curl_easy_cleanup(request);
+        if (result == CURLE_ABORTED_BY_CALLBACK &&
+            g_cancelPendingRequests.load(std::memory_order_acquire)) {
+            throw std::runtime_error("HTTP request cancelled for system applet handoff");
+        }
+        throw std::runtime_error(std::string("HTTP request failed: ") + curl_easy_strerror(result));
+    }
+
+    long statusCode = 0;
+    curl_easy_getinfo(request, CURLINFO_RESPONSE_CODE, &statusCode);
+    curl_easy_cleanup(request);
     if (statusCode < 200 || statusCode >= 300) {
         throw std::runtime_error("HTTP error " + std::to_string(statusCode));
     }
 
-    std::string body = response.str();
-    return std::vector<std::uint8_t>(body.begin(), body.end());
+    return std::vector<std::uint8_t>(response.begin(), response.end());
 }
 
 std::vector<std::uint8_t> performBytes(const std::string& url,
@@ -138,6 +183,8 @@ std::vector<std::uint8_t> performBytes(const std::string& url,
     std::string lastError = "Theme Shop HTTP request failed";
     for (int attempt = 1; attempt <= kRequestAttemptCount; ++attempt) {
         try {
+            if (g_cancelPendingRequests.load(std::memory_order_acquire))
+                throw std::runtime_error("HTTP request cancelled for system applet handoff");
             if (!initializeRuntimeLocked()) {
                 throw std::runtime_error("Theme Shop HTTP runtime is unavailable");
             }
@@ -162,6 +209,9 @@ std::vector<std::uint8_t> performBytes(const std::string& url,
                           kRequestAttemptCount,
                           url.c_str());
         }
+
+        if (g_cancelPendingRequests.load(std::memory_order_acquire))
+            break;
 
         if (attempt < kRequestAttemptCount) {
             shutdownRuntimeLocked();
@@ -188,6 +238,10 @@ void shutdown() {
 bool isInitialized() {
     std::lock_guard<std::mutex> lk(g_themeHttpMutex);
     return runtimeInitializedLocked();
+}
+
+void cancelPendingRequests() {
+    g_cancelPendingRequests.store(true, std::memory_order_release);
 }
 
 std::vector<std::uint8_t> getBytes(const std::string& url,

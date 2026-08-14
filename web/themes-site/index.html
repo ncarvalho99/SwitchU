@@ -6,13 +6,15 @@
     <meta name="color-scheme" content="dark">
     <meta name="description" content="Catálogo oficial de temas SwitchU.">
     <title>SwitchU // Temas</title>
-    <link rel="stylesheet" href="assets/styles.css">
-    <script src="assets/app.js" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=motion-1">
+    <script src="assets/app.js?v=motion-1" defer></script>
   </head>
   <body>
     <header class="site-header">
       <h1 class="mark">SwitchU <span>//</span> Temas</h1>
       <p class="readout" id="readout" aria-live="polite"></p>
+      <button class="motion-toggle" id="motion-toggle" type="button"
+              aria-pressed="true">Animações: ligadas</button>
     </header>
     <div class="rule" aria-hidden="true"><i></i></div>
     <main id="out" class="msg" aria-live="polite">Lendo catálogo&hellip;</main>

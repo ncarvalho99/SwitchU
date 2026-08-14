@@ -136,6 +136,14 @@ public:
 protected:
     virtual void buildTabs() = 0;
     virtual bool usesCustomContentLayout() const { return false; }
+    // Full-screen custom views such as a game dossier can own the tab rail as
+    // well as the normal content column.  Other overlays keep the stock rail.
+    virtual bool customContentUsesPanel() const { return false; }
+    // Custom screens may draw their own content cards.  Rendering the stock
+    // content panel underneath those cards leaves its divider and rounded
+    // border visible through translucent artwork.
+    virtual bool drawsCustomContentPanel() const { return true; }
+    virtual bool hidesTabRail() const { return false; }
     virtual void drawCustomContent(nxui::Renderer&, const nxui::Rect&, const nxui::Rect&, float) {}
     virtual void updateCustomContent(float) {}
     virtual bool handleCustomPressA() { return false; }

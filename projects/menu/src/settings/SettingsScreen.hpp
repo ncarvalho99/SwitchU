@@ -39,6 +39,20 @@ public:
     void onShutdownRequest(VoidCb cb)   { m_shutdownCb = std::move(cb); }
     void onRebootRequest(VoidCb cb)     { m_rebootCb = std::move(cb); }
 
+    // Lets a tab immediately reflect a system change that also affects one
+    // of its sibling toggles without rebuilding widgets during input dispatch.
+    void setCachedToggleState(const std::string& label, bool value) {
+        for (auto& tab : m_tabs) {
+            for (auto& item : tab.items) {
+                if (item.type == ItemType::Toggle && item.label == label) {
+                    item.boolVal = value;
+                    item.anim01 = value ? 1.f : 0.f;
+                    return;
+                }
+            }
+        }
+    }
+
     void setWireframeState(bool enabled) { m_wireframeEnabled = enabled; }
     void setGridLayoutState(int columns, int rows) {
         m_gridColumns = std::clamp(columns, 3, 8);

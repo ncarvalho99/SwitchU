@@ -9,6 +9,7 @@
 #include "core/GridModel.hpp"
 #include "widgets/SelectionCursor.hpp"
 #include "widgets/WaraWaraBackground.hpp"
+#include "widgets/GameArtworkBackdrop.hpp"
 #include "widgets/DateTimeWidget.hpp"
 #include "widgets/BatteryWidget.hpp"
 #include "widgets/TitlePillWidget.hpp"
@@ -22,6 +23,10 @@
 #include "widgets/UserAvatarButton.hpp"
 #include "settings/SettingsScreen.hpp"
 #include "themeshop/ThemeShopScreen.hpp"
+#include "gallery/GameGalleryScreen.hpp"
+#include "details/GameDetailsScreen.hpp"
+#include "mods/GameModsScreen.hpp"
+#include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
 #include "core/ThemePreset.hpp"
 #include "sidebar/SidebarManager.hpp"
@@ -90,7 +95,30 @@ private:
     void cycleSortMode();
     std::string sortModeLabel() const;
     void showIconOptions();
+    void showGameOptionsMenu(std::uint64_t titleId, const std::string& title);
+    void showGameCustomizeMenu(std::uint64_t titleId, const std::string& title);
+    void showGameArtworkStatus(std::uint64_t titleId, const std::string& title);
+    void showGameArtworkRestoreMenu(std::uint64_t titleId, const std::string& title);
+    void restoreGameArtworkFromOptions(std::uint64_t titleId, const std::string& title,
+                                       gallery::ArtworkKind kind);
     void showSoftwareInformation(std::uint64_t titleId, const std::string& title);
+    void showGameGallery(std::uint64_t titleId, const std::string& title);
+    void showGameDetails(std::uint64_t titleId, const std::string& title,
+                         nxui::Texture* liveCover = nullptr);
+    void showGameMods(std::uint64_t titleId, const std::string& title);
+    void confirmDeleteGameMod();
+    void confirmGameArtwork(std::uint64_t titleId, const std::string& title,
+                            GameGalleryClient::Category category,
+                            GameGalleryClient::Asset asset,
+                            std::shared_ptr<const std::vector<std::uint8_t>> bytes);
+    void startGameArtworkSave(std::uint64_t titleId, GameGalleryClient::Category category,
+                              GameGalleryClient::Asset asset,
+                              std::shared_ptr<const std::vector<std::uint8_t>> bytes);
+    void confirmRestoreGameArtwork(std::uint64_t titleId, const std::string& title,
+                                   GameGalleryClient::Category category);
+    void startGameArtworkRestore(std::uint64_t titleId, GameGalleryClient::Category category);
+    void syncGameArtworkSave();
+    void refreshGameArtworkBackdrop(std::uint64_t titleId);
     void confirmDeleteSoftware(std::uint64_t titleId, const std::string& title);
     void buildUserAvatarBar();
     void applyTheme();
@@ -127,6 +155,8 @@ private:
     std::string accessibilityPositionFor(nxui::Widget* w) const;
     void createSettings();
     void createThemeShop();
+    void createGameGallery();
+    void createGameDetails();
     void reloadThemePresets();
     void refreshThemeShopState();
     std::vector<ThemeShopScreen::ThemeShopEntry> buildThemeShopEntries();
@@ -168,13 +198,14 @@ private:
     GridModel    m_model;
     nxui::Theme  m_theme;
 
-    std::string              m_activePresetName = "Default Light";
+    std::string              m_activePresetName = "Default Dark";
     ThemeColorSet            m_activeColors;
     nxui::ThemeMode          m_activeMode = nxui::ThemeMode::Light;
     std::vector<ThemePreset> m_allPresets;
     ThemePreset              m_effectivePreset;
 
     std::shared_ptr<WaraWaraBackground> m_background;
+    std::shared_ptr<GameArtworkBackdrop> m_gameArtworkBackdrop;
     std::shared_ptr<IconGrid>          m_grid;
     std::shared_ptr<SelectionCursor>   m_cursor;
     std::shared_ptr<SelectionCursor>   m_pointerCursor;
@@ -188,6 +219,9 @@ private:
     std::shared_ptr<ProgressDialog>    m_progressDialog;
     std::shared_ptr<SettingsScreen>    m_settings;
     std::shared_ptr<ThemeShopScreen>   m_themeShop;
+    std::shared_ptr<GameGalleryScreen> m_gameGallery;
+    std::shared_ptr<GameDetailsScreen> m_gameDetails;
+    std::shared_ptr<GameModsScreen>    m_gameMods;
 
     nxui::Texture m_gameCardTex;
 
@@ -220,6 +254,11 @@ private:
         bool installMode = false;
         std::string destinationPath;
         std::uint64_t revision = 0;
+    };
+
+    struct GameArtworkSaveShared {
+        std::mutex mutex;
+        gallery::ArtworkSaveResult result;
     };
 
     nxui::ThreadPool m_threadPool{2};
@@ -277,12 +316,18 @@ private:
     bool m_backgroundImageLoaded      = false;
     bool m_forceThemeResourceReload   = false;
     nxui::Widget* m_dialogReturnFocus = nullptr;
+    // The Gallery is launched from a close-on-press dialog. Its return focus
+    // must outlive that dialog's own return-focus handoff.
+    nxui::Widget* m_gameGalleryReturnFocus = nullptr;
+    nxui::Widget* m_gameDetailsReturnFocus = nullptr;
     bool m_dialogWasActive            = false;
     bool m_suppressNextNavigateSfx    = false;
     bool m_pendingNetConnect          = false;
     int  m_deferredBluetoothInitFrames = 0;
     int  m_deferredInitialAssetFrames = 0;
     std::future<void> m_themePackageTransferFuture;
+    std::future<void> m_gameArtworkSaveFuture;
+    std::shared_ptr<GameArtworkSaveShared> m_gameArtworkSave;
     std::shared_ptr<ThemePackageTransferShared> m_themePackageTransfer;
     std::uint64_t m_themePackageTransferUiRevision = 0;
     std::uint64_t m_themePackageTransferHandledRevision = 0;

@@ -18,7 +18,7 @@ param(
     [Parameter(Mandatory = $true)] [int] $ContainerId,
     [string] $ContainerThemeDirectory = '/srv/themes/themes',
     [string] $ReindexCommand = '/opt/switchu-themes/reindex.py',
-    [ValidateRange(1, 256)] [int] $ExpectedPackageCount = 56,
+    [ValidateRange(1, 256)] [int] $ExpectedPackageCount = 61,
     [string] $IdentityFile = '',
     [string] $LogPath = ''
 )

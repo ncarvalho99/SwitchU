@@ -1,0 +1,31 @@
+[Unit]
+Description=SwitchU SteamGridDB gallery proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=switchu-gallery
+Group=switchu-gallery
+WorkingDirectory=/opt/switchu-gallery
+EnvironmentFile=-/etc/switchu-gallery/steamgriddb.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+UMask=0077
+ExecStart=/usr/bin/python3 -m uvicorn gallery_proxy:app --host 0.0.0.0 --port 8081 --no-proxy-headers
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

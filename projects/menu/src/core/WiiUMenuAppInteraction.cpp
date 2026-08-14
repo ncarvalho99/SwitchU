@@ -4,8 +4,78 @@
 #include "DebugLog.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <nxui/core/I18n.hpp>
+
+namespace {
+
+std::string titleIdHex(std::uint64_t titleId) {
+    return fmt::format("{:016X}", titleId);
+}
+
+std::string installedDisplayVersion(std::uint64_t titleId) {
+#ifdef SWITCHU_MENU
+    NsApplicationControlData control{};
+    u64 actualSize = 0;
+    const Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage, titleId,
+                                                  &control, sizeof(control), &actualSize);
+    if (R_SUCCEEDED(rc) && control.nacp.display_version[0] != '\0') {
+        DebugLog::log("[details] version title=%016llX value=%s", (unsigned long long)titleId,
+                      control.nacp.display_version);
+        return control.nacp.display_version;
+    }
+    DebugLog::log("[details] version unavailable title=%016llX rc=0x%08X size=%llu",
+                  (unsigned long long)titleId, (unsigned int)rc, (unsigned long long)actualSize);
+#else
+    (void)titleId;
+#endif
+    return {};
+}
+
+std::string installedModSummary(std::uint64_t titleId) {
+    const std::filesystem::path base = std::filesystem::path("sdmc:/atmosphere/contents") / titleIdHex(titleId);
+    std::error_code ec;
+    int count = 0;
+    for (const char* directory : {"romfs", "exefs", "cheats"}) {
+        ec.clear();
+        if (std::filesystem::is_directory(base / directory, ec) && !ec)
+            ++count;
+    }
+    auto& i18n = nxui::I18n::instance();
+    if (count == 0)
+        return i18n.tr("dialog.details_mods_none", "None detected");
+    DebugLog::log("[details] mods title=%016llX detected=%d", (unsigned long long)titleId, count);
+    return i18n.tr("dialog.details_mods_detected", "Detected") + ": " + std::to_string(count);
+}
+
+std::string installedPlayTime(std::uint64_t titleId) {
+#ifdef SWITCHU_MENU
+    PdmPlayStatistics stats{};
+    const Result initRc = pdmqryInitialize();
+    if (R_SUCCEEDED(initRc)) {
+        const Result queryRc = pdmqryQueryPlayStatisticsByApplicationId(titleId, true, &stats);
+        pdmqryExit();
+        if (R_SUCCEEDED(queryRc) && stats.playtime > 0) {
+            const std::uint64_t minutes = stats.playtime / 60000000000ULL;
+            if (minutes >= 60)
+                return std::to_string(minutes / 60) + " h " + std::to_string(minutes % 60) + " min";
+            return std::to_string(minutes) + " min";
+        }
+        DebugLog::log("[details] playtime unavailable title=%016llX init=0x%X query=0x%X",
+                      static_cast<unsigned long long>(titleId), initRc, queryRc);
+    } else {
+        DebugLog::log("[details] pdmqry init failed title=%016llX rc=0x%X",
+                      static_cast<unsigned long long>(titleId), initRc);
+    }
+#else
+    (void)titleId;
+#endif
+    return nxui::I18n::instance().tr("dialog.details_playtime_unavailable", "Not available yet");
+}
+
+} // namespace
 
 bool WiiUMenuApp::isEditableIcon(nxui::Widget* w) const {
     if (!w || w->tag() != "glossy_icon")
@@ -26,6 +96,12 @@ std::string WiiUMenuApp::accessibilityContextFor(nxui::Widget* w) const {
         return i18n.tr("accessibility.context.settings", "Settings");
     if (m_themeShop && m_themeShop->isActive() && w == m_themeShop.get())
         return i18n.tr("accessibility.context.themes", "Themes");
+    if (m_gameGallery && m_gameGallery->isActive() && w == m_gameGallery.get())
+        return i18n.tr("dialog.gallery_title", "Gallery");
+    if (m_gameMods && m_gameMods->isActive() && w == m_gameMods.get())
+        return i18n.tr("dialog.mods_title", "Mods");
+    if (m_gameDetails && m_gameDetails->isActive() && w == m_gameDetails.get())
+        return i18n.tr("dialog.details_title", "Game details");
     if (w->tag() == "glossy_icon" && m_grid)
         return i18n.tr("accessibility.context.main_menu", "Main menu")
              + ", " + i18n.tr("accessibility.context.page", "page") + " "
@@ -59,6 +135,12 @@ std::string WiiUMenuApp::accessibilityActionsFor(nxui::Widget* w) const {
         return i18n.tr("accessibility.actions.settings", "Up and down to choose a category. A or right to enter. B to close.");
     if (m_themeShop && w == m_themeShop.get())
         return i18n.tr("accessibility.actions.themes", "Up and down to navigate. A to choose. B to close.");
+    if (m_gameGallery && w == m_gameGallery.get())
+        return i18n.tr("accessibility.actions.themes", "Up and down to navigate. A to choose. B to close.");
+    if (m_gameMods && w == m_gameMods.get())
+        return i18n.tr("dialog.mods_hint", "A enable/disable. X remove. B back.");
+    if (m_gameDetails && w == m_gameDetails.get())
+        return i18n.tr("dialog.details_actions", "Left and right to select gameplay art. A to expand. B to return.");
     if ((m_dialog && w == m_dialog.get()) || (m_userSelect && w == m_userSelect.get()))
         return i18n.tr("accessibility.actions.dialog", "Left and right to change choice. A to confirm. B to cancel.");
     return {};
@@ -414,6 +496,9 @@ void WiiUMenuApp::wireFocusCallback() {
 
         if ((m_dialog && m_dialog->isActive()) ||
             (m_themeShop && m_themeShop->isActive()) ||
+            (m_gameGallery && m_gameGallery->isActive()) ||
+            (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_userSelect && m_userSelect->isActive()))
             return;
@@ -440,9 +525,11 @@ void WiiUMenuApp::wireFocusCallback() {
                 return;
             }
             if (icon->titleId() == 0) {
+                refreshGameArtworkBackdrop(0);
                 m_titlePill->hideAnimated();
                 return;
             }
+            refreshGameArtworkBackdrop(icon->titleId());
 #ifdef SWITCHU_MENU
             if (m_launcher.isAppSuspended(icon->titleId())) {
                 m_titlePill->setText(icon->title());
@@ -451,6 +538,7 @@ void WiiUMenuApp::wireFocusCallback() {
             m_titlePill->setText(icon->title());
             m_titlePill->setVisible(true);
         } else if (cur) {
+            refreshGameArtworkBackdrop(0);
             if (m_editMode)
                 exitEditMode();
             for (auto& btn : m_sidebar.leftButtons()) {
@@ -468,6 +556,7 @@ void WiiUMenuApp::wireFocusCallback() {
             }
             m_titlePill->hideAnimated();
         } else {
+            refreshGameArtworkBackdrop(0);
             m_titlePill->hideAnimated();
         }
     });
@@ -477,12 +566,35 @@ void WiiUMenuApp::wireFocusCallback() {
             auto* icon = static_cast<GlossyIcon*>(cur);
             if (icon->titleId() != 0)
                 m_titlePill->setText(icon->title());
+            refreshGameArtworkBackdrop(icon->titleId());
         }
+    }
+}
+
+void WiiUMenuApp::refreshGameArtworkBackdrop(std::uint64_t titleId) {
+    if (!m_gameArtworkBackdrop)
+        return;
+    const std::string path = gallery::GameArtworkStore::pathFor(
+        titleId, gallery::ArtworkKind::Background);
+    if (path == m_gameArtworkBackdrop->artworkPath())
+        return;
+    if (path.empty()) {
+        m_gameArtworkBackdrop->clearArtwork();
+        return;
+    }
+    if (m_gameArtworkBackdrop->setArtwork(app().gpu(), app().renderer(), path)) {
+        DebugLog::log("[gallery] activated background: %s", path.c_str());
+    } else {
+        DebugLog::log("[gallery] could not load custom background: %s", path.c_str());
+        m_gameArtworkBackdrop->clearArtwork();
     }
 }
 
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
+    if (m_gameGallery && m_gameGallery.get() == w) return w->isFocusable();
+    if (m_gameMods && m_gameMods.get() == w) return w->isFocusable();
+    if (m_gameDetails && m_gameDetails.get() == w) return w->isFocusable();
     if (m_themeShop && m_themeShop.get() == w) return w->isFocusable();
     if (m_settings && m_settings.get() == w) return w->isFocusable();
     for (const auto& btn : m_sidebar.leftButtons())
@@ -560,11 +672,20 @@ void WiiUMenuApp::closeActiveOverlays() {
         m_settings->hide();
     if (m_themeShop && m_themeShop->isActive())
         m_themeShop->hide();
+    if (m_gameGallery && m_gameGallery->isActive())
+        m_gameGallery->hide();
+    if (m_gameMods && m_gameMods->isActive())
+        m_gameMods->hide();
+    if (m_gameDetails && m_gameDetails->isActive())
+        m_gameDetails->hide();
 }
 
 nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_launchAnim && m_launchAnim->isPlaying()) return nullptr;
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
+    if (m_gameMods && m_gameMods->isActive()) return m_gameMods.get();
+    if (m_gameGallery && m_gameGallery->isActive()) return m_gameGallery.get();
+    if (m_gameDetails && m_gameDetails->isActive()) return m_gameDetails.get();
     if (m_themeShop && m_themeShop->isActive()) return m_themeShop.get();
     if (m_settings && m_settings->isActive()) return m_settings.get();
     if (m_userSelect && m_userSelect->isActive()) return m_userSelect.get();
@@ -579,6 +700,12 @@ void WiiUMenuApp::toggleAccessibilitySpeech() {
         m_settings->setAccessibilityEnabledState(enabled);
     if (m_themeShop)
         m_themeShop->setAccessibilityVoiceEnabled(enabled);
+    if (m_gameGallery)
+        m_gameGallery->setAccessibilityVoiceEnabled(enabled);
+    if (m_gameMods)
+        m_gameMods->setAccessibilityVoiceEnabled(enabled);
+    if (m_gameDetails)
+        m_gameDetails->setAccessibilityVoiceEnabled(enabled);
 
     if (enabled) {
         m_audio.playSfx(Sfx::ThemeToggle);
@@ -633,6 +760,9 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::Y), [this]() {
         if ((m_dialog && m_dialog->isActive()) ||
             (m_themeShop && m_themeShop->isActive()) ||
+            (m_gameGallery && m_gameGallery->isActive()) ||
+            (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_userSelect && m_userSelect->isActive())) {
             return;
@@ -884,6 +1014,9 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
 
 void WiiUMenuApp::updateCursor() {
     if ((m_themeShop && m_themeShop->isActive()) ||
+        (m_gameGallery && m_gameGallery->isActive()) ||
+        (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameDetails && m_gameDetails->isActive()) ||
         (m_settings && m_settings->isActive()) ||
         (m_dialog && m_dialog->isActive()) ||
         (m_userSelect && m_userSelect->isActive()))
@@ -899,14 +1032,13 @@ void WiiUMenuApp::updateCursor() {
     }
 }
 
-// Pressing + on an icon, the way the stock menu does it. Two entries, both
-// answerable here: nsDeleteApplicationCompletely is called straight from the
-// menu in the storage tab already, so removing a game needs no daemon round
-// trip, and everything shown as information is already in the model.
+// Pressing + enters the game dossier directly. The old first dialog cost an
+// unnecessary action and hid the very information the player asked for.
 void WiiUMenuApp::showIconOptions() {
 #ifdef SWITCHU_MENU
     if (m_editMode) return;
-    if (m_dialog && m_dialog->isActive()) return;
+    if ((m_dialog && m_dialog->isActive()) || (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameDetails && m_gameDetails->isActive())) return;
 
     auto* cur = focusManager().current();
     if (!cur || cur->tag() != "glossy_icon") return;
@@ -917,18 +1049,27 @@ void WiiUMenuApp::showIconOptions() {
     const auto& entry = m_model.at(index);
 
 
-    auto& i18n = nxui::I18n::instance();
     const std::uint64_t titleId = entry.titleId;
     const std::string title = entry.title;
 
-    m_audio.playSfx(Sfx::ModalShow);
-    m_dialogReturnFocus = cur;
+    m_gameDetailsReturnFocus = cur;
+    showGameDetails(titleId, title, icon->texture());
+#endif
+}
+
+void WiiUMenuApp::showGameOptionsMenu(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    auto& i18n = nxui::I18n::instance();
     m_dialog->show(
         title,
         i18n.tr("dialog.icon_options_body", "Choose what to do with this software."),
         {
             {i18n.tr("dialog.icon_options_info", "Software information"),
              [this, titleId, title]() { showSoftwareInformation(titleId, title); }, true},
+            {i18n.tr("dialog.icon_options_customize", "Customize"),
+             [this, titleId, title]() { showGameCustomizeMenu(titleId, title); }, true},
             {i18n.tr("dialog.icon_options_delete", "Delete software"),
              [this, titleId, title]() { confirmDeleteSoftware(titleId, title); }, false},
             // closeOnPress, not an action. Cancel had it false with an empty
@@ -941,21 +1082,431 @@ void WiiUMenuApp::showIconOptions() {
 #endif
 }
 
+void WiiUMenuApp::showGameCustomizeMenu(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    auto& i18n = nxui::I18n::instance();
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show(
+        i18n.tr("dialog.customize_title", "Customize"),
+        title + "\n\n" + i18n.tr("dialog.customize_body",
+                                  "Choose how this software appears on the menu."),
+        {
+            {i18n.tr("dialog.icon_options_gallery", "Gallery"),
+             [this, titleId, title]() { showGameGallery(titleId, title); }, true},
+            {i18n.tr("dialog.customize_active_art", "Active artwork"),
+             [this, titleId, title]() { showGameArtworkStatus(titleId, title); }, true},
+            {i18n.tr("dialog.customize_restore_default", "Restore default"),
+             [this, titleId, title]() { showGameArtworkRestoreMenu(titleId, title); }, true},
+        },
+        0,
+        [this, titleId, title]() { showGameOptionsMenu(titleId, title); });
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
+void WiiUMenuApp::showGameArtworkStatus(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    // Game Details is added after the shared dialog in the overlay tree.  Put
+    // the dialog back at the end before showing it so the modal is visible,
+    // rather than merely receiving controller focus behind the dossier.
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
+    auto& i18n = nxui::I18n::instance();
+    const bool customCover = !gallery::GameArtworkStore::pathFor(
+        titleId, gallery::ArtworkKind::Cover).empty();
+    const bool customBackground = !gallery::GameArtworkStore::pathFor(
+        titleId, gallery::ArtworkKind::Background).empty();
+    const std::string body = title + "\n\n"
+        + i18n.tr(customCover ? "dialog.customize_cover_custom"
+                              : "dialog.customize_cover_default",
+                  customCover ? "Cover: custom" : "Cover: default")
+        + "\n"
+        + i18n.tr(customBackground ? "dialog.customize_background_custom"
+                                   : "dialog.customize_background_default",
+                  customBackground ? "Background: custom" : "Background: default");
+    // Details is now the parent view. Returning to the retired Customize
+    // dialog here created two dialog transitions in one frame and could leave
+    // controller focus without an active widget. This is intentionally a
+    // terminal status dialog: both A and B hand focus straight back to Details.
+    auto returnToDetails = [this]() {
+        if (m_gameDetails && m_gameDetails->isActive())
+            focusManager().setFocus(m_gameDetails.get());
+    };
+    m_dialog->show(i18n.tr("dialog.customize_active_art", "Active artwork"), body,
+                   {{i18n.tr("button.ok", "OK"), returnToDetails, true}}, 0, returnToDetails);
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
+void WiiUMenuApp::showGameArtworkRestoreMenu(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
+    auto& i18n = nxui::I18n::instance();
+    auto returnToDetails = [this]() {
+        if (m_gameDetails && m_gameDetails->isActive())
+            focusManager().setFocus(m_gameDetails.get());
+    };
+    m_dialog->show(i18n.tr("dialog.customize_restore_default", "Restore default"),
+                   title + "\n\n" + i18n.tr("dialog.customize_restore_body",
+                                               "Choose the artwork to restore."),
+                   {
+                       {i18n.tr("dialog.customize_restore_cover", "Restore cover"),
+                        [this, titleId, title]() {
+                            restoreGameArtworkFromOptions(titleId, title, gallery::ArtworkKind::Cover);
+                        }, true},
+                       {i18n.tr("dialog.customize_restore_background", "Restore background"),
+                        [this, titleId, title]() {
+                            restoreGameArtworkFromOptions(titleId, title, gallery::ArtworkKind::Background);
+                        }, true},
+                   },
+                   0,
+                   returnToDetails);
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
+void WiiUMenuApp::restoreGameArtworkFromOptions(
+    std::uint64_t titleId, const std::string& title, gallery::ArtworkKind kind) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    const auto result = gallery::GameArtworkStore::restoreDefault(titleId, kind);
+    const bool cover = kind == gallery::ArtworkKind::Cover;
+    if (result.ok && cover && m_grid) {
+        m_iconStreamer.forceReload(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                   app().gpu(), app().renderer(), m_grid->allIcons());
+    }
+    DebugLog::log("[gallery] options restore %s: title=%016llX ok=%d error=%s",
+                  cover ? "cover" : "background", static_cast<unsigned long long>(titleId),
+                  result.ok ? 1 : 0, result.error.c_str());
+    auto& i18n = nxui::I18n::instance();
+    const char* messageKey = result.ok
+        ? (cover ? "dialog.gallery_restored_cover" : "dialog.gallery_restored_background")
+        : "dialog.gallery_save_failed";
+    const char* fallback = result.ok
+        ? (cover ? "Default cover restored." : "Default background restored.")
+        : "Could not save image.";
+    auto returnToDetails = [this]() {
+        if (m_gameDetails && m_gameDetails->isActive())
+            focusManager().setFocus(m_gameDetails.get());
+    };
+    m_dialog->show(i18n.tr("dialog.customize_restore_default", "Restore default"),
+                   title + "\n\n" + i18n.tr(messageKey, fallback),
+                   {{i18n.tr("button.ok", "OK"), returnToDetails, true}},
+                   0,
+                   returnToDetails);
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+    (void)kind;
+#endif
+}
+
 void WiiUMenuApp::showSoftwareInformation(std::uint64_t titleId, const std::string& title) {
 #ifdef SWITCHU_MENU
-    auto& i18n = nxui::I18n::instance();
-    std::string body = fmt::format("{}\n\n{}: {:016X}",
-                                   title,
-                                   i18n.tr("dialog.software_title_id", "Title ID"),
-                                   titleId);
+    showGameDetails(titleId, title);
+#endif
+}
 
+void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& title,
+                                  nxui::Texture* liveCover) {
+#ifdef SWITCHU_MENU
+    createGameDetails();
+    if (!m_gameDetails) return;
+    std::vector<std::uint8_t> cover = gallery::GameArtworkStore::loadCover(titleId);
+    if (cover.empty()) cover = AppListLoader::loadIconData(titleId);
+    if (!m_gameDetailsReturnFocus)
+        m_gameDetailsReturnFocus = m_dialogReturnFocus;
+    m_dialogReturnFocus = m_gameDetails.get();
     m_audio.playSfx(Sfx::ModalShow);
-    m_dialog->show(i18n.tr("dialog.software_information", "Software information"),
-                   body,
-                   {{i18n.tr("button.ok", "OK"), [this]() {}, true}},
-                   0, {});
+    m_gameDetails->openForGame(titleId, title, std::move(cover), liveCover,
+                               installedDisplayVersion(titleId), installedModSummary(titleId),
+                               installedPlayTime(titleId));
+    focusManager().setFocus(m_gameDetails.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
+void WiiUMenuApp::showGameMods(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_gameMods) {
+        m_gameMods = std::make_shared<GameModsScreen>();
+        if (m_overlayLayer) m_overlayLayer->addChild(m_gameMods);
+        m_gameMods->setFont(&m_fontNormal);
+        m_gameMods->setSmallFont(&m_fontSmall);
+        m_gameMods->setTheme(&m_theme);
+        m_gameMods->setAccessibilityVoiceEnabled(m_config.accessibilityEnabled);
+        m_gameMods->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                       m_config.accessibilitySpeakPosition);
+        m_gameMods->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+        m_gameMods->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+        m_gameMods->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+        m_gameMods->onAccessibilityAnnouncement([this](const std::string& text) {
+            m_accessibility.announce(text);
+        });
+        m_gameMods->onRequestRemove([this]() { confirmDeleteGameMod(); });
+        m_gameMods->onClosed([this]() {
+            if (m_gameDetails && m_gameDetails->isActive()) {
+                m_suppressNextNavigateSfx = true;
+                focusManager().setFocus(m_gameDetails.get());
+            }
+        });
+    }
+    m_audio.playSfx(Sfx::ModalShow);
+    m_gameMods->openForGame(titleId, title);
+    focusManager().setFocus(m_gameMods.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
+void WiiUMenuApp::confirmDeleteGameMod() {
+#ifdef SWITCHU_MENU
+    if (!m_dialog || !m_gameMods || !m_gameMods->isActive()) return;
+    const std::string name = m_gameMods->selectedName();
+    if (name.empty()) return;
+    auto& i18n = nxui::I18n::instance();
+    // The Mods screen is newer in the overlay stack; place the confirmation
+    // above it so it receives both rendering and controller focus.
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
+    m_dialogReturnFocus = m_gameMods.get();
+    m_dialog->show(i18n.tr("dialog.mods_remove_title", "Remove mod?"),
+                   name + "\n\n" + i18n.tr("dialog.mods_remove_body",
+                                              "This permanently removes this mod from the SD card."),
+                   {
+                       {i18n.tr("button.cancel", "Cancel"), []() {}, true},
+                       {i18n.tr("dialog.mods_remove", "Remove"), [this]() {
+                            if (m_gameMods) m_gameMods->removeSelected();
+                        }, true},
+                   }, 0, {});
     focusManager().setFocus(m_dialog.get());
 #endif
+}
+
+void WiiUMenuApp::showGameGallery(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    createGameGallery();
+    if (!m_gameGallery)
+        return;
+    // The normal caller leaves its return target in m_dialogReturnFocus. When
+    // Gallery was entered from the dossier this is the dossier itself, so the
+    // close callback can resume it instead of exiting to the home grid.
+    m_gameGalleryReturnFocus = m_dialogReturnFocus;
+    m_dialogReturnFocus = m_gameGallery.get();
+    m_audio.playSfx(Sfx::ModalShow);
+    m_gameGallery->openForGame(titleId, title);
+    focusManager().setFocus(m_gameGallery.get());
+#endif
+}
+
+void WiiUMenuApp::confirmGameArtwork(
+    std::uint64_t titleId, const std::string& title, GameGalleryClient::Category category,
+    GameGalleryClient::Asset asset, std::shared_ptr<const std::vector<std::uint8_t>> bytes) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog || !m_gameGallery || !bytes || bytes->empty())
+        return;
+
+    auto& i18n = nxui::I18n::instance();
+    const bool cover = category == GameGalleryClient::Category::Grids;
+    const std::string message = i18n.tr(
+        cover ? "dialog.gallery_apply_cover" : "dialog.gallery_apply_background",
+        cover ? "This image will be saved as this software's custom cover."
+              : "This image will be saved as this software's custom background.");
+    // GameGallery is created after the shared dialog and therefore sits above
+    // it in the overlay paint order. Reinsert the dialog before showing it so
+    // its focused A/B controls and its visual card always describe one layer.
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
+    m_dialogReturnFocus = m_gameGallery.get();
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show(i18n.tr("dialog.gallery_apply_title", "Use this image?"),
+                   title + "\n\n" + message,
+                   {
+                       {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                       {i18n.tr("dialog.gallery_apply", "Use image"),
+                        [this, titleId, category, asset = std::move(asset), bytes = std::move(bytes)]() mutable {
+                            startGameArtworkSave(titleId, category, std::move(asset), std::move(bytes));
+                        }, true},
+                   },
+                   0, {});
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+    (void)category;
+    (void)asset;
+    (void)bytes;
+#endif
+}
+
+void WiiUMenuApp::startGameArtworkSave(
+    std::uint64_t titleId, GameGalleryClient::Category category,
+    GameGalleryClient::Asset asset, std::shared_ptr<const std::vector<std::uint8_t>> bytes) {
+    if (!m_gameGallery || !bytes || bytes->empty())
+        return;
+    syncGameArtworkSave();
+    if (m_gameArtworkSaveFuture.valid()
+        && m_gameArtworkSaveFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        m_gameGallery->requestToast(nxui::I18n::instance().tr(
+            "dialog.gallery_saving", "Saving image..."));
+        return;
+    }
+
+    const auto kind = category == GameGalleryClient::Category::Grids
+        ? gallery::ArtworkKind::Cover : gallery::ArtworkKind::Background;
+    auto shared = std::make_shared<GameArtworkSaveShared>();
+    shared->result.kind = kind;
+    m_gameArtworkSave = shared;
+    m_gameGallery->requestToast(nxui::I18n::instance().tr(
+        "dialog.gallery_saving", "Saving image..."));
+    m_gameArtworkSaveFuture = m_threadPool.submit([shared, titleId, kind, asset = std::move(asset), bytes = std::move(bytes)]() {
+        const auto result = gallery::GameArtworkStore::save(titleId, kind, asset, *bytes);
+        std::lock_guard<std::mutex> lock(shared->mutex);
+        shared->result = result;
+    });
+}
+
+void WiiUMenuApp::confirmRestoreGameArtwork(
+    std::uint64_t titleId, const std::string& title, GameGalleryClient::Category category) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog || !m_gameGallery)
+        return;
+
+    const bool cover = category == GameGalleryClient::Category::Grids;
+    auto& i18n = nxui::I18n::instance();
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
+    m_dialogReturnFocus = m_gameGallery.get();
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show(i18n.tr(cover ? "dialog.gallery_restore_cover_title"
+                                 : "dialog.gallery_restore_background_title",
+                                 cover ? "Restore default cover?" : "Restore default background?"),
+                   title + "\n\n" + i18n.tr(
+                       cover ? "dialog.gallery_restore_cover_body"
+                             : "dialog.gallery_restore_background_body",
+                       cover ? "The custom cover will be removed and the original Switch icon will return."
+                             : "The custom background will be removed and the theme background will return."),
+                   {
+                       {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                       {i18n.tr("dialog.gallery_restore", "Restore default"),
+                        [this, titleId, category]() { startGameArtworkRestore(titleId, category); }, true},
+                   },
+                   0, {});
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+    (void)category;
+#endif
+}
+
+void WiiUMenuApp::startGameArtworkRestore(
+    std::uint64_t titleId, GameGalleryClient::Category category) {
+    if (!m_gameGallery)
+        return;
+    syncGameArtworkSave();
+    if (m_gameArtworkSaveFuture.valid()
+        && m_gameArtworkSaveFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        m_gameGallery->requestToast(nxui::I18n::instance().tr(
+            "dialog.gallery_saving", "Saving image..."));
+        return;
+    }
+    const auto kind = category == GameGalleryClient::Category::Grids
+        ? gallery::ArtworkKind::Cover : gallery::ArtworkKind::Background;
+    auto shared = std::make_shared<GameArtworkSaveShared>();
+    shared->result.kind = kind;
+    shared->result.titleId = titleId;
+    shared->result.restored = true;
+    m_gameArtworkSave = shared;
+    m_gameGallery->requestToast(nxui::I18n::instance().tr(
+        "dialog.gallery_restoring", "Restoring default..."));
+    m_gameArtworkSaveFuture = m_threadPool.submit([shared, titleId, kind]() {
+        const auto result = gallery::GameArtworkStore::restoreDefault(titleId, kind);
+        std::lock_guard<std::mutex> lock(shared->mutex);
+        shared->result = result;
+    });
+}
+
+void WiiUMenuApp::syncGameArtworkSave() {
+    if (!m_gameArtworkSaveFuture.valid()
+        || m_gameArtworkSaveFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        return;
+
+    auto shared = m_gameArtworkSave;
+    gallery::ArtworkSaveResult result;
+    try {
+        m_gameArtworkSaveFuture.get();
+    } catch (...) {
+        result.error = "unexpected save failure";
+    }
+    if (shared) {
+        std::lock_guard<std::mutex> lock(shared->mutex);
+        result = shared->result;
+    }
+    m_gameArtworkSave.reset();
+    if (!m_gameGallery)
+        return;
+
+    auto& i18n = nxui::I18n::instance();
+    if (result.ok) {
+        const bool cover = result.kind == gallery::ArtworkKind::Cover;
+        const char* messageKey = result.restored
+            ? (cover ? "dialog.gallery_restored_cover" : "dialog.gallery_restored_background")
+            : (cover ? "dialog.gallery_saved_cover" : "dialog.gallery_saved_background");
+        const char* fallback = result.restored
+            ? (cover ? "Default cover restored." : "Default background restored.")
+            : (cover ? "Custom cover saved." : "Custom background saved.");
+        m_gameGallery->requestToast(i18n.tr(messageKey, fallback), 2.8f);
+        DebugLog::log("[gallery] %s %s: %s", result.restored ? "restored" : "saved",
+                      cover ? "cover" : "background", result.path.c_str());
+        if (cover && m_grid) {
+            // The visible icon may already own a streamed system texture. Reload
+            // this small page cache so the new cover appears before navigating
+            // away and back.
+            m_iconStreamer.forceReload(m_grid->currentPage(), m_grid->iconsPerPage(),
+                                       app().gpu(), app().renderer(), m_grid->allIcons());
+        } else if (!cover) {
+            auto* focused = focusManager().current();
+            if (focused && focused->tag() == "glossy_icon" &&
+                static_cast<GlossyIcon*>(focused)->titleId() == result.titleId)
+                refreshGameArtworkBackdrop(result.titleId);
+        }
+    } else {
+        m_gameGallery->requestToast(i18n.tr("dialog.gallery_save_failed",
+                                            "Could not save image."), 3.2f);
+        DebugLog::log("[gallery] save failed: %s", result.error.c_str());
+    }
 }
 
 void WiiUMenuApp::confirmDeleteSoftware(std::uint64_t titleId, const std::string& title) {

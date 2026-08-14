@@ -55,6 +55,34 @@ function Copy-TreeToConsole {
     }
 }
 
+function Remove-RetiredDefaultThemeMedia {
+    param(
+        [Parameter(Mandatory)] [string] $SourceSwitchU,
+        [Parameter(Mandatory)] [string] $ConsoleSwitchU
+    )
+
+    # The default themes are shipped by SwitchU, but third-party themes in this
+    # folder belong to the user. Delete only the two retired built-in media
+    # directories when the build intentionally no longer contains them.
+    foreach ($themeName in @('Default Dark', 'Default Light')) {
+        $sourceMedia = Join-Path $SourceSwitchU ("themes\\{0}\\media" -f $themeName)
+        $consoleMedia = Join-Path $ConsoleSwitchU ("themes\\{0}\\media" -f $themeName)
+        if ((Test-Path -LiteralPath $sourceMedia) -or -not (Test-Path -LiteralPath $consoleMedia)) {
+            continue
+        }
+
+        $expectedMedia = [System.IO.Path]::GetFullPath($consoleMedia)
+        $actualMedia = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $consoleMedia).Path)
+        if ($actualMedia -ne $expectedMedia) {
+            throw "Destino de limpeza inesperado: $actualMedia"
+        }
+
+        $fileCount = @(Get-ChildItem -LiteralPath $consoleMedia -Recurse -File).Count
+        Write-Host "removendo $fileCount assets antigos do tema interno $themeName" -ForegroundColor Cyan
+        Remove-Item -LiteralPath $consoleMedia -Recurse -Force
+    }
+}
+
 function Deploy-SysmoduleToConsole {
     if ($SkipConsoleDeploy) {
         Write-Host 'implantacao no console ignorada por parametro' -ForegroundColor Yellow
@@ -85,6 +113,7 @@ function Deploy-SysmoduleToConsole {
     Write-Host "implantando sysmodule no cartao $ConsoleDrive ..." -ForegroundColor Cyan
     Copy-TreeToConsole -Source $sourceAtmosphere -Destination $destinationAtmosphere -Label 'atmosphere'
     Copy-TreeToConsole -Source $sourceSwitch -Destination $destinationSwitch -Label 'switch'
+    Remove-RetiredDefaultThemeMedia -SourceSwitchU (Join-Path $sourceSwitch 'SwitchU') -ConsoleSwitchU $consoleSwitchU
 
     $checks = @(
         @{ Source = Join-Path $sourceAtmosphere 'contents\0100000000001000\exefs.nsp'; Destination = Join-Path $destinationAtmosphere 'contents\0100000000001000\exefs.nsp' },

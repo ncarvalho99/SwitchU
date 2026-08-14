@@ -267,6 +267,10 @@ void TabbedOverlayScreen::onPressA() {
     if (item.type == ItemType::Toggle) {
         item.boolVal = !item.boolVal;
         if (item.onChange) item.onChange(item);
+        // A callback may reject a system change and restore boolVal. Update
+        // the visual state afterwards so controller and touch input always
+        // show the state that was actually accepted.
+        item.anim01 = item.boolVal ? 1.f : 0.f;
         if (m_toggleSfxCb && !item.suppressToggleSfx) m_toggleSfxCb(item.boolVal);
         announceCurrentFocus();
     } else if (item.type == ItemType::Selector) {
@@ -916,8 +920,8 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
                         auto& item = m_tabs[m_tabIndex].items[rawIdx];
                         if (item.type == ItemType::Toggle) {
                             item.boolVal = !item.boolVal;
-                            item.anim01 = item.boolVal ? 1.f : 0.f;
                             if (item.onChange) item.onChange(item);
+                            item.anim01 = item.boolVal ? 1.f : 0.f;
                             if (m_toggleSfxCb && !item.suppressToggleSfx) m_toggleSfxCb(item.boolVal);
                         } else if (item.type == ItemType::Selector) {
                             onPressA();

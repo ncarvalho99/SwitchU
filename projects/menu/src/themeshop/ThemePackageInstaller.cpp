@@ -700,6 +700,54 @@ void writeFileBinary(const std::string& path, const std::string& data) {
         throw std::runtime_error("Failed to write file: " + path);
 }
 
+// A package can be a valid ZIP and still be an unusable animated theme when a
+// proxy/CDN serves an old, preview-only archive. Validate the manifest against
+// the staging directory before replacing the working installation; otherwise
+// selecting a theme can silently remove the wallpaper that was active before.
+bool hasAllDeclaredFrames(const std::string& root, std::string& detail) {
+    const std::string manifestPath = joinPath(root, "theme.json");
+    std::ifstream input(manifestPath);
+    if (!input) {
+        detail = "theme.json missing after extraction";
+        return false;
+    }
+
+    try {
+        nlohmann::json manifest;
+        input >> manifest;
+        const auto image = manifest.value("theme", nlohmann::json::object())
+                               .value("background", nlohmann::json::object())
+                               .value("image", nlohmann::json::object());
+        const auto frames = image.value("frames", nlohmann::json::array());
+        if (!frames.is_array() || frames.empty())
+            return true;
+
+        std::size_t found = 0;
+        for (const auto& entry : frames) {
+            if (!entry.is_string()) {
+                detail = "background frame list contains a non-string entry";
+                return false;
+            }
+            const std::string relative = trimSlashes(entry.get<std::string>());
+            if (relative.empty() || !isSafeRelativePath(relative)) {
+                detail = "background frame list contains an unsafe path";
+                return false;
+            }
+            if (pathExists(joinPath(root, relative)))
+                ++found;
+        }
+        if (found != frames.size()) {
+            detail = "background frames missing: " + std::to_string(found)
+                   + "/" + std::to_string(frames.size());
+            return false;
+        }
+        return true;
+    } catch (const std::exception& error) {
+        detail = std::string("invalid extracted manifest: ") + error.what();
+        return false;
+    }
+}
+
 } // namespace
 
 std::string ThemePackageInstaller::destinationRootFor(const std::string& themeId, Mode mode) {
@@ -785,6 +833,14 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
             std::remove(archivePath.c_str());
             throw std::runtime_error("Theme package download was empty");
         }
+        if (expectedBytes > 0 && downloaded != expectedBytes) {
+            std::remove(archivePath.c_str());
+            DebugLog::log("[themeshop] package size mismatch: expected=%llu received=%llu",
+                          (unsigned long long)expectedBytes,
+                          (unsigned long long)downloaded);
+            throw std::runtime_error(i18n.tr("themeshop.transfer.unpack_failed",
+                                             "Theme package could not be unpacked."));
+        }
 
         // Antes de escrever coisa alguma. Um cartao cheio deixava a extracao ir
         // ate o fim do espaco e falhar no primeiro arquivo que nao coubesse --
@@ -835,6 +891,15 @@ ThemePackageInstaller::Result ThemePackageInstaller::run(const std::string& cata
             DebugLog::log("[themeshop] extracao falhou (%s), %llu MB livres no cartao",
                           extracted.error.c_str(),
                           (unsigned long long)(sdFreeBytes() / 1048576));
+            throw std::runtime_error(i18n.tr("themeshop.transfer.unpack_failed",
+                                             "Theme package could not be unpacked."));
+        }
+
+        std::string packageValidationError;
+        if (!hasAllDeclaredFrames(stagingPath, packageValidationError)) {
+            removeDirectoryRecursive(stagingPath);
+            DebugLog::log("[themeshop] package rejected before replacement: %s",
+                          packageValidationError.c_str());
             throw std::runtime_error(i18n.tr("themeshop.transfer.unpack_failed",
                                              "Theme package could not be unpacked."));
         }
