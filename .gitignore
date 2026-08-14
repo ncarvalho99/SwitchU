@@ -30,6 +30,7 @@ compile_commands.json
 # implemented is committed from wherever it belongs in the tree; this folder
 # itself never is.
 /.features/
+/.shared/
 
 # Install layout and packaged zip produced by .logs/build-local.ps1, the same
 # two the CI workflow builds and uploads as artifacts.
