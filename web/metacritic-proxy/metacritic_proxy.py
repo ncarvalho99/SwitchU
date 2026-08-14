@@ -27,6 +27,7 @@ from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException, Request as FastApiRequest
+from fastapi.responses import JSONResponse
 
 
 APP_NAME = "switchu-metacritic"
@@ -40,6 +41,12 @@ USER_AGENT = "SwitchU-Metadata/0.1 (+https://switchu-api.nclabs.dev)"
 CACHE_TTL_SECONDS = 30 * 24 * 60 * 60
 STALE_TTL_SECONDS = 180 * 24 * 60 * 60
 NEGATIVE_CACHE_SECONDS = 24 * 60 * 60
+# Gemini's free tier caps requests per DAY, counted per project and per model
+# (quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier). Exhausting it
+# makes the dossier fall back to the original English text. That fallback must
+# not be stored for the normal 30 days, or the game stays English long after the
+# quota resets. See _gemini_model_chain for how the daily budget is stretched.
+UNTRANSLATED_CACHE_SECONDS = 30 * 60
 UPSTREAM_MIN_INTERVAL_SECONDS = 2.0
 RATE_LIMIT_REQUESTS = 20
 RATE_LIMIT_WINDOW_SECONDS = 60
@@ -66,6 +73,9 @@ _igdb_token_lock = threading.Lock()
 _igdb_access_token = ""
 _igdb_access_token_expires_at = 0.0
 _rate_windows: dict[str, deque[float]] = defaultdict(deque)
+# Outcome of the most recent real translation attempt. The admin panel reports
+# this instead of probing Gemini, which would consume the scarce free-tier quota.
+_last_translation_ok = True
 _rate_lock = threading.Lock()
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, title=APP_NAME)
@@ -142,9 +152,11 @@ def _load_cached(cache_key: str) -> tuple[dict[str, Any], bool] | None:
     return response, row["fresh_until"] > now
 
 
-def _save_cached(cache_key: str, response: dict[str, Any], found: bool) -> None:
+def _save_cached(cache_key: str, response: dict[str, Any], found: bool,
+                 ttl_override: int | None = None) -> None:
     now = int(time.time())
-    ttl = CACHE_TTL_SECONDS if found else NEGATIVE_CACHE_SECONDS
+    ttl = ttl_override if ttl_override is not None else (
+        CACHE_TTL_SECONDS if found else NEGATIVE_CACHE_SECONDS)
     with _database_lock, _connect() as database:
         database.execute(
             """
@@ -166,6 +178,20 @@ def _normalise_title(value: str) -> str:
     value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     value = value.casefold().replace("&", " and ")
     return " ".join(re.findall(r"[a-z0-9]+", value))
+
+
+def _urlopen_with_retry(request: Request, *, timeout: int):
+    """Retry a single upstream call once after a brief pause on a network-level
+    failure (DNS blip, reset connection). IGDB, Twitch and Gemini occasionally
+    drop one request; without this a lone hiccup turned into a permanent 502
+    for the console even though the very next attempt would have worked.
+    HTTP status errors are not retried here; they are handled by callers.
+    """
+    try:
+        return urlopen(request, timeout=timeout)
+    except (URLError, TimeoutError):
+        time.sleep(1.5)
+        return urlopen(request, timeout=timeout)
 
 
 def _igdb_credentials() -> tuple[str, str]:
@@ -197,7 +223,7 @@ def _igdb_token() -> str:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=18) as response:
+            with _urlopen_with_retry(request, timeout=18) as response:
                 token_response = json.loads(response.read().decode("utf-8"))
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise RuntimeError("Twitch token service is temporarily unavailable") from exc
@@ -230,7 +256,7 @@ def _igdb_query(query: str, endpoint: str = IGDB_API, retry: bool = True) -> lis
         method="POST",
     )
     try:
-        with urlopen(request, timeout=18) as response:
+        with _urlopen_with_retry(request, timeout=18) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         if exc.code == 401 and retry:
@@ -356,12 +382,46 @@ def _normalized_locale(language: str) -> str:
 
 
 def _translation_target(language: str) -> str | None:
-    return _TRANSLATION_TARGETS.get(_normalized_locale(language))
+    """Resolve a locale to the translator that serves its cache slot.
+
+    Entries are cached per base language ("es"), not per region, so a variant
+    the table does not list explicitly - es-MX, pt-PT, fr-CA - must resolve to
+    the same translator as its base. Without this it would be treated as having
+    no translator at all, and its untranslated English would be stored in the
+    slot that the listed variant reads from.
+    """
+    locale = _normalized_locale(language)
+    listed = _TRANSLATION_TARGETS.get(locale)
+    if listed:
+        return listed
+    base = _language_code(locale)
+    for key, value in _TRANSLATION_TARGETS.items():
+        if _language_code(key) == base:
+            return value
+    return None
 
 
 def _localize_labels(labels: list[str], language: str) -> list[str]:
     labels_by_locale = _LABEL_TRANSLATIONS.get(_normalized_locale(language), {})
     return [labels_by_locale.get(label, label) for label in labels]
+
+
+def _translation_incomplete(result: dict[str, Any], language: str) -> bool:
+    """True when a translation was expected for this language but did not happen.
+
+    Distinguishes a real failure from a game that simply has no prose: if there
+    is no summary and no storyline, there was nothing to translate and the entry
+    is complete as it stands.
+    """
+    if not _translation_target(language):
+        return False
+    if not (result.get("summary") or result.get("storyline")):
+        return False
+    # Compare at base-language granularity, which is the granularity the cache
+    # key uses. Text translated for es-ES fills the "es" slot and is complete
+    # for an es-MX reader; demanding an exact locale match would mark a good
+    # translation as failed and expire it in 30 minutes.
+    return _language_code(result.get("summaryLanguage") or "en") != _language_code(language)
 
 
 def _localize_cached_metadata(result: dict[str, Any], language: str) -> dict[str, Any]:
@@ -373,24 +433,46 @@ def _localize_cached_metadata(result: dict[str, Any], language: str) -> dict[str
     return localized
 
 
-def _gemini_text(prompt: str, api_key: str, model: str) -> str:
+def _gemini_text(prompt: str, api_key: str, models: list[str]) -> str:
+    """Ask the first model that still has quota.
+
+    The free tier caps requests per *day*, and the cap is counted per project
+    AND per model. One model alone is a very small budget for a whole library,
+    so exhausting one falls through to the next instead of giving up and
+    serving English. Only quota and availability errors advance the chain; a
+    malformed response is a real failure and stops it.
+    """
+    global _last_translation_ok
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096},
     }).encode("utf-8")
-    request = Request(
-        f"{GEMINI_API}/{model}:generateContent",
-        data=payload,
-        headers={"Content-Type": "application/json", "x-goog-api-key": api_key, "User-Agent": USER_AGENT},
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=20) as response:
-            response_json = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        raise RuntimeError(f"Gemini returned HTTP {exc.code}") from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise RuntimeError("Gemini translation is temporarily unavailable") from exc
+    last_error: Exception | None = None
+    for model in models:
+        request = Request(
+            f"{GEMINI_API}/{model}:generateContent",
+            data=payload,
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key,
+                     "User-Agent": USER_AGENT},
+            method="POST",
+        )
+        try:
+            with _urlopen_with_retry(request, timeout=20) as response:
+                response_json = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            last_error = RuntimeError(f"Gemini returned HTTP {exc.code} for {model}")
+            if exc.code in (429, 404, 403, 503):
+                continue
+            _last_translation_ok = False
+            raise last_error from exc
+        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+            last_error = RuntimeError("Gemini translation is temporarily unavailable")
+            continue
+        break
+    else:
+        _last_translation_ok = False
+        raise last_error or RuntimeError("No Gemini model accepted the request")
+    _last_translation_ok = True
     candidates = response_json.get("candidates") if isinstance(response_json, dict) else None
     content = candidates[0].get("content") if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict) else None
     parts = content.get("parts") if isinstance(content, dict) else None
@@ -400,15 +482,34 @@ def _gemini_text(prompt: str, api_key: str, model: str) -> str:
     return translated
 
 
-def _translation_credentials(language: str) -> tuple[str, str, str] | None:
+def _gemini_model_chain() -> list[str]:
+    """Primary model first, then the fallbacks, de-duplicated.
+
+    Each entry carries its own daily allowance, so the order here is the order
+    the budget is spent in.
+    """
+    configured = [os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")]
+    configured += os.environ.get(
+        "GEMINI_FALLBACK_MODELS",
+        "gemini-3.1-flash-lite,gemini-flash-lite-latest,gemini-3.5-flash",
+    ).split(",")
+    chain: list[str] = []
+    for name in (value.strip() for value in configured):
+        if not name:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9._-]{3,100}", name):
+            raise RuntimeError("Gemini model configuration is invalid")
+        if name not in chain:
+            chain.append(name)
+    return chain
+
+
+def _translation_credentials(language: str) -> tuple[str, str, list[str]] | None:
     target = _translation_target(language)
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not target or not api_key:
         return None
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
-    if not re.fullmatch(r"[A-Za-z0-9._-]{3,100}", model):
-        raise RuntimeError("Gemini model configuration is invalid")
-    return target, api_key, model
+    return target, api_key, _gemini_model_chain()
 
 
 def _translate_catalogue_texts(summary: str | None,
@@ -422,7 +523,7 @@ def _translate_catalogue_texts(summary: str | None,
     credentials = _translation_credentials(language)
     if not credentials:
         return summary, storyline, "en"
-    target, api_key, model = credentials
+    target, api_key, models = credentials
     fields = [summary or "", storyline or ""]
     prompt = (
         f"Translate every non-empty value in this JSON array of video-game catalogue text into {target}. "
@@ -430,7 +531,7 @@ def _translate_catalogue_texts(summary: str | None,
         "Keep exactly two strings in the original order. Return only valid JSON, without Markdown.\n\n"
         + json.dumps(fields, ensure_ascii=False)
     )
-    translated = _gemini_text(prompt, api_key, model)
+    translated = _gemini_text(prompt, api_key, models)
     try:
         values = json.loads(translated)
     except json.JSONDecodeError:
@@ -448,14 +549,14 @@ def _translate_labels(labels: list[str], language: str) -> list[str]:
     credentials = _translation_credentials(language)
     if not clean or not credentials:
         return clean
-    target, api_key, model = credentials
+    target, api_key, models = credentials
     prompt = (
         f"Translate every video-game classification in this JSON array into {target}. "
         "Keep the same number and order of items. Return only a valid JSON array of strings, "
         "without Markdown or commentary.\n\n"
         + json.dumps(clean, ensure_ascii=False)
     )
-    translated = _gemini_text(prompt, api_key, model)
+    translated = _gemini_text(prompt, api_key, models)
     try:
         result = json.loads(translated)
     except json.JSONDecodeError:
@@ -473,7 +574,7 @@ def _translate_metadata_fields(summary: str | None, storyline: str | None,
     credentials = _translation_credentials(language)
     if not credentials:
         return summary, storyline, genres, themes, game_modes, "en"
-    target, api_key, model = credentials
+    target, api_key, models = credentials
     original = {
         "summary": summary or "",
         "storyline": storyline or "",
@@ -488,7 +589,7 @@ def _translate_metadata_fields(summary: str | None, storyline: str | None,
         + json.dumps(original, ensure_ascii=False)
     )
     try:
-        translated = json.loads(_gemini_text(prompt, api_key, model))
+        translated = json.loads(_gemini_text(prompt, api_key, models))
     except (RuntimeError, json.JSONDecodeError):
         return summary, storyline, genres, themes, game_modes, "en"
     if not isinstance(translated, dict):
@@ -609,7 +710,7 @@ def _throttled_page(url: str) -> tuple[str, str]:
         _last_upstream_request = time.monotonic()
         request = Request(url, headers={"Accept": "text/html", "User-Agent": USER_AGENT}, method="GET")
         try:
-            with urlopen(request, timeout=18) as response:
+            with _urlopen_with_retry(request, timeout=18) as response:
                 final_url = response.geturl()
                 if urlparse(final_url).hostname != SOURCE_HOST:
                     raise RuntimeError("Metacritic redirected to an unexpected host")
@@ -738,14 +839,139 @@ def startup() -> None:
     _initialize_database()
 
 
+def _admin_list_entries() -> list[dict[str, Any]]:
+    """Flatten the cache into rows the panel can render."""
+    now = int(time.time())
+    rows: list[dict[str, Any]] = []
+    with _database_lock, _connect() as database:
+        cursor = database.execute(
+            "SELECT cache_key, response_json, fetched_at, fresh_until FROM score_cache")
+        records = cursor.fetchall()
+    for record in records:
+        key = record["cache_key"]
+        try:
+            payload = json.loads(record["response_json"])
+        except json.JSONDecodeError:
+            continue
+        dossier = key.startswith("igdb:")
+        parts = key.split(":")
+        language = parts[3] if dossier and len(parts) > 4 else ""
+        # The key carries the base language ("pt") while the payload records the
+        # full locale ("pt-BR"), so compare base codes or every translated entry
+        # would be listed as a failure.
+        translated = bool(
+            dossier
+            and (payload.get("summary") or payload.get("storyline"))
+            and _language_code(payload.get("summaryLanguage") or "en") == _language_code(language or "en")
+        )
+        if dossier and not (payload.get("summary") or payload.get("storyline")):
+            # Nothing to translate; do not flag it as a failure.
+            translated = True
+        rows.append({
+            "cacheKey": key,
+            "kind": "dossie" if dossier else "notas",
+            "title": payload.get("title") or key.rsplit(":", 1)[-1],
+            "language": language or "-",
+            "translated": translated,
+            "expiresIn": max(int(record["fresh_until"]) - now, 0),
+            "ttlSeconds": max(int(record["fresh_until"]) - int(record["fetched_at"]), 1),
+        })
+    rows.sort(key=lambda row: (row["translated"], row["expiresIn"]))
+    return rows
+
+
+def _admin_service_status() -> dict[str, Any]:
+    entries = _admin_list_entries()
+    return {
+        "total": len(entries),
+        "untranslated": sum(1 for row in entries if row["kind"] == "dossie" and not row["translated"]),
+        "igdbReady": bool(os.environ.get("IGDB_CLIENT_ID") and os.environ.get("IGDB_CLIENT_SECRET")),
+        "geminiReady": _gemini_reachable(),
+    }
+
+
+def _gemini_reachable() -> bool:
+    """Report whether translation is currently possible.
+
+    A cheap probe would burn one of the few free-tier calls per minute, so this
+    reports configuration plus the outcome of the most recent real attempt.
+    """
+    if not os.environ.get("GEMINI_API_KEY"):
+        return False
+    return _last_translation_ok
+
+
+def _admin_refresh_metadata(title: str, language: str) -> dict[str, Any]:
+    """Re-query the origin for one title, ignoring whatever is cached."""
+    platform = "nintendo-switch"
+    result = _igdb_metadata(title, platform, language)
+    cache_key = f"igdb:v2:{platform}:{_language_code(language)}:{_normalise_title(title)}"
+    incomplete = _translation_incomplete(result, language)
+    _save_cached(cache_key, result, bool(result["found"]),
+                 ttl_override=UNTRANSLATED_CACHE_SECONDS if incomplete else None)
+    return {
+        "found": bool(result.get("found")),
+        "title": result.get("title") or title,
+        "translated": not incomplete,
+        "cacheKey": cache_key,
+    }
+
+
+def _admin_refresh_scores(title: str) -> dict[str, Any]:
+    platform = "nintendo-switch"
+    result = _resolve(title, platform)
+    cache_key = f"{platform}:{_normalise_title(title)}"
+    _save_cached(cache_key, result, bool(result["found"]))
+    return {"found": bool(result.get("found")), "title": result.get("title") or title,
+            "translated": True, "cacheKey": cache_key}
+
+
+def _admin_delete_entry(cache_key: str) -> int:
+    with _database_lock, _connect() as database:
+        cursor = database.execute("DELETE FROM score_cache WHERE cache_key=?", (cache_key,))
+        return cursor.rowcount
+
+
+def _admin_purge_untranslated() -> int:
+    removed = 0
+    for row in _admin_list_entries():
+        if row["kind"] == "dossie" and not row["translated"]:
+            removed += _admin_delete_entry(row["cacheKey"])
+    return removed
+
+
 @app.middleware("http")
 async def restrict_to_tunnel(request: FastApiRequest, call_next: Any) -> Any:
+    # BaseHTTPMiddleware does not convert a raised HTTPException into a
+    # response the way route handlers do; it crashes the request as an
+    # unhandled 500 instead. Every check here must return a Response.
     client_host = request.client.host if request.client else None
     if not _is_trusted_proxy(client_host):
-        raise HTTPException(status_code=403, detail="Tunnel access required")
-    if request.url.path != "/health" and not _allow_request(_client_identity(request)):
-        raise HTTPException(status_code=429, detail="Too many requests")
+        return JSONResponse(status_code=403, content={"detail": "Tunnel access required"})
+    # The panel is behind a session and its own login throttle, and one screen
+    # legitimately issues several calls. Counting it against the console's
+    # 20-per-minute console budget would lock the operator out of the tool used
+    # to fix things.
+    exempt = request.url.path == "/health" or request.url.path.startswith("/admin")
+    if not exempt and not _allow_request(_client_identity(request)):
+        return JSONResponse(status_code=429, content={"detail": "Too many requests"})
     return await call_next(request)
+
+
+# Mounted last so every helper it receives is already defined.
+try:
+    import admin_panel
+
+    app.include_router(admin_panel.build_router({
+        "list_entries": _admin_list_entries,
+        "service_status": _admin_service_status,
+        "refresh_metadata": _admin_refresh_metadata,
+        "refresh_scores": _admin_refresh_scores,
+        "delete_entry": _admin_delete_entry,
+        "purge_untranslated": _admin_purge_untranslated,
+    }))
+except Exception as _admin_error:  # keep the public API alive if the panel fails
+    print(f"admin panel disabled: {_admin_error}", flush=True)
 
 
 @app.get("/health")
@@ -807,7 +1033,9 @@ def metadata(title: str, platform: str = "nintendo-switch", language: str = "en-
 
     try:
         result = _igdb_metadata(title, platform, language)
-        _save_cached(cache_key, result, bool(result["found"]))
+        _save_cached(cache_key, result, bool(result["found"]),
+                     ttl_override=UNTRANSLATED_CACHE_SECONDS
+                     if _translation_incomplete(result, language) else None)
         return {**result, "cached": False, "stale": False}
     except HTTPException:
         raise
