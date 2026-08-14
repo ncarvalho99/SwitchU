@@ -33,9 +33,15 @@
   <summary><b>More screenshots</b></summary>
 
 ![](./screenshots/2.jpg)
-![](./screenshots/3.jpg)
 ![](./screenshots/4.jpg)
 ![](./screenshots/5.jpg)
+![](./screenshots/8.jpg)
+![](./screenshots/9.jpg)
+![](./screenshots/10.jpg)
+![](./screenshots/11.jpg)
+![](./screenshots/12.jpg)
+![](./screenshots/13.jpg)
+![](./screenshots/14.jpg)
 
 </details>
 
