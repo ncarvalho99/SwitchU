@@ -4,19 +4,45 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta name="description" content="Catálogo oficial de temas SwitchU.">
+    <meta name="description" content="Catálogo de temas animados para o SwitchU. Papéis de parede em movimento para o menu do Nintendo Switch.">
     <title>SwitchU // Temas</title>
-    <link rel="stylesheet" href="assets/styles.css?v=motion-1">
-    <script src="assets/app.js?v=motion-1" defer></script>
+    <link rel="preload" href="assets/chakra.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="assets/plexmono.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="assets/styles.css?v=5">
+    <script src="assets/app.js?v=5" defer></script>
   </head>
   <body>
-    <header class="site-header">
-      <h1 class="mark">SwitchU <span>//</span> Temas</h1>
-      <p class="readout" id="readout" aria-live="polite"></p>
-      <button class="motion-toggle" id="motion-toggle" type="button"
-              aria-pressed="true">Animações: ligadas</button>
+    <a class="skip" href="#out">Ir para o catálogo</a>
+
+    <header class="masthead">
+      <div class="masthead-row">
+        <h1 class="mark">SwitchU <span aria-hidden="true">//</span> Temas</h1>
+        <button class="ghost" id="motion-toggle" type="button" aria-pressed="true">
+          <span class="dot" aria-hidden="true"></span><span id="motion-label">Animações ligadas</span>
+        </button>
+      </div>
+      <p class="lede">Papéis de parede em movimento para o menu do seu Switch.
+        Cada tema é um laço de quadros que roda direto no console.</p>
+      <dl class="totals" id="totals" aria-live="polite"></dl>
     </header>
-    <div class="rule" aria-hidden="true"><i></i></div>
-    <main id="out" class="msg" aria-live="polite">Lendo catálogo&hellip;</main>
+
+    <nav class="filters" id="filters" aria-label="Filtrar catálogo">
+      <div class="search">
+        <label class="sr-only" for="q">Buscar tema</label>
+        <input id="q" type="search" placeholder="Buscar por nome ou autor" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="chips" role="group" aria-label="Filtros rápidos">
+        <button class="chip" type="button" data-filter="todos" aria-pressed="true">Todos</button>
+        <button class="chip" type="button" data-filter="animados" aria-pressed="false">Animados</button>
+        <button class="chip" type="button" data-filter="trilha" aria-pressed="false">Com trilha</button>
+        <button class="chip" type="button" data-filter="sem-licenca" aria-pressed="false">Sem licença</button>
+      </div>
+    </nav>
+
+    <main id="out" class="state" aria-live="polite" tabindex="-1">Lendo catálogo&hellip;</main>
+
+    <footer class="foot">
+      <span id="foot-src"></span>
+    </footer>
   </body>
 </html>
