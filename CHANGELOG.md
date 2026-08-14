@@ -1,3 +1,138 @@
+# SwitchU 1.1.0+fork.7
+
+## English
+
+Seventh release of the [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU)
+fork, based on [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+A maintenance release. Everything here came from playing fork.6 on real hardware
+and fixing what got in the way.
+
+### Game dossier
+
+- Games whose entry has no story text no longer fail to open. The dossier read a
+  null field as if it were text, which threw and blanked the whole screen, so a
+  title without a recorded story showed only *Online details are unavailable*.
+  Diablo III: Eternal Collection and Mario Kart 8 Deluxe were the reported cases.
+- Deleting software asks for confirmation again. The dialog was being created
+  behind the dossier: it took the buttons, so the on-screen hints changed, but no
+  card was ever drawn and the delete looked like it was waiting on nothing.
+- When online details really are unavailable, pressing **A** retries instead of
+  leaving the screen stuck until it is closed and reopened.
+- Ports and homebrew no longer load for ever. A search that finished without
+  finding the title fell through to the loading message, so a port sat on
+  *Loading game details* although the service had already answered. Homebrew,
+  forwarders and system applets now skip the lookup altogether instead of
+  spending requests that can only come back empty; the rest of the dossier still
+  opens for them.
+- Synopses stay in the console language. A translation that failed because the
+  daily quota was spent used to be stored for 30 days, so the game stayed in
+  English long after the quota recovered; it is now retried within the hour.
+  Regional variants such as es-MX and pt-PT resolve to their base language
+  instead of being treated as having no translator at all.
+
+### Grid and controls
+
+- **R** now advances the sort order when it is released, and only on a short tap.
+  Holding **R** over a game is how the homebrew override reaches Sphaira, and the
+  grid used to reorder itself under the player's hand during that hold.
+- New installations start with menu music at 15%, sound effects at 25% and a
+  light 5% background blur, the levels people settled on after using the menu on
+  hardware. Grid columns and rows are unchanged.
+
+### Theme catalogue
+
+- The five wallpapers added in fork.6 animate on the site again. Their preview
+  choice lived in a file the catalogue generator rewrites, so it was silently
+  reverted; the generator itself now prefers a browser-playable clip.
+- The catalogue site was rebuilt: larger artwork, search by name or author,
+  filters for animated, soundtrack and unlicensed themes, and a loop meter that
+  tracks each preview's real position. Turning previews off no longer blanks the
+  page, which a missing variable had been doing since the control was added.
+
+### Infrastructure
+
+- The metadata, gallery and catalogue services moved to a single cloud host and
+  no longer depend on a machine at home staying powered.
+- Translation spreads across several models, so one exhausted daily quota no
+  longer means English text for the rest of the day.
+- A rate-limit refusal returns a clean 429. It was crashing into a 500 instead,
+  and a burst of requests could take every game's details down at once.
+
+### Validation
+
+- Tested on console: dossier for the reported titles, delete confirmation, sort
+  on release, holding **R** through to Sphaira, and the new audio defaults.
+
+---
+
+## Português
+
+Sétima versão da fork [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU),
+baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Versão de manutenção. Tudo aqui saiu de usar a fork.6 no console e corrigir o
+que atrapalhava.
+
+### Dossiê do jogo
+
+- Jogos sem texto de história voltam a abrir. O dossiê lia um campo nulo como se
+  fosse texto, o que lançava erro e apagava a tela inteira: um título sem enredo
+  cadastrado mostrava apenas *Os detalhes online não estão disponíveis*. Diablo
+  III: Eternal Collection e Mario Kart 8 Deluxe foram os casos relatados.
+- Apagar software pede confirmação de novo. O diálogo era criado atrás do
+  dossiê: ele recebia os botões, por isso as dicas na tela mudavam, mas nenhum
+  cartão era desenhado e a exclusão parecia travada esperando nada.
+- Quando os detalhes online realmente não estão disponíveis, **A** tenta de
+  novo, em vez de deixar a tela presa até ser fechada e reaberta.
+- Ports e homebrews não ficam mais carregando para sempre. Uma busca que
+  terminava sem encontrar o título caía na mesma mensagem de carregamento, então
+  um port ficava em *Carregando detalhes do jogo* embora o serviço já tivesse
+  respondido. Homebrews, atalhos e applets de sistema agora nem consultam o
+  catálogo, em vez de gastar requisições que só podem voltar vazias; o resto do
+  dossiê continua abrindo para eles.
+- As sinopses ficam no idioma do console. Uma tradução que falhava por a cota
+  diária ter acabado era guardada por 30 dias, então o jogo continuava em inglês
+  muito depois de a cota se recuperar; agora é refeita dentro de uma hora.
+  Variantes regionais como es-MX e pt-PT passam a usar o tradutor do idioma
+  base, em vez de serem tratadas como sem tradutor algum.
+
+### Grade e controles
+
+- O **R** passa a avançar a ordenação na soltura, e somente em toque curto.
+  Segurar **R** sobre um jogo é como o atalho de homebrew alcança o Sphaira, e a
+  grade se reordenava sob a mão do jogador durante esse tempo.
+- Instalações novas começam com música do menu em 15%, efeitos em 25% e um
+  desfoque leve de 5% no fundo, os níveis a que as pessoas chegaram usando o
+  menu no console. Colunas e linhas da grade não mudaram.
+
+### Catálogo de temas
+
+- Os cinco papéis de parede acrescentados na fork.6 voltam a animar no site. A
+  escolha da prévia deles vivia num arquivo que o gerador do catálogo reescreve,
+  então era desfeita em silêncio; agora o próprio gerador prefere um vídeo que o
+  navegador consegue reproduzir.
+- O site do catálogo foi refeito: arte maior, busca por nome ou autor, filtros
+  por animado, com trilha e sem licença, e um medidor que acompanha a posição
+  real de cada prévia. Desligar as prévias não apaga mais a página, coisa que
+  uma variável inexistente vinha causando desde que o controle foi criado.
+
+### Infraestrutura
+
+- Os serviços de metadados, galeria e catálogo passaram para um único servidor
+  em nuvem e não dependem mais de uma máquina em casa continuar ligada.
+- A tradução se distribui entre vários modelos, então uma cota diária esgotada
+  deixa de significar texto em inglês pelo resto do dia.
+- Uma recusa por limite de requisições devolve 429 corretamente. Antes ela
+  quebrava em 500, e uma rajada podia derrubar os detalhes de todos os jogos.
+
+### Validação
+
+- Testado no console: dossiê dos títulos relatados, confirmação de exclusão,
+  ordenação na soltura, segurar **R** até o Sphaira e os novos padrões de áudio.
+
+---
+
 # SwitchU 1.1.0+fork.6
 
 ## English

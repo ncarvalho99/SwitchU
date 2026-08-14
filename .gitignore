@@ -37,6 +37,13 @@ compile_commands.json
 /dist/
 /artifacts/
 
+# The authenticated admin surface of the metadata service. The rest of web/ is
+# published on purpose; this one stays out of the public repository. Its safety
+# does not depend on being hidden -- it is Argon2id, server-side sessions and
+# CSRF -- and it holds no credentials, which live only on the server. Keeping it
+# private simply gives an attacker nothing to read.
+/web/metacritic-proxy/admin_panel.py
+
 # Regenerated frame sources and Python bytecode used while authoring animated
 # theme assets. The committed DDS frames live under romfs/themes instead.
 /fps/
