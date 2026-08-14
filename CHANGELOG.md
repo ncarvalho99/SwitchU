@@ -21,10 +21,11 @@ and fixing what got in the way.
   leaving the screen stuck until it is closed and reopened.
 - Ports and homebrew no longer load for ever. A search that finished without
   finding the title fell through to the loading message, so a port sat on
-  *Loading game details* although the service had already answered. Homebrew,
-  forwarders and system applets now skip the lookup altogether instead of
-  spending requests that can only come back empty; the rest of the dossier still
-  opens for them.
+  *Loading game details* although the service had already answered.
+- **+** on homebrew, forwarders and emulator ports now offers only the action
+  that applies to them, removal, instead of a dossier of empty fields. They have
+  no catalogue entry, no store version, no mods and no cover art, so nothing is
+  requested from the service for them either.
 - Synopses stay in the console language. A translation that failed because the
   daily quota was spent used to be stored for 30 days, so the game stayed in
   English long after the quota recovered; it is now retried within the hour.
@@ -88,9 +89,11 @@ que atrapalhava.
 - Ports e homebrews não ficam mais carregando para sempre. Uma busca que
   terminava sem encontrar o título caía na mesma mensagem de carregamento, então
   um port ficava em *Carregando detalhes do jogo* embora o serviço já tivesse
-  respondido. Homebrews, atalhos e applets de sistema agora nem consultam o
-  catálogo, em vez de gastar requisições que só podem voltar vazias; o resto do
-  dossiê continua abrindo para eles.
+  respondido.
+- O **+** sobre homebrews, atalhos e ports de emulador passa a oferecer apenas a
+  ação que faz sentido para eles, a remoção, em vez de um dossiê de campos
+  vazios. Não têm ficha no catálogo, versão de loja, mods nem capa, então também
+  nada é pedido ao serviço por causa deles.
 - As sinopses ficam no idioma do console. Uma tradução que falhava por a cota
   diária ter acabado era guardada por 30 dias, então o jogo continuava em inglês
   muito depois de a cota se recuperar; agora é refeita dentro de uma hora.

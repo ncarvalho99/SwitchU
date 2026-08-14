@@ -1090,8 +1090,49 @@ void WiiUMenuApp::showIconOptions() {
     const std::uint64_t titleId = entry.titleId;
     const std::string title = entry.title;
 
+    // Homebrew, forwarders and emulator ports have no catalogue entry, no store
+    // version, no mods and no cover art to manage, so the dossier would be a
+    // screen of empty fields. They get the one action that does apply to them.
+    if (!isNativeApplicationId(titleId)) {
+        m_dialogReturnFocus = cur;
+        showNonGameOptions(titleId, title);
+        return;
+    }
+
     m_gameDetailsReturnFocus = cur;
     showGameDetails(titleId, title, icon->texture());
+#endif
+}
+
+void WiiUMenuApp::showNonGameOptions(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    auto& i18n = nxui::I18n::instance();
+    // Same overlay ordering fix the other dialogs carry: the shared dialog is
+    // created before the overlays that can sit above it, so it is moved back to
+    // the end of the tree before being shown.
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show(
+        title,
+        i18n.tr("dialog.non_game_options_body",
+                "Homebrew and ports have no game details, artwork or mods to manage. "
+                "Removing it is the only action available here."),
+        {
+            {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+            {i18n.tr("button.delete", "Delete"), [this, titleId, title]() {
+                 confirmDeleteSoftware(titleId, title);
+             }, false},
+        },
+        0, {});
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
 #endif
 }
 

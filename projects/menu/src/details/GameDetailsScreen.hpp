@@ -67,9 +67,6 @@ protected:
     bool handleCustomNavRight() override;
     std::string currentAccessibilitySummary() const override;
     std::string onlineStatusMessage() const;
-    // Titles the online catalogue cannot hold: homebrew, forwarders and
-    // system applets. Checked before any request is made.
-    static bool hasCatalogueEntry(std::uint64_t titleId);
 
 private:
     enum class ImagePhase { Idle, Loading, Downloaded, Ready, Failed };

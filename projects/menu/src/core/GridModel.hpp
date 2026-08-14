@@ -6,6 +6,17 @@
 #include <utility>
 
 
+// Tells a retail Switch application apart from everything else that can end up
+// on the grid: homebrew, emulator ports installed as forwarders, and system
+// applets. Retail titles are 0x01-prefixed and sit above the range reserved for
+// built-in system titles; forwarders conventionally use the 0x05 prefix.
+// Only retail titles have a catalogue entry, an update, mods or cover art worth
+// showing, so this is what decides whether the dossier is offered at all.
+inline bool isNativeApplicationId(uint64_t titleId) {
+    constexpr uint64_t kFirstApplication = 0x0100000000010000ULL;
+    return (titleId >> 56) == 0x01ULL && titleId >= kFirstApplication;
+}
+
 struct AppEntry {
     std::string id;
     std::string title;

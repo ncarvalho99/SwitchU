@@ -627,6 +627,7 @@
       "details_loading": "Cargando detalles del juego...",
       "details_offline": "Los detalles en línea no están disponibles. Pulsa A para volver a intentarlo.",
       "details_no_online": "Este título no tiene ficha en el catálogo en línea.",
+      "non_game_options_body": "Los homebrew y los ports no tienen detalles de juego, ilustraciones ni mods que gestionar. Eliminar es la única acción disponible aquí.",
       "details_cover_loading": "Cargando portada...",
       "details_version": "Versión",
       "details_mods": "Mods",

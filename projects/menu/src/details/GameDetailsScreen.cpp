@@ -1,6 +1,7 @@
 #include "GameDetailsScreen.hpp"
 
 #include "themeshop/ThemeHttp.hpp"
+#include "core/GridModel.hpp"
 
 #include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/I18n.hpp>
@@ -77,23 +78,12 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
     // facts, while the custom content owns every visible interaction.
     m_tabIndex = 0;
     m_focusArea = FocusArea::Content;
-    // Homebrew, forwarders and system applets have no catalogue entry, so asking
-    // is a request that can only come back empty. The rest of the dossier --
-    // cover, version, mods, artwork, delete -- is still useful for them, so the
-    // screen opens as normal and simply skips the lookup.
-    m_localOnly = !hasCatalogueEntry(m_titleId);
+    // The grid keeps non-retail titles out of this screen entirely, so this is
+    // a guard rather than the usual path: should one ever arrive, it must not
+    // spend a request that can only come back empty.
+    m_localOnly = !isNativeApplicationId(m_titleId);
     if (m_pool && !m_localOnly)
         m_client.load(*m_pool, m_title);
-}
-
-bool GameDetailsScreen::hasCatalogueEntry(std::uint64_t titleId) {
-    // Retail applications are 0x01-prefixed and sit above the system range that
-    // holds applets and built-in titles. Homebrew forwarders conventionally use
-    // the 0x05 prefix. Anything outside the retail range is left to the local
-    // half of the dossier rather than sent to the catalogue.
-    const std::uint64_t prefix = titleId >> 56;
-    const std::uint64_t firstApplication = 0x0100000000010000ULL;
-    return prefix == 0x01ULL && titleId >= firstApplication;
 }
 
 void GameDetailsScreen::buildTabs() {
