@@ -627,6 +627,7 @@
       "details_loading": "Loading game details...",
       "details_offline": "Online details are unavailable. Press A to try again.",
       "details_no_online": "This title has no entry in the online catalogue.",
+      "non_game_options_body": "Homebrew and ports have no game details, artwork or mods to manage. Removing it is the only action available here.",
       "details_cover_loading": "Loading cover...",
       "details_version": "Version",
       "details_mods": "Mods",

@@ -627,6 +627,7 @@
       "details_loading": "Caricamento dettagli del gioco...",
       "details_offline": "I dettagli online non sono disponibili. Premi A per riprovare.",
       "details_no_online": "Questo titolo non ha una scheda nel catalogo online.",
+      "non_game_options_body": "Gli homebrew e i port non hanno dettagli di gioco, artwork o mod da gestire. Rimuoverlo è l'unica azione disponibile qui.",
       "details_cover_loading": "Caricamento copertina...",
       "details_version": "Versione",
       "details_mods": "Mod",

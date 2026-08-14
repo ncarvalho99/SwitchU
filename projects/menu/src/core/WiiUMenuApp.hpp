@@ -95,6 +95,9 @@ private:
     void cycleSortMode();
     std::string sortModeLabel() const;
     void showIconOptions();
+    // Homebrew, forwarders and ports: the dossier has nothing to show for them,
+    // so + offers the single action that applies.
+    void showNonGameOptions(std::uint64_t titleId, const std::string& title);
     void showGameOptionsMenu(std::uint64_t titleId, const std::string& title);
     void showGameCustomizeMenu(std::uint64_t titleId, const std::string& title);
     void showGameArtworkStatus(std::uint64_t titleId, const std::string& title);

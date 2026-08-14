@@ -627,6 +627,7 @@
       "details_loading": "Chargement des détails du jeu...",
       "details_offline": "Les détails en ligne ne sont pas disponibles. Appuyez sur A pour réessayer.",
       "details_no_online": "Ce titre n'a pas de fiche dans le catalogue en ligne.",
+      "non_game_options_body": "Les homebrews et les portages n'ont ni détails de jeu, ni illustrations, ni mods à gérer. Supprimer est la seule action disponible ici.",
       "details_cover_loading": "Chargement de la jaquette...",
       "details_version": "Version",
       "details_mods": "Mods",
