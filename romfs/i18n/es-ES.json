@@ -625,7 +625,7 @@
       "gallery_restore": "Restaurar predeterminado",
       "details_title": "Detalles del juego",
       "details_loading": "Cargando detalles del juego...",
-      "details_offline": "Los detalles en línea no están disponibles.",
+      "details_offline": "Los detalles en línea no están disponibles. Pulsa A para volver a intentarlo.",
       "details_cover_loading": "Cargando portada...",
       "details_version": "Versión",
       "details_mods": "Mods",

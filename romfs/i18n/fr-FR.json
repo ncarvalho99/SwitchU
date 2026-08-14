@@ -625,7 +625,7 @@
       "gallery_restore": "Rétablir par défaut",
       "details_title": "Détails du jeu",
       "details_loading": "Chargement des détails du jeu...",
-      "details_offline": "Les détails en ligne ne sont pas disponibles.",
+      "details_offline": "Les détails en ligne ne sont pas disponibles. Appuyez sur A pour réessayer.",
       "details_cover_loading": "Chargement de la jaquette...",
       "details_version": "Version",
       "details_mods": "Mods",

@@ -2106,6 +2106,8 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_plusExitPendingTimer = 0.f;
     }
 
+    handleSortShortcutRelease(dt);
+
     if (!app().input().isDown(nxui::Button::Plus) || !app().input().isDown(nxui::Button::Minus))
         m_accessibilityToggleComboHeld = false;
 

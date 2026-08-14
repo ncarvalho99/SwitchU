@@ -625,7 +625,7 @@
       "gallery_restore": "Восстановить стандарт",
       "details_title": "Сведения об игре",
       "details_loading": "Загрузка сведений об игре...",
-      "details_offline": "Сведения из сети недоступны.",
+      "details_offline": "Сведения из сети недоступны. Нажмите A, чтобы повторить попытку.",
       "details_cover_loading": "Загрузка обложки...",
       "details_version": "Версия",
       "details_mods": "Моды",

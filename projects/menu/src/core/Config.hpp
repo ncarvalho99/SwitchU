@@ -7,8 +7,12 @@
 
 struct AppConfig {
     bool  musicEnabled = true;
-    float musicVolume  = 0.4f;
-    float sfxVolume    = 0.7f;
+    // Levels asked for after people used the menu on real hardware: the music
+    // sits under the game audio rather than competing with it, and the effects
+    // stay audible above it. Both were louder before and were turned down by
+    // nearly everyone who was asked.
+    float musicVolume  = 0.15f;
+    float sfxVolume    = 0.25f;
     int   gridColumns  = 5;
     int   gridRows     = 3;
     std::string uiLanguageOverride = "auto";
@@ -23,13 +27,13 @@ struct AppConfig {
     bool  accessibilitySpeakPosition = true;
     int   accessibilitySpeechRate = 190;
 
-    // Softens the wallpaper and the shapes drifting over it. Barely on: enough
-    // to take the hard edge off the shapes without anyone noticing a blur, and
-    // the value asked for after people looked at it on real hardware.
-    // Zero, nao 0.05: o desfoque custa meia resolucao do papel de parede, e
-    // 0.05 dava um borrao invisivel em troca disso. Quem quiser desfoque pede
-    // nas opcoes e sabe o que esta trocando.
-    float backgroundBlur = 0.f;
+    // Softens the wallpaper and the shapes drifting over it.
+    // This was zero on the argument that the blur costs half the wallpaper's
+    // resolution and 0.05 bought an invisible smudge in return. That argument
+    // was made before the blur curve was reworked: the threshold that swallowed
+    // the first 15% is gone and the low end is now a gentle, visible softening.
+    // Users looked at the result on hardware and asked for it on by default.
+    float backgroundBlur = 0.05f;
 
     // How sharply the scene reads through the glass panels. Capturing that
     // scene at full resolution made it sharper than it had ever been, which
