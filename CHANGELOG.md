@@ -1,3 +1,103 @@
+# SwitchU 1.1.0+fork.6
+
+## English
+
+Sixth release of the [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU)
+fork, based on [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+### Game options redesigned as a dossier
+
+- Pressing **+** on a game or homebrew now opens its software dossier directly.
+  It combines the former options with game-specific information, artwork and mod
+  management in one controller-friendly screen.
+- The dossier shows the active icon, version, installed-mod count, local playtime,
+  publisher, release date, genres, themes, game modes and Time to Beat estimates
+  for quick, main-story and completionist playthroughs.
+- IGDB metadata adds translated synopsis and story, publishers, gameplay captures,
+  cover art and duration estimates. Metascore and user score are served through
+  the SwitchU metadata service; catalogue responses are cached and never include
+  console profile data.
+- SteamGridDB gallery integration lets players browse covers and backgrounds,
+  filter artwork by dimensions, expand previews, apply artwork, inspect the active
+  artwork and restore the default icon. Non-matching cover ratios use a blurred
+  supporting fill rather than stretching or cropping the game art.
+- Full-screen gallery, artwork, restore and mods views now return with **B** to
+  the dossier instead of closing to the home screen. Screenshot navigation and
+  selection bounds were also corrected.
+
+### Connectivity, themes and polish
+
+- Added a real **Airplane Mode** toggle under Internet. It synchronizes Wi-Fi and
+  other wireless state, correctly refreshes after returning to the tab, and is
+  translated in every bundled language.
+- Opening the system network applet no longer waits for an in-flight catalogue or
+  gallery HTTP request to time out; pending small requests are cancelled safely
+  during the handoff.
+- Default Dark and Default Light return to the author's lightweight default
+  themes, with accurate preview thumbnails. Theme browsing remains available from
+  the catalogue, and the background-blur control now responds from its first step.
+- The mod manager has a clean, independent card layout and system-style toggles
+  in place of Enabled/Disabled chips. It keeps direct enable, disable and remove
+  actions with restart guidance.
+- The entire new interface, labels and notifications are localized for pt-BR,
+  en-US, es-ES, fr-FR, de-DE, it-IT, nl-NL and ru-RU.
+
+### Validation
+
+- The sysmodule release payload was tested successfully on console, including the
+  redesigned game options and artwork flow.
+
+---
+
+## Português
+
+Sexta versão da fork [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU),
+baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+### Opções do jogo redesenhadas como dossiê
+
+- Pressionar **+** sobre um jogo ou homebrew agora abre diretamente o dossiê do
+  software. Ele reúne as antigas opções, informações específicas, artes e
+  gerenciamento de mods em uma única tela navegável pelo controle.
+- O dossiê mostra ícone ativo, versão, quantidade de mods, tempo local jogado,
+  publicadoras, lançamento, gêneros, temas, modos de jogo e estimativas do
+  Time to Beat para jogo rápido, história principal e completo.
+- Os metadados do IGDB acrescentam sinopse e história traduzidas, publicadoras,
+  capturas de gameplay, capa e durações. Metascore e nota de usuários são
+  fornecidos pelo serviço de metadados do SwitchU; as respostas ficam em cache e
+  não incluem dados de perfil do console.
+- A galeria SteamGridDB permite navegar por capas e fundos, filtrar as artes por
+  dimensões, ampliar a prévia, aplicar a arte, consultar a arte ativa e restaurar
+  o ícone padrão. Capas em proporção diferente recebem preenchimento desfocado,
+  sem esticar ou recortar a arte do jogo.
+- As telas em tela cheia de galeria, arte ativa, restauração e mods agora voltam
+  com **B** para o dossiê, em vez de fechar para a tela inicial. A navegação de
+  capturas e os limites da seleção também foram corrigidos.
+
+### Conexão, temas e acabamento
+
+- Adicionado um toggle real de **Modo avião** em Internet. Ele sincroniza o estado
+  do Wi-Fi e das demais conexões sem fio, atualiza corretamente ao retornar à aba
+  e foi traduzido para todos os idiomas incluídos.
+- Abrir o applet de rede do sistema não espera mais uma consulta de catálogo ou
+  galeria atingir timeout: as requisições pequenas pendentes são canceladas com
+  segurança durante a transição.
+- Default Dark e Default Light voltam a ser os temas padrão leves do autor, com
+  miniaturas fiéis. A navegação de temas continua disponível no catálogo, e o
+  controle de desfoque do fundo passou a responder desde o primeiro nível.
+- O gerenciador de mods recebeu cards independentes sem linhas sobrepostas e
+  toggles no estilo do sistema no lugar de botões Habilitado/Desabilitado. As
+  ações de ativar, desativar e remover continuam diretas, com aviso de reinício.
+- Toda a interface, rótulos e notificações novos foi localizada para pt-BR,
+  en-US, es-ES, fr-FR, de-DE, it-IT, nl-NL e ru-RU.
+
+### Validação
+
+- O payload sysmodule de release foi testado com sucesso no console, incluindo
+  as opções redesenhadas de jogo e o fluxo de artes.
+
+---
+
 # SwitchU 1.1.0+fork.5
 
 ## English
