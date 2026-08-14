@@ -40,6 +40,7 @@ compile_commands.json
 # theme assets. The committed DDS frames live under romfs/themes instead.
 /fps/
 tools/__pycache__/
+__pycache__/
 
 # Local hbloader experiments; the project does not consume these binaries.
 /lib/switchu-hbloader/
