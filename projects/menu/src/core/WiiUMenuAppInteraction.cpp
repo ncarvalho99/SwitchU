@@ -719,6 +719,42 @@ void WiiUMenuApp::toggleAccessibilitySpeech() {
     m_config.save();
 }
 
+void WiiUMenuApp::handleSortShortcutRelease(float dt) {
+    auto& input = app().input();
+    if (input.isDown(nxui::Button::R)) {
+        m_sortShortcutArmed = true;
+        m_sortShortcutHeld = 0.f;
+    } else if (m_sortShortcutArmed && input.isHeld(nxui::Button::R)) {
+        m_sortShortcutHeld += dt;
+    }
+    if (!input.isUp(nxui::Button::R))
+        return;
+    const bool armed = m_sortShortcutArmed;
+    const float held = m_sortShortcutHeld;
+    m_sortShortcutArmed = false;
+    m_sortShortcutHeld = 0.f;
+    if (!armed)
+        return;
+    // Only a tap sorts. Holding R is how the homebrew override reaches Sphaira,
+    // and a player doing that is not asking for the grid to be reordered when
+    // they let go -- which is what made the shortcut feel like it fired twice.
+    if (held > kSortShortcutTapSeconds)
+        return;
+    // Anything with its own R meaning, or any overlay covering the grid, keeps
+    // the shortcut out of the way: the sort belongs to the grid alone.
+    if ((m_dialog && m_dialog->isActive()) ||
+        (m_themeShop && m_themeShop->isActive()) ||
+        (m_gameGallery && m_gameGallery->isActive()) ||
+        (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameDetails && m_gameDetails->isActive()) ||
+        (m_settings && m_settings->isActive()) ||
+        (m_userSelect && m_userSelect->isActive()) ||
+        m_editMode) {
+        return;
+    }
+    cycleSortMode();
+}
+
 bool WiiUMenuApp::handleAccessibilityToggleCombo() {
     auto& input = app().input();
     if (!input.isDown(nxui::Button::Plus) || !input.isDown(nxui::Button::Minus))
@@ -739,9 +775,11 @@ void WiiUMenuApp::wireGlobalActions() {
         m_accessibility.repeatLastAnnouncement();
     });
 
-    root.addAction(static_cast<uint64_t>(nxui::Button::R), [this]() {
-        cycleSortMode();
-    });
+    // R is deliberately not wired as a press action. Holding it over a game is
+    // how the homebrew override reaches Sphaira, and reordering the grid on the
+    // initial press moved the tiles out from under the player mid-hold. The
+    // sort now advances on release instead; see handleSortShortcutRelease.
+    // The hint panel still advertises R, which is drawn from sortModeLabel().
 
     root.addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() {
         int p = m_grid->currentPage() - 1;
@@ -1511,6 +1549,17 @@ void WiiUMenuApp::syncGameArtworkSave() {
 
 void WiiUMenuApp::confirmDeleteSoftware(std::uint64_t titleId, const std::string& title) {
 #ifdef SWITCHU_MENU
+    if (!m_dialog)
+        return;
+    // Reached from the dossier, which is added after the shared dialog in the
+    // overlay tree. Without moving the dialog back to the end it takes focus
+    // but is drawn behind the dossier: the A/B hints change and no card
+    // appears, so a delete looks like it is waiting on nothing. Same fix the
+    // artwork dialogs already carry.
+    if (m_overlayLayer) {
+        m_overlayLayer->removeChild(m_dialog.get());
+        m_overlayLayer->addChild(m_dialog);
+    }
     auto& i18n = nxui::I18n::instance();
     // Says what goes and what does not. Save data survives a delete on this
     // console, and somebody about to remove a game they intend to reinstall

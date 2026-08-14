@@ -33,6 +33,17 @@ bool isHttpsUrl(const std::string& value) {
     return value.rfind("https://", 0) == 0 && value.size() <= 2048;
 }
 
+std::string readString(const nlohmann::json& json, const char* key,
+                       const std::string& fallback = std::string()) {
+    // The service sends an explicit null for fields a game simply does not
+    // have. json::value() only falls back when the key is absent, so a present
+    // null would throw and fail the whole dossier instead of leaving one field
+    // empty.
+    const auto it = json.find(key);
+    if (it == json.end() || !it->is_string()) return fallback;
+    return it->get<std::string>();
+}
+
 std::vector<std::string> readStrings(const nlohmann::json& json, const char* key) {
     std::vector<std::string> result;
     const auto it = json.find(key);
@@ -95,10 +106,10 @@ GameMetadataClient::Snapshot GameMetadataClient::fetch(std::string title, std::u
     result.phase = Phase::Ready;
     result.revision = revision;
     result.found = metadata.value("found", false);
-    result.title = metadata.value("title", title);
-    result.summary = metadata.value("summary", std::string());
-    result.storyline = metadata.value("storyline", std::string());
-    result.releaseDate = metadata.value("releaseDate", std::string());
+    result.title = readString(metadata, "title", title);
+    result.summary = readString(metadata, "summary");
+    result.storyline = readString(metadata, "storyline");
+    result.releaseDate = readString(metadata, "releaseDate");
     result.developers = readStrings(metadata, "developers");
     result.publishers = readStrings(metadata, "publishers");
     result.genres = readStrings(metadata, "genres");

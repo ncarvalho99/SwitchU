@@ -151,6 +151,10 @@ private:
     void wireGlobalActions();
     void toggleAccessibilitySpeech();
     bool handleAccessibilityToggleCombo();
+    void handleSortShortcutRelease(float dt);
+    // Longer than a deliberate tap, far shorter than the hold used to reach
+    // Sphaira, so the two gestures never get confused for one another.
+    static constexpr float kSortShortcutTapSeconds = 0.35f;
     bool isCurrentFocusableWidget(nxui::Widget* w) const;
     std::string accessibilityPositionFor(nxui::Widget* w) const;
     void createSettings();
@@ -338,6 +342,10 @@ private:
     bool  m_tutorialStartupFade = false;
     bool m_hintPanelInitialized = false;
     bool m_accessibilityToggleComboHeld = false;
+    // Set while R is held so a release only sorts when the press began here,
+    // and not when R was already down on the way back from another screen.
+    bool m_sortShortcutArmed = false;
+    float m_sortShortcutHeld = 0.f;
     bool m_plusExitPending = false;
     float m_plusExitPendingTimer = 0.f;
     nxui::AnimatedFloat m_hintPanelW{0.f};

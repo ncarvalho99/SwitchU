@@ -270,6 +270,13 @@ bool GameDetailsScreen::handleCustomPressA() {
     }
     if (m_focusZone == FocusZone::Summary)
         return true;
+    if (m_snapshot.phase == GameMetadataClient::Phase::Failed) {
+        // A one-off network/upstream hiccup should not require closing and
+        // reopening the whole screen just to ask the server again.
+        if (m_pool) m_client.load(*m_pool, m_title);
+        if (m_activateSfxCb) m_activateSfxCb();
+        return true;
+    }
     if (m_snapshot.phase != GameMetadataClient::Phase::Ready || m_snapshot.screenshots.empty())
         return true;
     m_imageExpanded = !m_imageExpanded;

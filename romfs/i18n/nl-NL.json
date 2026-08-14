@@ -625,7 +625,7 @@
       "gallery_restore": "Standaard herstellen",
       "details_title": "Speldetails",
       "details_loading": "Speldetails laden...",
-      "details_offline": "Online details zijn niet beschikbaar.",
+      "details_offline": "Online details zijn niet beschikbaar. Druk op A om het opnieuw te proberen.",
       "details_cover_loading": "Cover laden...",
       "details_version": "Versie",
       "details_mods": "Mods",
