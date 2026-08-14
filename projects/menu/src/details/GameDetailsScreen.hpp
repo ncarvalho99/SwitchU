@@ -66,6 +66,10 @@ protected:
     bool handleCustomNavLeft() override;
     bool handleCustomNavRight() override;
     std::string currentAccessibilitySummary() const override;
+    std::string onlineStatusMessage() const;
+    // Titles the online catalogue cannot hold: homebrew, forwarders and
+    // system applets. Checked before any request is made.
+    static bool hasCatalogueEntry(std::uint64_t titleId);
 
 private:
     enum class ImagePhase { Idle, Loading, Downloaded, Ready, Failed };
@@ -115,6 +119,7 @@ private:
     int m_summaryScrollLine = 0;
     FocusZone m_focusZone = FocusZone::Screenshots;
     bool m_imageExpanded = false;
+    bool m_localOnly = false;
     ActionCb m_openGalleryCb;
     ActionCb m_showArtworkCb;
     ActionCb m_restoreArtworkCb;

@@ -626,6 +626,7 @@
       "details_title": "Détails du jeu",
       "details_loading": "Chargement des détails du jeu...",
       "details_offline": "Les détails en ligne ne sont pas disponibles. Appuyez sur A pour réessayer.",
+      "details_no_online": "Ce titre n'a pas de fiche dans le catalogue en ligne.",
       "details_cover_loading": "Chargement de la jaquette...",
       "details_version": "Version",
       "details_mods": "Mods",

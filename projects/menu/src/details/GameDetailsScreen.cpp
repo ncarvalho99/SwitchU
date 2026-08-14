@@ -77,8 +77,23 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
     // facts, while the custom content owns every visible interaction.
     m_tabIndex = 0;
     m_focusArea = FocusArea::Content;
-    if (m_pool)
+    // Homebrew, forwarders and system applets have no catalogue entry, so asking
+    // is a request that can only come back empty. The rest of the dossier --
+    // cover, version, mods, artwork, delete -- is still useful for them, so the
+    // screen opens as normal and simply skips the lookup.
+    m_localOnly = !hasCatalogueEntry(m_titleId);
+    if (m_pool && !m_localOnly)
         m_client.load(*m_pool, m_title);
+}
+
+bool GameDetailsScreen::hasCatalogueEntry(std::uint64_t titleId) {
+    // Retail applications are 0x01-prefixed and sit above the system range that
+    // holds applets and built-in titles. Homebrew forwarders conventionally use
+    // the 0x05 prefix. Anything outside the retail range is left to the local
+    // half of the dossier rather than sent to the catalogue.
+    const std::uint64_t prefix = titleId >> 56;
+    const std::uint64_t firstApplication = 0x0100000000010000ULL;
+    return prefix == 0x01ULL && titleId >= firstApplication;
 }
 
 void GameDetailsScreen::buildTabs() {
@@ -270,9 +285,10 @@ bool GameDetailsScreen::handleCustomPressA() {
     }
     if (m_focusZone == FocusZone::Summary)
         return true;
-    if (m_snapshot.phase == GameMetadataClient::Phase::Failed) {
-        // A one-off network/upstream hiccup should not require closing and
-        // reopening the whole screen just to ask the server again.
+    // Only a network failure is worth asking about again. A title the catalogue
+    // does not have stays absent, and the service remembers that answer for a
+    // day, so retrying it would spend a request to be told the same thing.
+    if (!m_localOnly && m_snapshot.phase == GameMetadataClient::Phase::Failed) {
         if (m_pool) m_client.load(*m_pool, m_title);
         if (m_activateSfxCb) m_activateSfxCb();
         return true;
@@ -383,16 +399,26 @@ void GameDetailsScreen::activateAction() {
     }
 }
 
+std::string GameDetailsScreen::onlineStatusMessage() const {
+    auto& i18n = nxui::I18n::instance();
+    // A finished search that found nothing used to fall through to the loading
+    // text, so a port or homebrew appeared to load for ever. Each outcome now
+    // says what actually happened.
+    if (m_localOnly || (m_snapshot.phase == GameMetadataClient::Phase::Ready && !m_snapshot.found))
+        return i18n.tr("dialog.details_no_online", "This title has no entry in the online catalogue.");
+    if (m_snapshot.phase == GameMetadataClient::Phase::Failed)
+        return i18n.tr("dialog.details_offline", "Online details are unavailable.");
+    return i18n.tr("dialog.details_loading", "Loading game details...");
+}
+
 std::string GameDetailsScreen::currentAccessibilitySummary() const {
     auto& i18n = nxui::I18n::instance();
     if (m_imageExpanded)
         return i18n.tr("dialog.details_image_expanded", "Expanded gameplay image. Press B to return.");
-    if (m_snapshot.phase == GameMetadataClient::Phase::Loading)
-        return i18n.tr("dialog.details_loading", "Loading game details...");
-    if (m_snapshot.phase == GameMetadataClient::Phase::Failed)
-        return i18n.tr("dialog.details_offline", "Online details are unavailable.");
+    if (m_localOnly || m_snapshot.phase != GameMetadataClient::Phase::Ready)
+        return m_title + ". " + onlineStatusMessage();
     if (m_snapshot.screenshots.empty())
-        return m_title;
+        return m_title + ". " + onlineStatusMessage();
     if (m_focusZone == FocusZone::Actions)
         return i18n.tr("dialog.details_actions", "Left and right to select gameplay art. A to expand. B to return.");
     if (m_focusZone == FocusZone::Summary)
@@ -537,10 +563,8 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
         }
     } else {
         ren.drawRoundedRect(hero, m_theme->panelBase.withAlpha(0.12f * opacity), 15.f);
-        const std::string message = m_snapshot.phase == GameMetadataClient::Phase::Failed
-            ? i18n.tr("dialog.details_offline", "Online details are unavailable.")
-            : i18n.tr("dialog.details_loading", "Loading game details...");
-        ren.drawText(message, {hero.x + 26.f, hero.y + hero.height * 0.48f}, m_font, primary, 0.88f);
+        ren.drawText(onlineStatusMessage(), {hero.x + 26.f, hero.y + hero.height * 0.48f},
+                     m_font, primary, 0.88f);
     }
 
     // Compact catalogue facts live in a two-line ribbon between the gameplay
