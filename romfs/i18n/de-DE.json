@@ -626,6 +626,7 @@
       "details_title": "Spieldetails",
       "details_loading": "Spieldetails werden geladen...",
       "details_offline": "Online-Details sind nicht verfügbar. Drücke A, um es erneut zu versuchen.",
+      "details_no_online": "Für diesen Titel gibt es keinen Eintrag im Online-Katalog.",
       "details_cover_loading": "Cover wird geladen...",
       "details_version": "Version",
       "details_mods": "Mods",
