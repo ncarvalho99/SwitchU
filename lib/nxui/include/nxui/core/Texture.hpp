@@ -38,9 +38,7 @@ public:
     }
     Texture& operator=(Texture&& o) noexcept {
         if (this != &o) {
-            releaseSlot();
-            if (m_gpu && m_mem && m_allocSize > 0)
-                m_gpu->freeImageMemory(m_allocSize);
+            retireGpuResources();
             m_mem   = nullptr;
             m_image = o.m_image;
             m_mem   = static_cast<dk::MemBlock&&>(o.m_mem);
@@ -123,6 +121,11 @@ public:
 
 private:
     void releaseSlot();
+
+    // Gives the descriptor slot and the image memory back, but only once the
+    // GPU has finished with them. Every path that stops owning a live texture
+    // goes through here.
+    void retireGpuResources();
 
 #ifdef NXUI_BACKEND_DEKO3D
     // Shared by every format: allocation, budget accounting and descriptor
