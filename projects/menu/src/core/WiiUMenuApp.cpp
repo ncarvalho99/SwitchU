@@ -509,6 +509,7 @@ void WiiUMenuApp::buildUserAvatarBar() {
                 i18n.tr("userselect.add_user", "Add user"));
             // Without this the dialog draws but no button reaches it, which is
             // how it came up touch-only.
+            raiseOverlay(m_userSelect);
             focusManager().setFocus(m_userSelect.get());
 #endif
         });
@@ -1128,6 +1129,12 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
                 if (usersLoaded)
                     m_audio.playSfx(Sfx::ModalShow);
             }
+            // The picker joins the overlay tree at startup, while the dossier,
+            // gallery and mods screens are created on demand and land after it.
+            // Once any of those exists it covers the picker, which then takes
+            // focus without ever being drawn: the grid appears frozen under a
+            // menu nobody can see. Move it back to the end before showing.
+            raiseOverlay(m_userSelect);
             m_userSelect->showUserSelect([startLaunch](AccountUid uid) { startLaunch(uid); });
             focusManager().setFocus(m_userSelect.get());
         }
@@ -1971,6 +1978,9 @@ void WiiUMenuApp::onUpdate(float dt) {
         if (m_deferredBluetoothInitFrames == 0) {
             bluetooth::Initialize();
             DebugLog::log("[init] Bluetooth manager initialized (deferred)");
+            // Deferred with the rest of the network-dependent startup so the
+            // grid is already on screen before anything reaches for the wire.
+            startUpdateCheck(false);
         }
     }
 
@@ -2107,6 +2117,8 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 
     handleSortShortcutRelease(dt);
+    syncUpdateCheck();
+    syncUpdateDownload();
 
     if (!app().input().isDown(nxui::Button::Plus) || !app().input().isDown(nxui::Button::Minus))
         m_accessibilityToggleComboHeld = false;

@@ -867,6 +867,7 @@ void WiiUMenuApp::startThemePackageTransfer(const ThemeCatalogClient::Entry& ent
         m_themeShop->setPackageTransferState(shared->state, shared->themeId, shared->installMode);
     if (m_progressDialog) {
         m_progressDialog->setTheme(&m_theme);
+        raiseOverlay(m_progressDialog);
         m_progressDialog->show(i18n.tr("themeshop.transfer.dialog_title", "Downloading Theme"),
                                preparingLabel,
                                -1.f);

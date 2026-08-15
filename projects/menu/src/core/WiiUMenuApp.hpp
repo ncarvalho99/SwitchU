@@ -25,6 +25,7 @@
 #include "themeshop/ThemeShopScreen.hpp"
 #include "gallery/GameGalleryScreen.hpp"
 #include "details/GameDetailsScreen.hpp"
+#include "update/UpdateClient.hpp"
 #include "mods/GameModsScreen.hpp"
 #include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
@@ -147,6 +148,18 @@ private:
     int findTitleIndex(uint64_t titleId) const;
     bool focusTitle(uint64_t titleId);
     void markSuspendedIcon(uint64_t titleId);
+    // Overlays created at startup sit below the dossier, gallery and mods
+    // screens, which are built on demand and appended after them. One of those
+    // early overlays then takes focus without being drawn, and the grid looks
+    // frozen under a menu nobody can see. Anything shown on top must be moved
+    // to the end of the layer first; this is the one place that does it.
+    void raiseOverlay(const std::shared_ptr<nxui::Widget>& overlay);
+    // Asks GitHub for the newest release at most once a day, then offers it.
+    void startUpdateCheck(bool forced);
+    void syncUpdateCheck();
+    void offerUpdate(const update::UpdateClient::Release& release);
+    void startUpdateDownload(const update::UpdateClient::Release& release);
+    void syncUpdateDownload();
     void closeActiveOverlays();
     void handleTouch();
     std::shared_ptr<GlossyIcon> makeIcon(const AppEntry& entry);
@@ -347,6 +360,12 @@ private:
     bool m_accessibilityToggleComboHeld = false;
     // Set while R is held so a release only sorts when the press began here,
     // and not when R was already down on the way back from another screen.
+    update::UpdateClient m_updateClient;
+    std::uint64_t m_updateSeenRevision = 0;
+    bool m_updateOffered = false;
+    struct UpdateDownload;
+    std::shared_ptr<UpdateDownload> m_updateDownload;
+    std::future<void> m_updateDownloadFuture;
     bool m_sortShortcutArmed = false;
     float m_sortShortcutHeld = 0.f;
     bool m_plusExitPending = false;
