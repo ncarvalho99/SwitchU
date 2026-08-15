@@ -15,7 +15,10 @@ class Renderer;
 class GameArtworkBackdrop final : public nxui::Widget {
 public:
     bool setArtwork(nxui::GpuDevice& gpu, nxui::Renderer& ren, const std::string& path);
-    void clearArtwork();
+    // Takes the device because releasing the outgoing texture has to wait for
+    // the frame still sampling it. Focus moves call this on every step across
+    // the grid, so the release cannot be left to chance.
+    void clearArtwork(nxui::GpuDevice* gpu = nullptr);
     const std::string& artworkPath() const { return m_path; }
 
 protected:
