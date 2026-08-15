@@ -245,6 +245,12 @@ void TutorialActivity::buildUi() {
     bgConfig.wobble = 16.f;
     bgConfig.opacity = 1.f;
     m_background->setConfig(bgConfig);
+    // The same gentle softening the menu itself uses by default. The tutorial
+    // built its background by hand and never set this, so it was the one screen
+    // in the launcher with the shapes at full sharpness competing with the text
+    // panel over them -- and it is the first screen anyone sees. Asked for by a
+    // player who noticed exactly that.
+    m_background->setBlurStrength(AppConfig{}.backgroundBlur);
     rootBox().addChild(m_background);
 
     m_progressTrack = std::make_shared<nxui::GlassPanel>();
