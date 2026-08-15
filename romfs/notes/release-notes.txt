@@ -1,29 +1,33 @@
 
-Updating from the launcher
-- SwitchU has an Update tab, below Options. It shows the installed version, what the last check found, and what changed -- the notes for the installed build ship with it, so the tab answers before it has spoken to anyone.
-- The launcher checks GitHub for a newer release once a day, and there is a button to check immediately, both in the Update tab and under Settings, About. A check you asked for always answers, including when nothing changed; the daily one stays quiet unless there is news.
-- Accepting an update downloads it, checks it against the size the release published, inspects every path it carries and asks you to restart. The files are put in place by the daemon at the next boot, before the menu exists, because a running menu cannot replace the font and binaries it is holding open. That first boot takes around half a minute longer than usual while 466 files are unpacked; it is a one-time cost per update.
-- Nothing is overwritten in place. Each file is written beside its destination and swapped in at the end, so a file that cannot be replaced is left exactly as it was rather than destroyed. An update that fails is retried at the next two boots and then abandoned, so it can never keep the console from starting.
-- Release notes scroll with up and down, so long changelogs are read rather than truncated.
+Changing theme could kill the launcher
+- Switching between the default dark and light themes could fill the screen with colour noise and drop the console back to a relaunch. Reported by a player who hit it every time.
+- A texture handed its descriptor slot and its memory back the instant it was replaced, without waiting for the GPU. The slot returned to the free list, the next texture claimed it, and the frame already in flight sampled an image whose memory was gone. Changing theme re-primes every installed preview while the frame is being drawn, which is why that screen was the one that died.
+- Both figures were checked against the reporter's card first: his theme files were intact and the right size. Nothing about the crash was local to him except the timing.
+- Image dimensions are now also refused before they reach the graphics driver, which answers a layout it cannot compute by killing the process rather than returning an error.
 
-Two ways the menu could be lost
-- Moving the cursor across a game with custom artwork could end the menu and send you back to a relaunch. Its background texture was freed while the frame still being drawn was reading it, and the focus path does that on every step across the grid.
-- Applying a background left the launcher stuck on the game icon, escapable only with HOME. The user picker had taken the buttons while being drawn behind the dossier, so the grid sat under a menu that was never visible.
+What a theme costs
+- Each animated theme shows its download size at the end of the author's line.
+- The top of the catalogue tab summarises the whole repository: how many themes it holds, how much they are to download, and how much they occupy once unpacked. The two are far apart -- the frames compress hard -- and the number that matters when a card is filling up is the second one.
+- Both figures also appear on a theme's detail screen, where the decision to install is actually made.
+- The totals are counted from the catalogue as it is read, so a theme published later is included without anything being edited by hand.
 
-Notes
-- An earlier build of this release was withdrawn: its installer reused the theme package extractor, which accepts media and text and would have refused 392 of the 466 files a launcher build contains, starting with the menu binary itself. The extractor now takes an explicit policy, and an update must additionally prove that every path it carries stays inside atmosphere/ and switch/ -- it is unpacked at the root of a card that also holds the bootloader.
+Smaller things
+- The tutorial's background gets the same gentle blur the menu uses by default. It was the one screen in the launcher rendering its background at full sharpness behind the text panel, and it is the first screen anyone sees. Suggested by a player who noticed exactly that.
+- Settings are written beside the configuration file and swapped in, rather than over it. A launcher that dies mid-write used to leave a truncated file that failed to parse at the next boot, resetting every preference to its default; the previous copy is now kept and read if the current one cannot be.
 --pt-BR--
 
-Atualizar pelo launcher
-- O SwitchU ganhou a aba Atualização, abaixo de Opções. Ela mostra a versão instalada, o que a última verificação encontrou e o que mudou — as notas da versão instalada vêm junto com o build, então a aba responde antes mesmo de falar com alguém.
-- O launcher consulta o GitHub uma vez por dia, e há um botão para verificar na hora, tanto na aba quanto em Configurações, Sobre. Uma verificação que você pede sempre responde, inclusive quando nada mudou; a diária fica calada a menos que haja novidade.
-- Aceitar a atualização baixa o pacote, confere com o tamanho que a release publicou, inspeciona todos os caminhos que ele carrega e pede o reinício. Os arquivos são postos no lugar pelo daemon no boot seguinte, antes de o menu existir, porque um menu em execução não consegue substituir a fonte e os binários que mantém abertos. Esse primeiro boot demora cerca de meio minuto a mais enquanto 466 arquivos são descompactados; é um custo único por atualização.
-- Nada é sobrescrito no lugar. Cada arquivo é gravado ao lado do destino e trocado no final, então um arquivo que não puder ser substituído fica exatamente como estava, em vez de ser destruído. Uma atualização que falhe é tentada nos dois boots seguintes e então abandonada, de modo que nunca pode impedir o console de iniciar.
-- As notas de versão rolam com cima e baixo, então um changelog longo é lido, e não cortado.
+Trocar de tema podia matar o launcher
+- Alternar entre os temas padrão escuro e claro podia encher a tela de ruído colorido e devolver o console a um relançamento. Relatado por um usuário que reproduzia sempre.
+- Uma textura devolvia o slot de descritor e a memória no instante em que era substituída, sem esperar a GPU. O slot voltava para a lista livre, a textura seguinte o tomava, e o quadro já entregue à GPU lia uma imagem cuja memória havia sumido. Trocar de tema reprepara todas as prévias instaladas durante o desenho do quadro, e é por isso que era justamente aquela tela que morria.
+- Os dois números foram conferidos antes no cartão de quem relatou: os arquivos de tema dele estavam íntegros e no tamanho certo. Nada no crash era particular a ele além do tempo.
+- As dimensões de imagem passam também a ser recusadas antes de chegar ao driver gráfico, que responde a um layout impossível encerrando o processo em vez de devolver erro.
 
-Dois jeitos de perder o menu
-- Passar o cursor sobre um jogo com arte personalizada podia encerrar o menu e devolver você a um relançamento. A textura do fundo era liberada enquanto o quadro ainda em desenho a estava lendo, e o caminho do foco faz isso a cada passo pela grade.
-- Aplicar um fundo deixava o launcher preso no ícone do jogo, com saída apenas pelo botão HOME. O seletor de usuário havia tomado os botões enquanto era desenhado atrás do dossiê, então a grade ficava sob um menu que nunca aparecia.
+Quanto custa um tema
+- Cada tema animado mostra o tamanho do download no fim da linha do autor.
+- O topo da aba do catálogo resume o repositório inteiro: quantos temas tem, quanto é para baixar e quanto ocupa depois de descompactado. Os dois números ficam longe um do outro — os quadros comprimem muito — e o que importa quando o cartão está enchendo é o segundo.
+- Os dois aparecem também na tela de detalhe do tema, que é onde a decisão de instalar é de fato tomada.
+- Os totais são somados do catálogo conforme ele é lido, então um tema publicado depois entra sozinho, sem nada para editar à mão.
 
-Notas
-- Uma versão anterior desta release foi retirada: o instalador reaproveitava o extrator de pacotes de tema, que aceita mídia e texto e teria recusado 392 dos 466 arquivos de um build do launcher, a começar pelo binário do próprio menu. O extrator passou a receber uma política explícita, e uma atualização precisa ainda provar que todo caminho que carrega fica dentro de atmosphere/ e switch/ — ela é aberta na raiz de um cartão que também guarda o bootloader.
+Coisas menores
+- O fundo do tutorial recebe o mesmo desfoque suave que o menu usa por padrão. Era a única tela do launcher desenhando o fundo em nitidez total atrás do painel de texto, e é a primeira tela que qualquer pessoa vê. Sugerido por um usuário que notou exatamente isso.
+- As configurações são gravadas ao lado do arquivo e trocadas no final, em vez de por cima dele. Um launcher que morresse no meio da gravação deixava um arquivo truncado que falhava na leitura do boot seguinte, zerando todas as preferências; agora a cópia anterior é guardada e lida quando a atual não puder ser.
