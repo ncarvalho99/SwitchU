@@ -358,6 +358,12 @@
       "apply": "Applica tema",
       "remove": "Rimuovi tema"
     },
+    "catalog": {
+      "theme_one": "tema",
+      "theme_many": "temi",
+      "to_download": "da scaricare",
+      "on_card": "sulla scheda SD"
+    },
     "community": {
       "title": "Temi della community",
       "subtitle": "Un catalogo visivo, non una pagina impostazioni.",
@@ -373,6 +379,7 @@
       "version_unknown": "Sconosciuta",
       "manifest": "Manifest",
       "manifest_missing": "Non indicato",
+      "size": "Dimensione",
       "cover_missing": "Nessuno screenshot indicato per questo tema.",
       "cover_present": "Sinistra/Destra per gli screenshot, A per schermo intero.",
       "cover_single": "A apre questo screenshot a schermo intero.",
