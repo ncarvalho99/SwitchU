@@ -242,6 +242,9 @@
       "acknowledgements_desc": "Спасибо xortroll за помощь с проектом uLaunch и за поддержку и советы во время разработки.",
       "source_code": "Исходный код (форк)",
       "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "check_updates": "Проверить обновления",
+      "check_updates_desc": "Спрашивает у GitHub, вышла ли новая версия.",
+      "check_updates_running": "Проверка обновлений...",
       "fork_maintainer": "Форк поддерживает",
       "upstream_source": "Исходный код (оригинал)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
@@ -315,6 +318,12 @@
     "replace": "Заменить"
   },
   "themeshop": {
+    "update_status": "Состояние",
+    "update_view": "Посмотреть изменения и обновить",
+    "update_view_desc": "Показывает список изменений, затем загружает и устанавливает.",
+    "update_state": "Состояние",
+    "update_notes": "Что нового",
+    "update_unknown": "Ещё не проверялось",
     "source": {
       "builtin": "Встроенный",
       "custom": "Свой",
@@ -326,7 +335,8 @@
       "installed": "Установленные",
       "community": "Статичные темы",
       "animated": "Анимированные темы",
-      "options": "Опции"
+      "options": "Опции",
+      "update": "Обновление"
     },
     "search": {
       "button": "Поиск",
@@ -638,6 +648,9 @@
       "update_applying": "Применение обновления...",
       "update_done": "Обновление установлено. Перезапустите консоль, чтобы использовать новую версию.",
       "update_failed": "Не удалось установить обновление.",
+      "update_up_to_date": "У вас последняя версия SwitchU.",
+      "update_check_failed": "Не удалось связаться с сервером обновлений.",
+      "update_available_short": "Доступно обновление",
       "details_cover_loading": "Загрузка обложки...",
       "details_version": "Версия",
       "details_mods": "Моды",

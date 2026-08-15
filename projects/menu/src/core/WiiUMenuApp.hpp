@@ -160,6 +160,8 @@ private:
     void offerUpdate(const update::UpdateClient::Release& release);
     void startUpdateDownload(const update::UpdateClient::Release& release);
     void syncUpdateDownload();
+    void publishUpdateState();
+    void showReleaseNotes();
     void closeActiveOverlays();
     void handleTouch();
     std::shared_ptr<GlossyIcon> makeIcon(const AppEntry& entry);
@@ -363,6 +365,12 @@ private:
     update::UpdateClient m_updateClient;
     std::uint64_t m_updateSeenRevision = 0;
     bool m_updateOffered = false;
+    bool m_updateCheckForced = false;
+    update::UpdateClient::Release m_pendingUpdate;
+    // The newest published release, whether or not it is newer than this
+    // build, so its notes can be read at any time.
+    update::UpdateClient::Release m_latestRelease;
+    std::string m_updateStatus;
     struct UpdateDownload;
     std::shared_ptr<UpdateDownload> m_updateDownload;
     std::future<void> m_updateDownloadFuture;

@@ -242,6 +242,9 @@
       "acknowledgements_desc": "Dank aan xortroll voor de hulp met het uLaunch-project en voor de steun en adviezen tijdens de ontwikkeling.",
       "source_code": "Broncode (fork)",
       "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "check_updates": "Controleer op updates",
+      "check_updates_desc": "Vraagt GitHub of er een nieuwere versie is uitgebracht.",
+      "check_updates_running": "Controleren op updates...",
       "fork_maintainer": "Fork onderhouden door",
       "upstream_source": "Broncode (origineel)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
@@ -315,6 +318,12 @@
     "replace": "Vervangen"
   },
   "themeshop": {
+    "update_status": "Status",
+    "update_view": "Bekijk wat er is veranderd en werk bij",
+    "update_view_desc": "Toont de release-opmerkingen en downloadt en installeert daarna.",
+    "update_state": "Status",
+    "update_notes": "Wat is er veranderd",
+    "update_unknown": "Nog niet gecontroleerd",
     "source": {
       "builtin": "Ingebouwd",
       "custom": "Eigen",
@@ -326,7 +335,8 @@
       "installed": "Geïnstalleerd",
       "community": "Statische thema’s",
       "animated": "Geanimeerde thema’s",
-      "options": "Opties"
+      "options": "Opties",
+      "update": "Update"
     },
     "search": {
       "button": "Zoeken",
@@ -638,6 +648,9 @@
       "update_applying": "Update toepassen...",
       "update_done": "Update geïnstalleerd. Start de console opnieuw op voor de nieuwe versie.",
       "update_failed": "De update kon niet worden geïnstalleerd.",
+      "update_up_to_date": "SwitchU is up-to-date.",
+      "update_check_failed": "Kon de updateserver niet bereiken.",
+      "update_available_short": "Update beschikbaar",
       "details_cover_loading": "Cover laden...",
       "details_version": "Versie",
       "details_mods": "Mods",

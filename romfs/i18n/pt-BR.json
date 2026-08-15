@@ -242,6 +242,9 @@
       "acknowledgements_desc": "Agradecimentos a xortroll pela ajuda com o projeto uLaunch e pelo apoio e conselhos durante o desenvolvimento.",
       "source_code": "Código-fonte (fork)",
       "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "check_updates": "Verificar atualizações",
+      "check_updates_desc": "Consulta o GitHub para saber se há uma versão mais nova.",
+      "check_updates_running": "Verificando atualizações...",
       "fork_maintainer": "Fork mantido por",
       "upstream_source": "Código-fonte (original)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
@@ -315,6 +318,12 @@
     "replace": "Substituir"
   },
   "themeshop": {
+    "update_status": "Situação",
+    "update_view": "Ver novidades e atualizar",
+    "update_view_desc": "Mostra as notas da versão e depois baixa e instala.",
+    "update_state": "Situação",
+    "update_notes": "Novidades",
+    "update_unknown": "Ainda não verificado",
     "source": {
       "builtin": "Integrado",
       "custom": "Personalizado",
@@ -326,7 +335,8 @@
       "installed": "Instalados",
       "community": "Temas Estáticos",
       "animated": "Temas Animados",
-      "options": "Opções"
+      "options": "Opções",
+      "update": "Atualização"
     },
     "search": {
       "button": "Buscar",
@@ -638,6 +648,9 @@
       "update_applying": "Aplicando atualização...",
       "update_done": "Atualização instalada. Reinicie o console para usar a nova versão.",
       "update_failed": "Não foi possível instalar a atualização.",
+      "update_up_to_date": "O SwitchU está atualizado.",
+      "update_check_failed": "Não foi possível falar com o servidor de atualizações.",
+      "update_available_short": "Atualização disponível",
       "details_cover_loading": "Carregando capa...",
       "details_version": "Versão",
       "details_mods": "Mods",
