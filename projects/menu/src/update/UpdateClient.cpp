@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <sstream>
 #include <vector>
 
@@ -162,12 +163,30 @@ UpdateClient::Snapshot UpdateClient::snapshot() const {
     return m_snapshot;
 }
 
+std::string UpdateClient::feedUrl() {
+    // A file that does not exist on a normal install. When it is there, the
+    // release feed is read from the address inside it instead of from GitHub,
+    // which is what makes the whole update path testable end to end -- against
+    // a payload of your own, as often as you like -- without publishing a
+    // release to everybody first.
+    std::ifstream override("sdmc:/config/SwitchU/update-source.txt");
+    if (override) {
+        std::string url;
+        std::getline(override, url);
+        while (!url.empty() && std::isspace((unsigned char)url.back()))
+            url.pop_back();
+        if (url.rfind("https://", 0) == 0)
+            return url;
+    }
+    return kReleasesUrl;
+}
+
 UpdateClient::Snapshot UpdateClient::fetch(const std::string& currentVersion, std::uint64_t revision) {
     Snapshot result;
     result.revision = revision;
 
     const nlohmann::json feed = nlohmann::json::parse(
-        themeshop::http::getText(kReleasesUrl, {"Accept: application/vnd.github+json"}));
+        themeshop::http::getText(feedUrl(), {"Accept: application/vnd.github+json"}));
 
     const auto tag = feed.find("tag_name");
     if (tag == feed.end() || !tag->is_string()) {

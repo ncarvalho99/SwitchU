@@ -16,10 +16,16 @@ The launcher can now update itself, and two ways of losing the menu are gone.
   button to check immediately, both in the Update tab and under Settings, About.
   A check you asked for always answers, including when nothing changed; the
   daily one stays quiet unless there is news.
-- Accepting an update downloads it, verifies it against the size the release
-  published, installs it and asks you to restart. Nothing is replaced until the
-  whole payload is on the card, because the archive being unpacked contains the
-  menu doing the unpacking. The card is committed before the restart is offered.
+- Accepting an update downloads it, checks it against the size the release
+  published, inspects every path it carries and asks you to restart. The files
+  are put in place by the daemon at the next boot, before the menu exists,
+  because a running menu cannot replace the font and binaries it is holding
+  open. **That first boot takes around half a minute longer than usual** while
+  466 files are unpacked; it is a one-time cost per update.
+- Nothing is overwritten in place. Each file is written beside its destination
+  and swapped in at the end, so a file that cannot be replaced is left exactly
+  as it was rather than destroyed. An update that fails is retried at the next
+  two boots and then abandoned, so it can never keep the console from starting.
 - Release notes scroll with up and down, so long changelogs are read rather than
   truncated.
 
@@ -32,6 +38,15 @@ The launcher can now update itself, and two ways of losing the menu are gone.
 - Applying a background left the launcher stuck on the game icon, escapable only
   with HOME. The user picker had taken the buttons while being drawn behind the
   dossier, so the grid sat under a menu that was never visible.
+
+### Notes
+
+- An earlier build of this release was withdrawn: its installer reused the theme
+  package extractor, which accepts media and text and would have refused 392 of
+  the 466 files a launcher build contains, starting with the menu binary itself.
+  The extractor now takes an explicit policy, and an update must additionally
+  prove that every path it carries stays inside `atmosphere/` and `switch/` --
+  it is unpacked at the root of a card that also holds the bootloader.
 
 ---
 
@@ -54,9 +69,17 @@ de existir.
   pede sempre responde, inclusive quando nada mudou; a diária fica calada a menos
   que haja novidade.
 - Aceitar a atualização baixa o pacote, confere com o tamanho que a release
-  publicou, instala e pede o reinício. Nada é substituído antes de o pacote
-  inteiro estar no cartão, porque o arquivo sendo aberto contém o próprio menu
-  que o abre. O cartão é sincronizado antes de o reinício ser oferecido.
+  publicou, inspeciona todos os caminhos que ele carrega e pede o reinício. Os
+  arquivos são postos no lugar pelo daemon no boot seguinte, antes de o menu
+  existir, porque um menu em execução não consegue substituir a fonte e os
+  binários que mantém abertos. **Esse primeiro boot demora cerca de meio minuto
+  a mais** enquanto 466 arquivos são descompactados; é um custo único por
+  atualização.
+- Nada é sobrescrito no lugar. Cada arquivo é gravado ao lado do destino e
+  trocado no final, então um arquivo que não puder ser substituído fica
+  exatamente como estava, em vez de ser destruído. Uma atualização que falhe é
+  tentada nos dois boots seguintes e então abandonada, de modo que nunca pode
+  impedir o console de iniciar.
 - As notas de versão rolam com cima e baixo, então um changelog longo é lido, e
   não cortado.
 
@@ -69,6 +92,15 @@ de existir.
 - Aplicar um fundo deixava o launcher preso no ícone do jogo, com saída apenas
   pelo botão HOME. O seletor de usuário havia tomado os botões enquanto era
   desenhado atrás do dossiê, então a grade ficava sob um menu que nunca aparecia.
+
+### Notas
+
+- Uma versão anterior desta release foi retirada: o instalador reaproveitava o
+  extrator de pacotes de tema, que aceita mídia e texto e teria recusado 392 dos
+  466 arquivos de um build do launcher, a começar pelo binário do próprio menu.
+  O extrator passou a receber uma política explícita, e uma atualização precisa
+  ainda provar que todo caminho que carrega fica dentro de `atmosphere/` e
+  `switch/` — ela é aberta na raiz de um cartão que também guarda o bootloader.
 
 ---
 

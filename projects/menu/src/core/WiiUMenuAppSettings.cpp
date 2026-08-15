@@ -411,15 +411,6 @@ void WiiUMenuApp::createSettings() {
         m_config.accessibilitySpeechRate = std::clamp(rate, 120, 320);
         m_accessibility.setSpeechRate(m_config.accessibilitySpeechRate);
     });
-    m_settings->onCheckUpdates([this]() {
-        startUpdateCheck(true);
-        if (m_settings) {
-            auto& i18n = nxui::I18n::instance();
-            m_settings->requestToast(i18n.tr("settings.about.check_updates_running",
-                                             "Checking for updates..."), 2.4f);
-        }
-    });
-
     m_settings->onNetConnect([this]() {
         m_pendingNetConnect = true;
         m_settings->hide();
@@ -654,10 +645,8 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->onUpdateInstall([this]() {
         // The notes dialog is the confirmation step: nothing downloads until a
         // player has seen what changed and chosen to go ahead.
-        if (!m_pendingUpdate.downloadUrl.empty()) {
-            m_updateOffered = false;
-            offerUpdate(m_pendingUpdate);
-        }
+        if (!m_pendingUpdate.downloadUrl.empty())
+            offerUpdate(m_pendingUpdate, false);
     });
 
     m_themeShop->onNetConnectRequest([this]() {
