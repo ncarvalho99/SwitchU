@@ -10,6 +10,7 @@
 #include <switchu/sd_commit.hpp>
 #include "app_manager.hpp"
 #include "ecs.hpp"
+#include "update_apply.hpp"
 #include "menu_launcher.hpp"
 #include <cstdio>
 #include <cstring>
@@ -1613,6 +1614,9 @@ int main(int argc, char* argv[]) {
     rc = startEventManager();
     if (R_FAILED(rc))
         switchu::FileLog::log("[daemon] event manager failed: 0x%X (non-fatal)", rc);
+
+    // Before the menu exists, so nothing it would replace is open.
+    switchu::daemon::update::applyStagedUpdate();
 
     switchu::FileLog::log("[daemon] launching menu...");
     rc = daemon::menu_la::launch(smi::MenuStartMode::StartupBoot, buildSystemStatus());

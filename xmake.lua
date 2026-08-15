@@ -278,6 +278,11 @@ target("switchu-daemon")
     add_deps("atmosphere-stratosphere")
 
     add_files("projects/daemon/src/**.cpp")
+    -- The daemon applies launcher updates at boot, which needs the same audited
+    -- extractor the menu uses. Shared rather than copied: two implementations of
+    -- unpacking an archive onto the card is one too many.
+    add_files("projects/menu/src/themeshop/ZipReader.cpp")
+    add_includedirs("projects/menu/src", {public = false})
 
     add_includedirs("projects/common/include", {public = false})
     add_includedirs("lib/Atmosphere-libs/libstratosphere/include")

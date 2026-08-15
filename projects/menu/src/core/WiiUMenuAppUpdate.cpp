@@ -29,6 +29,7 @@ namespace {
 
 constexpr const char* kUpdateDir = "sdmc:/config/SwitchU/update";
 constexpr const char* kUpdateArchive = "sdmc:/config/SwitchU/update/update.zip";
+constexpr const char* kReadyMarker = "sdmc:/config/SwitchU/update/ready";
 // The archive lays out atmosphere/ and switch/ exactly as they sit on the card,
 // so the card root is the extraction target.
 constexpr const char* kCardRoot = "sdmc:/";
@@ -161,7 +162,7 @@ void WiiUMenuApp::syncUpdateCheck() {
     m_updateStatus = i18n.tr("dialog.update_available_short", "Update available")
                    + " (" + snapshot.release.version + ")";
     publishUpdateState();
-    offerUpdate(snapshot.release);
+    offerUpdate(snapshot.release, true);
 #endif
 }
 
@@ -188,17 +189,23 @@ void WiiUMenuApp::showReleaseNotes() {
 #endif
 }
 
-void WiiUMenuApp::offerUpdate(const update::UpdateClient::Release& release) {
+void WiiUMenuApp::offerUpdate(const update::UpdateClient::Release& release, bool automatic) {
 #ifdef SWITCHU_MENU
-    if (m_updateOffered || !m_dialog)
+    if (!m_dialog)
         return;
-    // Never interrupt something the player is in the middle of. The offer is
-    // dropped rather than queued: the next boot asks again.
-    if (m_dialog->isActive() || (m_settings && m_settings->isActive())
-        || (m_themeShop && m_themeShop->isActive()) || (m_gameDetails && m_gameDetails->isActive())
-        || (m_gameGallery && m_gameGallery->isActive()) || (m_gameMods && m_gameMods->isActive())
-        || (m_userSelect && m_userSelect->isActive()) || m_editMode)
-        return;
+    // The courtesy of not interrupting belongs to the offer nobody asked for.
+    // Applied to the button as well it blocked the button, because that button
+    // lives inside the very screen the guard was testing for: pressing Install
+    // in the SwitchU tab did nothing at all.
+    if (automatic) {
+        if (m_updateOffered)
+            return;
+        if (m_dialog->isActive() || (m_settings && m_settings->isActive())
+            || (m_themeShop && m_themeShop->isActive()) || (m_gameDetails && m_gameDetails->isActive())
+            || (m_gameGallery && m_gameGallery->isActive()) || (m_gameMods && m_gameMods->isActive())
+            || (m_userSelect && m_userSelect->isActive()) || m_editMode)
+            return;
+    }
     m_updateOffered = true;
 
     auto& i18n = nxui::I18n::instance();
@@ -271,22 +278,49 @@ void WiiUMenuApp::startUpdateDownload(const update::UpdateClient::Release& relea
                 std::lock_guard<std::mutex> lock(shared->mutex);
                 shared->extracting = true;
             }
-            const auto result = themeshop::extractZipFile(kUpdateArchive, kCardRoot);
-            if (!result.success)
-                throw std::runtime_error(result.error.empty() ? "could not unpack the update"
-                                                              : result.error);
-            std::remove(kUpdateArchive);
+            // Not unpacked here. SDL_ttf holds the font open for as long as
+            // this menu runs, and the first version of this code destroyed that
+            // font trying to replace it. The daemon applies the update at the
+            // next boot, before the menu exists and before anything is open.
+            //
+            // The archive is still checked now, while there is a screen to
+            // report on: a payload that reaches outside what SwitchU installs
+            // is refused before it is ever staged, not at boot with nobody
+            // watching.
+            themeshop::ZipExtractPolicy policy;
+            policy.allowExecutablePayload = true;
+            policy.requiredRoots = {"atmosphere/", "switch/"};
+            const auto inspection = themeshop::inspectZipFile(kUpdateArchive, policy);
+            if (!inspection.success)
+                throw std::runtime_error(inspection.error.empty()
+                                             ? "the update package is not valid"
+                                             : inspection.error);
+
+            {
+                std::lock_guard<std::mutex> lock(shared->mutex);
+                shared->extracting = true;
+            }
+            // Written last, once the archive is whole and inspected: the daemon
+            // treats this marker as the only sign that an update is ready.
+            if (std::FILE* marker = std::fopen(kReadyMarker, "wb")) {
+                std::fputs("ready", marker);
+                std::fclose(marker);
+            } else {
+                throw std::runtime_error("could not mark the update as ready");
+            }
 
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->ok = true;
             shared->done = true;
         } catch (const std::exception& error) {
             std::remove(kUpdateArchive);
+            std::remove(kReadyMarker);
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->error = error.what();
             shared->done = true;
         } catch (...) {
             std::remove(kUpdateArchive);
+            std::remove(kReadyMarker);
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->error = "unknown update failure";
             shared->done = true;
@@ -360,6 +394,7 @@ void WiiUMenuApp::syncUpdateDownload() {
         {{i18n.tr("button.ok", "OK"), [this]() {}, true}},
         0, {});
     focusManager().setFocus(m_dialog.get());
-    DebugLog::log("[update] %s%s", ok ? "installed" : "failed: ", ok ? "" : error.c_str());
+    DebugLog::log("[update] %s%s", ok ? "staged for the next boot" : "failed: ",
+                  ok ? "" : error.c_str());
 #endif
 }
