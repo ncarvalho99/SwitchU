@@ -185,6 +185,9 @@ private:
     void syncCommunityCatalog(const ThemeCatalogClient::Snapshot& snapshot);
     bool isCommunityTab() const;
     bool isAnimatedTab() const;
+    // One line summarising the open tab's whole catalogue: how many themes it
+    // has, and what they cost to download and to keep.
+    std::string communityCatalogueTotals() const;
     int currentEntryCount() const;
     int currentSelectedIndex() const;
     void setCurrentSelectedIndex(int idx);

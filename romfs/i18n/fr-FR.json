@@ -524,6 +524,12 @@
       "apply": "Appliquer le thème",
       "remove": "Supprimer le thème"
     },
+    "catalog": {
+      "theme_one": "thème",
+      "theme_many": "thèmes",
+      "to_download": "à télécharger",
+      "on_card": "sur la carte SD"
+    },
     "community": {
       "title": "Thèmes de la communauté",
       "subtitle": "Un catalogue visuel, pas une page de réglages.",
@@ -539,6 +545,7 @@
       "version_unknown": "Inconnue",
       "manifest": "Manifeste",
       "manifest_missing": "Non indiqué",
+      "size": "Taille",
       "cover_missing": "Aucune capture n’est indiquée pour ce thème.",
       "cover_present": "Gauche/Droite pour les captures, A pour le plein écran.",
       "cover_single": "A ouvre cette capture en plein écran.",

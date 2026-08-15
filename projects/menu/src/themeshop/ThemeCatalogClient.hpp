@@ -27,6 +27,12 @@ public:
         // catalogo publicado antes deste campo continua servindo.
         std::string package;
         std::uint64_t packageBytes = 0;
+        // O que o tema ocupa depois de descompactado. Os dois numeros ficam
+        // longe um do outro num tema -- os quadros comprimem muito -- e quem
+        // decide se cabe no cartao precisa do que fica, nao do que trafega.
+        // So o catalogo sabe: o console teria de baixar o pacote para
+        // descobrir, que e justamente a decisao em questao.
+        std::uint64_t installedBytes = 0;
         // Miniatura animada: uma folha de sprites com os quadros em grade.
         // Vazio faz o cartao usar a capa parada, que e o que todo catalogo
         // sem estes campos continua servindo.

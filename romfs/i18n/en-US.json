@@ -524,6 +524,12 @@
       "apply": "Apply Theme",
       "remove": "Remove Theme"
     },
+    "catalog": {
+      "theme_one": "theme",
+      "theme_many": "themes",
+      "to_download": "to download",
+      "on_card": "on the SD card"
+    },
     "community": {
       "title": "Browse Community Themes",
       "subtitle": "A visual catalog, not a settings selector.",
@@ -539,6 +545,7 @@
       "version_unknown": "Unknown",
       "manifest": "Manifest",
       "manifest_missing": "Not provided",
+      "size": "Size",
       "cover_missing": "No screenshot has been declared for this theme yet.",
       "cover_present": "Use Left/Right to browse screenshots and A for fullscreen.",
       "cover_single": "Press A to open this screenshot in fullscreen.",

@@ -358,6 +358,12 @@
       "apply": "Theme anwenden",
       "remove": "Theme entfernen"
     },
+    "catalog": {
+      "theme_one": "Theme",
+      "theme_many": "Themes",
+      "to_download": "zum Herunterladen",
+      "on_card": "auf der SD-Karte"
+    },
     "community": {
       "title": "Community-Themes",
       "subtitle": "Ein visueller Katalog, keine Einstellungsseite.",
@@ -373,6 +379,7 @@
       "version_unknown": "Unbekannt",
       "manifest": "Manifest",
       "manifest_missing": "Nicht angegeben",
+      "size": "Größe",
       "cover_missing": "Für dieses Theme ist noch kein Screenshot eingetragen.",
       "cover_present": "Links/Rechts für Screenshots, A für Vollbild.",
       "cover_single": "A öffnet diesen Screenshot im Vollbild.",

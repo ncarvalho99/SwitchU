@@ -358,6 +358,12 @@
       "apply": "Thema toepassen",
       "remove": "Thema verwijderen"
     },
+    "catalog": {
+      "theme_one": "thema",
+      "theme_many": "thema's",
+      "to_download": "om te downloaden",
+      "on_card": "op de SD-kaart"
+    },
     "community": {
       "title": "Community-thema’s",
       "subtitle": "Een visuele catalogus, geen instellingenpagina.",
@@ -373,6 +379,7 @@
       "version_unknown": "Onbekend",
       "manifest": "Manifest",
       "manifest_missing": "Niet opgegeven",
+      "size": "Grootte",
       "cover_missing": "Nog geen screenshot voor dit thema.",
       "cover_present": "Links/Rechts voor screenshots, A voor volledig scherm.",
       "cover_single": "A opent deze screenshot volledig.",

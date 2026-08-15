@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cmath>
 #include <functional>
 #include <unordered_map>
@@ -591,6 +592,26 @@ std::string transferLabel(const ThemeTransferState& state) {
     return state.label() + " (" + std::to_string(percent) + "%)";
 }
 
+// Sizes a player can act on, not exact byte counts.
+//
+// The decimal is dropped above 100 of a unit: "1,2 GB" tells you whether the
+// theme fits, "847,3 MB" only makes the line longer. The unit is binary, which
+// is what the console's own storage screen counts in, so the two agree.
+std::string formatBytes(std::uint64_t bytes) {
+    if (bytes == 0)
+        return {};
+    const char* units[] = {"KB", "MB", "GB"};
+    double value = (double)bytes / 1024.0;
+    int unit = 0;
+    while (value >= 1024.0 && unit < 2) {
+        value /= 1024.0;
+        ++unit;
+    }
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), value >= 100.0 ? "%.0f %s" : "%.1f %s", value, units[unit]);
+    return buffer;
+}
+
 } // namespace
 
 // Both catalogue tabs render the same way and read the same list; what tells
@@ -601,6 +622,41 @@ bool ThemeShopScreen::isCommunityTab() const {
 
 bool ThemeShopScreen::isAnimatedTab() const {
     return m_tabIndex == 1;
+}
+
+// "61 temas - 4,5 GB para baixar - 7,3 GB no cartao", for whichever catalogue
+// the open tab is showing.
+//
+// Both figures are worth having and they are far apart: the frames compress
+// hard, so the download is a little over half of what lands on the card. Only
+// entries that declare a size contribute -- an older index that never carried
+// the field is reported as the themes it has, without a size claim invented on
+// its behalf.
+std::string ThemeShopScreen::communityCatalogueTotals() const {
+    const bool wantAnimated = isAnimatedTab();
+    int themes = 0;
+    std::uint64_t download = 0;
+    std::uint64_t onCard = 0;
+    for (const auto& entry : m_allCommunityEntries) {
+        const bool fromOurs = entry.catalogUrl == ThemeCatalogClient::kDefaultCatalogUrl;
+        if (fromOurs != wantAnimated)
+            continue;
+        ++themes;
+        download += entry.packageBytes;
+        onCard   += entry.installedBytes;
+    }
+    if (themes == 0)
+        return {};
+
+    auto& i18n = nxui::I18n::instance();
+    std::string line = std::to_string(themes) + " "
+        + (themes == 1 ? i18n.tr("themeshop.catalog.theme_one", "theme")
+                       : i18n.tr("themeshop.catalog.theme_many", "themes"));
+    if (download > 0)
+        line += " - " + formatBytes(download) + " " + i18n.tr("themeshop.catalog.to_download", "to download");
+    if (onCard > 0)
+        line += " - " + formatBytes(onCard) + " " + i18n.tr("themeshop.catalog.on_card", "on the SD card");
+    return line;
 }
 
 int ThemeShopScreen::currentEntryCount() const {
@@ -1667,6 +1723,20 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     ren.drawText(subtitle, {layout.header.x, layout.header.y + 38.f}, m_smallFont,
                  m_theme->textSecondary.withAlpha(0.92f * contentOpacity), 0.78f);
 
+    // What the whole catalogue costs, before anything is chosen.
+    //
+    // Counted from the entries as they arrive, so a theme published tomorrow is
+    // in this line the next time the console reads the index -- there is no
+    // number to keep in step by hand. The search filter is deliberately not
+    // applied: this answers "what is there", not "what am I looking at".
+    if (isCommunityTab()) {
+        const std::string catalogueTotals = communityCatalogueTotals();
+        if (!catalogueTotals.empty()) {
+            ren.drawText(catalogueTotals, {layout.header.x, layout.header.y + 60.f}, m_smallFont,
+                         m_theme->textSecondary.withAlpha(0.70f * contentOpacity), 0.68f);
+        }
+    }
+
     std::string searchLabel = m_searchQuery.empty()
         ? i18n.tr("themeshop.search.button", "Search")
         : m_searchQuery;
@@ -1889,6 +1959,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         bool cardSelected = (globalIndex == selected);
         std::string titleText;
         std::string subtitleText;
+        // Drawn at the right end of the author's line rather than appended to
+        // it: the author is what gets ellipsized when the card is narrow, and
+        // the size must not be the half that disappears.
+        std::string sizeText;
         std::string versionText;
         const nxui::Texture* previewTexture = nullptr;
         PreviewPhase previewPhase = PreviewPhase::Failed;
@@ -1903,6 +1977,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             const auto& entry = m_communityEntries[(size_t)globalIndex];
             titleText = entry.name;
             subtitleText = entry.author.empty() ? i18n.tr("themeshop.community.author_unknown", "Unknown") : entry.author;
+            sizeText = formatBytes(entry.packageBytes);
             versionText = entry.version;
             previewTexture = communityPreviewTexture(entry);
             previewPhase = communityPreviewPhase(entry);
@@ -1989,7 +2064,17 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      m_font,
                      m_theme->textPrimary.withAlpha(rowOpacity),
                      0.86f);
-        std::string subtitleFitted = ellipsize(m_smallFont, subtitleText, card.width - 18.f, 0.76f);
+        float subtitleWidth = card.width - 18.f;
+        if (!sizeText.empty()) {
+            const float sizeWidth = measureTextCached(m_smallFont, sizeText).x * 0.72f;
+            ren.drawText(sizeText,
+                         {card.right() - 10.f - sizeWidth, card.bottom() - 30.f},
+                         m_smallFont,
+                         m_theme->textSecondary.withAlpha(0.78f * rowOpacity),
+                         0.72f);
+            subtitleWidth -= sizeWidth + 10.f;
+        }
+        std::string subtitleFitted = ellipsize(m_smallFont, subtitleText, subtitleWidth, 0.76f);
         ren.drawText(subtitleFitted,
                      {card.x + 10.f, card.bottom() - 30.f},
                      m_smallFont,
@@ -2052,8 +2137,24 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         detailSubtitle = entry->author.empty() ? i18n.tr("themeshop.community.author_unknown", "Unknown") : entry->author;
         detailInfoA = i18n.tr("themeshop.community.version", "Version") + std::string(": ")
             + (entry->version.empty() ? i18n.tr("themeshop.community.version_unknown", "Unknown") : entry->version);
-        detailInfoB = i18n.tr("themeshop.community.manifest", "Manifest") + std::string(": ")
-            + (entry->manifest.empty() ? i18n.tr("themeshop.community.manifest_missing", "Not provided") : entry->manifest);
+        // Where the two sizes belong: the detail screen is where a theme is
+        // accepted or refused, and it has room for both. The manifest path this
+        // line used to carry is a catalogue implementation detail -- it stays
+        // as the fallback for an index that declares no sizes.
+        const std::string downloadSize = formatBytes(entry->packageBytes);
+        const std::string cardSize = formatBytes(entry->installedBytes);
+        if (!downloadSize.empty() || !cardSize.empty()) {
+            detailInfoB = i18n.tr("themeshop.community.size", "Size") + std::string(": ");
+            if (!downloadSize.empty())
+                detailInfoB += downloadSize + " " + i18n.tr("themeshop.catalog.to_download", "to download");
+            if (!downloadSize.empty() && !cardSize.empty())
+                detailInfoB += " - ";
+            if (!cardSize.empty())
+                detailInfoB += cardSize + " " + i18n.tr("themeshop.catalog.on_card", "on the SD card");
+        } else {
+            detailInfoB = i18n.tr("themeshop.community.manifest", "Manifest") + std::string(": ")
+                + (entry->manifest.empty() ? i18n.tr("themeshop.community.manifest_missing", "Not provided") : entry->manifest);
+        }
         detailScreenshotTotal = std::max(0, (int)entry->screenshots.size());
         std::string detailPreviewPath = currentDetailCommunityPreviewPath();
         // A folha tambem no detalhe e na tela cheia. Ela e a unica coisa que se

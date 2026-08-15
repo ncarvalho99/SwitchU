@@ -358,6 +358,12 @@
       "apply": "Aplicar tema",
       "remove": "Remover tema"
     },
+    "catalog": {
+      "theme_one": "tema",
+      "theme_many": "temas",
+      "to_download": "para baixar",
+      "on_card": "no cartão"
+    },
     "community": {
       "title": "Temas da comunidade",
       "subtitle": "Um catálogo visual, não uma página de configurações.",
@@ -373,6 +379,7 @@
       "version_unknown": "Desconhecida",
       "manifest": "Manifesto",
       "manifest_missing": "Não informado",
+      "size": "Tamanho",
       "cover_missing": "Nenhuma captura foi indicada para este tema.",
       "cover_present": "Esquerda/Direita para capturas, A para tela cheia.",
       "cover_single": "A abre esta captura em tela cheia.",
