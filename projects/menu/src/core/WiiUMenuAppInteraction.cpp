@@ -579,14 +579,14 @@ void WiiUMenuApp::refreshGameArtworkBackdrop(std::uint64_t titleId) {
     if (path == m_gameArtworkBackdrop->artworkPath())
         return;
     if (path.empty()) {
-        m_gameArtworkBackdrop->clearArtwork();
+        m_gameArtworkBackdrop->clearArtwork(&app().gpu());
         return;
     }
     if (m_gameArtworkBackdrop->setArtwork(app().gpu(), app().renderer(), path)) {
         DebugLog::log("[gallery] activated background: %s", path.c_str());
     } else {
         DebugLog::log("[gallery] could not load custom background: %s", path.c_str());
-        m_gameArtworkBackdrop->clearArtwork();
+        m_gameArtworkBackdrop->clearArtwork(&app().gpu());
     }
 }
 

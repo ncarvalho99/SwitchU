@@ -10,18 +10,25 @@ bool GameArtworkBackdrop::setArtwork(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     if (path == m_path)
         return m_texture.valid();
     if (path.empty()) {
-        clearArtwork();
+        clearArtwork(&gpu);
         return true;
     }
     nxui::Texture loaded;
     if (!loaded.loadFromFile(gpu, ren, path, 1280))
         return false;
+    // The texture being replaced can still be referenced by the frame in
+    // flight. Freeing it underneath the GPU is how moving the cursor across a
+    // game with custom art took the whole menu down.
+    if (m_texture.valid())
+        gpu.waitIdle();
     m_texture = std::move(loaded);
     m_path = path;
     return true;
 }
 
-void GameArtworkBackdrop::clearArtwork() {
+void GameArtworkBackdrop::clearArtwork(nxui::GpuDevice* gpu) {
+    if (gpu && m_texture.valid())
+        gpu->waitIdle();
     m_texture = nxui::Texture{};
     m_path.clear();
 }
