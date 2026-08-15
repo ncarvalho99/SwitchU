@@ -157,7 +157,7 @@ private:
     // Asks GitHub for the newest release at most once a day, then offers it.
     void startUpdateCheck(bool forced);
     void syncUpdateCheck();
-    void offerUpdate(const update::UpdateClient::Release& release);
+    void offerUpdate(const update::UpdateClient::Release& release, bool automatic);
     void startUpdateDownload(const update::UpdateClient::Release& release);
     void syncUpdateDownload();
     void publishUpdateState();

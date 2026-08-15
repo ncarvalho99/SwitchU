@@ -50,6 +50,10 @@ public:
     // markup rather than showing seven thousand characters of it.
     static std::string condenseNotes(const std::string& body, const std::string& languageTag);
 
+    // Normally the fork's release feed; overridden by a file on the card so the
+    // update path can be tested without publishing anything.
+    static std::string feedUrl();
+
 private:
     Snapshot fetch(const std::string& currentVersion, std::uint64_t revision);
 
