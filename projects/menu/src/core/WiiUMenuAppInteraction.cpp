@@ -590,6 +590,13 @@ void WiiUMenuApp::refreshGameArtworkBackdrop(std::uint64_t titleId) {
     }
 }
 
+void WiiUMenuApp::raiseOverlay(const std::shared_ptr<nxui::Widget>& overlay) {
+    if (!m_overlayLayer || !overlay)
+        return;
+    m_overlayLayer->removeChild(overlay.get());
+    m_overlayLayer->addChild(overlay);
+}
+
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
     if (m_gameGallery && m_gameGallery.get() == w) return w->isFocusable();
@@ -1112,10 +1119,7 @@ void WiiUMenuApp::showNonGameOptions(std::uint64_t titleId, const std::string& t
     // Same overlay ordering fix the other dialogs carry: the shared dialog is
     // created before the overlays that can sit above it, so it is moved back to
     // the end of the tree before being shown.
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     m_audio.playSfx(Sfx::ModalShow);
     m_dialog->show(
         title,
@@ -1195,10 +1199,7 @@ void WiiUMenuApp::showGameArtworkStatus(std::uint64_t titleId, const std::string
     // Game Details is added after the shared dialog in the overlay tree.  Put
     // the dialog back at the end before showing it so the modal is visible,
     // rather than merely receiving controller focus behind the dossier.
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     auto& i18n = nxui::I18n::instance();
     const bool customCover = !gallery::GameArtworkStore::pathFor(
         titleId, gallery::ArtworkKind::Cover).empty();
@@ -1233,10 +1234,7 @@ void WiiUMenuApp::showGameArtworkRestoreMenu(std::uint64_t titleId, const std::s
 #ifdef SWITCHU_MENU
     if (!m_dialog)
         return;
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     auto& i18n = nxui::I18n::instance();
     auto returnToDetails = [this]() {
         if (m_gameDetails && m_gameDetails->isActive())
@@ -1371,10 +1369,7 @@ void WiiUMenuApp::confirmDeleteGameMod() {
     auto& i18n = nxui::I18n::instance();
     // The Mods screen is newer in the overlay stack; place the confirmation
     // above it so it receives both rendering and controller focus.
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     m_dialogReturnFocus = m_gameMods.get();
     m_dialog->show(i18n.tr("dialog.mods_remove_title", "Remove mod?"),
                    name + "\n\n" + i18n.tr("dialog.mods_remove_body",
@@ -1421,10 +1416,7 @@ void WiiUMenuApp::confirmGameArtwork(
     // GameGallery is created after the shared dialog and therefore sits above
     // it in the overlay paint order. Reinsert the dialog before showing it so
     // its focused A/B controls and its visual card always describe one layer.
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     m_dialogReturnFocus = m_gameGallery.get();
     m_audio.playSfx(Sfx::ModalShow);
     m_dialog->show(i18n.tr("dialog.gallery_apply_title", "Use this image?"),
@@ -1482,10 +1474,7 @@ void WiiUMenuApp::confirmRestoreGameArtwork(
 
     const bool cover = category == GameGalleryClient::Category::Grids;
     auto& i18n = nxui::I18n::instance();
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     m_dialogReturnFocus = m_gameGallery.get();
     m_audio.playSfx(Sfx::ModalShow);
     m_dialog->show(i18n.tr(cover ? "dialog.gallery_restore_cover_title"
@@ -1597,10 +1586,7 @@ void WiiUMenuApp::confirmDeleteSoftware(std::uint64_t titleId, const std::string
     // but is drawn behind the dossier: the A/B hints change and no card
     // appears, so a delete looks like it is waiting on nothing. Same fix the
     // artwork dialogs already carry.
-    if (m_overlayLayer) {
-        m_overlayLayer->removeChild(m_dialog.get());
-        m_overlayLayer->addChild(m_dialog);
-    }
+    raiseOverlay(m_dialog);
     auto& i18n = nxui::I18n::instance();
     // Says what goes and what does not. Save data survives a delete on this
     // console, and somebody about to remove a game they intend to reinstall

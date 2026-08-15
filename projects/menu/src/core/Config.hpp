@@ -20,6 +20,9 @@ struct AppConfig {
     bool  defaultProfileEnabled = false;
     std::string defaultProfileUid;
     bool  tutorialCompleted = false;
+    // Day number of the last update check, so the console asks GitHub once a
+    // day rather than on every return from a game.
+    int   lastUpdateCheckDay = 0;
     bool  clockUse12Hour = false;
     bool  accessibilityEnabled = true;
     bool  accessibilitySpeakHints = true;
