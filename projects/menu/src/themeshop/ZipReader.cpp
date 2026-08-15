@@ -101,7 +101,8 @@ bool readAt(std::FILE* f, std::uint64_t offset, void* dst, std::size_t bytes) {
 bool copyEntry(std::FILE* src, std::uint64_t offset, std::uint64_t compressed,
                std::uint64_t plain, bool deflated, const std::string& target,
                std::uint64_t& written) {
-    std::FILE* out = std::fopen(target.c_str(), "wb");
+    const std::string staging = target + ".part";
+    std::FILE* out = std::fopen(staging.c_str(), "wb");
     if (!out)
         return false;
 
@@ -170,8 +171,16 @@ bool copyEntry(std::FILE* src, std::uint64_t offset, std::uint64_t compressed,
         ok = false;
     if (ok && written != plain)
         ok = false;                      // truncado ou corrompido
-    if (!ok)
+    if (ok) {
+        // rename() replaces the destination in one step, so a reader never sees
+        // a half-written file. If it fails -- the file is open elsewhere, say --
+        // the original is still there, untouched.
         std::remove(target.c_str());
+        if (std::rename(staging.c_str(), target.c_str()) != 0)
+            ok = false;
+    }
+    if (!ok)
+        std::remove(staging.c_str());
     return ok;
 }
 
@@ -179,9 +188,29 @@ bool copyEntry(std::FILE* src, std::uint64_t offset, std::uint64_t compressed,
 
 namespace themeshop {
 
+static ZipExtractResult walkArchive(const std::string& archivePath,
+                                    const std::string& destinationDir,
+                                    const std::function<void(int, int)>& onProgress,
+                                    const ZipExtractPolicy& policy,
+                                    bool inspectOnly);
+
+ZipExtractResult inspectZipFile(const std::string& archivePath,
+                                const ZipExtractPolicy& policy) {
+    return walkArchive(archivePath, std::string(), {}, policy, true);
+}
+
 ZipExtractResult extractZipFile(const std::string& archivePath,
                                 const std::string& destinationDir,
-                                const std::function<void(int, int)>& onProgress) {
+                                const std::function<void(int, int)>& onProgress,
+                                const ZipExtractPolicy& policy) {
+    return walkArchive(archivePath, destinationDir, onProgress, policy, false);
+}
+
+static ZipExtractResult walkArchive(const std::string& archivePath,
+                                    const std::string& destinationDir,
+                                    const std::function<void(int, int)>& onProgress,
+                                    const ZipExtractPolicy& policy,
+                                    bool inspectOnly) {
     ZipExtractResult result;
 
     std::FILE* f = std::fopen(archivePath.c_str(), "rb");
@@ -244,7 +273,8 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
     }
 
     std::error_code ec;
-    std::filesystem::create_directories(destinationDir, ec);
+    if (!inspectOnly)
+        std::filesystem::create_directories(destinationDir, ec);
     if (ec) {
         std::fclose(f);
         result.error = "could not create extraction directory";
@@ -283,9 +313,19 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
             result.error = "refusing entry that escapes the theme folder: " + rawName;
             break;
         }
-        if (!allowedExtension(relative)) {
+        if (!policy.allowExecutablePayload && !allowedExtension(relative)) {
             result.error = "refusing file type: " + relative;
             break;
+        }
+        if (!policy.requiredRoots.empty()) {
+            bool inside = false;
+            for (const auto& root : policy.requiredRoots) {
+                if (relative.rfind(root, 0) == 0) { inside = true; break; }
+            }
+            if (!inside) {
+                result.error = "entry outside the allowed folders: " + relative;
+                break;
+            }
         }
         if (!seenPaths.insert(relative).second) {
             result.error = "archive has duplicate file: " + relative;
@@ -313,6 +353,13 @@ ZipExtractResult extractZipFile(const std::string& archivePath,
         if (dataOffset + compressed > size) {
             result.error = "file data runs past the end of the archive: " + relative;
             break;
+        }
+
+        if (inspectOnly) {
+            // Every check above has run; writing is the only thing skipped.
+            ++result.filesWritten;
+            result.bytesWritten += plain;
+            continue;
         }
 
         const std::filesystem::path target = std::filesystem::path(destinationDir) / relative;

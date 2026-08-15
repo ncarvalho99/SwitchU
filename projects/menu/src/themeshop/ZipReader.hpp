@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 // Extracts a theme package into a directory.
 //
@@ -29,9 +30,31 @@ struct ZipExtractResult {
     std::string error;
 };
 
+// What an archive is allowed to contain. The defaults describe a theme package:
+// media and text only, anywhere inside the destination.
+//
+// A launcher update is the other case. It carries executables -- an .nsp, an
+// .npdm, a file called "main" with no extension at all -- so the media list
+// would refuse every one of them. In exchange it must prove it stays inside the
+// directories SwitchU owns, because it is unpacked at the root of a card that
+// also holds the bootloader.
+struct ZipExtractPolicy {
+    bool allowExecutablePayload = false;
+    // When non-empty, every entry must start with one of these.
+    std::vector<std::string> requiredRoots;
+};
+
+// Runs every check extraction would run -- path safety, file types, the
+// required roots, duplicates -- and writes nothing. Lets an update be refused
+// while a screen is still up to say why, instead of at boot with nobody
+// watching.
+ZipExtractResult inspectZipFile(const std::string& archivePath,
+                                const ZipExtractPolicy& policy = {});
+
 // onProgress receives how many entries are done out of the total.
 ZipExtractResult extractZipFile(const std::string& archivePath,
                                 const std::string& destinationDir,
-                                const std::function<void(int, int)>& onProgress = {});
+                                const std::function<void(int, int)>& onProgress = {},
+                                const ZipExtractPolicy& policy = {});
 
 } // namespace themeshop
