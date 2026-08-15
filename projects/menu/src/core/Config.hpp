@@ -107,4 +107,7 @@ struct AppConfig {
 
     static constexpr const char* kConfigDir  = "sdmc:/config/SwitchU";
     static constexpr const char* kConfigPath = "sdmc:/config/SwitchU/config.json";
+    // The copy that was current before the last save. Read only when
+    // config.json is missing or does not parse.
+    static constexpr const char* kBackupPath = "sdmc:/config/SwitchU/config.json.bak";
 };
