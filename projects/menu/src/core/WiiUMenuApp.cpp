@@ -1980,6 +1980,7 @@ void WiiUMenuApp::onUpdate(float dt) {
             DebugLog::log("[init] Bluetooth manager initialized (deferred)");
             // Deferred with the rest of the network-dependent startup so the
             // grid is already on screen before anything reaches for the wire.
+            publishUpdateState();   // bundled notes, before any network call
             startUpdateCheck(false);
         }
     }

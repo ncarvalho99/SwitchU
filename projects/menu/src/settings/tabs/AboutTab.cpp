@@ -15,7 +15,7 @@
 // GPL-2.0 section 2(a) asks a modified version to say that it was modified.
 // PoloNX stays named above the fork, which is both correct and the point.
 
-SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& /* screen */) {
+SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& screen) {
     using Tab = SettingsScreen::Tab;
     using SettingItem = SettingsScreen::SettingItem;
     using ItemType = SettingsScreen::ItemType;
@@ -32,6 +32,20 @@ SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& /* screen */
     };
 
     info("settings.about.version", "Version", "SwitchU " SWITCHU_VERSION);
+
+    // Sits under the version it is about. The launcher also checks once a day
+    // on its own; this is for somebody who does not want to wait for that.
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.about.check_updates", "Check for updates");
+        it.description = i18n.tr("settings.about.check_updates_desc",
+                                 "Asks GitHub whether a newer version has been released.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_checkUpdatesCb) screen.m_checkUpdatesCb();
+        };
+        t.items.push_back(std::move(it));
+    }
     info("settings.about.based_on", "Based on", "SwitchU " SWITCHU_UPSTREAM_VERSION);
     info("settings.about.author", "Original author", "PoloNX");
     info("settings.about.fork_maintainer", "Fork maintained by", "ncarvalho99");

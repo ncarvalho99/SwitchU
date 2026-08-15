@@ -147,6 +147,19 @@ private:
 
     std::shared_ptr<nxui::Label>                     m_titleLabel;
     std::shared_ptr<nxui::Label>                     m_messageLabel;
+    // A message longer than the panel can hold is drawn line by line and
+    // scrolled with up/down, rather than growing a panel past the screen or
+    // silently cutting the text off. Release notes are the case that needs it.
+    std::vector<std::string> m_messageLines;
+    int   m_messageScroll = 0;
+    int   m_messageVisibleLines = 0;
+    float m_messageTop = 0.f;
+    float m_messageLineHeight = 0.f;
+    bool  m_messageScrollable = false;
+    void  scrollMessage(int delta);
+    void  renderScrollingMessage(nxui::Renderer& ren, const nxui::Rect& panel, float alpha);
+    static std::vector<std::string> wrapMessage(nxui::Font* font, const std::string& text,
+                                                float maxWidth, float scale);
     std::shared_ptr<nxui::Box>                       m_buttonRow;
     std::vector<std::shared_ptr<ActionButton>>       m_btnWidgets;
     SelectionCursor m_cursor;

@@ -18,6 +18,7 @@ class InstalledTab;
 class CommunityTab;
 class AnimatedTab;
 class OptionsTab;
+class UpdateTab;
 }
 
 namespace nxui {
@@ -43,6 +44,22 @@ public:
     ~ThemeShopScreen() override = default;
 
     void onMusicEnabledChange(BoolCb cb) { m_musicEnabledCb = std::move(cb); }
+    void onUpdateCheck(std::function<void()> cb)   { m_updateCheckCb = std::move(cb); }
+    void onUpdateInstall(std::function<void()> cb) { m_updateInstallCb = std::move(cb); }
+    // Called by the app whenever the update state changes, so the tab redraws
+    // with the answer instead of polling for it.
+    void setUpdateState(std::string installed, std::string available,
+                        std::string status, bool busy,
+                        std::string latestVersion, std::string latestNotes) {
+        m_updateInstalledVersion = std::move(installed);
+        m_updateAvailableVersion = std::move(available);
+        m_updateStatusText = std::move(status);
+        m_updateBusy = busy;
+        m_updateLatestVersion = std::move(latestVersion);
+        m_updateLatestNotes = std::move(latestNotes);
+        rebuildCurrentTab();
+    }
+    void onReleaseNotes(std::function<void()> cb) { m_releaseNotesCb = std::move(cb); }
     void onMusicVolumeChange(FloatCb cb) { m_musicVolumeCb = std::move(cb); }
     void onSfxVolumeChange(FloatCb cb)   { m_sfxVolumeCb = std::move(cb); }
     // The three appearance controls also live under Settings > Display. They
@@ -119,6 +136,7 @@ private:
     friend class themeshop::tabs::CommunityTab;
     friend class themeshop::tabs::AnimatedTab;
     friend class themeshop::tabs::OptionsTab;
+    friend class themeshop::tabs::UpdateTab;
 
     enum class PreviewPhase {
         Idle,
@@ -222,6 +240,17 @@ private:
     VoidCb m_netConnectCb;
 
     bool m_musicEnabled = true;
+    // What the Update tab shows. The app owns the check itself and pushes the
+    // outcome here, so the tab stays a view rather than a second client.
+    std::string m_updateInstalledVersion;
+    std::string m_updateAvailableVersion;
+    std::string m_updateStatusText;
+    bool  m_updateBusy = false;
+    std::function<void()> m_updateCheckCb;
+    std::function<void()> m_updateInstallCb;
+    std::function<void()> m_releaseNotesCb;
+    std::string m_updateLatestVersion;
+    std::string m_updateLatestNotes;
     float m_musicVolume = 0.4f;
     float m_sfxVolume = 0.7f;
     float m_glassSharpness = 0.4f;

@@ -3,6 +3,7 @@
 #include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <algorithm>
+#include <sstream>
 #include <cstdint>
 #include <utility>
 #include <cmath>
@@ -33,6 +34,45 @@ OverlayDialog::OverlayDialog() {
     m_cursor.setBorderWidth(2.6f);
 }
 
+
+std::vector<std::string> OverlayDialog::wrapMessage(nxui::Font* font, const std::string& text,
+                                                    float maxWidth, float scale) {
+    std::vector<std::string> lines;
+    if (!font || text.empty()) return lines;
+    // Explicit breaks are content here: release notes are a list, and folding
+    // them into one paragraph would lose the shape the author gave them.
+    std::size_t start = 0;
+    while (start <= text.size()) {
+        const std::size_t breakAt = text.find('\n', start);
+        const std::string paragraph = text.substr(start, breakAt == std::string::npos
+                                                         ? std::string::npos : breakAt - start);
+        if (paragraph.empty()) {
+            lines.push_back("");
+        } else {
+            std::istringstream stream(paragraph);
+            std::string word, current;
+            while (stream >> word) {
+                if (current.empty()) { current = word; continue; }
+                const std::string candidate = current + " " + word;
+                if (font->measure(candidate).x * scale <= maxWidth) current = candidate;
+                else { lines.push_back(current); current = word; }
+            }
+            if (!current.empty()) lines.push_back(current);
+        }
+        if (breakAt == std::string::npos) break;
+        start = breakAt + 1;
+    }
+    return lines;
+}
+
+void OverlayDialog::scrollMessage(int delta) {
+    if (!m_messageScrollable) return;
+    const int maxScroll = std::max(0, (int)m_messageLines.size() - m_messageVisibleLines);
+    const int next = std::clamp(m_messageScroll + delta, 0, maxScroll);
+    if (next == m_messageScroll) return;
+    m_messageScroll = next;
+    if (m_navSfxCb) m_navSfxCb();
+}
 
 nxui::Rect OverlayDialog::panelRect() const {
     float panelX = 640.f - m_panelW * 0.5f;
@@ -81,11 +121,26 @@ void OverlayDialog::buildWidgetTree() {
     float titleH = (titleFont && !m_title.empty())
                        ? titleFont->measure(m_title).y : 0.f;
     float msgH   = 0.f;
+    m_messageLines.clear();
+    m_messageScroll = 0;
+    m_messageScrollable = false;
+    m_messageVisibleLines = 0;
     if (bodyFont && !m_message.empty()) {
         nxui::Label probe(m_message, bodyFont);
         probe.setScale(0.96f);
         probe.setMultiline(true);
         msgH = probe.measureWrappedText(contentW).y;
+
+        // Past this the panel would run off a 720p screen. Longer text is kept
+        // whole and scrolled instead of being truncated.
+        constexpr float kMaxMessageH = 300.f;
+        if (msgH > kMaxMessageH) {
+            m_messageLines = wrapMessage(bodyFont, m_message, contentW, 0.96f);
+            m_messageLineHeight = std::max(14.f, bodyFont->measure("Ag").y * 0.96f * 1.12f);
+            m_messageVisibleLines = std::max(1, (int)(kMaxMessageH / m_messageLineHeight));
+            m_messageScrollable = (int)m_messageLines.size() > m_messageVisibleLines;
+            msgH = m_messageVisibleLines * m_messageLineHeight;
+        }
     }
 
     m_panelH = kPanelPadY
@@ -120,7 +175,7 @@ void OverlayDialog::buildWidgetTree() {
         addChild(m_titleLabel);
     }
 
-    if (bodyFont && !m_message.empty()) {
+    if (bodyFont && !m_message.empty() && m_messageLines.empty()) {
         m_messageLabel = std::make_shared<nxui::Label>(m_message, bodyFont);
         m_messageLabel->setTextColor(textSecondary);
         m_messageLabel->setScale(0.96f);
@@ -131,6 +186,13 @@ void OverlayDialog::buildWidgetTree() {
         m_messageLabel->setRect({0, 0, contentW, msgH});
         m_messageLabel->setMarginBottom(kMsgBtnGap);
         addChild(m_messageLabel);
+    } else if (!m_messageLines.empty()) {
+        // A spacer holds the reading area open; render() paints into it.
+        auto reserved = std::make_shared<nxui::Box>(nxui::Axis::COLUMN);
+        reserved->setRect({0, 0, contentW, msgH});
+        reserved->setMarginBottom(kMsgBtnGap);
+        addChild(reserved);
+        m_messageTop = msgH;
     }
 
     float btnW    = (contentW - kButtonGap * (btnCount - 1)) / (float)btnCount;
@@ -530,6 +592,15 @@ void OverlayDialog::setupActions() {
         animateButtonFocus(0.16f, nxui::Easing::outCubic);
         if (m_navSfxCb) m_navSfxCb();
         announceCurrentSelection();
+    });
+
+    addDirectionAction(nxui::FocusDirection::UP, [this]() {
+        if (!m_active || m_animatingOut) return;
+        scrollMessage(-1);
+    });
+    addDirectionAction(nxui::FocusDirection::DOWN, [this]() {
+        if (!m_active || m_animatingOut) return;
+        scrollMessage(1);
     });
 
     addAction(static_cast<uint64_t>(nxui::Button::A), [this]() {
@@ -978,6 +1049,38 @@ void OverlayDialog::renderGlassPanel(nxui::Renderer& ren,
     ren.liquidGlassSettings() = savedGlass;
 }
 
+void OverlayDialog::renderScrollingMessage(nxui::Renderer& ren, const nxui::Rect& panel, float alpha) {
+    if (!m_smallFont && !m_font) return;
+    nxui::Font* bodyFont = m_smallFont ? m_smallFont : m_font;
+    const float scaleNow = scale();
+    const float padX = kPanelPadX * scaleNow;
+    const float lineH = m_messageLineHeight * scaleNow;
+    const float areaH = m_messageVisibleLines * lineH;
+    // Sits under the title, above the button row, matching the space the spacer
+    // child reserved in the column.
+    const float areaY = panel.bottom() - (kPanelPadY + kButtonH + kMsgBtnGap) * scaleNow - areaH;
+    const nxui::Rect area = {panel.x + padX, areaY, panel.width - padX * 2.f, areaH};
+
+    const nxui::Color text = m_theme ? m_theme->textSecondary : nxui::Color::white();
+    ren.pushClipRect(area);
+    for (int i = 0; i < m_messageVisibleLines; ++i) {
+        const int index = m_messageScroll + i;
+        if (index >= (int)m_messageLines.size()) break;
+        ren.drawText(m_messageLines[(size_t)index], {area.x, area.y + i * lineH},
+                     bodyFont, text.withAlpha(text.a * alpha), 0.96f * scaleNow);
+    }
+    ren.popClipRect();
+
+    if (!m_messageScrollable) return;
+    const int maxScroll = std::max(1, (int)m_messageLines.size() - m_messageVisibleLines);
+    const float trackH = std::max(18.f, area.height - 8.f);
+    const float thumbH = std::max(14.f, trackH * m_messageVisibleLines / (float)m_messageLines.size());
+    const float progress = m_messageScroll / (float)maxScroll;
+    const nxui::Color accent = m_theme ? m_theme->cursorNormal : nxui::Color::white();
+    ren.drawRoundedRect({area.right() - 3.f, area.y + 4.f + (trackH - thumbH) * progress, 2.f, thumbH},
+                        accent.withAlpha(0.72f * alpha), 1.f);
+}
+
 void OverlayDialog::render(nxui::Renderer& ren) {
     if (!m_active && !m_animatingOut) return;
 
@@ -1009,6 +1112,8 @@ void OverlayDialog::render(nxui::Renderer& ren) {
     } else {
         for (auto& c : children())
             c->render(ren);
+        if (!m_messageLines.empty())
+            renderScrollingMessage(ren, panel, alpha);
     }
 
     m_cursor.render(ren);

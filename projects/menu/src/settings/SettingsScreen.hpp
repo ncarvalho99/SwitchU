@@ -34,6 +34,7 @@ public:
     void onAccessibilitySpeakPositionChange(BoolCb cb) { m_accessibilitySpeakPositionCb = std::move(cb); }
     void onAccessibilitySpeechRateChange(IntCb cb) { m_accessibilitySpeechRateCb = std::move(cb); }
     void onNetConnect(VoidCb cb)        { m_netConnectCb = std::move(cb); }
+    void onCheckUpdates(VoidCb cb)      { m_checkUpdatesCb = std::move(cb); }
     void onAddUser(VoidCb cb)           { m_addUserCb = std::move(cb); }
     void onSleepRequest(VoidCb cb)      { m_sleepCb = std::move(cb); }
     void onShutdownRequest(VoidCb cb)   { m_shutdownCb = std::move(cb); }
@@ -107,6 +108,7 @@ private:
     BoolCb m_accessibilitySpeakPositionCb;
     IntCb m_accessibilitySpeechRateCb;
     VoidCb m_netConnectCb;
+    VoidCb m_checkUpdatesCb;
     VoidCb m_addUserCb;
     VoidCb m_sleepCb;
     VoidCb m_shutdownCb;

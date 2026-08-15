@@ -1,0 +1,21 @@
+
+Updating from the launcher
+- SwitchU has an Update tab, below Options. It shows the installed version, what the last check found, and what changed -- the notes for the installed build ship with it, so the tab answers before it has spoken to anyone.
+- The launcher checks GitHub for a newer release once a day, and there is a button to check immediately, both in the Update tab and under Settings, About. A check you asked for always answers, including when nothing changed; the daily one stays quiet unless there is news.
+- Accepting an update downloads it, verifies it against the size the release published, installs it and asks you to restart. Nothing is replaced until the whole payload is on the card, because the archive being unpacked contains the menu doing the unpacking. The card is committed before the restart is offered.
+- Release notes scroll with up and down, so long changelogs are read rather than truncated.
+
+Two ways the menu could be lost
+- Moving the cursor across a game with custom artwork could end the menu and send you back to a relaunch. Its background texture was freed while the frame still being drawn was reading it, and the focus path does that on every step across the grid.
+- Applying a background left the launcher stuck on the game icon, escapable only with HOME. The user picker had taken the buttons while being drawn behind the dossier, so the grid sat under a menu that was never visible.
+--pt-BR--
+
+Atualizar pelo launcher
+- O SwitchU ganhou a aba Atualização, abaixo de Opções. Ela mostra a versão instalada, o que a última verificação encontrou e o que mudou — as notas da versão instalada vêm junto com o build, então a aba responde antes mesmo de falar com alguém.
+- O launcher consulta o GitHub uma vez por dia, e há um botão para verificar na hora, tanto na aba quanto em Configurações, Sobre. Uma verificação que você pede sempre responde, inclusive quando nada mudou; a diária fica calada a menos que haja novidade.
+- Aceitar a atualização baixa o pacote, confere com o tamanho que a release publicou, instala e pede o reinício. Nada é substituído antes de o pacote inteiro estar no cartão, porque o arquivo sendo aberto contém o próprio menu que o abre. O cartão é sincronizado antes de o reinício ser oferecido.
+- As notas de versão rolam com cima e baixo, então um changelog longo é lido, e não cortado.
+
+Dois jeitos de perder o menu
+- Passar o cursor sobre um jogo com arte personalizada podia encerrar o menu e devolver você a um relançamento. A textura do fundo era liberada enquanto o quadro ainda em desenho a estava lendo, e o caminho do foco faz isso a cada passo pela grade.
+- Aplicar um fundo deixava o launcher preso no ícone do jogo, com saída apenas pelo botão HOME. O seletor de usuário havia tomado os botões enquanto era desenhado atrás do dossiê, então a grade ficava sob um menu que nunca aparecia.

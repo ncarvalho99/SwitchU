@@ -105,18 +105,23 @@ std::string UpdateClient::condenseNotes(const std::string& body, const std::stri
     std::istringstream stream(section);
     std::string line;
     std::vector<std::string> kept;
-    constexpr std::size_t kMaxBullets = 7;
-    constexpr std::size_t kMaxChars = 620;
+    // The dialog scrolls, so the whole section is kept: headings give the notes
+    // their shape and bullets carry the content. The cap only exists so a
+    // runaway release body cannot allocate without bound.
+    constexpr std::size_t kMaxChars = 6000;
     std::size_t total = 0;
 
-    while (std::getline(stream, line) && kept.size() < kMaxBullets) {
+    while (std::getline(stream, line)) {
         const std::string trimmed = trim(line);
-        if (trimmed.rfind("- ", 0) != 0) continue;      // bullets only
-        const std::string text = plainText(trimmed.substr(2));
+        if (trimmed.empty() || trimmed == "---") continue;
+        const bool heading = trimmed.rfind("### ", 0) == 0 || trimmed.rfind("## ", 0) == 0;
+        const bool bullet = trimmed.rfind("- ", 0) == 0;
+        if (!heading && !bullet) continue;
+        const std::string text = plainText(bullet ? trimmed.substr(2) : trimmed);
         if (text.empty()) continue;
         if (total + text.size() > kMaxChars) break;
         total += text.size();
-        kept.push_back("- " + text);
+        kept.push_back(heading ? (std::string(1, '\n') + text) : ("- " + text));
     }
 
     std::string notes;
@@ -200,17 +205,10 @@ UpdateClient::Snapshot UpdateClient::fetch(const std::string& currentVersion, st
         }
     }
 
-    if (!isNewer(release.version, currentVersion)) {
-        result.phase = Phase::UpToDate;
-        return result;
-    }
-    if (release.downloadUrl.empty()) {
-        // Newer, but nothing installable is published for it.
-        result.phase = Phase::UpToDate;
-        return result;
-    }
-
-    result.phase = Phase::Available;
+    // The release is carried back either way. Up to date is not the same as
+    // having nothing to say: the tab shows what the installed version brought.
+    const bool newer = isNewer(release.version, currentVersion) && !release.downloadUrl.empty();
+    result.phase = newer ? Phase::Available : Phase::UpToDate;
     result.release = std::move(release);
     return result;
 }
