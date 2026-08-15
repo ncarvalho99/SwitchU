@@ -1,3 +1,105 @@
+# SwitchU 1.1.0+fork.9
+
+## English
+
+Ninth release of the [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU)
+fork, based on [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Changing theme could end the launcher. It no longer can, and the theme shop now
+says what a theme costs before you take it.
+
+### Changing theme could kill the launcher
+
+- Switching between the default dark and light themes could fill the screen with
+  colour noise and drop the console back to a relaunch. Reported by a player who
+  hit it every time.
+- A texture handed its descriptor slot and its memory back the instant it was
+  replaced, without waiting for the GPU. The slot returned to the free list, the
+  next texture claimed it, and the frame already in flight sampled an image whose
+  memory was gone. Changing theme re-primes every installed preview while the
+  frame is being drawn, which is why that screen was the one that died.
+- Both figures were checked against the reporter's card first: his theme files
+  were intact and the right size. Nothing about the crash was local to him except
+  the timing.
+- Image dimensions are now also refused before they reach the graphics driver,
+  which answers a layout it cannot compute by killing the process rather than
+  returning an error.
+
+### What a theme costs
+
+- Each animated theme shows its download size at the end of the author's line.
+- The top of the catalogue tab summarises the whole repository: how many themes
+  it holds, how much they are to download, and how much they occupy once
+  unpacked. The two are far apart -- the frames compress hard -- and the number
+  that matters when a card is filling up is the second one.
+- Both figures also appear on a theme's detail screen, where the decision to
+  install is actually made.
+- The totals are counted from the catalogue as it is read, so a theme published
+  later is included without anything being edited by hand.
+
+### Smaller things
+
+- The tutorial's background gets the same gentle blur the menu uses by default.
+  It was the one screen in the launcher rendering its background at full
+  sharpness behind the text panel, and it is the first screen anyone sees.
+  Suggested by a player who noticed exactly that.
+- Settings are written beside the configuration file and swapped in, rather than
+  over it. A launcher that dies mid-write used to leave a truncated file that
+  failed to parse at the next boot, resetting every preference to its default;
+  the previous copy is now kept and read if the current one cannot be.
+
+---
+
+## Português
+
+Nona versão da fork [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU),
+baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Trocar de tema podia encerrar o launcher. Não pode mais, e a loja de temas passa
+a dizer quanto um tema custa antes de você levá-lo.
+
+### Trocar de tema podia matar o launcher
+
+- Alternar entre os temas padrão escuro e claro podia encher a tela de ruído
+  colorido e devolver o console a um relançamento. Relatado por um usuário que
+  reproduzia sempre.
+- Uma textura devolvia o slot de descritor e a memória no instante em que era
+  substituída, sem esperar a GPU. O slot voltava para a lista livre, a textura
+  seguinte o tomava, e o quadro já entregue à GPU lia uma imagem cuja memória
+  havia sumido. Trocar de tema reprepara todas as prévias instaladas durante o
+  desenho do quadro, e é por isso que era justamente aquela tela que morria.
+- Os dois números foram conferidos antes no cartão de quem relatou: os arquivos
+  de tema dele estavam íntegros e no tamanho certo. Nada no crash era particular
+  a ele além do tempo.
+- As dimensões de imagem passam também a ser recusadas antes de chegar ao driver
+  gráfico, que responde a um layout impossível encerrando o processo em vez de
+  devolver erro.
+
+### Quanto custa um tema
+
+- Cada tema animado mostra o tamanho do download no fim da linha do autor.
+- O topo da aba do catálogo resume o repositório inteiro: quantos temas tem,
+  quanto é para baixar e quanto ocupa depois de descompactado. Os dois números
+  ficam longe um do outro — os quadros comprimem muito — e o que importa quando
+  o cartão está enchendo é o segundo.
+- Os dois aparecem também na tela de detalhe do tema, que é onde a decisão de
+  instalar é de fato tomada.
+- Os totais são somados do catálogo conforme ele é lido, então um tema publicado
+  depois entra sozinho, sem nada para editar à mão.
+
+### Coisas menores
+
+- O fundo do tutorial recebe o mesmo desfoque suave que o menu usa por padrão.
+  Era a única tela do launcher desenhando o fundo em nitidez total atrás do
+  painel de texto, e é a primeira tela que qualquer pessoa vê. Sugerido por um
+  usuário que notou exatamente isso.
+- As configurações são gravadas ao lado do arquivo e trocadas no final, em vez de
+  por cima dele. Um launcher que morresse no meio da gravação deixava um arquivo
+  truncado que falhava na leitura do boot seguinte, zerando todas as preferências;
+  agora a cópia anterior é guardada e lida quando a atual não puder ser.
+
+---
+
 # SwitchU 1.1.0+fork.8
 
 ## English
