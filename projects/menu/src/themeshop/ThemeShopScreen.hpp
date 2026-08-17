@@ -275,8 +275,13 @@ private:
     std::string m_updateAvailableVersion;
     std::string m_updateStatusText;
     bool  m_updateBusy = false;
+    // Um pacote já baixado e conferido, esperando o reinício que o aplica. Nesse
+    // estado não há o que baixar de novo, e era justamente isso que fazia a aba
+    // oferecer a mesma atualização sem fim.
+    bool  m_updateRestartPending = false;
     std::function<void()> m_updateCheckCb;
     std::function<void()> m_updateInstallCb;
+    std::function<void()> m_updateRestartCb;
     std::function<void()> m_releaseNotesCb;
     std::string m_updateLatestVersion;
     std::string m_updateLatestNotes;

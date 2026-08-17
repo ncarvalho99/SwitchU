@@ -628,6 +628,14 @@ bool ThemeShopScreen::isAnimatedTab() const {
     return m_tabIndex == 1;
 }
 
+bool ThemeShopScreen::stepCataloguePage(int delta) {
+    if (!usesCustomContentLayout() || m_detailOpen || !isFullyVisible())
+        return false;
+    const int before = currentPage();
+    stepPage(delta);
+    return before != currentPage();
+}
+
 // "61 temas - 4,5 GB para baixar - 7,3 GB no cartao", for whichever catalogue
 // the open tab is showing.
 //
