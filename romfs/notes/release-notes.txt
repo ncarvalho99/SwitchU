@@ -1,39 +1,27 @@
 
-Deleting a theme actually deletes it
-- Removing a live wallpaper took it out of the Installed list and left every file on the card. The space never came back, and themes accumulated silently.
-- The delete used std::filesystem::remove_all and threw the error away. remove_all does not work against the console's device paths, so the call failed and the theme left the list anyway -- from the outside a failure and a success looked the same.
-- The result is checked now, a delete that fails says which path stopped it, and one that works commits the card so the space is really gone.
-- Removing a mod used the same call and had the same fault waiting. It is fixed with it.
-- Themes already left behind stay on the card. They have to be deleted once by hand; the fix applies from here on.
+The version number changed, and why
+- The previous eleven releases were numbered 1.1.0+fork.N. That kept the upstream version visible, but it put the number that actually changes into semver's build metadata -- the one field the specification says to ignore when comparing versions. Formally, 1.1.0+fork.11 and 1.1.0+fork.2 were the same version, and the console only told them apart because the updater's comparator was written to read that field. A version has to be unambiguous in exactly one place above all others: the code deciding whether to install an update.
+- Releases are numbered 2.0.0 onwards, as plain semver. Nothing about the install changes, and a console on 1.1.0+fork.11 sees this as newer and updates normally.
+- What this is built from did not go anywhere: Settings, About still shows Based on: SwitchU 1.1.0, on its own line, which is where it belongs. The fork adds to PoloNX's work rather than replacing it.
+- The eleven old tags stay. Deleting them would erase the history that got here.
 
-Shortcuts
-- A shortcut deleted and created again for another app kept the old name and icon. Names and icons are cached per title, and a forwarder shortcut reuses its title when it is recreated, so the cache looked current when it was not.
-- Titles that appear or disappear now lose what was cached for them, so a shortcut made while the console is on shows its own icon without a reboot.
-- Nothing automatic can notice a title reused while the console was off, so Options gains Reload games and shortcuts: it clears the cache and reads the installed titles again. The player is the one who can see the wrong icon.
+Themes you already have
+- The Animated Themes tab marks the themes already on the console with an Installed chip, so it takes no opening to tell.
+- Opening one offers Apply and Remove instead of offering to download it again -- the same pair the Installed tab shows, acting on the theme the download became. Asked for by a player who had no way to remove a theme without walking back to the other tab to find it.
 
-Nothing writes to the card behind a game
-- The background worker that caches names and icons kept running while a game was in the foreground: an IPC call per title and two files written to the card, underneath a game whose own content the card is also serving. The catalogue rebuild already stood aside for this and the worker did not.
-- It waits now, and resumes when the menu is back. Whether this was behind the crashes reported while playing is not established -- it is worth not doing either way.
-
-Release notes on the console
-- The Update tab showed each note cut off mid-sentence. A changelog bullet wraps over several lines and only the first begins with the dash; everything after the opening clause was dropped. The whole item is kept now.
+Documentation
+- The README describes the launcher as it is. Its TODO list held three items that had all shipped -- the panel on +, the animated background and the SteamGridDB integration -- and its table of contents linked to a Features section that did not exist.
 --pt-BR--
 
-Apagar um tema apaga de verdade
-- Remover um live wallpaper tirava da lista de instalados e deixava todos os arquivos no cartão. O espaço nunca voltava, e os temas se acumulavam em silêncio.
-- A exclusão usava std::filesystem::remove_all e jogava o erro fora. O remove_all não funciona contra os caminhos de dispositivo do console, então a chamada falhava e o tema saía da lista do mesmo jeito — de fora, falha e sucesso pareciam iguais.
-- O resultado passou a ser conferido, uma exclusão que falha diz em que caminho parou, e uma que dá certo confirma no cartão, para o espaço ir embora mesmo.
-- Remover um mod usava a mesma chamada e tinha o mesmo defeito esperando. Foi corrigido junto.
-- Os temas que já ficaram para trás continuam no cartão. Precisam ser apagados à mão uma vez; a correção vale daqui em diante.
+O número de versão mudou, e por quê
+- As onze versões anteriores eram numeradas 1.1.0+fork.N. Isso mantinha a versão de origem visível, mas colocava o número que de fato muda dentro do build metadata do semver — justamente o campo que a especificação manda ignorar ao comparar versões. Formalmente, 1.1.0+fork.11 e 1.1.0+fork.2 eram a mesma versão, e o console só as distinguia porque o comparador do atualizador foi escrito para ler esse campo. Uma versão precisa ser inequívoca num lugar acima de todos: o código que decide se instala uma atualização.
+- As versões passam a ser numeradas de 2.0.0 em diante, em semver simples. Nada muda na instalação, e um console na 1.1.0+fork.11 enxerga esta como mais nova e atualiza normalmente.
+- De onde isto foi feito não sumiu: Configurações, Sobre continua mostrando Baseado em: SwitchU 1.1.0, em linha própria, que é onde isso pertence. A fork soma ao trabalho do PoloNX em vez de substituí-lo.
+- As onze tags antigas ficam. Apagá-las apagaria a história que chegou até aqui.
 
-Atalhos
-- Um atalho apagado e criado de novo para outro aplicativo mantinha o nome e o ícone antigos. Nomes e ícones ficam em cache por título, e um atalho forwarder reaproveita o seu título ao ser recriado, então o cache parecia atual sem estar.
-- Títulos que aparecem ou somem passam a perder o que estava em cache, então um atalho criado com o console ligado mostra o próprio ícone sem reiniciar.
-- Nada automático consegue perceber um título reaproveitado enquanto o console estava desligado, então Opções ganhou Recarregar jogos e atalhos: limpa o cache e relê os títulos instalados. Quem enxerga o ícone errado é a pessoa.
+Temas que você já tem
+- A aba de Temas Animados marca com Instalado os temas que já estão no console, para não ser preciso abrir cada um só para descobrir.
+- Abrir um deles oferece Aplicar e Remover em vez de oferecer baixar de novo — o mesmo par da aba de instalados, agindo sobre o tema em que o download se transformou. Pedido por um usuário que não tinha como remover um tema sem voltar até a outra aba para procurá-lo.
 
-Nada grava no cartão por trás de um jogo
-- O trabalhador em segundo plano que guarda nomes e ícones continuava rodando com um jogo em primeiro plano: uma chamada de IPC por título e dois arquivos gravados no cartão, por baixo de um jogo cujo próprio conteúdo o cartão também serve. A reconstrução do catálogo já se abstinha disso e ele não.
-- Agora ele espera, e volta quando o menu está de volta. Se isso estava por trás das quedas relatadas durante o jogo não está estabelecido — não fazer isso vale de qualquer forma.
-
-Notas de versão no console
-- A aba Atualização mostrava cada nota cortada no meio da frase. Um item do changelog quebra em várias linhas e só a primeira começa com o traço; tudo depois da cláusula inicial era descartado. Agora o item inteiro é mantido.
+Documentação
+- O README passou a descrever o launcher como ele é. A lista de TODO tinha três itens todos já entregues — o painel no +, o fundo animado e a integração com o SteamGridDB — e o índice apontava para uma seção de recursos que não existia.
