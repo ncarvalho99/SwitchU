@@ -1,45 +1,39 @@
 
-Moving the cursor no longer stalls
-- Landing on a game with custom artwork froze the menu for about half a second, every time. The cover was read off the card, decoded and uploaded inside the frame being drawn -- a megabyte or more of card, and tens of milliseconds of JPEG, with the launcher waiting for all of it.
-- Reading and decoding now happen on a worker thread and only the upload is left in the frame, which is microseconds. The image arrives a few frames later rather than instantly, and the grid stays at full speed while it does.
-- Moving quickly across the grid abandons requests instead of queueing them: only the cover you stop on is ever shown.
+Deleting a theme actually deletes it
+- Removing a live wallpaper took it out of the Installed list and left every file on the card. The space never came back, and themes accumulated silently.
+- The delete used std::filesystem::remove_all and threw the error away. remove_all does not work against the console's device paths, so the call failed and the theme left the list anyway -- from the outside a failure and a success looked the same.
+- The result is checked now, a delete that fails says which path stopped it, and one that works commits the card so the space is really gone.
+- Removing a mod used the same call and had the same fault waiting. It is fixed with it.
+- Themes already left behind stay on the card. They have to be deleted once by hand; the fix applies from here on.
 
-What the themes cost
-- The Installed tab counts what the themes on the console occupy, both as a total at the top and on each theme's own card. Built-in themes are not counted -- they ship inside the launcher and take nothing from the card.
-- Those measurements are taken on a worker as well. A theme is hundreds of frames on the card, and adding that up during a frame is the same stall the artwork had.
-- On a theme's detail screen the installed size gets its own line. Sharing one line with the download size ran past the column and the ellipsis ate the half that matters when deciding whether a theme fits.
+Shortcuts
+- A shortcut deleted and created again for another app kept the old name and icon. Names and icons are cached per title, and a forwarder shortcut reuses its title when it is recreated, so the cache looked current when it was not.
+- Titles that appear or disappear now lose what was cached for them, so a shortcut made while the console is on shows its own icon without a reboot.
+- Nothing automatic can notice a title reused while the console was off, so Options gains Reload games and shortcuts: it clears the cache and reads the installed titles again. The player is the one who can see the wrong icon.
 
-Updates
-- An update that has been downloaded no longer offers to download itself again. Once the package is staged, checking, the automatic offer and the install row are all held back until the restart that applies it. The pending state is read from the card rather than remembered, because the menu restarts every time a game closes and a forgotten flag was how the loop started.
-- The Update tab offers Restart now while that restart is pending, so nobody has to leave the screen that asked for it.
+Nothing writes to the card behind a game
+- The background worker that caches names and icons kept running while a game was in the foreground: an IPC call per title and two files written to the card, underneath a game whose own content the card is also serving. The catalogue rebuild already stood aside for this and the worker did not.
+- It waits now, and resumes when the menu is back. Whether this was behind the crashes reported while playing is not established -- it is worth not doing either way.
 
-Smaller things
-- Pressing HOME with the cursor on a sidebar button left it there, while the name at the bottom of the screen showed the game -- two things pointing at each other's answer. The selector now returns to the grid.
-- L and R turn the page in all three theme tabs. Reaching the previous and next buttons meant walking down the whole grid, and in a catalogue of dozens of themes turning the page is the most repeated thing on that screen.
-
-Notes
-- An earlier package of this release was withdrawn. Applying an update writes 527 files and about 43 MB, and none of it was committed to the card -- so a console carried that much outstanding metadata through the session that followed, and the next reboot could bring hekate up unable to find nyx. The reboot itself was never at fault; the write before it was. Both the extraction and the removal of the archive now commit.
-- Because the update is applied by the version already installed, that fix takes effect from the update after this one. Installing this package from a PC avoids the risk entirely.
+Release notes on the console
+- The Update tab showed each note cut off mid-sentence. A changelog bullet wraps over several lines and only the first begins with the dash; everything after the opening clause was dropped. The whole item is kept now.
 --pt-BR--
 
-Passar o cursor não trava mais
-- Parar num jogo com capa personalizada congelava o menu por cerca de meio segundo, toda vez. A capa era lida do cartão, decodificada e enviada à GPU dentro do quadro que estava sendo desenhado — um megabyte ou mais de cartão e dezenas de milissegundos de JPEG, com o launcher esperando por tudo isso.
-- Ler e decodificar passaram para uma thread de trabalho e no quadro sobrou só a subida para a GPU, que é questão de microssegundos. A imagem aparece alguns quadros depois em vez de na hora, e a grade continua fluida enquanto isso.
-- Andar rápido pela grade abandona os pedidos em vez de enfileirá-los: só a capa onde você para chega a ser mostrada.
+Apagar um tema apaga de verdade
+- Remover um live wallpaper tirava da lista de instalados e deixava todos os arquivos no cartão. O espaço nunca voltava, e os temas se acumulavam em silêncio.
+- A exclusão usava std::filesystem::remove_all e jogava o erro fora. O remove_all não funciona contra os caminhos de dispositivo do console, então a chamada falhava e o tema saía da lista do mesmo jeito — de fora, falha e sucesso pareciam iguais.
+- O resultado passou a ser conferido, uma exclusão que falha diz em que caminho parou, e uma que dá certo confirma no cartão, para o espaço ir embora mesmo.
+- Remover um mod usava a mesma chamada e tinha o mesmo defeito esperando. Foi corrigido junto.
+- Os temas que já ficaram para trás continuam no cartão. Precisam ser apagados à mão uma vez; a correção vale daqui em diante.
 
-Quanto os temas custam
-- A aba Instalados conta o que os temas ocupam no console, tanto no total, no topo, quanto no cartão de cada tema. Os embutidos não entram: vêm dentro do launcher e não tomam nada do cartão.
-- Essas medições também acontecem numa thread de trabalho. Um tema é centenas de quadros no cartão, e somar isso durante o quadro é a mesma travada da capa.
-- Na tela de detalhe do tema, o tamanho instalado ganhou linha própria. Dividir uma linha com o tamanho do download passava da coluna, e as reticências comiam justamente a metade que importa para decidir se o tema cabe.
+Atalhos
+- Um atalho apagado e criado de novo para outro aplicativo mantinha o nome e o ícone antigos. Nomes e ícones ficam em cache por título, e um atalho forwarder reaproveita o seu título ao ser recriado, então o cache parecia atual sem estar.
+- Títulos que aparecem ou somem passam a perder o que estava em cache, então um atalho criado com o console ligado mostra o próprio ícone sem reiniciar.
+- Nada automático consegue perceber um título reaproveitado enquanto o console estava desligado, então Opções ganhou Recarregar jogos e atalhos: limpa o cache e relê os títulos instalados. Quem enxerga o ícone errado é a pessoa.
 
-Atualizações
-- Uma atualização já baixada não se oferece mais para ser baixada de novo. Com o pacote pronto no cartão, a verificação, o oferecimento automático e a linha de instalar ficam retidos até o reinício que a aplica. Esse estado é lido do cartão, e não guardado em memória, porque o menu reinicia toda vez que um jogo é fechado — e uma marca esquecida foi como o laço começou.
-- A aba Atualização oferece Reiniciar agora enquanto esse reinício está pendente, para ninguém precisar sair da tela que o pediu.
+Nada grava no cartão por trás de um jogo
+- O trabalhador em segundo plano que guarda nomes e ícones continuava rodando com um jogo em primeiro plano: uma chamada de IPC por título e dois arquivos gravados no cartão, por baixo de um jogo cujo próprio conteúdo o cartão também serve. A reconstrução do catálogo já se abstinha disso e ele não.
+- Agora ele espera, e volta quando o menu está de volta. Se isso estava por trás das quedas relatadas durante o jogo não está estabelecido — não fazer isso vale de qualquer forma.
 
-Coisas menores
-- Apertar HOME com o cursor num botão da barra lateral o deixava lá, enquanto o nome no rodapé da tela mostrava o jogo — dois lugares apontando para a resposta um do outro. O seletor volta para a grade.
-- L e R viram a página nas três abas de temas. Chegar aos botões de anterior e próxima significava descer a grade inteira, e num catálogo de dezenas de temas virar página é o gesto mais repetido daquela tela.
-
-Notas
-- Um pacote anterior desta versão foi retirado. Aplicar uma atualização grava 527 arquivos e cerca de 43 MB, e nada disso era confirmado no cartão — então o console carregava toda essa metadata pendente pela sessão seguinte, e o próximo reinício podia trazer o hekate sem encontrar o nyx. O reinício nunca foi o culpado; a gravação anterior a ele é que era. A extração e a remoção do pacote passaram a confirmar.
-- Como a atualização é aplicada pela versão já instalada, essa correção só passa a valer da atualização seguinte a esta. Instalar este pacote pelo PC evita o risco por completo.
+Notas de versão no console
+- A aba Atualização mostrava cada nota cortada no meio da frase. Um item do changelog quebra em várias linhas e só a primeira começa com o traço; tudo depois da cláusula inicial era descartado. Agora o item inteiro é mantido.
