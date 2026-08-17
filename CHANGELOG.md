@@ -1,3 +1,111 @@
+# SwitchU 1.1.0+fork.11
+
+## English
+
+Eleventh release of the [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU)
+fork, based on [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Deleting a theme now frees the space, a shortcut stops wearing the icon of the
+app it replaced, and nothing writes to the card behind a running game.
+
+### Deleting a theme actually deletes it
+
+- Removing a live wallpaper took it out of the Installed list and left every
+  file on the card. The space never came back, and themes accumulated silently.
+- The delete used std::filesystem::remove_all and threw the error away.
+  remove_all does not work against the console's device paths, so the call
+  failed and the theme left the list anyway -- from the outside a failure and a
+  success looked the same.
+- The result is checked now, a delete that fails says which path stopped it, and
+  one that works commits the card so the space is really gone.
+- Removing a mod used the same call and had the same fault waiting. It is fixed
+  with it.
+- Themes already left behind stay on the card. They have to be deleted once by
+  hand; the fix applies from here on.
+
+### Shortcuts
+
+- A shortcut deleted and created again for another app kept the old name and
+  icon. Names and icons are cached per title, and a forwarder shortcut reuses
+  its title when it is recreated, so the cache looked current when it was not.
+- Titles that appear or disappear now lose what was cached for them, so a
+  shortcut made while the console is on shows its own icon without a reboot.
+- Nothing automatic can notice a title reused while the console was off, so
+  Options gains **Reload games and shortcuts**: it clears the cache and reads
+  the installed titles again. The player is the one who can see the wrong icon.
+
+### Nothing writes to the card behind a game
+
+- The background worker that caches names and icons kept running while a game
+  was in the foreground: an IPC call per title and two files written to the card,
+  underneath a game whose own content the card is also serving. The catalogue
+  rebuild already stood aside for this and the worker did not.
+- It waits now, and resumes when the menu is back. Whether this was behind the
+  crashes reported while playing is not established -- it is worth not doing
+  either way.
+
+### Release notes on the console
+
+- The Update tab showed each note cut off mid-sentence. A changelog bullet wraps
+  over several lines and only the first begins with the dash; everything after
+  the opening clause was dropped. The whole item is kept now.
+
+---
+
+## Português
+
+Décima primeira versão da fork [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU),
+baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Apagar um tema passa a liberar o espaço, um atalho deixa de vestir o ícone do
+aplicativo que substituiu, e nada mais grava no cartão por trás de um jogo.
+
+### Apagar um tema apaga de verdade
+
+- Remover um live wallpaper tirava da lista de instalados e deixava todos os
+  arquivos no cartão. O espaço nunca voltava, e os temas se acumulavam em
+  silêncio.
+- A exclusão usava `std::filesystem::remove_all` e jogava o erro fora. O
+  `remove_all` não funciona contra os caminhos de dispositivo do console, então
+  a chamada falhava e o tema saía da lista do mesmo jeito — de fora, falha e
+  sucesso pareciam iguais.
+- O resultado passou a ser conferido, uma exclusão que falha diz em que caminho
+  parou, e uma que dá certo confirma no cartão, para o espaço ir embora mesmo.
+- Remover um mod usava a mesma chamada e tinha o mesmo defeito esperando. Foi
+  corrigido junto.
+- Os temas que já ficaram para trás continuam no cartão. Precisam ser apagados
+  à mão uma vez; a correção vale daqui em diante.
+
+### Atalhos
+
+- Um atalho apagado e criado de novo para outro aplicativo mantinha o nome e o
+  ícone antigos. Nomes e ícones ficam em cache por título, e um atalho forwarder
+  reaproveita o seu título ao ser recriado, então o cache parecia atual sem
+  estar.
+- Títulos que aparecem ou somem passam a perder o que estava em cache, então um
+  atalho criado com o console ligado mostra o próprio ícone sem reiniciar.
+- Nada automático consegue perceber um título reaproveitado enquanto o console
+  estava desligado, então Opções ganhou **Recarregar jogos e atalhos**: limpa o
+  cache e relê os títulos instalados. Quem enxerga o ícone errado é a pessoa.
+
+### Nada grava no cartão por trás de um jogo
+
+- O trabalhador em segundo plano que guarda nomes e ícones continuava rodando
+  com um jogo em primeiro plano: uma chamada de IPC por título e dois arquivos
+  gravados no cartão, por baixo de um jogo cujo próprio conteúdo o cartão também
+  serve. A reconstrução do catálogo já se abstinha disso e ele não.
+- Agora ele espera, e volta quando o menu está de volta. Se isso estava por trás
+  das quedas relatadas durante o jogo não está estabelecido — não fazer isso
+  vale de qualquer forma.
+
+### Notas de versão no console
+
+- A aba Atualização mostrava cada nota cortada no meio da frase. Um item do
+  changelog quebra em várias linhas e só a primeira começa com o traço; tudo
+  depois da cláusula inicial era descartado. Agora o item inteiro é mantido.
+
+---
+
 # SwitchU 1.1.0+fork.10
 
 ## English
