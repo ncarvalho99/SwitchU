@@ -469,6 +469,10 @@
   "themeshop": {
     "update_status": "Status",
     "update_install": "Install update",
+    "update_restart": "Restart now",
+    "update_restart_desc": "The update is applied while the console starts. This first boot takes about half a minute longer.",
+    "update_restart_pending": "Downloaded. Restart to apply it.",
+    "update_restart_confirm": "The console restarts and applies the update while it starts. This first boot takes about half a minute longer than usual.",
     "update_state": "Update",
     "update_notes": "What changed",
     "update_unknown": "Not checked yet",

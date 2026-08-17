@@ -648,6 +648,28 @@ void WiiUMenuApp::createThemeShop() {
         if (!m_pendingUpdate.downloadUrl.empty())
             offerUpdate(m_pendingUpdate, false);
     });
+    // Offered only while a downloaded update waits for the reboot that applies
+    // it. Asked for so the player does not have to leave the tab that told them
+    // a restart was needed in order to perform it.
+    m_themeShop->onUpdateRestart([this]() {
+        auto& i18n = nxui::I18n::instance();
+        m_audio.playSfx(Sfx::ModalShow);
+        raiseOverlay(m_dialog);
+        m_dialog->show(
+            i18n.tr("themeshop.update_restart", "Restart now"),
+            i18n.tr("themeshop.update_restart_confirm",
+                    "The console restarts and applies the update while it starts. "
+                    "This first boot takes about half a minute longer than usual."),
+            {
+                {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                {i18n.tr("themeshop.update_restart", "Restart now"), [this]() {
+                     DebugLog::log("[update] restart requested from the Update tab");
+                     m_launcher.reboot();
+                 }, false},
+            },
+            0, {});
+        focusManager().setFocus(m_dialog.get());
+    });
 
     m_themeShop->onNetConnectRequest([this]() {
         m_pendingNetConnect = true;

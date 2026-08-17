@@ -320,6 +320,10 @@
   "themeshop": {
     "update_status": "Status",
     "update_install": "Update installeren",
+    "update_restart": "Nu opnieuw opstarten",
+    "update_restart_desc": "De update wordt tijdens het opstarten toegepast. Dat eerste opstarten duurt ongeveer een halve minuut langer.",
+    "update_restart_pending": "Gedownload. Start opnieuw op om toe te passen.",
+    "update_restart_confirm": "De console start opnieuw op en past de update tijdens het opstarten toe. Dat eerste opstarten duurt ongeveer een halve minuut langer dan normaal.",
     "update_state": "Status",
     "update_notes": "Wat is er veranderd",
     "update_unknown": "Nog niet gecontroleerd",

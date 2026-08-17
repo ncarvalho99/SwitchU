@@ -469,6 +469,10 @@
   "themeshop": {
     "update_status": "État",
     "update_install": "Installer la mise à jour",
+    "update_restart": "Redémarrer",
+    "update_restart_desc": "La mise à jour est appliquée au démarrage. Ce premier démarrage prend environ une demi-minute de plus.",
+    "update_restart_pending": "Téléchargée. Redémarrez pour l'appliquer.",
+    "update_restart_confirm": "La console redémarre et applique la mise à jour au démarrage. Ce premier démarrage prend environ une demi-minute de plus que d'habitude.",
     "update_state": "État",
     "update_notes": "Nouveautés",
     "update_unknown": "Pas encore vérifié",

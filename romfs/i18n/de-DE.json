@@ -320,6 +320,10 @@
   "themeshop": {
     "update_status": "Status",
     "update_install": "Update installieren",
+    "update_restart": "Jetzt neu starten",
+    "update_restart_desc": "Das Update wird beim Start angewendet. Dieser erste Start dauert etwa eine halbe Minute länger.",
+    "update_restart_pending": "Heruntergeladen. Zum Anwenden neu starten.",
+    "update_restart_confirm": "Die Konsole startet neu und wendet das Update beim Start an. Dieser erste Start dauert etwa eine halbe Minute länger als sonst.",
     "update_state": "Status",
     "update_notes": "Neuerungen",
     "update_unknown": "Noch nicht geprüft",

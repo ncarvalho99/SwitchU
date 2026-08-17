@@ -49,17 +49,20 @@ public:
     void onMusicEnabledChange(BoolCb cb) { m_musicEnabledCb = std::move(cb); }
     void onUpdateCheck(std::function<void()> cb)   { m_updateCheckCb = std::move(cb); }
     void onUpdateInstall(std::function<void()> cb) { m_updateInstallCb = std::move(cb); }
+    void onUpdateRestart(std::function<void()> cb) { m_updateRestartCb = std::move(cb); }
     // Called by the app whenever the update state changes, so the tab redraws
     // with the answer instead of polling for it.
     void setUpdateState(std::string installed, std::string available,
                         std::string status, bool busy,
-                        std::string latestVersion, std::string latestNotes) {
+                        std::string latestVersion, std::string latestNotes,
+                        bool restartPending) {
         m_updateInstalledVersion = std::move(installed);
         m_updateAvailableVersion = std::move(available);
         m_updateStatusText = std::move(status);
         m_updateBusy = busy;
         m_updateLatestVersion = std::move(latestVersion);
         m_updateLatestNotes = std::move(latestNotes);
+        m_updateRestartPending = restartPending;
         rebuildCurrentTab();
     }
     void onReleaseNotes(std::function<void()> cb) { m_releaseNotesCb = std::move(cb); }
@@ -98,6 +101,16 @@ public:
     void setThreadPool(nxui::ThreadPool* pool);
     void setRenderContext(nxui::GpuDevice* gpu, nxui::Renderer* renderer);
     void refreshCommunityCatalog();
+
+    // Vira a página do catálogo, de onde quer que o foco esteja.
+    //
+    // Chegar até os botões Anterior e Próxima é descer a grade inteira, e num
+    // catálogo de dezenas de temas virar página é o gesto mais repetido da
+    // tela; os gatilhos L e R fazem isso sem tirar o foco do lugar. Devolve
+    // true quando a página mudou de fato, para o som tocar só aí.
+    //
+    // Recusa com o detalhe aberto: ali L e R já percorrem as capturas.
+    bool stepCataloguePage(int delta);
     void requestRenderDiagnostics(int frames = 6) {
         if (frames > m_renderDebugFrames)
             m_renderDebugFrames = frames;
