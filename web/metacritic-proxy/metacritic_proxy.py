@@ -691,13 +691,28 @@ def _igdb_metadata(title: str, platform: str, language: str) -> dict[str, Any]:
 
 
 def _slug_candidates(title: str) -> list[str]:
+    # An apostrophe closes up rather than separating: Metacritic writes Link's
+    # Awakening as "links-awakening", never "link-s-awakening". _normalise_title
+    # keeps only [a-z0-9] runs, so the apostrophe split the word in two and every
+    # title carrying one missed -- Link's Awakening, Luigi's Mansion, Assassin's
+    # Creed, No Man's Sky. Reported for Link's Awakening, which returned no
+    # scores at all.
+    #
+    # The split form stays as a second candidate. It costs one 404 on a title
+    # that does not have it, and this has no way to know which convention a
+    # given page was written under.
+    closed = _normalise_title(re.sub(r"['‘’ʼ]", "", title))
     normal = _normalise_title(title)
-    words = normal.split()
-    candidates = ["-".join(words)]
-    # Some local titles include a leading article while the Metacritic URL does
-    # not. Keep the original candidate first and never introduce arbitrary URLs.
-    if words[:1] in (["the"], ["a"], ["an"]) and len(words) > 2:
-        candidates.append("-".join(words[1:]))
+
+    candidates: list[str] = []
+    for words in ([closed.split(), normal.split()] if closed != normal else [normal.split()]):
+        if not words:
+            continue
+        candidates.append("-".join(words))
+        # Some local titles include a leading article while the Metacritic URL
+        # does not. Never introduce arbitrary URLs beyond these.
+        if words[:1] in (["the"], ["a"], ["an"]) and len(words) > 2:
+            candidates.append("-".join(words[1:]))
     return list(dict.fromkeys(candidate for candidate in candidates if 2 <= len(candidate) <= 180))
 
 
