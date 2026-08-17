@@ -320,6 +320,10 @@
   "themeshop": {
     "update_status": "Stato",
     "update_install": "Installa aggiornamento",
+    "update_restart": "Riavvia ora",
+    "update_restart_desc": "L'aggiornamento viene applicato all'avvio. Questo primo avvio richiede circa mezzo minuto in più.",
+    "update_restart_pending": "Scaricato. Riavvia per applicarlo.",
+    "update_restart_confirm": "La console si riavvia e applica l'aggiornamento all'avvio. Questo primo avvio richiede circa mezzo minuto in più del solito.",
     "update_state": "Stato",
     "update_notes": "Novità",
     "update_unknown": "Non ancora verificato",

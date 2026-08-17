@@ -36,13 +36,19 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
     // One line says where things stand: what the last check found, or that no
     // check has happened yet. Two rows here read as a duplicate, which is what
     // they were.
+    //
+    // A pending restart outranks whatever the last check said: the package is
+    // already on the card and the only thing left is the reboot that applies it.
     {
         SettingItem it;
         it.label = i18n.tr("themeshop.update_status", "Status");
         it.type = ItemType::Info;
-        it.infoText = !screen.m_updateStatusText.empty()
-            ? screen.m_updateStatusText
-            : i18n.tr("themeshop.update_unknown", "Not checked yet");
+        it.infoText = screen.m_updateRestartPending
+            ? i18n.tr("themeshop.update_restart_pending",
+                      "Downloaded. Restart to apply it.")
+            : (!screen.m_updateStatusText.empty()
+                   ? screen.m_updateStatusText
+                   : i18n.tr("themeshop.update_unknown", "Not checked yet"));
         t.items.push_back(std::move(it));
     }
 
@@ -59,6 +65,23 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
             if (screen.m_releaseNotesCb) screen.m_releaseNotesCb();
         };
         t.items.push_back(std::move(it));
+    }
+
+    // With a package waiting to be applied there is nothing to ask GitHub and
+    // nothing to install: both rows would only offer to fetch again what is
+    // already on the card, which is the loop that was reported.
+    if (screen.m_updateRestartPending) {
+        SettingItem it;
+        it.label = i18n.tr("themeshop.update_restart", "Restart now");
+        it.description = i18n.tr("themeshop.update_restart_desc",
+                                 "The update is applied while the console starts. "
+                                 "This first boot takes about half a minute longer.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_updateRestartCb) screen.m_updateRestartCb();
+        };
+        t.items.push_back(std::move(it));
+        return t;
     }
 
     {

@@ -320,6 +320,10 @@
   "themeshop": {
     "update_status": "Situação",
     "update_install": "Instalar atualização",
+    "update_restart": "Reiniciar agora",
+    "update_restart_desc": "A atualização é aplicada durante a inicialização. Esse primeiro boot demora cerca de meio minuto a mais.",
+    "update_restart_pending": "Baixada. Reinicie para aplicá-la.",
+    "update_restart_confirm": "O console reinicia e aplica a atualização durante a inicialização. Esse primeiro boot demora cerca de meio minuto a mais que o normal.",
     "update_state": "Situação",
     "update_notes": "Novidades",
     "update_unknown": "Ainda não verificado",

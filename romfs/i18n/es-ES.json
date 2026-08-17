@@ -320,6 +320,10 @@
   "themeshop": {
     "update_status": "Estado",
     "update_install": "Instalar actualización",
+    "update_restart": "Reiniciar ahora",
+    "update_restart_desc": "La actualización se aplica al iniciar la consola. Ese primer arranque tarda cerca de medio minuto más.",
+    "update_restart_pending": "Descargada. Reinicia para aplicarla.",
+    "update_restart_confirm": "La consola se reinicia y aplica la actualización al arrancar. Ese primer arranque tarda cerca de medio minuto más de lo normal.",
     "update_state": "Estado",
     "update_notes": "Novedades",
     "update_unknown": "Aún no comprobado",

@@ -44,6 +44,19 @@ bool ensureUpdateDirectory() {
     return mkdir(kUpdateDir, 0777) == 0;
 }
 
+// The marker the daemon looks for at boot. While it is there the update is
+// downloaded, verified and staged, and the only step left is the restart that
+// applies it. The daemon removes it once the files are in place, so its absence
+// after a reboot is what says the update went through.
+//
+// Checked from the card rather than remembered in memory on purpose: the menu
+// restarts every time a game closes, and a flag that did not survive that was
+// how the same update kept being offered over and over.
+bool updateRestartPending() {
+    struct stat info {};
+    return stat(kReadyMarker, &info) == 0;
+}
+
 int todayNumber() {
     const auto now = std::chrono::system_clock::now().time_since_epoch();
     return (int)std::chrono::duration_cast<std::chrono::hours>(now).count() / 24;
@@ -85,6 +98,17 @@ struct WiiUMenuApp::UpdateDownload {
 
 void WiiUMenuApp::startUpdateCheck(bool forced) {
 #ifdef SWITCHU_MENU
+    // Nothing a check could find is actionable while a package waits to be
+    // applied, and asking again is how the console ended up downloading the
+    // same release repeatedly.
+    if (updateRestartPending()) {
+        m_pendingUpdate = {};
+        m_updateStatus = nxui::I18n::instance().tr("themeshop.update_restart_pending",
+                                                   "Downloaded. Restart to apply it.");
+        publishUpdateState();
+        DebugLog::log("[update] restart pending; check skipped");
+        return;
+    }
     if (!forced) {
         const int today = todayNumber();
         // Once a day. The menu restarts every time a game is closed, and asking
@@ -113,14 +137,18 @@ void WiiUMenuApp::publishUpdateState() {
         return;
     const std::string language = nxui::I18n::instance().activeLanguageTag();
     const bool havePublished = !m_latestRelease.notes.empty();
+    const bool restartPending = updateRestartPending();
     m_themeShop->setUpdateState(
         std::string("SwitchU ") + SWITCHU_VERSION,
-        m_pendingUpdate.version,
+        // With the restart pending there is nothing left to install, so the row
+        // that offers it must not appear at all.
+        restartPending ? std::string() : m_pendingUpdate.version,
         m_updateStatus,
         m_updateDownload != nullptr,
         havePublished ? m_latestRelease.version : std::string(SWITCHU_VERSION),
         havePublished ? update::UpdateClient::condenseNotes(m_latestRelease.notes, language)
-                      : loadBundledReleaseNotes(language));
+                      : loadBundledReleaseNotes(language),
+        restartPending);
 #endif
 }
 
@@ -197,6 +225,10 @@ void WiiUMenuApp::offerUpdate(const update::UpdateClient::Release& release, bool
     // Applied to the button as well it blocked the button, because that button
     // lives inside the very screen the guard was testing for: pressing Install
     // in the SwitchU tab did nothing at all.
+    if (updateRestartPending()) {
+        DebugLog::log("[update] restart pending; offer suppressed");
+        return;
+    }
     if (automatic) {
         if (m_updateOffered)
             return;
