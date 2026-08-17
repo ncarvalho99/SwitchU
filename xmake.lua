@@ -5,19 +5,28 @@ add_repositories("switch-repo https://github.com/PoloNX/switch-repo.git")
 includes("toolchain/*.lua")
 add_rules("mode.debug", "mode.release")
 
--- Semver build metadata, deliberately. "1.1.0" is what this is built from and
--- stays visible; "+fork.N" cannot be mistaken for a release PoloNX made, and
--- sorts equal to 1.1.0 rather than below it the way a "-fork.N" prerelease
--- would. Rebasing onto an upstream 1.2.0 makes this 1.2.0+fork.1.
+-- Plain semver, counted by this fork.
+--
+-- Eleven releases were numbered "1.1.0+fork.N", which kept the upstream version
+-- visible but put the number that actually changes into semver's build
+-- metadata -- the one field the specification says to ignore when comparing
+-- versions. Formally every one of those releases was the same version, and the
+-- console only ordered them because the updater's comparator was written to
+-- read that field. The one place a version must be unambiguous is the code that
+-- decides whether to install an update.
+--
+-- What it is built from has its own line on the About screen, fed by
+-- upstream_version below, which is where that belongs.
+local version = "2.0.0"
+-- The PoloNX release this fork descends from. Shown as "Based on", never as
+-- our own version.
 local upstream_version = "1.1.0"
-local fork_revision = "11"
-local version = upstream_version .. "+fork." .. fork_revision
 local version_define = string.format('SWITCHU_VERSION="%s"', version)
 local upstream_define = string.format('SWITCHU_UPSTREAM_VERSION="%s"', upstream_version)
 
--- set_version feeds the NACP, which rejects build metadata, so it gets the
--- plain number; the About screen shows the full string.
-set_version(upstream_version)
+-- The NACP rejects build metadata, which is why this used to get the upstream
+-- number instead. There is none to reject now, so it gets the real version.
+set_version(version)
 
 add_requires("libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp", "nlohmann_json", "fmt", "libcurl", "curlpp", {configs = {toolchains = "devkita64"}})
 if get_config("backend") ~= "sdl2" then
