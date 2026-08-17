@@ -147,6 +147,9 @@ private:
     void renderActionHintBar(nxui::Renderer& ren);
     int findTitleIndex(uint64_t titleId) const;
     bool focusTitle(uint64_t titleId);
+    // Devolve o seletor para a grade quando não há um título específico para
+    // focar. Usado ao voltar pelo HOME.
+    bool focusGridSelection();
     void markSuspendedIcon(uint64_t titleId);
     // Overlays created at startup sit below the dossier, gallery and mods
     // screens, which are built on demand and appended after them. One of those
