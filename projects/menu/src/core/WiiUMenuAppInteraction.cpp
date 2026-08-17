@@ -650,6 +650,34 @@ bool WiiUMenuApp::focusTitle(uint64_t titleId) {
     return true;
 }
 
+// Leva o seletor de volta para a grade, seja qual for o jogo.
+//
+// HOME traz o menu para a frente e o seletor tem de vir junto. Quando não há
+// jogo suspenso, focusTitle não tem o que procurar e devolve false, e até aqui
+// isso deixava o cursor parado no botão da barra lateral que abriu a tela --
+// com o nome do jogo escrito embaixo, apontando para outra coisa. Era esse
+// desencontro que aparecia no relato.
+bool WiiUMenuApp::focusGridSelection() {
+    if (!m_grid)
+        return false;
+
+    nxui::Widget* target = m_grid->focusManager().current();
+    if (!target) {
+        // Sem nada lembrado, o primeiro ícone da página aberta serve.
+        const int first = m_grid->currentPage() * m_grid->iconsPerPage();
+        if (!m_grid->focusGlobalIndex(first))
+            return false;
+        target = m_grid->focusManager().current();
+    }
+    if (!target)
+        return false;
+
+    m_grid->focusManager().setFocus(target);
+    focusManager().setFocus(target);
+    updateCursor();
+    return true;
+}
+
 void WiiUMenuApp::markSuspendedIcon(uint64_t titleId) {
     if (!m_grid)
         return;
@@ -1049,7 +1077,10 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
 
             markSuspendedIcon(m_launcher.suspendedTitleId());
             closeActiveOverlays();
-            focusTitle(m_launcher.suspendedTitleId());
+            // Sem jogo suspenso não há título para procurar, e antes o seletor
+            // simplesmente ficava onde estava -- na barra lateral.
+            if (!focusTitle(m_launcher.suspendedTitleId()))
+                focusGridSelection();
             break;
         default:
             break;
