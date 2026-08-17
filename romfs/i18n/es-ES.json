@@ -394,6 +394,7 @@
       "cover_loading": "Cargando captura del tema...",
       "cover_unavailable": "No se pudo cargar la captura. Se muestra un marcador.",
       "install": "Instalar",
+      "installed": "Instalado",
       "download_apply": "Descargar + aplicar",
       "transfer_busy": "Ya hay una transferencia de tema en curso.",
       "install_pending": "Instalación aún no conectada.",

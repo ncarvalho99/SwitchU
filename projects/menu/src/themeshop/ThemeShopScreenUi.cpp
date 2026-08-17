@@ -870,6 +870,21 @@ void ThemeShopScreen::closeDetail() {
     }
 }
 
+// Um pacote baixado vira um preset com id "package:<id do catálogo>". A pasta
+// de instalação também usa o id do catálogo, então a ligação entre as duas
+// listas é essa e não depende do nome, que o autor do tema pode mudar.
+const ThemeShopScreen::ThemeShopEntry*
+ThemeShopScreen::installedEntryForCatalogue(const std::string& catalogueId) const {
+    if (catalogueId.empty())
+        return nullptr;
+    const std::string packaged = "package:" + catalogueId;
+    for (const auto& entry : m_allThemeShopEntries) {
+        if (entry.id == packaged || entry.id == catalogueId)
+            return &entry;
+    }
+    return nullptr;
+}
+
 int ThemeShopScreen::detailButtonCount() const {
     if (isCommunityTab())
         return selectedCommunityThemeEntry() ? 2 : 0;
@@ -896,6 +911,22 @@ void ThemeShopScreen::activateDetailButton(int buttonIndex) {
         }
 
         std::string themeId = entry->id;
+        // Já instalado: baixar de novo não é o que alguém quer daqui, e era a
+        // única coisa oferecida. As ações passam a ser as mesmas da aba de
+        // instalados, sobre o preset que o pacote virou.
+        if (const auto* installed = installedEntryForCatalogue(themeId)) {
+            const std::string presetId = installed->id;
+            clearCommunityPreviewCache();
+            m_lastPreviewPrimeKey.clear();
+            closeDetail();
+            if (buttonIndex == 0) {
+                if (m_themeShopApplyCb) m_themeShopApplyCb(presetId);
+            } else if (buttonIndex == 1) {
+                if (m_themeShopDeleteCb) m_themeShopDeleteCb(presetId);
+            }
+            return;
+        }
+
         clearCommunityPreviewCache();
         m_lastPreviewPrimeKey.clear();
         if (buttonIndex == 0) {
@@ -2056,6 +2087,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         bool builtInDefaultPreview = false;
         bool builtInLightPreview = false;
         bool activeTheme = false;
+        bool installedHere = false;
         int sheetCols = 0, sheetRows = 0;
         float sheetFps = 10.f;
 
@@ -2071,6 +2103,9 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             sheetCols = entry.thumbCols;
             sheetRows = entry.thumbRows;
             sheetFps  = entry.thumbFps;
+            // Marca o que já está no console, para não ser preciso abrir cada
+            // tema só para descobrir que ele já foi baixado.
+            installedHere = installedEntryForCatalogue(entry.id) != nullptr;
         } else {
             const auto& entry = m_themeShopEntries[(size_t)globalIndex];
             titleText = entry.name;
@@ -2128,6 +2163,21 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      m_theme->textPrimary,
                      rowOpacity,
                      0.64f);
+        }
+
+        if (installedHere) {
+            const std::string label = i18n.tr("themeshop.community.installed", "Installed");
+            float chipWidth = std::max(92.f, std::min(126.f, 32.f + measureTextCached(m_smallFont, label).x * 0.66f));
+            nxui::Rect chip = {preview.x + 10.f, preview.y + 10.f, chipWidth, 26.f};
+            drawChip(ren,
+                     m_smallFont,
+                     chip,
+                     label,
+                     nxui::Color(0.10f, 0.22f, 0.38f, 0.36f),
+                     nxui::Color(0.36f, 0.68f, 0.98f, 0.52f),
+                     m_theme->textPrimary,
+                     rowOpacity,
+                     0.66f);
         }
 
         if (activeTheme) {
@@ -2516,8 +2566,16 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
 
     std::vector<std::string> buttonLabels;
     if (isCommunityTab()) {
-        buttonLabels.push_back(i18n.tr("themeshop.community.install", "Install"));
-        buttonLabels.push_back(i18n.tr("themeshop.community.download_apply", "Download + Apply"));
+        const auto* catalogueEntry = selectedCommunityThemeEntry();
+        const bool alreadyInstalled =
+            catalogueEntry && installedEntryForCatalogue(catalogueEntry->id) != nullptr;
+        if (alreadyInstalled) {
+            buttonLabels.push_back(i18n.tr("themeshop.installed.apply", "Apply Theme"));
+            buttonLabels.push_back(i18n.tr("themeshop.installed.remove", "Remove Theme"));
+        } else {
+            buttonLabels.push_back(i18n.tr("themeshop.community.install", "Install"));
+            buttonLabels.push_back(i18n.tr("themeshop.community.download_apply", "Download + Apply"));
+        }
     } else {
         buttonLabels.push_back(i18n.tr("themeshop.installed.apply", "Apply Theme"));
         const auto* entry = selectedThemeShopEntry();

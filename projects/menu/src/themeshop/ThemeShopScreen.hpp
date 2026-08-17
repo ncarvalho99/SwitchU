@@ -126,6 +126,10 @@ public:
                                  std::string themeId,
                                  bool installMode);
     const ThemeShopEntry* selectedThemeShopEntry() const;
+    // O tema do catálogo que já está instalado, ou nullptr. Um pacote baixado
+    // vira um preset com id "package:<id do catálogo>", e é essa a ligação
+    // entre as duas listas.
+    const ThemeShopEntry* installedEntryForCatalogue(const std::string& catalogueId) const;
     const ThemeCatalogClient::Entry* selectedCommunityThemeEntry() const;
     const ThemeCatalogClient::Entry* findCommunityThemeEntry(const std::string& themeId) const;
     const std::string& communityCatalogUrl() const {
