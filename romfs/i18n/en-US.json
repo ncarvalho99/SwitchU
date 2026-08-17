@@ -560,6 +560,7 @@
       "cover_loading": "Loading theme screenshot...",
       "cover_unavailable": "The screenshot could not be loaded. Placeholder shown instead.",
       "install": "Install",
+      "installed": "Installed",
       "download_apply": "Download + Apply",
       "transfer_busy": "Another theme transfer is already running.",
       "install_pending": "Install flow is not wired yet.",

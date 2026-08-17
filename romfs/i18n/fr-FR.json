@@ -560,6 +560,7 @@
       "cover_loading": "Chargement de la capture du thème...",
       "cover_unavailable": "La capture n’a pas pu être chargée. Un aperçu par défaut est affiché.",
       "install": "Installer",
+      "installed": "Installé",
       "download_apply": "Télécharger + appliquer",
       "transfer_busy": "Un transfert de thème est déjà en cours.",
       "install_pending": "Installation pas encore branchée.",
