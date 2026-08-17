@@ -101,7 +101,11 @@
       "background_speed": "Geschwindigkeit der Hintergrundanimation",
       "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes.",
       "grid_columns": "Rasterspalten",
-      "grid_rows": "Rasterzeilen"
+      "grid_rows": "Rasterzeilen",
+      "reload_grid": "Spiele und Verknüpfungen neu laden",
+      "reload_grid_desc": "Liest die installierten Titel erneut und verwirft zwischengespeicherte Namen und Symbole. Nach dem Anlegen oder Löschen einer Verknüpfung verwenden.",
+      "reload_grid_done": "Installierte Titel werden erneut gelesen...",
+      "reload_grid_failed": "Neuladen konnte nicht angefordert werden."
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",

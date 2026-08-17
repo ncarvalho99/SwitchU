@@ -101,7 +101,11 @@
       "background_speed": "Velocidad de la animación de fondo",
       "background_speed_desc": "Cuánto se mueven las formas. El centro es el ritmo del propio tema.",
       "grid_columns": "Columnas de la cuadrícula",
-      "grid_rows": "Filas de la cuadrícula"
+      "grid_rows": "Filas de la cuadrícula",
+      "reload_grid": "Recargar juegos y accesos directos",
+      "reload_grid_desc": "Vuelve a leer los títulos instalados y descarta los nombres e iconos en caché. Úsalo tras crear o borrar un acceso directo.",
+      "reload_grid_done": "Releyendo los títulos instalados...",
+      "reload_grid_failed": "No se pudo pedir la recarga."
     },
     "internet": {
       "wifi_ssid": "Red WiFi",

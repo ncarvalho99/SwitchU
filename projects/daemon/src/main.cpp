@@ -224,6 +224,9 @@ static std::atomic<bool> g_appCatalogRefreshPending{false};
 // appeared once something restarted the menu -- reported as "the first two
 // games never showed up, then the third made all three appear at once".
 static std::atomic<bool> g_catalogChangedWhileAway{false};
+// The first rebuild of a boot only records what is installed; it has nothing to
+// compare against. Invalidating cached names and icons starts from the second.
+static bool g_catalogBaselineTaken = false;
 static int g_appCatalogRefreshDelay = 0;
 static constexpr const char* kAppCatalogPath = smi::kAppCatalogPath;
 static constexpr const char* kAppCatalogTmpPath = smi::kAppCatalogTmpPath;
@@ -417,6 +420,45 @@ static bool rebuildAppCatalog(const char* reason, bool* outChanged = nullptr) {
     queryApplicationViews(records, views, "catalog");
 
     const s32 count = static_cast<s32>(records.size());
+
+    // A title that just arrived or just left loses whatever was cached for it.
+    //
+    // The cache is keyed by title id and never expired, which is fine until an
+    // id comes back meaning something else. A forwarder shortcut deleted and
+    // recreated for a different app keeps its id, hasMeta() then says the work
+    // is done, and the shortcut wears the old app's name and icon. Reported
+    // exactly that way.
+    //
+    // Only from the second rebuild of a boot: the first one has no previous
+    // list to compare against, and treating every title as new there would
+    // re-download every icon on every boot.
+    if (g_catalogBaselineTaken) {
+        auto wasPresent = [&](uint64_t tid) {
+            for (s32 i = 0; i < g_lastRecordCount && i < kMaxTrackedApplicationRecords; ++i)
+                if (g_lastRecordTids[i] == tid) return true;
+            return false;
+        };
+        auto isPresent = [&](uint64_t tid) {
+            for (s32 i = 0; i < count; ++i)
+                if (records[i].id == tid) return true;
+            return false;
+        };
+        for (s32 i = 0; i < count; ++i) {
+            const uint64_t tid = records[i].id;
+            if (tid != 0 && !wasPresent(tid)) {
+                switchu::control_cache::forget(tid);
+                switchu::FileLog::log("[control-cache] forgot 0x%016lX (new record)", tid);
+            }
+        }
+        for (s32 i = 0; i < g_lastRecordCount && i < kMaxTrackedApplicationRecords; ++i) {
+            const uint64_t tid = g_lastRecordTids[i];
+            if (tid != 0 && !isPresent(tid)) {
+                switchu::control_cache::forget(tid);
+                switchu::FileLog::log("[control-cache] forgot 0x%016lX (record gone)", tid);
+            }
+        }
+    }
+    g_catalogBaselineTaken = true;
     g_appCatalog.clear();
     g_appCatalog.reserve(count);
 
@@ -1108,6 +1150,24 @@ static void handleMenuCommand() {
         break;
 
     case smi::SystemMessage::GetAppList: {
+        break;
+    }
+
+    case smi::SystemMessage::RefreshCatalog: {
+        // Everything goes, not just what looks new. This is the answer to a
+        // shortcut that reused an id and therefore looks unchanged: the player
+        // is telling us the cache is wrong, and they are the ones who can see
+        // it. The worker refetches what the catalogue still needs.
+        for (s32 i = 0; i < g_lastRecordCount && i < kMaxTrackedApplicationRecords; ++i) {
+            if (g_lastRecordTids[i] != 0)
+                switchu::control_cache::forget(g_lastRecordTids[i]);
+        }
+        switchu::FileLog::log("[control-cache] cleared on request (%d titles)",
+                              (int)g_lastRecordCount);
+        bool catalogChanged = false;
+        rebuildAppCatalog("refresh-request", &catalogChanged);
+        if (daemon::menu_la::isActive())
+            pushNotification(smi::MenuMessage::AppRecordsChanged);
         break;
     }
 

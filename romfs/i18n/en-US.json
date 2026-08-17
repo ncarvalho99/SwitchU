@@ -265,7 +265,11 @@
       "background_speed": "Background animation speed",
       "background_speed_desc": "How fast the shapes drift. Centre is the theme's own pace.",
       "grid_columns": "Home Grid Columns",
-      "grid_rows": "Home Grid Rows"
+      "grid_rows": "Home Grid Rows",
+      "reload_grid": "Reload games and shortcuts",
+      "reload_grid_desc": "Reads the installed titles again and discards the cached names and icons. Use it after creating or deleting a shortcut.",
+      "reload_grid_done": "Reading the installed titles again...",
+      "reload_grid_failed": "Could not ask for a reload."
     },
     "internet": {
       "wifi_ssid": "WiFi Network",

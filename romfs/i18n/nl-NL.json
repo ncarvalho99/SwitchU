@@ -101,7 +101,11 @@
       "background_speed": "Snelheid van achtergrondanimatie",
       "background_speed_desc": "Hoe snel de vormen zweven. Het midden is het tempo van het thema zelf.",
       "grid_columns": "Rasterkolommen",
-      "grid_rows": "Rasterrijen"
+      "grid_rows": "Rasterrijen",
+      "reload_grid": "Games en snelkoppelingen herladen",
+      "reload_grid_desc": "Leest de geïnstalleerde titels opnieuw en gooit namen en pictogrammen in de cache weg. Gebruik dit na het maken of verwijderen van een snelkoppeling.",
+      "reload_grid_done": "Geïnstalleerde titels worden opnieuw gelezen...",
+      "reload_grid_failed": "Kon geen herlading aanvragen."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",

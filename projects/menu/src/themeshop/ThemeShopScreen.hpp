@@ -82,6 +82,10 @@ public:
     void onThemeShopDownload(StringCb cb) { m_themeShopDownloadCb = std::move(cb); }
     void onThemeShopDownloadInstall(StringCb cb) { m_themeShopDownloadInstallCb = std::move(cb); }
     void onNetConnectRequest(VoidCb cb)  { m_netConnectCb = std::move(cb); }
+    // Recarrega a grade: relê os títulos instalados e descarta nomes e ícones
+    // em cache. É a saída para um atalho cujo id foi reaproveitado, que não
+    // parece novo para nenhuma verificação automática.
+    void onReloadCatalog(VoidCb cb)      { m_reloadCatalogCb = std::move(cb); }
 
     void setMusicState(bool enabled, float musicVol, float sfxVol) {
         m_musicEnabled = enabled;
@@ -282,6 +286,7 @@ private:
     std::function<void()> m_updateCheckCb;
     std::function<void()> m_updateInstallCb;
     std::function<void()> m_updateRestartCb;
+    VoidCb m_reloadCatalogCb;
     std::function<void()> m_releaseNotesCb;
     std::string m_updateLatestVersion;
     std::string m_updateLatestNotes;

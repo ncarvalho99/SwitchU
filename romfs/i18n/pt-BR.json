@@ -101,7 +101,11 @@
       "background_speed": "Velocidade da animação de fundo",
       "background_speed_desc": "O quanto as formas se movem. O centro é o ritmo do próprio tema.",
       "grid_columns": "Colunas da grade",
-      "grid_rows": "Linhas da grade"
+      "grid_rows": "Linhas da grade",
+      "reload_grid": "Recarregar jogos e atalhos",
+      "reload_grid_desc": "Relê os títulos instalados e descarta os nomes e ícones em cache. Use depois de criar ou apagar um atalho.",
+      "reload_grid_done": "Relendo os títulos instalados...",
+      "reload_grid_failed": "Não foi possível pedir a recarga."
     },
     "internet": {
       "wifi_ssid": "Rede WiFi",

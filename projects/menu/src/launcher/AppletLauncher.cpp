@@ -113,6 +113,11 @@ void AppletLauncher::reboot() {
     switchu::menu::smi_cmd::reboot();
 }
 
+Result AppletLauncher::refreshCatalog() {
+    DebugLog::log("[launcher] requesting catalog refresh");
+    return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RefreshCatalog);
+}
+
 void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid) {
     DebugLog::log("[launcher] tid=%016lX", titleId);
     Result rc = switchu::menu::smi_cmd::launchApplication(titleId, uid);
@@ -165,6 +170,7 @@ void AppletLauncher::enterSleep()              {}
 void AppletLauncher::shutdown()                {}
 void AppletLauncher::reboot()                  {}
 void AppletLauncher::launchApplication(uint64_t, AccountUid) {}
+Result AppletLauncher::refreshCatalog()                { return 0; }
 void AppletLauncher::resumeApplication()       {}
 void AppletLauncher::terminateApplication()    {}
 void AppletLauncher::checkRunningApplication() {}

@@ -265,7 +265,11 @@
       "background_speed": "Vitesse de l'animation de fond",
       "background_speed_desc": "À quelle vitesse les formes dérivent. Le centre est le rythme du thème.",
       "grid_columns": "Colonnes de la grille",
-      "grid_rows": "Lignes de la grille"
+      "grid_rows": "Lignes de la grille",
+      "reload_grid": "Recharger jeux et raccourcis",
+      "reload_grid_desc": "Relit les titres installés et jette les noms et icônes en cache. À utiliser après avoir créé ou supprimé un raccourci.",
+      "reload_grid_done": "Relecture des titres installés...",
+      "reload_grid_failed": "Impossible de demander le rechargement."
     },
     "internet": {
       "wifi_ssid": "Réseau WiFi",

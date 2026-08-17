@@ -50,6 +50,13 @@ enum class SystemMessage : uint32_t {
 
     MenuReady             = 40,
     MenuClosing           = 41,
+    // Rebuild the catalogue now, forgetting every cached name and icon first.
+    //
+    // The daemon already refreshes when the record list changes, but a shortcut
+    // whose id was reused looks unchanged to that check, and a player who has
+    // just made one has no way to say "look again" short of rebooting. Asked
+    // for after exactly that.
+    RefreshCatalog        = 42,
 };
 
 enum class MenuStartMode : uint32_t {

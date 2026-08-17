@@ -27,6 +27,10 @@ public:
     void enterSleep();
     void shutdown();
     void reboot();
+    // Pede ao daemon que releia os titulos instalados, jogando fora nomes e
+    // icones em cache. Sem daemon nao ha catalogo para reler, e a versao
+    // homebrew simplesmente nao faz nada.
+    Result refreshCatalog();
 
     void launchApplication(uint64_t titleId, AccountUid uid);
     void resumeApplication();
