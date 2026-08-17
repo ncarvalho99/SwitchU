@@ -2165,6 +2165,15 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (!debugTouchBlocked && m_themeShop && m_themeShop->isActive())
         m_themeShop->handleTouch(app().input());
 
+    // L e R viram a página do catálogo de temas. Roteado daqui porque é onde a
+    // entrada está: a loja é um widget e não alcança o Input por conta própria.
+    if (m_themeShop && m_themeShop->isActive() && !(m_dialog && m_dialog->isActive())) {
+        const int delta = app().input().isDown(nxui::Button::L) ? -1
+                        : app().input().isDown(nxui::Button::R) ? 1 : 0;
+        if (delta != 0 && m_themeShop->stepCataloguePage(delta))
+            m_audio.playSfx(Sfx::Navigate);
+    }
+
     if (!debugTouchBlocked && m_gameGallery && m_gameGallery->isActive())
         m_gameGallery->handleTouch(app().input());
 
