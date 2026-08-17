@@ -112,18 +112,54 @@ std::string UpdateClient::condenseNotes(const std::string& body, const std::stri
     constexpr std::size_t kMaxChars = 6000;
     std::size_t total = 0;
 
+    // A bullet in the changelog wraps over several lines and only the first one
+    // starts with "- ". Dropping every line that is not a heading or a bullet
+    // therefore threw away all but the opening clause of each item -- the notes
+    // arrived on the console cut off mid-sentence, which is how this was
+    // reported. The continuations have to be joined back on.
+    //
+    // tools/export_release_notes.py already does this for the notes shipped
+    // inside the build. This is the same text arriving by the other route, and
+    // it needs the same treatment.
+    std::string pending;
+    auto flushPending = [&]() {
+        if (pending.empty())
+            return;
+        if (total + pending.size() <= kMaxChars) {
+            total += pending.size();
+            kept.push_back("- " + pending);
+        }
+        pending.clear();
+    };
+
     while (std::getline(stream, line)) {
         const std::string trimmed = trim(line);
-        if (trimmed.empty() || trimmed == "---") continue;
+        if (trimmed.empty() || trimmed == "---") {
+            flushPending();
+            continue;
+        }
         const bool heading = trimmed.rfind("### ", 0) == 0 || trimmed.rfind("## ", 0) == 0;
         const bool bullet = trimmed.rfind("- ", 0) == 0;
-        if (!heading && !bullet) continue;
-        const std::string text = plainText(bullet ? trimmed.substr(2) : trimmed);
-        if (text.empty()) continue;
-        if (total + text.size() > kMaxChars) break;
-        total += text.size();
-        kept.push_back(heading ? (std::string(1, '\n') + text) : ("- " + text));
+        if (heading) {
+            flushPending();
+            const std::string text = plainText(trimmed);
+            if (text.empty()) continue;
+            if (total + text.size() > kMaxChars) break;
+            total += text.size();
+            kept.push_back(std::string(1, '\n') + text);
+            continue;
+        }
+        if (bullet) {
+            flushPending();
+            pending = plainText(trimmed.substr(2));
+            continue;
+        }
+        // A continuation of the bullet above. Outside one it is prose between
+        // sections, which the dialog has no room for.
+        if (!pending.empty())
+            pending += " " + plainText(trimmed);
     }
+    flushPending();
 
     std::string notes;
     for (const auto& entry : kept) {
