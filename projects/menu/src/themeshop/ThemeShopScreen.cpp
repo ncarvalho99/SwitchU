@@ -143,6 +143,9 @@ void ThemeShopScreen::setThemeShopState(const std::vector<ThemeShopEntry>& entri
     m_allThemeShopEntries = entries;
     m_installedPreviewCache.clear();
     applySearchFilter();
+    // Um tema recém-instalado entra aqui, então é aqui que a medição do que ele
+    // ocupa é enfileirada. Quem já foi medido não é medido de novo.
+    measureInstalledThemes();
 
     auto hasId = [&](const std::string& id) {
         return std::any_of(m_themeShopEntries.begin(), m_themeShopEntries.end(),

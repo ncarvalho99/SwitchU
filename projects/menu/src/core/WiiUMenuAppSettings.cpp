@@ -1046,6 +1046,9 @@ std::vector<ThemeShopScreen::ThemeShopEntry> WiiUMenuApp::buildThemeShopEntries(
         else
             entry.soundPreset = preset.soundPreset;
         entry.coverPath = installedThemePreviewPath(preset);
+        // Só o caminho. Medir o que ele ocupa é percorrer centenas de quadros no
+        // cartão, e isso a loja faz numa thread de trabalho, não aqui.
+        entry.installPath = preset.installPath;
         entry.active = (entry.id == activeId);
         entry.removable = (preset.source != ThemePresetSource::BuiltIn);
         entries.push_back(std::move(entry));

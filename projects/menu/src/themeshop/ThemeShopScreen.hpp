@@ -36,6 +36,9 @@ public:
         std::string source;
         std::string soundPreset;
         std::string coverPath;
+        // De onde o tema foi instalado. Vazio para os embutidos, que vivem no
+        // romfs do proprio build e nao ocupam nada do cartao.
+        std::string installPath;
         bool active = false;
         bool removable = false;
     };
@@ -188,6 +191,16 @@ private:
     // One line summarising the open tab's whole catalogue: how many themes it
     // has, and what they cost to download and to keep.
     std::string communityCatalogueTotals() const;
+
+    // O mesmo resumo para o que já está no console: quantos temas e quanto do
+    // cartão eles ocupam.
+    std::string installedThemeTotals() const;
+    // O que um tema instalado ocupa, ou 0 enquanto a medição não voltou.
+    std::uint64_t installedThemeBytes(const std::string& installPath) const;
+    // Põe na fila a medição dos temas que ainda não têm tamanho. Percorrer a
+    // pasta de um tema animado é centenas de arquivos no cartão, então isso
+    // nunca acontece na thread que desenha.
+    void measureInstalledThemes();
     int currentEntryCount() const;
     int currentSelectedIndex() const;
     void setCurrentSelectedIndex(int idx);
@@ -265,6 +278,16 @@ private:
     std::vector<ThemeShopEntry> m_allThemeShopEntries;
     std::vector<ThemeShopEntry> m_themeShopEntries;
     std::string m_themeShopSelectedId;
+
+    // Tamanhos medidos por caminho de instalação. Compartilhado com as threads
+    // de trabalho que fazem a medição, daí o mutex; a leitura acontece durante
+    // o desenho e é só uma consulta.
+    struct InstalledSizes {
+        mutable std::mutex mutex;
+        std::unordered_map<std::string, std::uint64_t> bytes;
+        std::unordered_set<std::string> inFlight;
+    };
+    std::shared_ptr<InstalledSizes> m_installedSizes = std::make_shared<InstalledSizes>();
 
     nxui::ThreadPool* m_threadPool = nullptr;
     nxui::GpuDevice* m_gpu = nullptr;

@@ -7,12 +7,16 @@
 
 #include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
+#include <nxui/core/ThreadPool.hpp>
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cmath>
+#include <filesystem>
 #include <functional>
+#include <system_error>
+#include <vector>
 #include <unordered_map>
 #include <utility>
 
@@ -632,6 +636,79 @@ bool ThemeShopScreen::isAnimatedTab() const {
 // entries that declare a size contribute -- an older index that never carried
 // the field is reported as the themes it has, without a size claim invented on
 // its behalf.
+std::uint64_t ThemeShopScreen::installedThemeBytes(const std::string& installPath) const {
+    if (installPath.empty())
+        return 0;
+    std::lock_guard<std::mutex> lk(m_installedSizes->mutex);
+    auto it = m_installedSizes->bytes.find(installPath);
+    return it == m_installedSizes->bytes.end() ? 0 : it->second;
+}
+
+// Uma medição por tema, na thread de trabalho, e o resultado fica.
+//
+// Um tema animado é uma pasta com centenas de quadros; somar isso com o
+// desenho parado é a mesma travada que a capa personalizada causava. O tamanho
+// aparece um instante depois de a aba abrir, e é o preço certo a pagar.
+void ThemeShopScreen::measureInstalledThemes() {
+    if (!m_threadPool)
+        return;
+
+    std::vector<std::string> pending;
+    {
+        std::lock_guard<std::mutex> lk(m_installedSizes->mutex);
+        for (const auto& entry : m_allThemeShopEntries) {
+            if (entry.installPath.empty())
+                continue;
+            if (m_installedSizes->bytes.count(entry.installPath))
+                continue;
+            if (!m_installedSizes->inFlight.insert(entry.installPath).second)
+                continue;
+            pending.push_back(entry.installPath);
+        }
+    }
+    if (pending.empty())
+        return;
+
+    auto sizes = m_installedSizes;
+    m_threadPool->submit([sizes, pending]() {
+        for (const auto& path : pending) {
+            std::uint64_t total = 0;
+            std::error_code ec;
+            for (std::filesystem::recursive_directory_iterator it(path, ec), end;
+                 it != end && !ec; it.increment(ec)) {
+                if (it->is_regular_file(ec) && !ec)
+                    total += (std::uint64_t)it->file_size(ec);
+            }
+            std::lock_guard<std::mutex> lk(sizes->mutex);
+            sizes->bytes[path] = total;
+            sizes->inFlight.erase(path);
+        }
+    });
+}
+
+// "4 temas - 512 MB no cartao". Só conta o que realmente ocupa espaço: os
+// embutidos vêm dentro do próprio build e não têm caminho de instalação.
+std::string ThemeShopScreen::installedThemeTotals() const {
+    int measured = 0;
+    std::uint64_t total = 0;
+    for (const auto& entry : m_allThemeShopEntries) {
+        const std::uint64_t bytes = installedThemeBytes(entry.installPath);
+        if (bytes == 0)
+            continue;
+        ++measured;
+        total += bytes;
+    }
+    if (measured == 0 || total == 0)
+        return {};
+
+    auto& i18n = nxui::I18n::instance();
+    return std::to_string((int)m_allThemeShopEntries.size()) + " "
+        + (m_allThemeShopEntries.size() == 1
+               ? i18n.tr("themeshop.catalog.theme_one", "theme")
+               : i18n.tr("themeshop.catalog.theme_many", "themes"))
+        + " - " + formatBytes(total) + " " + i18n.tr("themeshop.catalog.on_card", "on the SD card");
+}
+
 std::string ThemeShopScreen::communityCatalogueTotals() const {
     const bool wantAnimated = isAnimatedTab();
     int themes = 0;
@@ -1729,10 +1806,11 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     // in this line the next time the console reads the index -- there is no
     // number to keep in step by hand. The search filter is deliberately not
     // applied: this answers "what is there", not "what am I looking at".
-    if (isCommunityTab()) {
-        const std::string catalogueTotals = communityCatalogueTotals();
-        if (!catalogueTotals.empty()) {
-            ren.drawText(catalogueTotals, {layout.header.x, layout.header.y + 60.f}, m_smallFont,
+    {
+        const std::string totals = isCommunityTab() ? communityCatalogueTotals()
+                                                    : installedThemeTotals();
+        if (!totals.empty()) {
+            ren.drawText(totals, {layout.header.x, layout.header.y + 60.f}, m_smallFont,
                          m_theme->textSecondary.withAlpha(0.70f * contentOpacity), 0.68f);
         }
     }
@@ -1992,6 +2070,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                 ? i18n.tr("themeshop.community.author_unknown", "Unknown")
                 : entry.author;
             subtitleText = entry.source.empty() ? author : (author + " - " + entry.source);
+            sizeText = formatBytes(installedThemeBytes(entry.installPath));
             versionText = entry.version;
             activeTheme = entry.active;
             previewRequested = !entry.coverPath.empty();
@@ -2120,6 +2199,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     std::string detailSubtitle;
     std::string detailInfoA;
     std::string detailInfoB;
+    // O tamanho no cartao ganhou linha propria. Junto com o download numa linha
+    // so, a frase passava da largura da coluna e as reticencias comiam
+    // justamente a metade que interessa a quem esta decidindo se cabe.
+    std::string detailInfoBExtra;
     std::string detailInfoC;
     const nxui::Texture* detailPreviewTexture = nullptr;
     PreviewPhase detailPreviewPhase = PreviewPhase::Failed;
@@ -2147,10 +2230,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             detailInfoB = i18n.tr("themeshop.community.size", "Size") + std::string(": ");
             if (!downloadSize.empty())
                 detailInfoB += downloadSize + " " + i18n.tr("themeshop.catalog.to_download", "to download");
-            if (!downloadSize.empty() && !cardSize.empty())
-                detailInfoB += " - ";
             if (!cardSize.empty())
-                detailInfoB += cardSize + " " + i18n.tr("themeshop.catalog.on_card", "on the SD card");
+                detailInfoBExtra = cardSize + " " + i18n.tr("themeshop.catalog.on_card", "on the SD card");
         } else {
             detailInfoB = i18n.tr("themeshop.community.manifest", "Manifest") + std::string(": ")
                 + (entry->manifest.empty() ? i18n.tr("themeshop.community.manifest_missing", "Not provided") : entry->manifest);
@@ -2285,6 +2366,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     }
 
     float infoBlockHeight = (isCommunityTab() && !m_packageTransferState.label().empty()) ? 272.f : 224.f;
+    // A linha extra do tamanho empurra o resto para baixo, entao o bloco cresce
+    // junto -- senao a ultima linha sai pela borda do dialogo.
+    if (!detailInfoBExtra.empty())
+        infoBlockHeight += 32.f;
     nxui::Rect infoBounds = {
         preview.right() + 24.f,
         dialog.y + 26.f,
@@ -2318,8 +2403,17 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                  m_smallFont,
                  m_theme->textSecondary.withAlpha(0.92f * detailOpacity),
                  0.76f);
+    float infoCy = info.y + 190.f;
+    if (!detailInfoBExtra.empty()) {
+        ren.drawText(ellipsize(m_smallFont, detailInfoBExtra, info.width, 0.76f),
+                     {info.x, info.y + 182.f},
+                     m_smallFont,
+                     m_theme->textSecondary.withAlpha(0.92f * detailOpacity),
+                     0.76f);
+        infoCy = info.y + 222.f;
+    }
     ren.drawText(ellipsize(m_smallFont, detailInfoC, info.width, 0.76f),
-                 {info.x, info.y + 190.f},
+                 {info.x, infoCy},
                  m_smallFont,
                  m_theme->textSecondary.withAlpha(0.92f * detailOpacity),
                  0.76f);
