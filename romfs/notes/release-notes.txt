@@ -1,33 +1,37 @@
 
-Changing theme could kill the launcher
-- Switching between the default dark and light themes could fill the screen with colour noise and drop the console back to a relaunch. Reported by a player who hit it every time.
-- A texture handed its descriptor slot and its memory back the instant it was replaced, without waiting for the GPU. The slot returned to the free list, the next texture claimed it, and the frame already in flight sampled an image whose memory was gone. Changing theme re-primes every installed preview while the frame is being drawn, which is why that screen was the one that died.
-- Both figures were checked against the reporter's card first: his theme files were intact and the right size. Nothing about the crash was local to him except the timing.
-- Image dimensions are now also refused before they reach the graphics driver, which answers a layout it cannot compute by killing the process rather than returning an error.
+Moving the cursor no longer stalls
+- Landing on a game with custom artwork froze the menu for about half a second, every time. The cover was read off the card, decoded and uploaded inside the frame being drawn -- a megabyte or more of card, and tens of milliseconds of JPEG, with the launcher waiting for all of it.
+- Reading and decoding now happen on a worker thread and only the upload is left in the frame, which is microseconds. The image arrives a few frames later rather than instantly, and the grid stays at full speed while it does.
+- Moving quickly across the grid abandons requests instead of queueing them: only the cover you stop on is ever shown.
 
-What a theme costs
-- Each animated theme shows its download size at the end of the author's line.
-- The top of the catalogue tab summarises the whole repository: how many themes it holds, how much they are to download, and how much they occupy once unpacked. The two are far apart -- the frames compress hard -- and the number that matters when a card is filling up is the second one.
-- Both figures also appear on a theme's detail screen, where the decision to install is actually made.
-- The totals are counted from the catalogue as it is read, so a theme published later is included without anything being edited by hand.
+What the themes cost
+- The Installed tab counts what the themes on the console occupy, both as a total at the top and on each theme's own card. Built-in themes are not counted -- they ship inside the launcher and take nothing from the card.
+- Those measurements are taken on a worker as well. A theme is hundreds of frames on the card, and adding that up during a frame is the same stall the artwork had.
+- On a theme's detail screen the installed size gets its own line. Sharing one line with the download size ran past the column and the ellipsis ate the half that matters when deciding whether a theme fits.
+
+Updates
+- An update that has been downloaded no longer offers to download itself again. Once the package is staged, checking, the automatic offer and the install row are all held back until the restart that applies it. The pending state is read from the card rather than remembered, because the menu restarts every time a game closes and a forgotten flag was how the loop started.
+- The Update tab offers Restart now while that restart is pending, so nobody has to leave the screen that asked for it.
 
 Smaller things
-- The tutorial's background gets the same gentle blur the menu uses by default. It was the one screen in the launcher rendering its background at full sharpness behind the text panel, and it is the first screen anyone sees. Suggested by a player who noticed exactly that.
-- Settings are written beside the configuration file and swapped in, rather than over it. A launcher that dies mid-write used to leave a truncated file that failed to parse at the next boot, resetting every preference to its default; the previous copy is now kept and read if the current one cannot be.
+- Pressing HOME with the cursor on a sidebar button left it there, while the name at the bottom of the screen showed the game -- two things pointing at each other's answer. The selector now returns to the grid.
+- L and R turn the page in all three theme tabs. Reaching the previous and next buttons meant walking down the whole grid, and in a catalogue of dozens of themes turning the page is the most repeated thing on that screen.
 --pt-BR--
 
-Trocar de tema podia matar o launcher
-- Alternar entre os temas padrão escuro e claro podia encher a tela de ruído colorido e devolver o console a um relançamento. Relatado por um usuário que reproduzia sempre.
-- Uma textura devolvia o slot de descritor e a memória no instante em que era substituída, sem esperar a GPU. O slot voltava para a lista livre, a textura seguinte o tomava, e o quadro já entregue à GPU lia uma imagem cuja memória havia sumido. Trocar de tema reprepara todas as prévias instaladas durante o desenho do quadro, e é por isso que era justamente aquela tela que morria.
-- Os dois números foram conferidos antes no cartão de quem relatou: os arquivos de tema dele estavam íntegros e no tamanho certo. Nada no crash era particular a ele além do tempo.
-- As dimensões de imagem passam também a ser recusadas antes de chegar ao driver gráfico, que responde a um layout impossível encerrando o processo em vez de devolver erro.
+Passar o cursor não trava mais
+- Parar num jogo com capa personalizada congelava o menu por cerca de meio segundo, toda vez. A capa era lida do cartão, decodificada e enviada à GPU dentro do quadro que estava sendo desenhado — um megabyte ou mais de cartão e dezenas de milissegundos de JPEG, com o launcher esperando por tudo isso.
+- Ler e decodificar passaram para uma thread de trabalho e no quadro sobrou só a subida para a GPU, que é questão de microssegundos. A imagem aparece alguns quadros depois em vez de na hora, e a grade continua fluida enquanto isso.
+- Andar rápido pela grade abandona os pedidos em vez de enfileirá-los: só a capa onde você para chega a ser mostrada.
 
-Quanto custa um tema
-- Cada tema animado mostra o tamanho do download no fim da linha do autor.
-- O topo da aba do catálogo resume o repositório inteiro: quantos temas tem, quanto é para baixar e quanto ocupa depois de descompactado. Os dois números ficam longe um do outro — os quadros comprimem muito — e o que importa quando o cartão está enchendo é o segundo.
-- Os dois aparecem também na tela de detalhe do tema, que é onde a decisão de instalar é de fato tomada.
-- Os totais são somados do catálogo conforme ele é lido, então um tema publicado depois entra sozinho, sem nada para editar à mão.
+Quanto os temas custam
+- A aba Instalados conta o que os temas ocupam no console, tanto no total, no topo, quanto no cartão de cada tema. Os embutidos não entram: vêm dentro do launcher e não tomam nada do cartão.
+- Essas medições também acontecem numa thread de trabalho. Um tema é centenas de quadros no cartão, e somar isso durante o quadro é a mesma travada da capa.
+- Na tela de detalhe do tema, o tamanho instalado ganhou linha própria. Dividir uma linha com o tamanho do download passava da coluna, e as reticências comiam justamente a metade que importa para decidir se o tema cabe.
+
+Atualizações
+- Uma atualização já baixada não se oferece mais para ser baixada de novo. Com o pacote pronto no cartão, a verificação, o oferecimento automático e a linha de instalar ficam retidos até o reinício que a aplica. Esse estado é lido do cartão, e não guardado em memória, porque o menu reinicia toda vez que um jogo é fechado — e uma marca esquecida foi como o laço começou.
+- A aba Atualização oferece Reiniciar agora enquanto esse reinício está pendente, para ninguém precisar sair da tela que o pediu.
 
 Coisas menores
-- O fundo do tutorial recebe o mesmo desfoque suave que o menu usa por padrão. Era a única tela do launcher desenhando o fundo em nitidez total atrás do painel de texto, e é a primeira tela que qualquer pessoa vê. Sugerido por um usuário que notou exatamente isso.
-- As configurações são gravadas ao lado do arquivo e trocadas no final, em vez de por cima dele. Um launcher que morresse no meio da gravação deixava um arquivo truncado que falhava na leitura do boot seguinte, zerando todas as preferências; agora a cópia anterior é guardada e lida quando a atual não puder ser.
+- Apertar HOME com o cursor num botão da barra lateral o deixava lá, enquanto o nome no rodapé da tela mostrava o jogo — dois lugares apontando para a resposta um do outro. O seletor volta para a grade.
+- L e R viram a página nas três abas de temas. Chegar aos botões de anterior e próxima significava descer a grade inteira, e num catálogo de dezenas de temas virar página é o gesto mais repetido daquela tela.

@@ -1,3 +1,110 @@
+# SwitchU 1.1.0+fork.10
+
+## English
+
+Tenth release of the [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU)
+fork, based on [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Moving across the grid no longer stalls, the theme shop says what everything
+costs, and an update that has been downloaded stops asking to be downloaded.
+
+### Moving the cursor no longer stalls
+
+- Landing on a game with custom artwork froze the menu for about half a second,
+  every time. The cover was read off the card, decoded and uploaded inside the
+  frame being drawn -- a megabyte or more of card, and tens of milliseconds of
+  JPEG, with the launcher waiting for all of it.
+- Reading and decoding now happen on a worker thread and only the upload is left
+  in the frame, which is microseconds. The image arrives a few frames later
+  rather than instantly, and the grid stays at full speed while it does.
+- Moving quickly across the grid abandons requests instead of queueing them:
+  only the cover you stop on is ever shown.
+
+### What the themes cost
+
+- The Installed tab counts what the themes on the console occupy, both as a
+  total at the top and on each theme's own card. Built-in themes are not
+  counted -- they ship inside the launcher and take nothing from the card.
+- Those measurements are taken on a worker as well. A theme is hundreds of
+  frames on the card, and adding that up during a frame is the same stall the
+  artwork had.
+- On a theme's detail screen the installed size gets its own line. Sharing one
+  line with the download size ran past the column and the ellipsis ate the half
+  that matters when deciding whether a theme fits.
+
+### Updates
+
+- An update that has been downloaded no longer offers to download itself again.
+  Once the package is staged, checking, the automatic offer and the install row
+  are all held back until the restart that applies it. The pending state is read
+  from the card rather than remembered, because the menu restarts every time a
+  game closes and a forgotten flag was how the loop started.
+- The Update tab offers **Restart now** while that restart is pending, so
+  nobody has to leave the screen that asked for it.
+
+### Smaller things
+
+- Pressing HOME with the cursor on a sidebar button left it there, while the
+  name at the bottom of the screen showed the game -- two things pointing at
+  each other's answer. The selector now returns to the grid.
+- L and R turn the page in all three theme tabs. Reaching the previous and next
+  buttons meant walking down the whole grid, and in a catalogue of dozens of
+  themes turning the page is the most repeated thing on that screen.
+
+---
+
+## Português
+
+Décima versão da fork [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU),
+baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+Andar pela grade não trava mais, a loja de temas diz quanto tudo custa, e uma
+atualização já baixada para de pedir para ser baixada.
+
+### Passar o cursor não trava mais
+
+- Parar num jogo com capa personalizada congelava o menu por cerca de meio
+  segundo, toda vez. A capa era lida do cartão, decodificada e enviada à GPU
+  dentro do quadro que estava sendo desenhado — um megabyte ou mais de cartão e
+  dezenas de milissegundos de JPEG, com o launcher esperando por tudo isso.
+- Ler e decodificar passaram para uma thread de trabalho e no quadro sobrou só a
+  subida para a GPU, que é questão de microssegundos. A imagem aparece alguns
+  quadros depois em vez de na hora, e a grade continua fluida enquanto isso.
+- Andar rápido pela grade abandona os pedidos em vez de enfileirá-los: só a capa
+  onde você para chega a ser mostrada.
+
+### Quanto os temas custam
+
+- A aba Instalados conta o que os temas ocupam no console, tanto no total, no
+  topo, quanto no cartão de cada tema. Os embutidos não entram: vêm dentro do
+  launcher e não tomam nada do cartão.
+- Essas medições também acontecem numa thread de trabalho. Um tema é centenas de
+  quadros no cartão, e somar isso durante o quadro é a mesma travada da capa.
+- Na tela de detalhe do tema, o tamanho instalado ganhou linha própria. Dividir
+  uma linha com o tamanho do download passava da coluna, e as reticências comiam
+  justamente a metade que importa para decidir se o tema cabe.
+
+### Atualizações
+
+- Uma atualização já baixada não se oferece mais para ser baixada de novo. Com o
+  pacote pronto no cartão, a verificação, o oferecimento automático e a linha de
+  instalar ficam retidos até o reinício que a aplica. Esse estado é lido do
+  cartão, e não guardado em memória, porque o menu reinicia toda vez que um jogo
+  é fechado — e uma marca esquecida foi como o laço começou.
+- A aba Atualização oferece **Reiniciar agora** enquanto esse reinício está
+  pendente, para ninguém precisar sair da tela que o pediu.
+
+### Coisas menores
+
+- Apertar HOME com o cursor num botão da barra lateral o deixava lá, enquanto o
+  nome no rodapé da tela mostrava o jogo — dois lugares apontando para a
+  resposta um do outro. O seletor volta para a grade.
+- L e R viram a página nas três abas de temas. Chegar aos botões de anterior e
+  próxima significava descer a grade inteira, e num catálogo de dezenas de temas
+  virar página é o gesto mais repetido daquela tela.
+
+---
+
 # SwitchU 1.1.0+fork.9
 
 ## English
