@@ -6,12 +6,30 @@
 #endif
 #include <string>
 #include <memory>
+#include <vector>
 
 struct SDL_Texture;
 
 namespace nxui {
 
 class Renderer;
+
+// An image read and decoded, but not yet on the GPU.
+//
+// The two halves of loading cost very different things: reading a cover off
+// the card and turning JPEG into pixels is hundreds of milliseconds, and
+// uploading the result is microseconds. Only the upload has to happen on the
+// render thread, so the expensive half is split out to be done anywhere.
+struct DecodedImage {
+    std::vector<std::uint8_t> rgba;
+    int width  = 0;
+    int height = 0;
+
+    bool valid() const {
+        return width > 0 && height > 0
+            && rgba.size() >= static_cast<std::size_t>(width) * height * 4;
+    }
+};
 
 class Texture {
 public:
@@ -75,6 +93,14 @@ public:
     // Load from image file (PNG/JPG via stb_image).
     // maxSide <= 0 keeps the source resolution.
     bool loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide = 128);
+
+    // Read and decode without touching the GPU. Safe to call from any thread,
+    // which is the point: a caller that must not stall the frame does this on a
+    // worker and hands the result to loadFromDecoded when it lands.
+    static DecodedImage decodeFile(const std::string& path, int maxSide = 0);
+
+    // Upload pixels already decoded. Cheap enough to do mid-frame.
+    bool loadFromDecoded(GpuDevice& gpu, Renderer& ren, const DecodedImage& image);
 
     // Load from in-memory image data (JPEG/PNG via stb_image)
     bool loadFromMemory(GpuDevice& gpu, Renderer& ren,
