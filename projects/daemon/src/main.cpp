@@ -1517,6 +1517,24 @@ static void controlCacheThreadFunc(void* arg) {
     switchu::control_cache::ensureDirectory();
 
     while (g_controlCacheRunning.load()) {
+        // Nothing while a game holds the foreground.
+        //
+        // The catalogue rebuild already stands aside for this, through
+        // shouldDeferViewPolling, and this worker did not -- an asymmetry, not
+        // a decision. It keeps chewing whatever was queued before the game
+        // started, and each title costs an nsGetApplicationControlData, which
+        // reads the icon and NACP from storage, plus a .meta and a .jpg written
+        // to the card. That is ns IPC and SD writes underneath a running game,
+        // while ams_mitm is serving that game's LayeredFS from the same card.
+        //
+        // Whether it is what produced the aborts and the kernel panic is not
+        // established. Doing this work behind a game is worth stopping either
+        // way: none of it is needed until the player is back in the menu.
+        if (shouldDeferViewPolling()) {
+            svcSleepThread(500'000'000ULL);
+            continue;
+        }
+
         uint64_t titleId = 0;
         if (!popControlCacheTitle(titleId)) {
             svcSleepThread(100'000'000ULL);
