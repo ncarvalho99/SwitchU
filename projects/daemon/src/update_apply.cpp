@@ -2,6 +2,7 @@
 
 #include "themeshop/ZipReader.hpp"
 #include <switchu/file_log.hpp>
+#include <switchu/sd_commit.hpp>
 
 #include <cstdio>
 #include <string>
@@ -88,6 +89,24 @@ void applyStagedUpdate() {
     policy.requiredRoots = {"atmosphere/", "switch/"};
 
     const auto result = themeshop::extractZipFile(kStagedArchive, kCardRoot, {}, policy);
+
+    // Commit whichever way it went, before anything else runs.
+    //
+    // This is the largest write the console ever makes on its own: 527 files
+    // and about 43 MB, each one created as .part and renamed over its target,
+    // which is three directory operations apiece. That much FAT churn left
+    // outstanding is exactly the state the power sequence was taught to avoid,
+    // and it was left outstanding here -- extraction happens in the daemon, at
+    // boot, and nothing committed it. The console then ran for ten minutes and
+    // rebooted, and hekate came up unable to find nyx.
+    //
+    // The failure path commits too: the extractor writes beside its targets and
+    // swaps at the end, so a run that gave up partway still moved real files.
+    //
+    // A power cut during the extraction itself is still a risk, but it is a
+    // twenty-second window at boot rather than a whole session.
+    switchu::commitSdCard("update applied");
+
     if (!result.success) {
         switchu::FileLog::log("[update] apply failed: %s", result.error.c_str());
         return;   // staging stays; the next boot retries until the limit
@@ -96,6 +115,9 @@ void applyStagedUpdate() {
     switchu::FileLog::log("[update] applied %d files, %llu bytes",
                           result.filesWritten, (unsigned long long)result.bytesWritten);
     clearStaging();
+    // Dropping the archive frees another 43 MB of clusters, which is its own
+    // batch of metadata. It costs nothing to make it durable here.
+    switchu::commitSdCard("update staging cleared");
 }
 
 } // namespace switchu::daemon::update
