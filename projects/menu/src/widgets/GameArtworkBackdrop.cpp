@@ -2,35 +2,86 @@
 
 #include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
+#include <nxui/core/ThreadPool.hpp>
 
 #include <algorithm>
+#include <utility>
 
-bool GameArtworkBackdrop::setArtwork(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-                                     const std::string& path) {
-    if (path == m_path)
-        return m_texture.valid();
+namespace {
+// The backdrop covers the screen, so there is nothing to gain above this.
+constexpr int kBackdropMaxSide = 1280;
+} // namespace
+
+void GameArtworkBackdrop::requestArtwork(nxui::ThreadPool& pool, const std::string& path) {
+    if (path == m_requestedPath)
+        return;
     if (path.empty()) {
-        clearArtwork(&gpu);
-        return true;
+        clearArtwork();
+        return;
     }
-    nxui::Texture loaded;
-    if (!loaded.loadFromFile(gpu, ren, path, 1280))
+
+    m_requestedPath = path;
+
+    // The previous request is abandoned rather than waited for: moving the
+    // cursor quickly across the grid asks for several backgrounds in a row and
+    // only the last one is ever shown. The worker keeps writing into its own
+    // shared state, which nobody reads again, and it dies with the shared_ptr.
+    m_pending = std::make_shared<PendingDecode>();
+    m_pending->path = path;
+    auto pending = m_pending;
+    m_pendingJob = pool.submit([pending, path]() {
+        nxui::DecodedImage image = nxui::Texture::decodeFile(path, kBackdropMaxSide);
+        std::lock_guard<std::mutex> lk(pending->mutex);
+        pending->image = std::move(image);
+        pending->finished = true;
+    });
+}
+
+bool GameArtworkBackdrop::pollPendingArtwork(nxui::GpuDevice& gpu, nxui::Renderer& ren) {
+    if (!m_pending)
         return false;
-    // The texture being replaced can still be referenced by the frame in
-    // flight. Freeing it underneath the GPU is how moving the cursor across a
-    // game with custom art took the whole menu down.
-    if (m_texture.valid())
-        gpu.waitIdle();
+
+    nxui::DecodedImage image;
+    std::string path;
+    {
+        std::lock_guard<std::mutex> lk(m_pending->mutex);
+        if (!m_pending->finished)
+            return false;
+        image = std::move(m_pending->image);
+        path  = m_pending->path;
+    }
+    m_pending.reset();
+
+    // Overtaken while decoding: the cursor moved on and a newer request is
+    // already running. Dropping this one is the whole point of not waiting.
+    if (path != m_requestedPath)
+        return false;
+
+    if (!image.valid()) {
+        clearArtwork(&gpu);
+        return false;
+    }
+
+    nxui::Texture loaded;
+    if (!loaded.loadFromDecoded(gpu, ren, image)) {
+        clearArtwork(&gpu);
+        return false;
+    }
+    // Texture's move assignment waits for the queue before it retires what it
+    // replaces, so the frame still sampling the outgoing image is finished with
+    // it by the time its memory goes back.
     m_texture = std::move(loaded);
     m_path = path;
     return true;
 }
 
 void GameArtworkBackdrop::clearArtwork(nxui::GpuDevice* gpu) {
+    m_pending.reset();
     if (gpu && m_texture.valid())
         gpu->waitIdle();
     m_texture = nxui::Texture{};
     m_path.clear();
+    m_requestedPath.clear();
 }
 
 void GameArtworkBackdrop::onRender(nxui::Renderer& ren) {

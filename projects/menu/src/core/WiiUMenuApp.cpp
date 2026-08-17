@@ -1801,6 +1801,15 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (m_background)
         m_background->pumpImageSequence(app().gpu(), app().renderer());
 
+    // A capa personalizada do jogo em foco chega por aqui. O trabalho caro --
+    // ler do cartao e decodificar -- ja aconteceu numa thread de trabalho;
+    // sobra a subida para a GPU, que e barata o bastante para o quadro.
+    if (m_gameArtworkBackdrop) {
+        if (m_gameArtworkBackdrop->pollPendingArtwork(app().gpu(), app().renderer()))
+            DebugLog::log("[gallery] background applied: %s",
+                          m_gameArtworkBackdrop->artworkPath().c_str());
+    }
+
     // Amostrado enquanto a loja de temas esta aberta, que e onde o menu morreu
     // duas vezes sem deixar rastro. O daemon registrou "menu exited (reason=0)"
     // -- saida limpa, nao queda -- e uma saida limpa pedida pelo sistema tem

@@ -299,51 +299,64 @@ bool Texture::loadBc1Memory(GpuDevice& gpu, Renderer& ren, const uint8_t* head, 
     return loadImageData(gpu, ren, head + offset, blocks, ww, hh, format);
 }
 
-bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide) {
-    if (path.size() > 4 && path.compare(path.size() - 4, 4, ".dds") == 0)
-        return loadBc1File(gpu, ren, path);
+// Reading and decoding, with no GPU object touched anywhere in here. That is
+// what makes it callable from a worker thread.
+DecodedImage Texture::decodeFile(const std::string& path, int maxSide) {
+    DecodedImage out;
 
     int w, h, ch;
     uint8_t* data = stbi_load(path.c_str(), &w, &h, &ch, 4);
     if (!data) {
         std::printf("[Texture] stbi_load FAILED: %s\n", path.c_str());
-        // Half a texture is worse than none: it can still be bound and drawn.
-        m_valid = false;
-        return false;
+        return out;
     }
     // A file can decode without failing outright and still describe nothing
     // usable. Caught here so the path that scales and uploads never sees it.
     if (w <= 0 || h <= 0) {
         std::printf("[Texture] decoded %dx%d, refusing: %s\n", w, h, path.c_str());
         stbi_image_free(data);
+        return out;
+    }
+
+    int dw = w, dh = h;
+    if (maxSide > 0 && (w > maxSide || h > maxSide)) {
+        float scale = std::min((float)maxSide / w, (float)maxSide / h);
+        dw = std::max(1, (int)(w * scale));
+        dh = std::max(1, (int)(h * scale));
+    }
+
+    out.width  = dw;
+    out.height = dh;
+    out.rgba.resize((size_t)dw * dh * 4);
+    if (dw == w && dh == h) {
+        std::memcpy(out.rgba.data(), data, out.rgba.size());
+    } else {
+        for (int y = 0; y < dh; ++y) {
+            int sy = y * h / dh;
+            for (int x = 0; x < dw; ++x) {
+                int sx = x * w / dw;
+                std::memcpy(out.rgba.data() + ((size_t)y * dw + x) * 4,
+                            data            + ((size_t)sy * w + sx) * 4, 4);
+            }
+        }
+    }
+    stbi_image_free(data);
+    return out;
+}
+
+bool Texture::loadFromDecoded(GpuDevice& gpu, Renderer& ren, const DecodedImage& image) {
+    if (!image.valid()) {
         m_valid = false;
         return false;
     }
-    if (maxSide > 0 && (w > maxSide || h > maxSide)) {
-        float scale = std::min((float)maxSide / w, (float)maxSide / h);
-        int dw = std::max(1, (int)(w * scale));
-        int dh = std::max(1, (int)(h * scale));
-        uint8_t* scaled = (uint8_t*)std::malloc((size_t)dw * dh * 4);
-        if (scaled) {
-            for (int y = 0; y < dh; ++y) {
-                int sy = y * h / dh;
-                for (int x = 0; x < dw; ++x) {
-                    int sx = x * w / dw;
-                    std::memcpy(scaled + ((size_t)y * dw + x) * 4,
-                                data   + ((size_t)sy * w + sx) * 4, 4);
-                }
-            }
-            stbi_image_free(data);
-            data = scaled;
-            w = dw;
-            h = dh;
-            // after this, data is malloc'd not stbi
-        }
-    }
-    bool ok = loadFromPixels(gpu, ren, data, w, h);
-    // stbi_image_free uses free(), and malloc'd data also uses free()
-    std::free(data);
-    return ok;
+    return loadFromPixels(gpu, ren, image.rgba.data(), image.width, image.height);
+}
+
+bool Texture::loadFromFile(GpuDevice& gpu, Renderer& ren, const std::string& path, int maxSide) {
+    if (path.size() > 4 && path.compare(path.size() - 4, 4, ".dds") == 0)
+        return loadBc1File(gpu, ren, path);
+
+    return loadFromDecoded(gpu, ren, decodeFile(path, maxSide));
 }
 
 bool Texture::loadFromMemory(GpuDevice& gpu, Renderer& ren,

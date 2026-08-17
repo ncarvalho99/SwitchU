@@ -582,12 +582,12 @@ void WiiUMenuApp::refreshGameArtworkBackdrop(std::uint64_t titleId) {
         m_gameArtworkBackdrop->clearArtwork(&app().gpu());
         return;
     }
-    if (m_gameArtworkBackdrop->setArtwork(app().gpu(), app().renderer(), path)) {
-        DebugLog::log("[gallery] activated background: %s", path.c_str());
-    } else {
-        DebugLog::log("[gallery] could not load custom background: %s", path.c_str());
-        m_gameArtworkBackdrop->clearArtwork(&app().gpu());
-    }
+    // Only asks. Reading the cover off the card and decoding it happens on a
+    // worker, and the image arrives a few frames later through
+    // pollPendingArtwork. Doing it here is what made every step onto a game
+    // with custom art stall for about half a second.
+    m_gameArtworkBackdrop->requestArtwork(m_threadPool, path);
+    DebugLog::log("[gallery] background requested: %s", path.c_str());
 }
 
 void WiiUMenuApp::raiseOverlay(const std::shared_ptr<nxui::Widget>& overlay) {
