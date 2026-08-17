@@ -1,3 +1,91 @@
+# SwitchU 2.0.0
+
+## English
+
+First release numbered by this fork, based on
+[PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0. It follows
+1.1.0+fork.11 and is the twelfth release of the
+[ncarvalho99](https://github.com/ncarvalho99/SwitchU) line.
+
+### The version number changed, and why
+
+- The previous eleven releases were numbered `1.1.0+fork.N`. That kept the
+  upstream version visible, but it put the number that actually changes into
+  semver's build metadata -- the one field the specification says to **ignore**
+  when comparing versions. Formally, `1.1.0+fork.11` and `1.1.0+fork.2` were the
+  same version, and the console only told them apart because the updater's
+  comparator was written to read that field. A version has to be unambiguous in
+  exactly one place above all others: the code deciding whether to install an
+  update.
+- Releases are numbered `2.0.0` onwards, as plain semver. Nothing about the
+  install changes, and a console on `1.1.0+fork.11` sees this as newer and
+  updates normally.
+- What this is built from did not go anywhere: Settings, About still shows
+  **Based on: SwitchU 1.1.0**, on its own line, which is where it belongs. The
+  fork adds to PoloNX's work rather than replacing it.
+- The eleven old tags stay. Deleting them would erase the history that got here.
+
+### Themes you already have
+
+- The Animated Themes tab marks the themes already on the console with an
+  **Installed** chip, so it takes no opening to tell.
+- Opening one offers **Apply** and **Remove** instead of offering to download it
+  again -- the same pair the Installed tab shows, acting on the theme the
+  download became. Asked for by a player who had no way to remove a theme
+  without walking back to the other tab to find it.
+
+### Documentation
+
+- The README describes the launcher as it is. Its TODO list held three items
+  that had all shipped -- the panel on **+**, the animated background and the
+  SteamGridDB integration -- and its table of contents linked to a Features
+  section that did not exist.
+
+---
+
+## Português
+
+Primeira versão numerada por esta fork, baseada no
+[PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0. Sucede a
+1.1.0+fork.11 e é a décima segunda versão da linha
+[ncarvalho99](https://github.com/ncarvalho99/SwitchU).
+
+### O número de versão mudou, e por quê
+
+- As onze versões anteriores eram numeradas `1.1.0+fork.N`. Isso mantinha a
+  versão de origem visível, mas colocava o número que de fato muda dentro do
+  *build metadata* do semver — justamente o campo que a especificação manda
+  **ignorar** ao comparar versões. Formalmente, `1.1.0+fork.11` e
+  `1.1.0+fork.2` eram a mesma versão, e o console só as distinguia porque o
+  comparador do atualizador foi escrito para ler esse campo. Uma versão precisa
+  ser inequívoca num lugar acima de todos: o código que decide se instala uma
+  atualização.
+- As versões passam a ser numeradas de `2.0.0` em diante, em semver simples.
+  Nada muda na instalação, e um console na `1.1.0+fork.11` enxerga esta como
+  mais nova e atualiza normalmente.
+- De onde isto foi feito não sumiu: Configurações, Sobre continua mostrando
+  **Baseado em: SwitchU 1.1.0**, em linha própria, que é onde isso pertence. A
+  fork soma ao trabalho do PoloNX em vez de substituí-lo.
+- As onze tags antigas ficam. Apagá-las apagaria a história que chegou até aqui.
+
+### Temas que você já tem
+
+- A aba de Temas Animados marca com **Instalado** os temas que já estão no
+  console, para não ser preciso abrir cada um só para descobrir.
+- Abrir um deles oferece **Aplicar** e **Remover** em vez de oferecer baixar de
+  novo — o mesmo par da aba de instalados, agindo sobre o tema em que o download
+  se transformou. Pedido por um usuário que não tinha como remover um tema sem
+  voltar até a outra aba para procurá-lo.
+
+### Documentação
+
+- O README passou a descrever o launcher como ele é. A lista de TODO tinha três
+  itens todos já entregues — o painel no **+**, o fundo animado e a integração
+  com o SteamGridDB — e o índice apontava para uma seção de recursos que não
+  existia.
+
+---
+
 # SwitchU 1.1.0+fork.11
 
 ## English
