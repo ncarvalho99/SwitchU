@@ -51,6 +51,18 @@ costs, and an update that has been downloaded stops asking to be downloaded.
   buttons meant walking down the whole grid, and in a catalogue of dozens of
   themes turning the page is the most repeated thing on that screen.
 
+### Notes
+
+- An earlier package of this release was withdrawn. Applying an update writes
+  527 files and about 43 MB, and none of it was committed to the card -- so a
+  console carried that much outstanding metadata through the session that
+  followed, and the next reboot could bring hekate up unable to find nyx. The
+  reboot itself was never at fault; the write before it was. Both the extraction
+  and the removal of the archive now commit.
+- Because the update is applied by the version already installed, that fix takes
+  effect from the update **after** this one. Installing this package from a PC
+  avoids the risk entirely.
+
 ---
 
 ## Português
@@ -102,6 +114,18 @@ atualização já baixada para de pedir para ser baixada.
 - L e R viram a página nas três abas de temas. Chegar aos botões de anterior e
   próxima significava descer a grade inteira, e num catálogo de dezenas de temas
   virar página é o gesto mais repetido daquela tela.
+
+### Notas
+
+- Um pacote anterior desta versão foi retirado. Aplicar uma atualização grava
+  527 arquivos e cerca de 43 MB, e nada disso era confirmado no cartão — então o
+  console carregava toda essa metadata pendente pela sessão seguinte, e o
+  próximo reinício podia trazer o hekate sem encontrar o nyx. O reinício nunca
+  foi o culpado; a gravação anterior a ele é que era. A extração e a remoção do
+  pacote passaram a confirmar.
+- Como a atualização é aplicada pela versão já instalada, essa correção só passa
+  a valer da atualização **seguinte** a esta. Instalar este pacote pelo PC evita
+  o risco por completo.
 
 ---
 
