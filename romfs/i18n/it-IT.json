@@ -101,7 +101,11 @@
       "background_speed": "Velocità dell'animazione di sfondo",
       "background_speed_desc": "Quanto si muovono le forme. Al centro è il ritmo del tema stesso.",
       "grid_columns": "Colonne della griglia",
-      "grid_rows": "Righe della griglia"
+      "grid_rows": "Righe della griglia",
+      "reload_grid": "Ricarica giochi e collegamenti",
+      "reload_grid_desc": "Rilegge i titoli installati e scarta nomi e icone in cache. Da usare dopo aver creato o eliminato un collegamento.",
+      "reload_grid_done": "Rilettura dei titoli installati...",
+      "reload_grid_failed": "Impossibile richiedere la ricarica."
     },
     "internet": {
       "wifi_ssid": "Rete WiFi",

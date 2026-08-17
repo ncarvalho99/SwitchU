@@ -680,6 +680,21 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->onNetConnectRequest([this]() {
         m_pendingNetConnect = true;
     });
+    // O daemon relê os títulos e joga fora os nomes e ícones em cache. A grade
+    // se reconstrói quando ele avisa que o catálogo mudou, então aqui não há o
+    // que esperar.
+    m_themeShop->onReloadCatalog([this]() {
+        const Result rc = m_launcher.refreshCatalog();
+        DebugLog::log("[catalog] reload requested rc=0x%X", rc);
+        auto& i18n = nxui::I18n::instance();
+        if (m_settings) {
+            m_settings->requestToast(R_SUCCEEDED(rc)
+                ? i18n.tr("settings.display.reload_grid_done", "Reading the installed titles again...")
+                : i18n.tr("settings.display.reload_grid_failed", "Could not ask for a reload."), 2.6f);
+        }
+        m_refreshQueued = true;
+        m_deferredRefreshFrames = std::max(m_deferredRefreshFrames, 3);
+    });
     m_themeShop->onThemeShopApply([this](const std::string& presetId) {
         DebugLog::log("[theme-apply] request from Theme Shop: preset=%s", presetId.c_str());
         ThemePreset* preset = findPresetPtr(presetId);

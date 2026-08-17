@@ -142,5 +142,20 @@ ThemeShopScreen::Tab themeshop::tabs::OptionsTab::build(ThemeShopScreen& screen)
         t.items.push_back(std::move(it));
     }
 
+    // Asked for by a player who had just made a shortcut and could only get the
+    // grid to show it by rebooting the console.
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.display.reload_grid", "Reload games and shortcuts");
+        it.description = i18n.tr("settings.display.reload_grid_desc",
+                                 "Reads the installed titles again and discards the cached names "
+                                 "and icons. Use it after creating or deleting a shortcut.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_reloadCatalogCb) screen.m_reloadCatalogCb();
+        };
+        t.items.push_back(std::move(it));
+    }
+
     return t;
 }

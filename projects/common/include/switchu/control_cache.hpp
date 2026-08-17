@@ -89,6 +89,18 @@ inline bool hasMeta(uint64_t titleId) {
     return readMeta(titleId, meta);
 }
 
+// Throw away what was cached for a title, so the next pass fetches it again.
+//
+// The cache is keyed by title id and the worker skips anything that already has
+// a .meta, which is right while a title stays the same title. It is wrong the
+// moment an id is reused: a forwarder shortcut deleted and made again for a
+// different app keeps the same id, and the old name and icon came back with it.
+// Reported as shortcuts showing the icon of the app they replaced.
+inline void forget(uint64_t titleId) {
+    std::remove(metaPath(titleId).c_str());
+    std::remove(iconPath(titleId).c_str());
+}
+
 inline std::vector<uint8_t> readIcon(uint64_t titleId) {
     std::vector<uint8_t> data;
     std::ifstream file(iconPath(titleId), std::ios::binary | std::ios::ate);
