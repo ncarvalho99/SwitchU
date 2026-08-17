@@ -5,6 +5,8 @@
 
 #include "core/DebugLog.hpp"
 
+#include <switchu/fs_remove.hpp>
+
 #include <nxui/core/I18n.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Exception.hpp>
@@ -237,49 +239,15 @@ std::uint64_t sdFreeBytes() {
     return (std::uint64_t)st.f_bavail * (std::uint64_t)st.f_frsize;
 }
 
+// The walk itself now lives in switchu/fs_remove.hpp. It was duplicated here
+// while the theme deletion path had its own broken copy under the same name;
+// keeping one implementation is how that stops happening again.
 bool removeDirectoryRecursive(const std::string& path) {
-    struct stat st{};
-    if (stat(path.c_str(), &st) != 0)
-        return errno == ENOENT;
-
-    if (!S_ISDIR(st.st_mode)) {
-        if (std::remove(path.c_str()) == 0 || errno == ENOENT)
-            return true;
-        DebugLog::log("[themeshop] could not remove file %s (%d: %s)",
-                      path.c_str(), errno, std::strerror(errno));
-        return false;
-    }
-
-    DIR* dir = opendir(path.c_str());
-    if (!dir) {
-        DebugLog::log("[themeshop] could not open directory %s (%d: %s)",
-                      path.c_str(), errno, std::strerror(errno));
-        return false;
-    }
-
-    bool ok = true;
-    while (const dirent* entry = readdir(dir)) {
-        const char* name = entry->d_name;
-        if (std::strcmp(name, ".") == 0 || std::strcmp(name, "..") == 0)
-            continue;
-        std::string child = path;
-        if (!child.empty() && child.back() != '/')
-            child.push_back('/');
-        child += name;
-        if (!removeDirectoryRecursive(child)) {
-            ok = false;
-            break;
-        }
-    }
-    closedir(dir);
-
-    if (!ok)
-        return false;
-    if (rmdir(path.c_str()) == 0 || errno == ENOENT)
+    std::string failedPath;
+    if (switchu::removeRecursive(path, &failedPath))
         return true;
-
-    DebugLog::log("[themeshop] could not remove directory %s (%d: %s)",
-                  path.c_str(), errno, std::strerror(errno));
+    DebugLog::log("[themeshop] could not remove %s (stopped at %s, %d: %s)",
+                  path.c_str(), failedPath.c_str(), errno, std::strerror(errno));
     return false;
 }
 

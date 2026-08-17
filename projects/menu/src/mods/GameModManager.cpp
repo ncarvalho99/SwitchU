@@ -1,6 +1,7 @@
 #include "GameModManager.hpp"
 
 #include <fmt/format.h>
+#include <switchu/fs_remove.hpp>
 
 #include <algorithm>
 #include <system_error>
@@ -119,11 +120,15 @@ Result GameModManager::remove(const Entry& entry) {
         }
     }
     if (!isWithin(path, root)) return {false, "unsafe mod path"};
-    if (std::filesystem::is_directory(path, ec))
-        std::filesystem::remove_all(path, ec);
-    else
-        std::filesystem::remove(path, ec);
-    return ec ? fail(ec) : Result{true, {}};
+    // Same POSIX walk the themes use. std::filesystem::remove_all does not work
+    // against fsdev paths here -- it left theme folders on the card while
+    // reporting through an error code nobody read, and this was the twin of
+    // that call.
+    std::string failedPath;
+    if (!switchu::removeRecursive(path.string(), &failedPath))
+        return {false, failedPath.empty() ? std::string("could not remove the mod")
+                                          : ("could not remove " + failedPath)};
+    return Result{true, {}};
 }
 
 } // namespace mods

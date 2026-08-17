@@ -4,6 +4,9 @@
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 
+#include <switchu/fs_remove.hpp>
+#include <switchu/sd_commit.hpp>
+
 #include <nxui/core/I18n.hpp>
 
 #include <algorithm>
@@ -18,10 +21,13 @@
 
 namespace {
 
-bool removeDirectoryRecursive(const std::string& path) {
-    std::error_code ec;
-    std::filesystem::remove_all(path, ec);
-    return !ec;
+// Deleting a theme goes through the POSIX walk in switchu/fs_remove.hpp.
+//
+// This used std::filesystem::remove_all and discarded the error, which on the
+// console meant the folder simply stayed. Removing a live wallpaper freed the
+// space in the list and nothing on the card.
+bool removeDirectoryRecursive(const std::string& path, std::string* failedPath = nullptr) {
+    return switchu::removeRecursive(path, failedPath);
 }
 
 bool pathExists(const std::string& path) {
@@ -1580,7 +1586,20 @@ void WiiUMenuApp::deletePreset(const std::string& presetId) {
     ThemePreset::saveUserPresets(userPresets);
 
     if (source == ThemePresetSource::InstalledPackage && !installPath.empty()) {
-        removeDirectoryRecursive(installPath);
+        // The result is checked now. It was discarded before, which is why a
+        // failure to delete looked exactly like a success from the player's
+        // side: the theme left the list either way.
+        std::string failedPath;
+        if (removeDirectoryRecursive(installPath, &failedPath)) {
+            DebugLog::log("[theme] removed %s", installPath.c_str());
+            // The deletion has to reach the card, not just the cache: a reboot
+            // before that and the folder is back with the theme gone from the
+            // list, which is the same symptom by another route.
+            switchu::commitSdCard("theme removed");
+        } else {
+            DebugLog::log("[theme] could not remove %s (stopped at %s)",
+                          installPath.c_str(), failedPath.c_str());
+        }
     }
 
     if (!soundPreset.empty() && m_config.soundPreset == soundPreset) {
