@@ -62,7 +62,16 @@ extern "C" {
 // nao abrir. Descendo degrau a degrau, o pior caso e exatamente o que se tinha
 // antes.
 namespace {
+// Degraus acima de 352 acrescentados depois de medir no console: o processo
+// relata 457,9 MB no total e o teto anterior da escada, 352, era concedido na
+// primeira tentativa -- ou seja, ela parava de pedir antes de o sistema recusar.
+// Nao ha custo em tentar: svcSetHeapSize devolve erro e o degrau seguinte entra.
+// Quanto o sistema concede de fato aparece no log como "heap concedido".
 constexpr size_t kHeapLadder[] = {
+    416u * 1024u * 1024u,
+    400u * 1024u * 1024u,
+    384u * 1024u * 1024u,
+    368u * 1024u * 1024u,
     352u * 1024u * 1024u,
     320u * 1024u * 1024u,
     288u * 1024u * 1024u,
