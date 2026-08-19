@@ -34,7 +34,7 @@ from PIL import Image
 # is its own GPU memory block, and 600 of them crashed the menu mid-load. The
 # runtime caps the count at 320 -- a sequence longer than that plays sampled.
 MAX_FRAMES = 320
-FRAME_BUDGET_MB = 80.0
+FRAME_BUDGET_MB = 150.0
 
 
 def gpu_bytes(w, h):
