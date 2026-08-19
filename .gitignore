@@ -52,3 +52,6 @@ __pycache__/
 
 # Local hbloader experiments; the project does not consume these binaries.
 /lib/switchu-hbloader/
+
+# ffmpeg local binary
+/ffmpeg/

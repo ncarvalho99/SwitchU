@@ -1,3 +1,63 @@
+# SwitchU 2.0.1
+
+## English
+
+Thirteenth release of the [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU)
+fork, based on [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+It asks the console for more memory to allow larger animated themes to fit, and
+shrinks all themes in the catalogue to half their memory footprint.
+
+### Memory allocation and performance
+
+- Increased the maximum allowed application heap to 416 MB, raising the image
+  budget to 296 MB. This ensures larger animated themes can load all frames
+  without running out of memory.
+- Migrated the entire theme catalogue from the BC7 to the BC1 (DXT1) format.
+  This cuts the GPU memory footprint by 50% (from 456 KB to 232 KB per frame)
+  while keeping visual quality identical, guaranteeing a stable 60 fps playback.
+  This change also cuts the file size of animated themes in half, both for
+  downloading and storing on the console.
+- **Note**: For the memory and storage savings to take effect, animated themes
+  already installed on your console must be deleted and downloaded again.
+
+### Server deployment
+
+- Replaced the deployment scripts to safely publish themes to standard Ubuntu
+  hosts, preserving the immutable hash-based hardlink structure needed by the
+  updater.
+
+---
+
+## Português
+
+Décima terceira versão da linha [ncarvalho99](https://github.com/ncarvalho99/SwitchU),
+baseada no [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU) 1.1.0.
+
+O launcher passa a pedir mais memória ao console para dar espaço a temas
+animados maiores, e todos os temas do catálogo encolheram pela metade.
+
+### Alocação de memória e performance
+
+- Aumentado o limite máximo de *heap* da aplicação para 416 MB, o que eleva o
+  orçamento para imagens para 296 MB. Isso permite que temas animados maiores
+  carreguem todos os seus quadros sem esgotar a memória de vídeo.
+- Todo o catálogo de temas foi migrado do formato BC7 para o BC1 (DXT1). Essa
+  mudança corta o consumo de memória da GPU pela metade (de 456 KB para 232 KB
+  por quadro), mantendo a mesma qualidade visual e assegurando reprodução fluida
+  a 60 fps. Essa mudança também corta pela metade o tamanho dos arquivos dos
+  temas animados, tanto para baixar da internet quanto já instalados no console.
+- **Nota**: Para que a economia de memória e espaço surta efeito, temas animados
+  já instalados no seu console precisam ser apagados e baixados novamente.
+
+### Deploy de servidor
+
+- O script de deploy do servidor foi reescrito para publicar os temas com
+  segurança em instâncias Ubuntu normais, respeitando a estrutura de *hardlinks*
+  imutáveis exigida pelo atualizador no console.
+
+---
+
 # SwitchU 2.0.0
 
 ## English
