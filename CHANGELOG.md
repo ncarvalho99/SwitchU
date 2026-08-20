@@ -10,14 +10,19 @@ shrinks all themes in the catalogue to half their memory footprint.
 
 ### Memory allocation and performance
 
-- Increased the maximum allowed application heap to 416 MB, raising the image
-  budget to 296 MB. This ensures larger animated themes can load all frames
-  without running out of memory.
+- The launcher now requests up to 416 MB of application heap before safely
+  falling back. On tested consoles this raised the image budget to 296 MB,
+  giving larger animated themes substantially more room when memory is
+  available.
 - Migrated the entire theme catalogue from the BC7 to the BC1 (DXT1) format.
   This cuts the GPU memory footprint by 50% (from 456 KB to 232 KB per frame)
-  while keeping visual quality identical, guaranteeing a stable 60 fps playback.
-  This change also cuts the file size of animated themes in half, both for
-  downloading and storing on the console.
+  and significantly reduces package size. User testing found no visible quality
+  loss in the tested themes. Playback can still be sampled for sequences above
+  the 320-frame safety cap, or reduced gracefully when an applet has less free
+  memory after returning from suspended software.
+- Fixed a deko3d safety failure: if a GPU image-memory allocation is refused,
+  SwitchU now leaves that image unloaded instead of using an invalid memory
+  block and triggering a fatal `svcBreak` when returning from an applet.
 - **Note**: For the memory and storage savings to take effect, animated themes
   already installed on your console must be deleted and downloaded again.
 
@@ -39,14 +44,18 @@ animados maiores, e todos os temas do catálogo encolheram pela metade.
 
 ### Alocação de memória e performance
 
-- Aumentado o limite máximo de *heap* da aplicação para 416 MB, o que eleva o
-  orçamento para imagens para 296 MB. Isso permite que temas animados maiores
-  carreguem todos os seus quadros sem esgotar a memória de vídeo.
+- O launcher agora pede até 416 MB de *heap* da aplicação antes de usar um
+  recuo seguro. Nos consoles testados, isso elevou o orçamento para imagens a
+  296 MB, dando bem mais espaço a temas animados maiores quando há memória.
 - Todo o catálogo de temas foi migrado do formato BC7 para o BC1 (DXT1). Essa
   mudança corta o consumo de memória da GPU pela metade (de 456 KB para 232 KB
-  por quadro), mantendo a mesma qualidade visual e assegurando reprodução fluida
-  a 60 fps. Essa mudança também corta pela metade o tamanho dos arquivos dos
-  temas animados, tanto para baixar da internet quanto já instalados no console.
+  por quadro) e reduz significativamente o tamanho dos pacotes. Nos temas
+  testados, não houve perda visual perceptível. Sequências acima do limite de
+  segurança de 320 quadros ainda podem ser amostradas, e pouca memória livre ao
+  voltar de um software suspenso pode reduzir a reprodução de forma segura.
+- Corrigida uma falha de segurança do deko3d: se uma alocação de memória de
+  imagem da GPU for recusada, o SwitchU deixa essa imagem descarregada em vez
+  de usar um bloco inválido e provocar `svcBreak` fatal ao voltar de um applet.
 - **Nota**: Para que a economia de memória e espaço surta efeito, temas animados
   já instalados no seu console precisam ser apagados e baixados novamente.
 

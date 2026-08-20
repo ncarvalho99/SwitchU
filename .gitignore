@@ -55,3 +55,31 @@ __pycache__/
 
 # ffmpeg local binary
 /ffmpeg/
+
+# Credentials and local service state. Keep examples in source, never real
+# values, private keys, credential stores, or production/local databases.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+*.keystore
+id_rsa
+id_ed25519
+**/.secrets/
+**/secrets/
+**/credentials/
+*.db
+*.sqlite
+*.sqlite3
+
+# Per-agent local state can contain permissions, session data, and credentials.
+/.claude/
+/.codex/
+/.agents/
+/.antigravity/
+/AGENTS.md
+/CLAUDE.md
