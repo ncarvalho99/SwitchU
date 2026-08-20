@@ -1,19 +1,21 @@
 
 Memory allocation and performance
-- The launcher now requests up to 416 MB of application heap before safely falling back. On tested consoles this raised the image budget to 296 MB, giving larger animated themes more room when memory is available.
-- Migrated the entire theme catalogue from BC7 to BC1 (DXT1). GPU frame memory is 50% lower (456 KB to 232 KB per frame) and packages are substantially smaller. Tested themes showed no visible quality loss. Sequences above the 320-frame safety cap can still be sampled, and lower applet memory after suspended software can reduce playback safely.
-- Fixed a deko3d safety failure: a refused GPU image allocation is now left unloaded rather than used as an invalid memory block that could trigger a fatal svcBreak after returning from an applet.
+- The launcher now requests up to 416 MB of application heap before safely falling back. On tested consoles this raised the image budget to 296 MB, giving larger animated themes substantially more room when memory is available.
+- Migrated the entire theme catalogue from the BC7 to the BC1 (DXT1) format. This cuts the GPU memory footprint by 50% (from 456 KB to 232 KB per frame) and significantly reduces package size. User testing found no visible quality loss in the tested themes. Playback can still be sampled for sequences above the 320-frame safety cap, or reduced gracefully when an applet has less free memory after returning from suspended software.
+- Fixed a deko3d safety failure: if a GPU image-memory allocation is refused, SwitchU now leaves that image unloaded instead of using an invalid memory block and triggering a fatal svcBreak when returning from an applet.
 - Note: For the memory and storage savings to take effect, animated themes already installed on your console must be deleted and downloaded again.
 
 Server deployment
 - Replaced the deployment scripts to safely publish themes to standard Ubuntu hosts, preserving the immutable hash-based hardlink structure needed by the updater.
+- Hardened catalogue deployment with the same lock used by ingestion, unique same-filesystem staging, archive/package validation, atomic alias replacement, and rollback if reindexing fails.
 --pt-BR--
 
 Alocação de memória e performance
-- O launcher agora pede até 416 MB de heap da aplicação antes de usar um recuo seguro. Nos consoles testados, isso elevou o orçamento para imagens a 296 MB, dando mais espaço a temas maiores quando há memória.
-- Todo o catálogo foi migrado de BC7 para BC1 (DXT1). A memória por quadro da GPU é 50% menor (456 KB para 232 KB) e os pacotes são bem menores. Os temas testados não tiveram perda visual perceptível. Sequências acima do limite de segurança de 320 quadros podem ser amostradas, e menos memória após software suspenso pode reduzir a reprodução com segurança.
-- Corrigida uma falha de segurança do deko3d: uma alocação recusada de imagem da GPU agora fica descarregada em vez de usar um bloco inválido que poderia provocar svcBreak fatal ao voltar de um applet.
+- O launcher agora pede até 416 MB de heap da aplicação antes de usar um recuo seguro. Nos consoles testados, isso elevou o orçamento para imagens a 296 MB, dando bem mais espaço a temas animados maiores quando há memória.
+- Todo o catálogo de temas foi migrado do formato BC7 para o BC1 (DXT1). Essa mudança corta o consumo de memória da GPU pela metade (de 456 KB para 232 KB por quadro) e reduz significativamente o tamanho dos pacotes. Nos temas testados, não houve perda visual perceptível. Sequências acima do limite de segurança de 320 quadros ainda podem ser amostradas, e pouca memória livre ao voltar de um software suspenso pode reduzir a reprodução de forma segura.
+- Corrigida uma falha de segurança do deko3d: se uma alocação de memória de imagem da GPU for recusada, o SwitchU deixa essa imagem descarregada em vez de usar um bloco inválido e provocar svcBreak fatal ao voltar de um applet.
 - Nota: Para que a economia de memória e espaço surta efeito, temas animados já instalados no seu console precisam ser apagados e baixados novamente.
 
 Deploy de servidor
 - O script de deploy do servidor foi reescrito para publicar os temas com segurança em instâncias Ubuntu normais, respeitando a estrutura de hardlinks imutáveis exigida pelo atualizador no console.
+- O deploy do catálogo foi reforçado com o mesmo bloqueio da ingestão, área temporária única no mesmo sistema de arquivos, validação do lote/pacotes, troca atômica dos aliases e restauração caso a reindexação falhe.

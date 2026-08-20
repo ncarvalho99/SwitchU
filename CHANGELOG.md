@@ -31,6 +31,9 @@ shrinks all themes in the catalogue to half their memory footprint.
 - Replaced the deployment scripts to safely publish themes to standard Ubuntu
   hosts, preserving the immutable hash-based hardlink structure needed by the
   updater.
+- Hardened catalogue deployment with the same lock used by ingestion, unique
+  same-filesystem staging, archive/package validation, atomic alias replacement,
+  and rollback if reindexing fails.
 
 ---
 
@@ -64,6 +67,9 @@ animados maiores, e todos os temas do catálogo encolheram pela metade.
 - O script de deploy do servidor foi reescrito para publicar os temas com
   segurança em instâncias Ubuntu normais, respeitando a estrutura de *hardlinks*
   imutáveis exigida pelo atualizador no console.
+- O deploy do catálogo foi reforçado com o mesmo bloqueio da ingestão, área
+  temporária única no mesmo sistema de arquivos, validação do lote/pacotes,
+  troca atômica dos aliases e restauração caso a reindexação falhe.
 
 ---
 
