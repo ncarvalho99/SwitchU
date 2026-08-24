@@ -21,7 +21,7 @@ import unicodedata
 from collections import defaultdict, deque
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -433,14 +433,86 @@ def _localize_cached_metadata(result: dict[str, Any], language: str) -> dict[str
     return localized
 
 
-def _gemini_text(prompt: str, api_key: str, models: list[str]) -> str:
-    """Ask the first model that still has quota.
+def _is_gemini_v3_or_higher(model_name: str) -> bool:
+    """Strict check: model must be Gemini version 3.0 or higher.
 
-    The free tier caps requests per *day*, and the cap is counted per project
-    AND per model. One model alone is a very small budget for a whole library,
-    so exhausting one falls through to the next instead of giving up and
-    serving English. Only quota and availability errors advance the chain; a
-    malformed response is a real failure and stops it.
+    Never permits anything lower than version 3.0.
+    """
+    if not isinstance(model_name, str):
+        return False
+    name = model_name.strip()
+    match = re.fullmatch(r"gemini-(\d+)(?:\.(\d+))?(?:-[A-Za-z0-9._-]+)?", name, re.IGNORECASE)
+    if not match:
+        return False
+    major = int(match.group(1))
+    return major >= 3
+
+
+def _clean_gemini_json(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    else:
+        match = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned, re.DOTALL)
+        if match:
+            cleaned = match.group(1).strip()
+    return cleaned
+
+
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+DEFAULT_GEMINI_FALLBACKS = (
+    "gemini-3.5-flash-lite,"
+    "gemini-3.6-flash,"
+    "gemini-3.6-flash-lite,"
+    "gemini-3.7-flash,"
+    "gemini-3.7-flash-lite,"
+    "gemini-3.1-flash,"
+    "gemini-3.1-flash-lite,"
+    "gemini-3.0-flash,"
+    "gemini-3.0-flash-lite"
+)
+
+
+def _gemini_model_chain() -> list[str]:
+    """Primary model first, then the fallbacks, de-duplicated.
+
+    Each entry carries its own daily allowance. The order here is the order
+    the budget is spent in. Only models >= Gemini 3.0 are permitted.
+    """
+    primary_env = os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
+    fallback_env = os.environ.get("GEMINI_FALLBACK_MODELS", DEFAULT_GEMINI_FALLBACKS)
+
+    configured = [primary_env] + fallback_env.split(",")
+    chain: list[str] = []
+    for name in (value.strip() for value in configured):
+        if not name:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9._-]{3,100}", name):
+            continue
+        if not _is_gemini_v3_or_higher(name):
+            continue
+        if name not in chain:
+            chain.append(name)
+
+    if not chain:
+        for name in (DEFAULT_GEMINI_MODEL + "," + DEFAULT_GEMINI_FALLBACKS).split(","):
+            if name not in chain and _is_gemini_v3_or_higher(name):
+                chain.append(name)
+
+    return chain
+
+
+def _gemini_text(prompt: str, api_key: str, models: list[str],
+                 validator: Callable[[str], bool] | None = None) -> str:
+    """Ask models in the fallback chain sequentially until one yields a valid translation.
+
+    If a model hits rate limits (HTTP 429), quota exhaustion, transient errors,
+    or returns empty/malformed text, the loop advances to the next Gemini >= 3.0 model.
     """
     global _last_translation_ok
     payload = json.dumps({
@@ -448,7 +520,10 @@ def _gemini_text(prompt: str, api_key: str, models: list[str]) -> str:
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096},
     }).encode("utf-8")
     last_error: Exception | None = None
+
     for model in models:
+        if not _is_gemini_v3_or_higher(model):
+            continue
         request = Request(
             f"{GEMINI_API}/{model}:generateContent",
             data=payload,
@@ -460,48 +535,35 @@ def _gemini_text(prompt: str, api_key: str, models: list[str]) -> str:
             with _urlopen_with_retry(request, timeout=20) as response:
                 response_json = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            last_error = RuntimeError(f"Gemini returned HTTP {exc.code} for {model}")
-            if exc.code in (429, 404, 403, 503):
-                continue
-            _last_translation_ok = False
-            raise last_error from exc
+            last_error = RuntimeError(f"Gemini HTTP {exc.code} for {model}")
+            continue
         except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-            last_error = RuntimeError("Gemini translation is temporarily unavailable")
+            last_error = RuntimeError(f"Gemini translation temporarily unavailable for {model}: {exc}")
             continue
-        break
-    else:
-        _last_translation_ok = False
-        raise last_error or RuntimeError("No Gemini model accepted the request")
-    _last_translation_ok = True
-    candidates = response_json.get("candidates") if isinstance(response_json, dict) else None
-    content = candidates[0].get("content") if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict) else None
-    parts = content.get("parts") if isinstance(content, dict) else None
-    translated = "".join(item.get("text", "") for item in parts if isinstance(item, dict)).strip() if isinstance(parts, list) else ""
-    if not translated:
-        raise RuntimeError("Gemini returned an invalid translation")
-    return translated
 
-
-def _gemini_model_chain() -> list[str]:
-    """Primary model first, then the fallbacks, de-duplicated.
-
-    Each entry carries its own daily allowance, so the order here is the order
-    the budget is spent in.
-    """
-    configured = [os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")]
-    configured += os.environ.get(
-        "GEMINI_FALLBACK_MODELS",
-        "gemini-3.1-flash-lite,gemini-flash-lite-latest,gemini-3.5-flash",
-    ).split(",")
-    chain: list[str] = []
-    for name in (value.strip() for value in configured):
-        if not name:
+        candidates = response_json.get("candidates") if isinstance(response_json, dict) else None
+        content = candidates[0].get("content") if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict) else None
+        parts = content.get("parts") if isinstance(content, dict) else None
+        raw_text = "".join(item.get("text", "") for item in parts if isinstance(item, dict)).strip() if isinstance(parts, list) else ""
+        translated = _clean_gemini_json(raw_text)
+        if not translated:
+            last_error = RuntimeError(f"Gemini model {model} returned empty or blocked content")
             continue
-        if not re.fullmatch(r"[A-Za-z0-9._-]{3,100}", name):
-            raise RuntimeError("Gemini model configuration is invalid")
-        if name not in chain:
-            chain.append(name)
-    return chain
+
+        if validator is not None:
+            try:
+                if not validator(translated):
+                    last_error = RuntimeError(f"Gemini model {model} payload failed validation")
+                    continue
+            except Exception as val_exc:
+                last_error = RuntimeError(f"Gemini model {model} validation error: {val_exc}")
+                continue
+
+        _last_translation_ok = True
+        return translated
+
+    _last_translation_ok = False
+    raise last_error or RuntimeError("No Gemini model accepted the request")
 
 
 def _translation_credentials(language: str) -> tuple[str, str, list[str]] | None:
@@ -531,16 +593,22 @@ def _translate_catalogue_texts(summary: str | None,
         "Keep exactly two strings in the original order. Return only valid JSON, without Markdown.\n\n"
         + json.dumps(fields, ensure_ascii=False)
     )
-    translated = _gemini_text(prompt, api_key, models)
+
+    def validate_payload(raw: str) -> bool:
+        try:
+            values = json.loads(raw)
+        except json.JSONDecodeError:
+            return False
+        return (isinstance(values, list) and len(values) == 2 and
+                all(isinstance(item, str) and len(item) <= len(fields[idx]) * 3 + 200
+                    for idx, item in enumerate(values)))
+
     try:
+        translated = _gemini_text(prompt, api_key, models, validator=validate_payload)
         values = json.loads(translated)
-    except json.JSONDecodeError:
+        return values[0] or None, values[1] or None, language.strip().replace("_", "-")
+    except (RuntimeError, json.JSONDecodeError):
         return summary, storyline, "en"
-    if (not isinstance(values, list) or len(values) != 2 or
-            any(not isinstance(item, str) or len(item) > len(fields[index]) * 3 + 200
-                for index, item in enumerate(values))):
-        return summary, storyline, "en"
-    return values[0] or None, values[1] or None, language.strip().replace("_", "-")
 
 
 def _translate_labels(labels: list[str], language: str) -> list[str]:
@@ -556,15 +624,21 @@ def _translate_labels(labels: list[str], language: str) -> list[str]:
         "without Markdown or commentary.\n\n"
         + json.dumps(clean, ensure_ascii=False)
     )
-    translated = _gemini_text(prompt, api_key, models)
+
+    def validate_payload(raw: str) -> bool:
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            return False
+        return (isinstance(result, list) and len(result) == len(clean) and
+                all(isinstance(item, str) and item.strip() and len(item) <= 180 for item in result))
+
     try:
+        translated = _gemini_text(prompt, api_key, models, validator=validate_payload)
         result = json.loads(translated)
-    except json.JSONDecodeError:
+        return [item.strip() for item in result]
+    except (RuntimeError, json.JSONDecodeError):
         return clean
-    if (not isinstance(result, list) or len(result) != len(clean) or
-            any(not isinstance(item, str) or not item.strip() or len(item) > 180 for item in result)):
-        return clean
-    return [item.strip() for item in result]
 
 
 def _translate_metadata_fields(summary: str | None, storyline: str | None,
@@ -588,8 +662,17 @@ def _translate_metadata_fields(summary: str | None, storyline: str | None,
         "Keep the exact JSON object shape and each array length. Return only valid JSON, without Markdown.\n\n"
         + json.dumps(original, ensure_ascii=False)
     )
+
+    def validate_payload(raw: str) -> bool:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return False
+        return isinstance(data, dict)
+
     try:
-        translated = json.loads(_gemini_text(prompt, api_key, models))
+        translated_json = _gemini_text(prompt, api_key, models, validator=validate_payload)
+        translated = json.loads(translated_json)
     except (RuntimeError, json.JSONDecodeError):
         return summary, storyline, genres, themes, game_modes, "en"
     if not isinstance(translated, dict):

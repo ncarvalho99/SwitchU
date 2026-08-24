@@ -1,21 +1,27 @@
 
-Memory allocation and performance
-- The launcher now requests up to 416 MB of application heap before safely falling back. On tested consoles this raised the image budget to 296 MB, giving larger animated themes substantially more room when memory is available.
-- Migrated the entire theme catalogue from the BC7 to the BC1 (DXT1) format. This cuts the GPU memory footprint by 50% (from 456 KB to 232 KB per frame) and significantly reduces package size. User testing found no visible quality loss in the tested themes. Playback can still be sampled for sequences above the 320-frame safety cap, or reduced gracefully when an applet has less free memory after returning from suspended software.
-- Fixed a deko3d safety failure: if a GPU image-memory allocation is refused, SwitchU now leaves that image unloaded instead of using an invalid memory block and triggering a fatal svcBreak when returning from an applet.
-- Note: For the memory and storage savings to take effect, animated themes already installed on your console must be deleted and downloaded again.
+Automatic sleep
+- SwitchU now runs the idle countdown behind Rest Mode > Automatic Sleep. The setting was always there and always saved, but nothing acted on it, so a console left alone in the launcher simply never slept. It now follows the handheld or docked delay you chose and genuinely suspends: the screen goes off and the console draws almost nothing, exactly as it does from the stock home menu.
+- Sleeping from Rest Mode > Sleep no longer disables the background service. Every power option, Sleep, Restart and Shutdown, kept working only until the first sleep of a session and then silently stopped responding. Waking the console also failed to reach the launcher for the same reason. Both are fixed.
 
-Server deployment
-- Replaced the deployment scripts to safely publish themes to standard Ubuntu hosts, preserving the immutable hash-based hardlink structure needed by the updater.
-- Hardened catalogue deployment with the same lock used by ingestion, unique same-filesystem staging, archive/package validation, atomic alias replacement, and rollback if reindexing fails.
+Lock screen
+- Waking the console now shows a lock screen with the clock, in the shape the stock home menu uses. Press the same button three times to get back in, any face, shoulder, d-pad or stick button, or tap the screen three times when no controller is attached. A half-finished sequence forgets a press after a couple of seconds, so a console loose in a bag cannot let itself in.
+- HOME unlocks immediately, since the console's own system layer has already answered for that press.
+- There is nothing to configure. The lock screen is what greets you after the console sleeps, and it is not shown while you are using the launcher, where it would only keep the screen lit in front of a sleep that was already coming.
+
+Other changes
+- The UI Wireframe developer toggle no longer appears in Settings. It drew debug outlines around every element and was never meant to be reachable.
+- Game descriptions recover from a translation service outage instead of falling back to English on the first failure.
 --pt-BR--
 
-Alocação de memória e performance
-- O launcher agora pede até 416 MB de heap da aplicação antes de usar um recuo seguro. Nos consoles testados, isso elevou o orçamento para imagens a 296 MB, dando bem mais espaço a temas animados maiores quando há memória.
-- Todo o catálogo de temas foi migrado do formato BC7 para o BC1 (DXT1). Essa mudança corta o consumo de memória da GPU pela metade (de 456 KB para 232 KB por quadro) e reduz significativamente o tamanho dos pacotes. Nos temas testados, não houve perda visual perceptível. Sequências acima do limite de segurança de 320 quadros ainda podem ser amostradas, e pouca memória livre ao voltar de um software suspenso pode reduzir a reprodução de forma segura.
-- Corrigida uma falha de segurança do deko3d: se uma alocação de memória de imagem da GPU for recusada, o SwitchU deixa essa imagem descarregada em vez de usar um bloco inválido e provocar svcBreak fatal ao voltar de um applet.
-- Nota: Para que a economia de memória e espaço surta efeito, temas animados já instalados no seu console precisam ser apagados e baixados novamente.
+Descanso automático
+- O SwitchU agora executa a contagem de inatividade de Modo de Descanso > Suspensão automática. A opção sempre existiu e sempre foi salva, mas nada agia sobre ela, então um console deixado parado no launcher simplesmente nunca dormia. Agora ele respeita o tempo escolhido para portátil ou base e suspende de verdade: a tela apaga e o console passa a consumir quase nada, exatamente como pelo menu original.
+- Suspender por Modo de Descanso > Suspender não desliga mais o serviço em segundo plano. Todas as opções de energia, Suspender, Reiniciar e Desligar, funcionavam apenas até o primeiro descanso da sessão e depois paravam de responder em silêncio. Acordar o console também não chegava ao launcher pelo mesmo motivo. Os dois casos estão corrigidos.
 
-Deploy de servidor
-- O script de deploy do servidor foi reescrito para publicar os temas com segurança em instâncias Ubuntu normais, respeitando a estrutura de hardlinks imutáveis exigida pelo atualizador no console.
-- O deploy do catálogo foi reforçado com o mesmo bloqueio da ingestão, área temporária única no mesmo sistema de arquivos, validação do lote/pacotes, troca atômica dos aliases e restauração caso a reindexação falhe.
+Tela de bloqueio
+- Ao acordar, o console mostra uma tela de bloqueio com o relógio, no formato do menu original. Pressione o mesmo botão três vezes para voltar, qualquer botão frontal, gatilho, direcional ou clique de analógico, ou toque a tela três vezes quando não houver controle conectado. Uma sequência pela metade esquece um toque depois de alguns segundos, então um console solto na mochila não consegue se desbloquear sozinho.
+- HOME desbloqueia na hora, porque o próprio sistema do console já respondeu por esse toque.
+- Não há nada para configurar. A tela de bloqueio é o que recebe você depois que o console dorme, e não aparece enquanto você está usando o launcher, onde só manteria a tela acesa na frente de um descanso que já estava chegando.
+
+Outras mudanças
+- O ajuste de desenvolvedor UI Wireframe não aparece mais nas Configurações. Ele desenhava contornos de depuração em volta de cada elemento e nunca deveria estar acessível.
+- As descrições dos jogos se recuperam de uma indisponibilidade do serviço de tradução em vez de cair para o inglês na primeira falha.

@@ -33,6 +33,8 @@ public:
     void clearTracks();
     void play();
     void stop();
+    /// Silence music and active sound effects without unloading audio assets.
+    void stopAll();
     void nextTrack();
     void setVolume(float vol);
     float volume() const { return m_volume; }

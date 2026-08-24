@@ -1,3 +1,89 @@
+# SwitchU 2.1.0
+
+## English
+
+The console now goes to sleep on its own again, and the lock screen from the
+stock home menu is back with it. A daemon fault that left every power option
+dead after a sleep was found and fixed along the way.
+
+### Automatic sleep
+
+- SwitchU now runs the idle countdown behind **Rest Mode > Automatic Sleep**.
+  The setting was always there and always saved, but nothing acted on it, so a
+  console left alone in the launcher simply never slept. It now follows the
+  handheld or docked delay you chose and genuinely suspends: the screen goes
+  off and the console draws almost nothing, exactly as it does from the stock
+  home menu.
+- Sleeping from **Rest Mode > Sleep** no longer disables the background
+  service. Every power option, Sleep, Restart and Shutdown, kept working only
+  until the first sleep of a session and then silently stopped responding.
+  Waking the console also failed to reach the launcher for the same reason.
+  Both are fixed.
+
+### Lock screen
+
+- Waking the console now shows a lock screen with the clock, in the shape the
+  stock home menu uses. Press the same button three times to get back in, any
+  face, shoulder, d-pad or stick button, or tap the screen three times when no
+  controller is attached. A half-finished sequence forgets a press after a
+  couple of seconds, so a console loose in a bag cannot let itself in.
+- HOME unlocks immediately, since the console's own system layer has already
+  answered for that press.
+- There is nothing to configure. The lock screen is what greets you after the
+  console sleeps, and it is not shown while you are using the launcher, where it
+  would only keep the screen lit in front of a sleep that was already coming.
+
+### Other changes
+
+- The **UI Wireframe** developer toggle no longer appears in Settings. It drew
+  debug outlines around every element and was never meant to be reachable.
+- Game descriptions recover from a translation service outage instead of
+  falling back to English on the first failure.
+
+---
+
+## Português
+
+O console volta a entrar em descanso sozinho, e a tela de bloqueio do menu
+original volta junto. No caminho, foi encontrada e corrigida uma falha do
+serviço que deixava todas as opções de energia sem resposta depois de dormir.
+
+### Descanso automático
+
+- O SwitchU agora executa a contagem de inatividade de **Modo de Descanso >
+  Suspensão automática**. A opção sempre existiu e sempre foi salva, mas nada
+  agia sobre ela, então um console deixado parado no launcher simplesmente
+  nunca dormia. Agora ele respeita o tempo escolhido para portátil ou base e
+  suspende de verdade: a tela apaga e o console passa a consumir quase nada,
+  exatamente como pelo menu original.
+- Suspender por **Modo de Descanso > Suspender** não desliga mais o serviço em
+  segundo plano. Todas as opções de energia, Suspender, Reiniciar e Desligar,
+  funcionavam apenas até o primeiro descanso da sessão e depois paravam de
+  responder em silêncio. Acordar o console também não chegava ao launcher pelo
+  mesmo motivo. Os dois casos estão corrigidos.
+
+### Tela de bloqueio
+
+- Ao acordar, o console mostra uma tela de bloqueio com o relógio, no formato
+  do menu original. Pressione o mesmo botão três vezes para voltar, qualquer
+  botão frontal, gatilho, direcional ou clique de analógico, ou toque a tela
+  três vezes quando não houver controle conectado. Uma sequência pela metade
+  esquece um toque depois de alguns segundos, então um console solto na mochila
+  não consegue se desbloquear sozinho.
+- HOME desbloqueia na hora, porque o próprio sistema do console já respondeu
+  por esse toque.
+- Não há nada para configurar. A tela de bloqueio é o que recebe você depois
+  que o console dorme, e não aparece enquanto você está usando o launcher, onde
+  só manteria a tela acesa na frente de um descanso que já estava chegando.
+
+### Outras mudanças
+
+- O ajuste de desenvolvedor **UI Wireframe** não aparece mais nas Configurações.
+  Ele desenhava contornos de depuração em volta de cada elemento e nunca deveria
+  estar acessível.
+- As descrições dos jogos se recuperam de uma indisponibilidade do serviço de
+  tradução em vez de cair para o inglês na primeira falha.
+
 # SwitchU 2.0.1
 
 ## English

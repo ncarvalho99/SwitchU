@@ -18,6 +18,7 @@
 #include "widgets/LaunchAnimation.hpp"
 #include "widgets/OverlayDialog.hpp"
 #include "widgets/ProgressDialog.hpp"
+#include "widgets/LockScreen.hpp"
 #include "widgets/AppletButton.hpp"
 #include "widgets/PageIndicator.hpp"
 #include "widgets/UserAvatarButton.hpp"
@@ -85,6 +86,7 @@ private:
     };
 
     void loadResources();
+    void setupLockScreen();
     GridLayoutMetrics computeGridLayoutMetrics() const;
     void reflowHomeGrid();
     void buildGrid();
@@ -219,9 +221,22 @@ private:
     nxui::Font  m_fontNormal;
     nxui::Font  m_fontSmall;
     nxui::Font  m_fontIcons;
+    // The lock screen clock, rasterised at the size it is drawn. Scaling
+    // the 24pt face up to it showed every pixel of the smaller bitmap.
+    nxui::Font  m_fontClock;
 
     GridModel    m_model;
     nxui::Theme  m_theme;
+
+    // Drawn last and outside the widget tree: while it is up focusRoot()
+    // hands back nothing, so no widget can be navigated or activated
+    // behind it, and it reads its own presses straight from the pad.
+    LockScreen   m_lockScreen;
+    // One rendered black frame must precede disabled rendering; otherwise the
+    // prior menu image remains scanned out while the GPU is idle.
+    bool         m_lockScreenLowPowerPrimed = false;
+    // Counts up to the next re-read of the console's own sleep plan.
+    float        m_sleepPlanTimer = 0.f;
 
     std::string              m_activePresetName = "Default Dark";
     ThemeColorSet            m_activeColors;
