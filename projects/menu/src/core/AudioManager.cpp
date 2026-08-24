@@ -81,6 +81,11 @@ void AudioManager::stop() {
     m_playing.store(false);
 }
 
+void AudioManager::stopAll() {
+    stop();
+    Mix_HaltChannel(-1);
+}
+
 void AudioManager::nextTrack() {
     std::lock_guard<std::mutex> lk(m_trackMutex);
     if (m_tracks.empty()) return;

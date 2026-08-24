@@ -147,6 +147,20 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         t.items.push_back(std::move(it));
     }
 
+#ifdef SWITCHU_DEBUG_UI
+    // UI Wireframe draws an outline around every Box widget. It is a layout
+    // debugging aid and it shipped visible to end users by mistake, so it is
+    // now built only in debug builds, next to the other SWITCHU_DEBUG_UI
+    // tooling. The item is kept intact rather than deleted: to bring it back
+    // for everyone, remove this guard. The rest of the plumbing
+    // (SettingsScreen::m_wireframeEnabled / m_wireframeCb,
+    // WiiUMenuApp::m_showWireframe, Renderer::setBoxWireframeEnabled) is
+    // untouched and stays compiled in; without this item nothing can enable
+    // it in a release build, because the flag is never persisted to config
+    // and defaults to false. The `settings.display.ui_wireframe*` translations
+    // were removed from romfs/i18n so the shipped assets no longer advertise a
+    // setting nobody can reach; a debug build falls back to the English
+    // literals below.
     {
         SettingItem it; it.label = i18n.tr("settings.display.ui_wireframe", "UI Wireframe"); it.type = ItemType::Toggle;
         it.description = i18n.tr("settings.display.ui_wireframe_desc", "Show outlines of all Box widgets for layout debugging.");
@@ -158,6 +172,9 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         };
         t.items.push_back(std::move(it));
     }
+#else
+    (void)screen;
+#endif
 
     return t;
 }

@@ -76,7 +76,7 @@ id_ed25519
 *.sqlite
 *.sqlite3
 
-# Per-agent local state can contain permissions, session data, and credentials.
+# Local tool state can contain permissions, session data, and credentials.
 /.claude/
 /.codex/
 /.agents/

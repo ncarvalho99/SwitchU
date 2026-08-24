@@ -37,6 +37,26 @@ namespace {
 static constexpr const char* kLayoutPath = "sdmc:/config/SwitchU/layout.json";
 static constexpr int kMinHomePages = 8;
 static constexpr const char* kBuiltInSoundPreset = "wiiu";
+// Combined with nxui::Application's 100 ms non-render sleep, this leaves the
+// locked menu responsive within roughly 350 ms while cutting CPU wakeups to
+// under three per second and eliminating GPU presentation work.
+static constexpr std::uint64_t kLockScreenLowPowerSleepNs = 250'000'000ULL;
+
+// How often the console's own sleep plan is re-read. It changes only when
+// somebody edits it in Settings, so once every few seconds is plenty and keeps
+// a system-settings IPC call out of the frame loop.
+static constexpr float kSleepPlanPollSeconds = 3.f;
+
+// The two ladders Horizon stores for automatic sleep, in seconds, in the order
+// the Sleep tab shows them. The sixth position is Never in both.
+static float sleepPlanSeconds(bool docked, std::uint8_t plan) {
+    static const float kHandheld[] = { 60.f, 180.f, 300.f, 600.f, 1800.f };
+    static const float kDocked[]   = { 3600.f, 7200.f, 10800.f, 21600.f, 43200.f };
+    const int index = static_cast<int>(plan);
+    if (index < 0 || index > 4)
+        return -1.f;
+    return docked ? kDocked[index] : kHandheld[index];
+}
 
 static constexpr float kGridRectX = 0.f;
 static constexpr float kGridRectY = 90.f;
@@ -332,6 +352,8 @@ bool WiiUMenuApp::onCreate() {
     DebugLog::log("[init] buildGrid...");
     buildGrid();
 
+    setupLockScreen();
+
 #ifdef SWITCHU_DEBUG_UI
     m_debugOverlay = std::make_unique<DebugImGuiOverlay>();
     if (!m_debugOverlay->initialize(app().gpu(), app().renderer())) {
@@ -433,6 +455,7 @@ void WiiUMenuApp::loadResources() {
     if (m_fontSmall.load(app().gpu(), app().renderer(), fontPath, 18))
         m_loadedSmallFontPath = fontPath;
     m_fontIcons.load(app().gpu(), app().renderer(), std::string(SD_ASSETS) + "/fonts/switch_icons.ttf", 24);
+    m_fontClock.load(app().gpu(), app().renderer(), fontPath, 72);
 
     std::string gameCardPath = std::string(SD_ASSETS) + "/icons/gamecard.png";
     if (m_gameCardTex.loadFromFile(app().gpu(), app().renderer(), gameCardPath))
@@ -1793,6 +1816,38 @@ bool WiiUMenuApp::inThemeShopForMemorySampling() const {
     return m_themeShop && m_themeShop->isActive();
 }
 
+void WiiUMenuApp::setupLockScreen() {
+    auto& i18n = nxui::I18n::instance();
+
+    m_lockScreen.setFonts(&m_fontClock, &m_fontSmall);
+    m_lockScreen.setTheme(&m_theme);
+    m_lockScreen.setUse12HourClock(m_config.clockUse12Hour);
+    m_lockScreen.onSleepRequested([this]() {
+        // The daemon owns the real sleep sequence. Asking for it here is what
+        // makes the panel actually go dark: stopping our own presentation only
+        // ends GPU work, and Horizon keeps the backlight on regardless.
+        closeActiveOverlays();
+        m_launcher.enterSleep();
+    });
+
+    m_lockScreen.onLocked([this, &i18n]() {
+        // Whatever was open goes with it. Coming back to a half-open menu the
+        // owner cannot remember opening is worse than coming back to the grid.
+        closeActiveOverlays();
+        m_audio.stopAll();
+        m_accessibility.announce(i18n.tr("lock_screen.locked",
+                                         "Screen locked. Press the same button three times to unlock."),
+                                 true, true);
+    });
+    m_lockScreen.onProgress([]() {});
+    m_lockScreen.onUnlocked([this, &i18n]() {
+        if (m_config.musicEnabled && m_audioStarted)
+            m_audio.play();
+        m_audio.playSfx(Sfx::ModalHide);
+        m_accessibility.announce(i18n.tr("lock_screen.unlocked", "Unlocked."), true, true);
+    });
+}
+
 void WiiUMenuApp::onUpdate(float dt) {
     // O restante da sequencia de fundo entra por aqui, alguns quadros por vez.
     // Ler os 71 MB onde o tema e aplicado custava 3.4 dos 4.1 segundos de
@@ -1999,7 +2054,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_audioFuture.get();
         m_audio.setVolume(m_config.musicVolume);
         m_audio.setSfxVolume(m_config.sfxVolume);
-        if (m_config.musicEnabled) m_audio.play();
+        if (m_config.musicEnabled && !m_lockScreen.isLocked()) m_audio.play();
         m_loadedSoundPreset = resolveSoundPresetId(m_config.soundPreset);
         m_audioStarted = true;
         DebugLog::log("[init] Audio ready (deferred)");
@@ -2010,7 +2065,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_audioFuture.get();
         m_audio.setVolume(m_config.musicVolume);
         m_audio.setSfxVolume(m_config.sfxVolume);
-        if (m_config.musicEnabled)
+        if (m_config.musicEnabled && !m_lockScreen.isLocked())
             m_audio.play();
         m_loadedSoundPreset = m_pendingSoundPreset.empty() ? resolveSoundPresetId(m_config.soundPreset)
                                                            : m_pendingSoundPreset;
@@ -2070,6 +2125,26 @@ void WiiUMenuApp::onUpdate(float dt) {
                 m_refreshQueued = true;
                 m_deferredRefreshFrames = std::max(m_deferredRefreshFrames, 3);
                 break;
+            case switchu::smi::MenuMessage::SleepSequence:
+                // Lock on the way under, so the console is already in the state
+                // the owner will come back to. Best effort: Horizon may suspend
+                // the applet before this runs, which is why WakeUp locks too.
+                m_lockScreen.lockNow();
+                break;
+            case switchu::smi::MenuMessage::WakeUp:
+                // The lock screen exists for this moment. Waking is the one
+                // thing that raises it, and it is not optional, the same way
+                // the stock home menu does not offer to skip it.
+                m_lockScreen.lockNow();
+                m_lockScreen.showAfterSystemWake();
+                // Rendering is restored either way: the black frame belongs to
+                // the lock screen, but a stopped presentation loop would strand
+                // any menu, locked or not.
+                // A console that just slept on its own is not still idle.
+                m_lockScreen.resetSleepCountdown();
+                m_lockScreenLowPowerPrimed = false;
+                app().setRenderEnabled(true);
+                break;
             case switchu::smi::MenuMessage::AppViewFlagsUpdate: {
                 uint64_t tid = notif.app_id;
                 uint32_t flags = notif.payload;
@@ -2121,12 +2196,18 @@ void WiiUMenuApp::onUpdate(float dt) {
     debugTouchBlocked = m_showDebugOverlay;
 #endif
 
-    if (handleAccessibilityToggleCombo()) {
+    // Shortcuts that read the pad straight rather than going through focus
+    // dispatch, so blocking focusRoot() is not enough to stop them: the lock
+    // screen has to be asked about here too.
+    const bool lockScreenUp = m_lockScreen.isLocked();
+
+    if (!lockScreenUp && handleAccessibilityToggleCombo()) {
         m_plusExitPending = false;
         m_plusExitPendingTimer = 0.f;
     }
 
-    handleSortShortcutRelease(dt);
+    if (!lockScreenUp)
+        handleSortShortcutRelease(dt);
     syncUpdateCheck();
     syncUpdateDownload();
 
@@ -2146,6 +2227,7 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 
     if (!debugTouchBlocked
+        && !lockScreenUp
         && !m_launchAnim->isPlaying()
         && !(m_dialog && m_dialog->isActive())
         && !(m_themeShop && m_themeShop->isActive())
@@ -2159,32 +2241,33 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 
     bool dialogActiveNow = (m_dialog && m_dialog->isActive());
-    if (!debugTouchBlocked && dialogActiveNow)
+    if (!debugTouchBlocked && !lockScreenUp && dialogActiveNow)
         m_dialog->handleTouch(app().input());
 
-    if (!debugTouchBlocked && m_themeShop && m_themeShop->isActive())
+    if (!debugTouchBlocked && !lockScreenUp && m_themeShop && m_themeShop->isActive())
         m_themeShop->handleTouch(app().input());
 
     // L e R viram a página do catálogo de temas. Roteado daqui porque é onde a
     // entrada está: a loja é um widget e não alcança o Input por conta própria.
-    if (m_themeShop && m_themeShop->isActive() && !(m_dialog && m_dialog->isActive())) {
+    if (!lockScreenUp && m_themeShop && m_themeShop->isActive()
+        && !(m_dialog && m_dialog->isActive())) {
         const int delta = app().input().isDown(nxui::Button::L) ? -1
                         : app().input().isDown(nxui::Button::R) ? 1 : 0;
         if (delta != 0 && m_themeShop->stepCataloguePage(delta))
             m_audio.playSfx(Sfx::Navigate);
     }
 
-    if (!debugTouchBlocked && m_gameGallery && m_gameGallery->isActive())
+    if (!debugTouchBlocked && !lockScreenUp && m_gameGallery && m_gameGallery->isActive())
         m_gameGallery->handleTouch(app().input());
 
-    if (!debugTouchBlocked && m_gameMods && m_gameMods->isActive())
+    if (!debugTouchBlocked && !lockScreenUp && m_gameMods && m_gameMods->isActive())
         m_gameMods->handleTouch(app().input());
 
-    if (!debugTouchBlocked && !(m_gameMods && m_gameMods->isActive())
+    if (!debugTouchBlocked && !lockScreenUp && !(m_gameMods && m_gameMods->isActive())
         && m_gameDetails && m_gameDetails->isActive())
         m_gameDetails->handleTouch(app().input());
 
-    if (!debugTouchBlocked && m_settings && m_settings->isActive())
+    if (!debugTouchBlocked && !lockScreenUp && m_settings && m_settings->isActive())
         m_settings->handleTouch(app().input());
 
     if (m_dialogWasActive && !dialogActiveNow) {
@@ -2196,7 +2279,7 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
     m_dialogWasActive = dialogActiveNow;
 
-    if (!debugTouchBlocked && m_userSelect && m_userSelect->isActive())
+    if (!debugTouchBlocked && !lockScreenUp && m_userSelect && m_userSelect->isActive())
         m_userSelect->handleTouch(app().input());
 
     if (!(m_userSelect && m_userSelect->isActive())
@@ -2249,6 +2332,53 @@ void WiiUMenuApp::onUpdate(float dt) {
 
     if (m_editMode && m_editGhostIcon)
         m_editGhostIcon->update(dt);
+
+    // Last, with this frame's state settled. The suspend countdown is held off
+    // while a game is starting, while a title is running, and while a progress
+    // dialog is up: none of those are somebody walking away. It deliberately
+    // ignores the menu's own black low-power frame, which also turns rendering
+    // off, because that state is the console sitting idle, which is precisely
+    // when it should be heading for sleep.
+    const bool sleepSuppressed =
+        (m_launchAnim && m_launchAnim->isPlaying()) ||
+        (m_progressDialog && m_progressDialog->isActive()) ||
+        m_launcher.isAppRunning() ||
+        (!app().renderEnabled() && !m_lockScreenLowPowerPrimed);
+
+    m_sleepPlanTimer += dt;
+    if (m_sleepPlanTimer >= kSleepPlanPollSeconds) {
+        m_sleepPlanTimer = 0.f;
+        SetSysSleepSettings plan{};
+        if (R_SUCCEEDED(setsysGetSleepSettings(&plan))) {
+            const bool docked = appletGetOperationMode() != AppletOperationMode_Handheld;
+            m_lockScreen.setSleepDelaySeconds(
+                sleepPlanSeconds(docked, docked ? plan.console_sleep_plan
+                                                : plan.handheld_sleep_plan));
+        }
+    }
+
+    m_lockScreen.update(dt, app().input(), sleepSuppressed);
+
+    if (!m_lockScreen.hidesScene()) {
+        // Any unlock starts rendering on this same loop iteration, so the
+        // black low-power frame fades back into the normal menu immediately.
+        m_lockScreenLowPowerPrimed = false;
+        if (!app().renderEnabled()) {
+            DebugLog::log("[lock] low power: presentation resumed");
+            app().setRenderEnabled(true);
+        }
+    } else if (!m_lockScreenLowPowerPrimed) {
+        // Leave rendering on for one frame: LockScreen::render() replaces the
+        // menu with black, after which the static framebuffer can be kept.
+        m_lockScreenLowPowerPrimed = true;
+    } else {
+        if (app().renderEnabled())
+            DebugLog::log("[lock] low power: presentation stopped");
+        app().setRenderEnabled(false);
+        // Input and system messages are still serviced after this short wait;
+        // HOME and the three-press gesture remain usable while GPU work stops.
+        svcSleepThread(kLockScreenLowPowerSleepNs);
+    }
 }
 
 std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
@@ -2563,6 +2693,10 @@ void WiiUMenuApp::onRender(nxui::Renderer& ren) {
         m_editGhostIcon->render(ren);
 
     renderActionHintBar(ren);
+
+    // Over the hint bar as well: while the lock screen is up none of those
+    // buttons do anything, so showing them would be a lie.
+    m_lockScreen.render(ren);
 
 #ifdef SWITCHU_DEBUG_UI
     if (m_debugOverlay) {

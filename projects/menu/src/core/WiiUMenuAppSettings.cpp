@@ -308,6 +308,7 @@ void WiiUMenuApp::createSettings() {
         app().gpu().waitIdle();
         m_fontNormal.clearCache();
         m_fontSmall.clearCache();
+        m_fontClock.clearCache();
         m_settingsNeedRefresh = true;
     });
     m_settings->onDefaultProfileChange([this](const std::string& uidHex) {
@@ -334,6 +335,7 @@ void WiiUMenuApp::createSettings() {
         m_config.clockUse12Hour = enabled;
         if (m_clock)
             m_clock->setUse12HourClock(enabled);
+        m_lockScreen.setUse12HourClock(enabled);
     });
     m_settings->onAccessibilityEnabledChange([this](bool enabled) {
         if (m_config.accessibilityEnabled == enabled)

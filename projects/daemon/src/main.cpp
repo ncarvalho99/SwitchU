@@ -679,7 +679,29 @@ static void requestPowerStateChange(const char* source, bool reboot) {
         appletStartShutdownSequence();
 }
 
+// Sleep is not a power-down and must not use the shutdown teardown below.
+// The process keeps running, the filesystem stays mounted, and the daemon has
+// to be alive on the other side to handle the wake. Routing sleep through
+// startPowerSequence set g_powerSequenceStarted, which parks the main loop for
+// good: the console woke to a daemon that had stopped reading applet messages
+// and menu commands, so the wake notification never reached the menu and every
+// power action in the menu did nothing from then on.
+static void startSleepSequence(const char* source) {
+    switchu::FileLog::log("[power] sleep requested (%s)", source);
+    if (daemon::menu_la::isActive())
+        pushNotification(smi::MenuMessage::SleepSequence);
+    // Cheap, and the console may never wake: a flat battery ends this in a
+    // power cut with whatever is outstanding still unwritten.
+    switchu::commitSdCard("sleep");
+    appletStartSleepSequence(true);
+}
+
 static void startPowerSequence(const char* source, smi::SystemMessage action) {
+    if (action == smi::SystemMessage::EnterSleep) {
+        // Defensive: no caller should reach the teardown with a sleep.
+        startSleepSequence(source);
+        return;
+    }
     cancelViewPolling(source);
     takeForegroundFromRunningApp(source);
     g_powerSequenceStarted.store(true);
@@ -717,11 +739,6 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
     switchu::commitSdCard("power sequence");
 
     switch (action) {
-        case smi::SystemMessage::EnterSleep:
-            // Sleep is left on the applet path: it is not a shutdown, the
-            // filesystem stays mounted, and it has never been implicated.
-            appletStartSleepSequence(true);
-            break;
         case smi::SystemMessage::Shutdown:
             requestPowerStateChange(source, false);
             break;
@@ -848,7 +865,7 @@ static void handleGeneralChannel() {
         break;
         case 3:
         switchu::FileLog::log("[sams] -> Sleep");
-        startPowerSequence("sams-sleep", smi::SystemMessage::EnterSleep);
+        startSleepSequence("sams-sleep");
         break;
         case 5:
         switchu::FileLog::log("[sams] -> Shutdown");
@@ -909,6 +926,8 @@ static void handleAppletMessages() {
         case 29:
         case 32:
         switchu::FileLog::log("[ae] -> Sleep (msg=%u)", msg);
+        if (daemon::menu_la::isActive())
+            pushNotification(smi::MenuMessage::SleepSequence);
         appletStartSleepSequence(true);
         break;
 
@@ -1134,7 +1153,7 @@ static void handleMenuCommand() {
         break;
 
     case smi::SystemMessage::EnterSleep:
-        startPowerSequence("smi-sleep", smi::SystemMessage::EnterSleep);
+        startSleepSequence("smi-sleep");
         break;
 
     case smi::SystemMessage::Shutdown:

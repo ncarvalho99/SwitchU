@@ -716,6 +716,10 @@ void WiiUMenuApp::closeActiveOverlays() {
 }
 
 nxui::Widget* WiiUMenuApp::focusRoot() {
+    // Nothing behind the lock screen can be navigated or activated. Returning
+    // nullptr blocks the frame's whole input dispatch, which is exactly the
+    // guarantee this screen has to make; it reads its own presses from the pad.
+    if (m_lockScreen.isLocked()) return nullptr;
     if (m_launchAnim && m_launchAnim->isPlaying()) return nullptr;
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
     if (m_gameMods && m_gameMods->isActive()) return m_gameMods.get();
@@ -1072,6 +1076,15 @@ void WiiUMenuApp::handleTouch() {
 void WiiUMenuApp::handleSystemAction(SysAction a) {
     switch (a) {
         case SysAction::HomeButton:
+            // HOME reaches the menu as a daemon notification rather than a HID
+            // button. While locked it is an immediate system-level unlock, not
+            // a regular HOME navigation event.
+            if (m_lockScreen.isLocked()) {
+                m_lockScreen.unlockNow();
+                m_lockScreenLowPowerPrimed = false;
+                app().setRenderEnabled(true);
+                return;
+            }
             DebugLog::log("[pump] HomeButton -> UI update");
             m_launcher.setAppHasForeground(false);
 
