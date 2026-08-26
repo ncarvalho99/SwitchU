@@ -88,6 +88,13 @@ public:
     void endFrame();
     void waitIdle();
 
+    // Application shutdown destroys a large texture graph. Waiting for the
+    // same queue once per texture turns teardown into a chain of redundant
+    // GPU-wide barriers. Drain it once before bulk destruction, then let each
+    // texture release only its descriptor and memory.
+    void beginBulkTeardown();
+    bool bulkTeardownActive() const { return m_bulkTeardown; }
+
     // Split of the two blocking waits in beginFrame, in nanoseconds.
     // Large acquire with small fence means the GPU is keeping up and we are
     // simply waiting on the display. Large fence means the GPU is the
@@ -309,6 +316,7 @@ private:
     uint32_t m_lastFrameUploads = 0;
     uint64_t m_lastAcquireNs = 0;
     uint64_t m_lastFenceWaitNs = 0;
+    bool m_bulkTeardown = false;
 };
 
 } // namespace nxui

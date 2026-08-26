@@ -48,10 +48,25 @@ bool Renderer::initialize() {
             .initialize(layout);
 
         m_whiteMemBlock = m_gpu.allocImageMemory(layout.getSize());
+        if (!m_whiteMemBlock) {
+            static constexpr const char* msg =
+                "[Renderer] White texture allocation FAILED";
+            std::fprintf(stderr, "%s\n", msg);
+            if (GpuDevice::debugSink())
+                GpuDevice::debugSink()(msg);
+            return false;
+        }
         m_whiteImage.initialize(layout, m_whiteMemBlock, 0);
 
         uint32_t white = 0xFFFFFFFF;
-        m_gpu.uploadTexture(m_whiteImage, &white, 4, 1, 1);
+        if (!m_gpu.uploadTexture(m_whiteImage, &white, 4, 1, 1)) {
+            static constexpr const char* msg =
+                "[Renderer] White texture upload FAILED";
+            std::fprintf(stderr, "%s\n", msg);
+            if (GpuDevice::debugSink())
+                GpuDevice::debugSink()(msg);
+            return false;
+        }
 
         dk::ImageView view{m_whiteImage};
         int slot = registerTexture(view);

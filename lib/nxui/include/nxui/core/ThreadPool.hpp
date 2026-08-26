@@ -15,6 +15,9 @@
 #include <thread>
 #include <vector>
 #include <cstddef>
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
 
 namespace nxui {
 
@@ -24,7 +27,7 @@ public:
     explicit ThreadPool(std::size_t numWorkers = 2) {
         m_workers.reserve(numWorkers);
         for (std::size_t i = 0; i < numWorkers; ++i) {
-            m_workers.emplace_back([this]() { workerLoop(); });
+            m_workers.emplace_back([this, i]() { workerLoop(i); });
         }
     }
 
@@ -63,7 +66,16 @@ public:
     }
 
 private:
-    void workerLoop() {
+    void workerLoop(std::size_t workerIndex) {
+#ifdef __SWITCH__
+        // The menu main/render thread starts on core 0. libnx gives a
+        // std::thread the whole process CPU mask, so pin background I/O and
+        // decode work to cores 1-2 instead of letting it preempt rendering.
+        const s32 core = 1 + static_cast<s32>(workerIndex % 2);
+        svcSetThreadCoreMask(CUR_THREAD_HANDLE, core, UINT64_C(1) << core);
+#else
+        (void)workerIndex;
+#endif
         for (;;) {
             std::function<void()> task;
             {

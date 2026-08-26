@@ -5,6 +5,7 @@
 namespace nxui {
 
 bool GpuDevice::initialize() {
+    m_bulkTeardown = false;
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::fprintf(stderr, "[GpuDevice-SDL2] SDL_Init(VIDEO) failed: %s\n", SDL_GetError());
         return false;
@@ -33,6 +34,7 @@ bool GpuDevice::initialize() {
 void GpuDevice::shutdown() {
     if (m_sdlRenderer) { SDL_DestroyRenderer(m_sdlRenderer); m_sdlRenderer = nullptr; }
     if (m_sdlWindow)   { SDL_DestroyWindow(m_sdlWindow);     m_sdlWindow = nullptr; }
+    m_bulkTeardown = false;
 }
 
 int GpuDevice::beginFrame() {
@@ -46,6 +48,13 @@ void GpuDevice::endFrame() {
 
 void GpuDevice::waitIdle() {
     // No-op for SDL2 — rendering is synchronous
+}
+
+void GpuDevice::beginBulkTeardown() {
+    if (m_bulkTeardown)
+        return;
+    waitIdle();
+    m_bulkTeardown = true;
 }
 
 } // namespace nxui

@@ -6,10 +6,12 @@ exec 2>&1
 
 MODE="${1:-release}"
 VARIANT="${2:-sysmodule}"
+TERMINATION_QUEUE_TEST="${3:-off}"
 cd /src || exit 1
 
 case "$MODE" in release|debug) ;; *) echo "modo invalido: $MODE"; exit 2;; esac
 case "$VARIANT" in sysmodule|homebrew) ;; *) echo "variante invalida: $VARIANT"; exit 2;; esac
+case "$TERMINATION_QUEUE_TEST" in on|off) ;; *) echo "teste de fila invalido: $TERMINATION_QUEUE_TEST"; exit 2;; esac
 
 # CMake records the source directory. A cache produced outside Docker cannot
 # safely be reused under /src, but an already-valid Docker cache is retained.
@@ -33,7 +35,13 @@ else
     HOMEBREW=--homebrew=n
 fi
 
-xmake f --yes -p cross -m "$MODE" -a aarch64 --toolchain=devkita64 "$HOMEBREW" --root || exit $?
+if [ "$TERMINATION_QUEUE_TEST" = on ]; then
+    TERMINATION_QUEUE_TEST_ARG=--termination_queue_test=y
+else
+    TERMINATION_QUEUE_TEST_ARG=--termination_queue_test=n
+fi
+
+xmake f --yes -p cross -m "$MODE" -a aarch64 --toolchain=devkita64 "$HOMEBREW" "$TERMINATION_QUEUE_TEST_ARG" --root || exit $?
 xmake --root -j"$(nproc)" || exit $?
 
 DIST="dist/$VARIANT/$MODE"

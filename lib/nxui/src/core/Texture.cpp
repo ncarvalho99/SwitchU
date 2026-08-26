@@ -38,7 +38,7 @@ void Texture::retireGpuResources() {
     const bool holdsMemory = m_gpu && m_mem && m_allocSize > 0;
     if (m_slot < 0 && !holdsMemory)
         return;
-    if (m_gpu)
+    if (m_gpu && !m_gpu->bulkTeardownActive())
         m_gpu->waitIdle();
     releaseSlot();
     if (holdsMemory)

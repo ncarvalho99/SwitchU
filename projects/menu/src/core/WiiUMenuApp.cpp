@@ -254,20 +254,37 @@ void WiiUMenuApp::setTutorialStartupFade(bool enabled) {
     m_tutorialStartupFade = enabled;
 }
 
+void WiiUMenuApp::setStartupConfig(const AppConfig& config) {
+    m_config = config;
+    m_startupConfigProvided = true;
+}
+
 #ifdef SWITCHU_MENU
-void WiiUMenuApp::setStartupStatus(uint64_t suspendedTitleId, bool appRunning) {
-    m_launcher.setStartupStatus(suspendedTitleId, appRunning);
+void WiiUMenuApp::setStartupStatus(const switchu::smi::SystemStatus& status) {
+    m_launcher.setStartupStatus(status.suspended_app_id, status.app_running);
+    m_transitionOriginTick = status.transition_origin_tick;
+}
+
+void WiiUMenuApp::setMenuMainTrace(uint64_t tick, uint32_t core) {
+    m_menuMainTick = tick;
+    m_menuMainCore = core;
 }
 #endif
 
 bool WiiUMenuApp::onCreate() {
+    const uint64_t activityCreateStartTick = armGetSystemTick();
     DebugLog::log("[init] onCreate enter");
     m_iconStreamer.setThreadPool(&m_threadPool);
-    m_config.load();
+    if (!m_startupConfigProvided)
+        m_config.load();
+    applyGlassSharpness(m_config.glassSharpness);
     loadMenuLayout();
     m_appLoader.setPendingTransform([this](std::vector<PendingApp>& apps) {
         applyMenuLayoutToPending(apps);
     });
+    // Catalog I/O is independent of font/GPU setup. Start it now so SD reads
+    // and metadata parsing overlap with i18n, audio, and resource creation.
+    m_appLoader.startAsync(m_threadPool);
 
     nxui::I18n::instance().initialize(std::string(SD_ASSETS) + "/i18n", "en-US");
     applyUiLanguage();
@@ -296,7 +313,8 @@ bool WiiUMenuApp::onCreate() {
         DebugLog::log("[init] Bluetooth manager initialization deferred for fast return");
     } else {
         bluetooth::Initialize();
-        DebugLog::log("[init] Bluetooth manager initialized");
+        DebugLog::log("[init] Bluetooth manager %s",
+                      bluetooth::IsAvailable() ? "initialized" : "unavailable");
     }
     DebugLog::log("[init] Theme Shop HTTP runtime deferred until first request");
 
@@ -367,7 +385,32 @@ bool WiiUMenuApp::onCreate() {
 #ifdef SWITCHU_MENU
     m_sysMsg.setCallback([this](SysAction a) { handleSystemAction(a); });
     DebugLog::log("[init] async notifications via AppletStorage only");
-    switchu::menu::smi_cmd::menuReady();
+
+    const auto& initTrace = app().initializeTrace();
+    switchu::smi::MenuReadyArgs ready{};
+    ready.transition_origin_tick = m_transitionOriginTick;
+    ready.menu_main_tick = m_menuMainTick;
+    ready.initialize_start_tick = initTrace.initializeStartTick;
+    ready.gpu_ready_tick = initTrace.gpuReadyTick;
+    ready.renderer_ready_tick = initTrace.rendererReadyTick;
+    ready.blank_frame_tick = initTrace.blankFrameTick;
+    ready.activity_create_start_tick = activityCreateStartTick;
+    ready.activity_create_end_tick = armGetSystemTick();
+    ready.menu_main_core = m_menuMainCore;
+    ready.activity_core = svcGetCurrentProcessorNumber();
+    ready.catalog_count = static_cast<uint32_t>(m_model.count());
+    switchu::menu::smi_cmd::menuReady(ready);
+
+    app().setFirstFrameCallback([this](uint64_t firstInputTick, uint64_t firstFrameTick) {
+        switchu::smi::MenuFirstFrameArgs first{};
+        first.transition_origin_tick = m_transitionOriginTick;
+        first.first_input_tick = firstInputTick;
+        first.first_frame_tick = firstFrameTick;
+        first.image_memory_bytes = app().gpu().imageMemoryUsed();
+        first.core = svcGetCurrentProcessorNumber();
+        first.catalog_count = static_cast<uint32_t>(m_model.count());
+        switchu::menu::smi_cmd::menuFirstFrame(first);
+    });
 #endif
 
     DebugLog::log("[init] DONE");
@@ -404,6 +447,22 @@ void WiiUMenuApp::quiesceWritersForPowerAction() {
 
 
 void WiiUMenuApp::onDestroy() {
+#ifdef SWITCHU_MENU
+    switchu::smi::MenuClosingArgs closingTrace{};
+    const auto& shutdownTrace = app().shutdownTrace();
+    closingTrace.shutdown_start_tick = shutdownTrace.shutdownStartTick;
+    closingTrace.gpu_drain_start_tick = shutdownTrace.gpuDrainStartTick;
+    closingTrace.gpu_drain_end_tick = shutdownTrace.gpuDrainEndTick;
+    closingTrace.on_destroy_start_tick = shutdownTrace.activityDestroyStartTick;
+#endif
+    // Wake any libcurl transfer before shutdown tries to take its mutex or the
+    // worker pool joins. Without this, a stalled package transfer can hold the
+    // outgoing menu process for its 30-second low-speed window.
+    themeshop::http::cancelPendingRequests();
+#ifdef SWITCHU_MENU
+    closingTrace.http_cancel_done_tick = armGetSystemTick();
+#endif
+
     if (m_audioFuture.valid()) m_audioFuture.get();
 
 #ifdef SWITCHU_MENU
@@ -426,6 +485,10 @@ void WiiUMenuApp::onDestroy() {
     }
 #endif
 
+#ifdef SWITCHU_MENU
+    closingTrace.state_persist_done_tick = armGetSystemTick();
+#endif
+
 #ifdef SWITCHU_DEBUG_UI
     if (m_debugOverlay) {
         m_debugOverlay->shutdown(app().gpu());
@@ -436,11 +499,16 @@ void WiiUMenuApp::onDestroy() {
     stopEditGhost();
 
     themeshop::http::shutdown();
+#ifdef SWITCHU_MENU
+    closingTrace.http_shutdown_done_tick = armGetSystemTick();
+#endif
 
     bluetooth::Finalize();
 
 #ifdef SWITCHU_MENU
-    switchu::menu::smi_cmd::menuClosing();
+    closingTrace.bluetooth_done_tick = armGetSystemTick();
+    closingTrace.core = svcGetCurrentProcessorNumber();
+    switchu::menu::smi_cmd::menuClosing(closingTrace);
 #endif
     if (m_layoutDirty)
         saveMenuLayout();
@@ -461,7 +529,7 @@ void WiiUMenuApp::loadResources() {
     if (m_gameCardTex.loadFromFile(app().gpu(), app().renderer(), gameCardPath))
         m_loadedGameCardPath = gameCardPath;
 
-    m_appLoader.load(m_model, m_iconStreamer);
+    m_appLoader.finalize(m_model, m_iconStreamer);
     // AppListLoader owns the initial native-icon setup.  Install the optional
     // Gallery lookup immediately afterwards so custom covers work after a
     // cold start too, not only after a sort or refresh rebuild.
@@ -1031,6 +1099,8 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
 
     GlossyIcon* raw = icon.get();
     icon->setOnActivate([this, raw]() {
+        switchu::smi::LaunchTransitionTrace transitionTrace{};
+        transitionTrace.activation_tick = armGetSystemTick();
         uint64_t tid = raw->titleId();
         if (m_launcher.isAppSuspended(tid)) {
             m_audio.playSfx(Sfx::LaunchGame);
@@ -1039,9 +1109,15 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             float  cr   = raw->cornerRadius();
             nxui::Color  base = m_theme.panelBase;
             nxui::Color  bord = m_theme.panelBorder;
+            transitionTrace.user_selected_tick = transitionTrace.activation_tick;
             m_launchAnim->start(fr, tex, cr, base, bord, 0, {},
                 nullptr,
-                [this]() { m_launcher.resumeApplication(); });
+                [this, transitionTrace]() mutable {
+                    transitionTrace.animation_complete_tick = armGetSystemTick();
+                    transitionTrace.recency_commit_complete_tick =
+                        transitionTrace.animation_complete_tick;
+                    m_launcher.resumeApplication(transitionTrace);
+                });
         } else {
             AppEntry* entry = nullptr;
             int entryIndex = findTitleIndex(tid);
@@ -1077,20 +1153,42 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             float  cr   = raw->cornerRadius();
             nxui::Color  base = m_theme.panelBase;
             nxui::Color  bord = m_theme.panelBorder;
-            auto startLaunch = [this, fr, tex, cr, base, bord, tid](AccountUid uid) {
+            auto startLaunch = [this, fr, tex, cr, base, bord, tid,
+                                transitionTrace](AccountUid uid) mutable {
+                transitionTrace.user_selected_tick = armGetSystemTick();
+                // Ask the persistent daemon to touch NS and ensure title save
+                // data while this process renders the acknowledgement. The
+                // final launch command remains authoritative and repeats this
+                // work if the bounded preflight cannot be reused safely.
+                m_launcher.prepareApplication(tid, uid, transitionTrace);
+                themeshop::http::cancelPendingRequests();
+                // Persist recency while the visual acknowledgement runs. The
+                // handoff still waits for this write and SD commit, preserving
+                // the existing durability guarantee without putting all of
+                // their latency after the animation.
+                if (m_configSaveFuture.valid())
+                    m_configSaveFuture.get();
+                const std::uint64_t openedAt = m_config.nextLastOpenedAt();
+                m_config.noteOpened(tid, openedAt);
+                m_configSaveFuture = m_threadPool.submit(
+                    [cfg = m_config, tid, openedAt]() {
+                        if (!cfg.save())
+                            DebugLog::log("[menu] could not save last-opened title=%016lX", tid);
+                        switchu::commitSdCard("last opened");
+                        DebugLog::log("[menu] last-opened title=%016lX at=%llu", tid,
+                                     (unsigned long long)openedAt);
+                    });
+                transitionTrace.recency_submit_tick = armGetSystemTick();
+
                 m_audio.playSfx(Sfx::LaunchGame);
                 m_launchAnim->start(fr, tex, cr, base, bord, tid, uid,
-                    [this](uint64_t id, AccountUid u) { // ns records last_updated, which is when a title was installed or
- // patched. "Last played" is a different question and only the menu is
- // in a position to answer it.
- const std::uint64_t openedAt = m_config.nextLastOpenedAt();
- m_config.noteOpened(id, openedAt);
- if (!m_config.save())
-     DebugLog::log("[menu] could not save last-opened title=%016lX", id);
- switchu::commitSdCard("last opened");
- DebugLog::log("[menu] last-opened title=%016lX at=%llu", id,
-               (unsigned long long)openedAt);
- m_launcher.launchApplication(id, u); });
+                    [this, transitionTrace](uint64_t id, AccountUid u) mutable {
+                        transitionTrace.animation_complete_tick = armGetSystemTick();
+                        if (m_configSaveFuture.valid())
+                            m_configSaveFuture.get();
+                        transitionTrace.recency_commit_complete_tick = armGetSystemTick();
+                        m_launcher.launchApplication(id, u, transitionTrace);
+                    });
             };
             if (entry) {
                 if (!entry->startupUserKnown) {
@@ -1158,7 +1256,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             // focus without ever being drawn: the grid appears frozen under a
             // menu nobody can see. Move it back to the end before showing.
             raiseOverlay(m_userSelect);
-            m_userSelect->showUserSelect([startLaunch](AccountUid uid) { startLaunch(uid); });
+            m_userSelect->showUserSelect([startLaunch](AccountUid uid) mutable { startLaunch(uid); });
             focusManager().setFocus(m_userSelect.get());
         }
     });
@@ -1364,6 +1462,7 @@ void WiiUMenuApp::buildGrid() {
 #endif
     sidebarActions.onSettings = [this]() {
         m_audio.playSfx(Sfx::ModalShow);
+        createSettings();
         if (m_settings) {
             if (m_themeShop && m_themeShop->isActive())
                 m_themeShop->hide();
@@ -1416,9 +1515,11 @@ void WiiUMenuApp::buildGrid() {
     };
     sidebarActions.onMiiverse = [this]() {
         m_audio.playSfx(Sfx::ModalShow);
+        createThemeShop();
         if (!m_themeShop) return;
         if (m_settings && m_settings->isActive())
             m_settings->hide();
+        publishUpdateState();
         refreshThemeShopState();
         m_themeShop->show();
         focusManager().setFocus(m_themeShop.get());
@@ -1485,9 +1586,6 @@ void WiiUMenuApp::buildGrid() {
     m_overlayLayer->setWireframeEnabled(false);
     m_overlayLayer->addChild(m_cursor);
     m_overlayLayer->addChild(m_userSelect);
-
-    createSettings();
-    createThemeShop();
 
     m_overlayLayer->addChild(m_dialog);
     m_overlayLayer->addChild(m_progressDialog);
@@ -2041,7 +2139,8 @@ void WiiUMenuApp::onUpdate(float dt) {
         --m_deferredBluetoothInitFrames;
         if (m_deferredBluetoothInitFrames == 0) {
             bluetooth::Initialize();
-            DebugLog::log("[init] Bluetooth manager initialized (deferred)");
+            DebugLog::log("[init] Bluetooth manager %s (deferred)",
+                          bluetooth::IsAvailable() ? "initialized" : "unavailable");
             // Deferred with the rest of the network-dependent startup so the
             // grid is already on screen before anything reaches for the wire.
             publishUpdateState();   // bundled notes, before any network call

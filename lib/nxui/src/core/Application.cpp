@@ -43,10 +43,14 @@ bool Application::applyPendingActivity() {
 }
 
 bool Application::initialize() {
+    m_initializeTrace = {};
+    m_initializeTrace.initializeStartTick = armGetSystemTick();
     if (!m_gpu.initialize()) return false;
+    m_initializeTrace.gpuReadyTick = armGetSystemTick();
 
     m_renderer = std::make_unique<Renderer>(m_gpu);
     if (!m_renderer->initialize()) return false;
+    m_initializeTrace.rendererReadyTick = armGetSystemTick();
 
     m_input.initialize();
 
@@ -56,11 +60,14 @@ bool Application::initialize() {
     m_renderer->beginFrame();
     m_renderer->endFrame();
     m_gpu.endFrame();
+    m_initializeTrace.blankFrameTick = armGetSystemTick();
 
     if (m_activity) {
         // Set the root box to cover the entire screen
         m_activity->m_rootBox->setRect({0, 0, (float)m_gpu.width(), (float)m_gpu.height()});
+        m_initializeTrace.activityCreateStartTick = armGetSystemTick();
         if (!m_activity->onCreate()) return false;
+        m_initializeTrace.activityCreateEndTick = armGetSystemTick();
     }
     return true;
 }
@@ -243,6 +250,8 @@ void Application::run() {
         if (dt > 0.1f) dt = 0.016f;
 
         m_input.update();
+        if (m_firstInputTick == 0)
+            m_firstInputTick = armGetSystemTick();
         dispatchInput();
 
         if (m_activity) {
@@ -260,6 +269,11 @@ void Application::run() {
                 m_activity->onRender(*m_renderer);
                 m_renderer->endFrame();
                 m_gpu.endFrame();
+                if (m_firstFrameTick == 0 && m_firstInputTick != 0 && m_firstFrameCallback) {
+                    m_firstFrameTick = armGetSystemTick();
+                    auto callback = std::move(m_firstFrameCallback);
+                    callback(m_firstInputTick, m_firstFrameTick);
+                }
             } else {
                 // Yield CPU while another app owns the foreground.
                 svcSleepThread(100000000LL); // 100 ms
@@ -269,13 +283,23 @@ void Application::run() {
 }
 
 void Application::shutdown() {
+    m_shutdownTrace = {};
+    m_shutdownTrace.shutdownStartTick = armGetSystemTick();
     // Clear all pending animations before destroying the activity so that
     // tween callbacks don't fire on already-destroyed widgets.
     AnimationManager::instance().clear();
 
     m_input.shutdown();
 
+    // Nothing renders after the run loop exits. Drain the queue once before
+    // the activity releases its texture graph; individual Texture destructors
+    // can then retire resources without repeating a device-wide wait.
+    m_shutdownTrace.gpuDrainStartTick = armGetSystemTick();
+    m_gpu.beginBulkTeardown();
+    m_shutdownTrace.gpuDrainEndTick = armGetSystemTick();
+
     if (m_activity) {
+        m_shutdownTrace.activityDestroyStartTick = armGetSystemTick();
         m_activity->onDestroy();
         m_activity.reset();
     }

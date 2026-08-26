@@ -1,5 +1,6 @@
 #include "AppListLoader.hpp"
 #include "core/DebugLog.hpp"
+#include "core/NsService.hpp"
 #include "smi_commands.hpp"
 #include <switch.h>
 #include <cstdio>
@@ -64,6 +65,12 @@ static constexpr s32 kApplicationRecordChunkCount = 30;
 
 bool listApplicationRecords(std::vector<switchu::ns::ExtApplicationRecord>& records) {
     records.clear();
+
+    const Result initRc = switchu::menu::ensureNsService("catalog-fallback");
+    if (R_FAILED(initRc)) {
+        DebugLog::log("[loader] lazy nsInitialize failed rc=0x%X", initRc);
+        return false;
+    }
 
     switchu::ns::ExtApplicationRecord chunk[kApplicationRecordChunkCount] = {};
     s32 offset = 0;

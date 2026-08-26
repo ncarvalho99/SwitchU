@@ -12,9 +12,9 @@ bool initialize();
 void shutdown();
 bool isInitialized();
 
-// Cancels small catalogue requests that are still in flight while the menu is
-// handing control to a system applet.  Package downloads deliberately keep
-// their own uninterrupted path through getToFile().
+// Cancels catalogue and file requests that are still in flight while the menu
+// hands control to another applet/application. Partial files are removed by
+// getToFile(); transition latency takes priority over a background transfer.
 void cancelPendingRequests();
 
 std::vector<std::uint8_t> getBytes(const std::string& url,

@@ -17,6 +17,7 @@ constexpr s32 kMaxDiscovered = 15;
 constexpr s32 kMaxPaired = 10;
 
 Event g_connectionEvent;
+UEvent g_stopEvent;
 
 std::vector<BtmAudioDevice> g_pairedDevices;
 std::recursive_mutex g_pairedLock;
@@ -33,19 +34,18 @@ std::atomic_bool g_discoveredChanged = false;
 std::atomic_bool g_threadRunning = false;
 std::atomic_bool g_discovering = false;
 std::atomic_bool g_initialized = false;
+std::atomic_uint g_discoveryPollCount = 0;
 
 Thread g_thread;
 alignas(0x1000) u8 g_threadStack[32 * 1024];
 
 bool UpdateList(std::vector<BtmAudioDevice>& dst, const std::vector<BtmAudioDevice>& src, std::atomic_bool& changed) {
-    bool prev = changed;
-    if (src.size() != dst.size()) {
-        changed = true;
-    } else if (!dst.empty() && memcmp(dst.data(), src.data(), sizeof(BtmAudioDevice) * dst.size()) != 0) {
-        changed = true;
-    }
+    const bool listChanged = src.size() != dst.size()
+        || (!dst.empty() && memcmp(dst.data(), src.data(), sizeof(BtmAudioDevice) * dst.size()) != 0);
     dst = src;
-    return changed != prev;
+    if (listChanged)
+        changed.store(true, std::memory_order_release);
+    return listChanged;
 }
 
 std::string SanitizedDeviceName(const BtmAudioDevice& device) {
@@ -79,6 +79,7 @@ void ReloadConnected() {
         DebugLog::log("[bt] GetConnectedAudioDevices failed: 0x%x", rc);
         return;
     }
+    count = std::clamp(count, 0, 1);
     if (!AddressesEqual(g_connectedDevice.addr, prevAddr)) {
         g_connectedChanged = true;
         if (count > 0)
@@ -97,23 +98,26 @@ void ReloadPaired() {
         DebugLog::log("[bt] GetPairedAudioDevices failed: 0x%x", rc);
         return;
     }
+    count = std::clamp(count, 0, kMaxPaired);
     std::vector<BtmAudioDevice> list(buf, buf + count);
     if (UpdateList(g_pairedDevices, list, g_pairedChanged))
         DebugLog::log("[bt] Paired devices changed (%d)", count);
 }
 
-void ReloadDiscovered() {
+s32 ReloadDiscovered() {
     std::lock_guard<std::recursive_mutex> lk(g_discoveredLock);
     BtmAudioDevice buf[kMaxDiscovered] = {};
     s32 count = 0;
     Result rc = btmsysGetDiscoveredAudioDevice(buf, kMaxDiscovered, &count);
     if (R_FAILED(rc)) {
         DebugLog::log("[bt] GetDiscoveredAudioDevice failed: 0x%x", rc);
-        return;
+        return -1;
     }
+    count = std::clamp(count, 0, kMaxDiscovered);
     std::vector<BtmAudioDevice> list(buf, buf + count);
     if (UpdateList(g_discoveredDevices, list, g_discoveredChanged))
         DebugLog::log("[bt] Discovered devices changed (%d)", count);
+    return count;
 }
 
 void ThreadFunc(void*) {
@@ -125,15 +129,33 @@ void ThreadFunc(void*) {
     }
 
     while (g_threadRunning) {
-        rc = eventWait(&g_connectionEvent, 500'000'000);
+        s32 waitIndex = -1;
+        rc = waitMulti(&waitIndex, 500'000'000,
+                       waiterForEvent(&g_connectionEvent),
+                       waiterForUEvent(&g_stopEvent));
+        if (!g_threadRunning || (R_SUCCEEDED(rc) && waitIndex == 1))
+            break;
         if (R_FAILED(rc) && rc != KERNELRESULT(TimedOut)) {
-            DebugLog::log("[bt] eventWait error: 0x%x", rc);
+            DebugLog::log("[bt] connection event wait error: 0x%x", rc);
         } else {
             ReloadConnected();
             ReloadPaired();
-            ReloadDiscovered();
+            if (g_discovering) {
+                bool serviceDiscovering = true;
+                const Result stateRc = btmsysIsDiscoveryingAudioDevice(&serviceDiscovering);
+                const s32 count = ReloadDiscovered();
+                const unsigned poll = g_discoveryPollCount.fetch_add(1, std::memory_order_relaxed) + 1;
+                if (poll == 1 || (poll % 10) == 0) {
+                    DebugLog::log("[bt] Discovery poll active=%d results=%d status=0x%x",
+                                  serviceDiscovering ? 1 : 0, count, stateRc);
+                }
+                if (R_SUCCEEDED(stateRc) && !serviceDiscovering) {
+                    g_discovering = false;
+                    g_discoveredChanged.store(true, std::memory_order_release);
+                    DebugLog::log("[bt] Discovery completed (%d result(s))", count);
+                }
+            }
         }
-        svcSleepThread(1'000'000);
     }
 
     DebugLog::log("[bt] Thread exiting");
@@ -154,16 +176,27 @@ void Initialize() {
     ReloadPaired();
     ReloadConnected();
 
+    bool radioEnabled = false;
+    Result radioRc = btmsysGetRadioOnOff(&radioEnabled);
+    bool configuredEnabled = false;
+    Result configuredRc = setsysGetBluetoothEnableFlag(&configuredEnabled);
+    DebugLog::log("[bt] Radio runtime=%d (0x%x) configured=%d (0x%x)",
+                  radioEnabled ? 1 : 0, radioRc,
+                  configuredEnabled ? 1 : 0, configuredRc);
+
+    ueventCreate(&g_stopEvent, false);
     g_threadRunning = true;
-    rc = threadCreate(&g_thread, ThreadFunc, nullptr, g_threadStack, sizeof(g_threadStack), 0x2C, -2);
+    rc = threadCreate(&g_thread, ThreadFunc, nullptr, g_threadStack, sizeof(g_threadStack), 0x2C, 2);
     if (R_FAILED(rc)) {
         DebugLog::log("[bt] threadCreate failed: 0x%x", rc);
+        g_threadRunning = false;
         btmsysExit();
         return;
     }
     rc = threadStart(&g_thread);
     if (R_FAILED(rc)) {
         DebugLog::log("[bt] threadStart failed: 0x%x", rc);
+        g_threadRunning = false;
         threadClose(&g_thread);
         btmsysExit();
         return;
@@ -179,6 +212,11 @@ void Finalize() {
     if (g_discovering) StopDiscovery();
 
     g_threadRunning = false;
+    // UEvent is user-mode only, so it does not consume the kernel handle that
+    // made the original stop Event fail with ResultLimitReached. waitMulti
+    // registers the waiter before sleeping, avoiding the cancellation race of
+    // calling svcCancelSynchronization directly.
+    ueventSignal(&g_stopEvent);
     threadWaitForExit(&g_thread);
     threadClose(&g_thread);
     btmsysExit();
@@ -188,15 +226,43 @@ void Finalize() {
 
 bool IsAvailable() { return g_initialized; }
 
+bool IsRadioEnabled() {
+    if (g_initialized) {
+        bool enabled = false;
+        Result rc = btmsysGetRadioOnOff(&enabled);
+        if (R_SUCCEEDED(rc))
+            return enabled;
+        DebugLog::log("[bt] GetRadioOnOff failed: 0x%x", rc);
+    }
+
+    bool enabled = false;
+    Result rc = setsysGetBluetoothEnableFlag(&enabled);
+    if (R_FAILED(rc))
+        DebugLog::log("[bt] GetBluetoothEnableFlag failed: 0x%x", rc);
+    return enabled;
+}
+
+Result SetRadioEnabled(bool enabled) {
+    if (!g_initialized)
+        return setsysSetBluetoothEnableFlag(enabled);
+
+    if (!enabled && g_discovering)
+        StopDiscovery();
+
+    const Result runtimeRc = enabled ? btmsysEnableRadio() : btmsysDisableRadio();
+    const Result configuredRc = setsysSetBluetoothEnableFlag(enabled);
+    DebugLog::log("[bt] Radio -> %d runtime=0x%x configured=0x%x",
+                  enabled ? 1 : 0, runtimeRc, configuredRc);
+    return R_FAILED(runtimeRc) ? runtimeRc : configuredRc;
+}
+
 std::vector<BtmAudioDevice> ListPairedAudioDevices() {
     std::lock_guard<std::recursive_mutex> lk(g_pairedLock);
     return g_pairedDevices;
 }
 
 bool HasPairedChanges() {
-    bool v = g_pairedChanged;
-    if (v) g_pairedChanged = false;
-    return v;
+    return g_pairedChanged.exchange(false, std::memory_order_acq_rel);
 }
 
 BtmAudioDevice GetConnectedAudioDevice() {
@@ -205,9 +271,7 @@ BtmAudioDevice GetConnectedAudioDevice() {
 }
 
 bool HasConnectedChanges() {
-    bool v = g_connectedChanged;
-    if (v) g_connectedChanged = false;
-    return v;
+    return g_connectedChanged.exchange(false, std::memory_order_acq_rel);
 }
 
 std::vector<BtmAudioDevice> ListDiscoveredAudioDevices() {
@@ -216,9 +280,7 @@ std::vector<BtmAudioDevice> ListDiscoveredAudioDevices() {
 }
 
 bool HasDiscoveredChanges() {
-    bool v = g_discoveredChanged;
-    if (v) g_discoveredChanged = false;
-    return v;
+    return g_discoveredChanged.exchange(false, std::memory_order_acq_rel);
 }
 
 Result ConnectAudioDevice(const BtmAudioDevice& device) {
@@ -248,13 +310,49 @@ std::string DeviceName(const BtmAudioDevice& device) {
 }
 
 void StartDiscovery() {
-    Result rc = btmsysStartAudioDeviceDiscovery();
+    if (!g_initialized)
+        return;
+
+    bool radioEnabled = false;
+    Result rc = btmsysGetRadioOnOff(&radioEnabled);
+    if (R_FAILED(rc)) {
+        DebugLog::log("[bt] Discovery radio query failed: 0x%x", rc);
+        return;
+    }
+    if (!radioEnabled) {
+        bool configuredEnabled = false;
+        Result configuredRc = setsysGetBluetoothEnableFlag(&configuredEnabled);
+        if (R_FAILED(configuredRc) || !configuredEnabled) {
+            DebugLog::log("[bt] Discovery blocked: radio disabled configured=%d status=0x%x",
+                          configuredEnabled ? 1 : 0, configuredRc);
+            return;
+        }
+        rc = btmsysEnableRadio();
+        if (R_FAILED(rc)) {
+            DebugLog::log("[bt] Discovery radio enable failed: 0x%x", rc);
+            return;
+        }
+        radioEnabled = true;
+    }
+
+    {
+        std::lock_guard<std::recursive_mutex> lk(g_discoveredLock);
+        if (!g_discoveredDevices.empty()) {
+            g_discoveredDevices.clear();
+            g_discoveredChanged.store(true, std::memory_order_release);
+        }
+    }
+
+    rc = btmsysStartAudioDeviceDiscovery();
     if (R_FAILED(rc))
         DebugLog::log("[bt] StartDiscovery failed: 0x%x", rc);
     else {
         g_discovering = true;
-        g_discoveredChanged = true;
-        DebugLog::log("[bt] Discovery started");
+        g_discoveryPollCount = 0;
+        g_discoveredChanged.store(true, std::memory_order_release);
+        const s32 count = ReloadDiscovered();
+        DebugLog::log("[bt] Discovery started radio=%d initial_results=%d",
+                      radioEnabled ? 1 : 0, count);
     }
 }
 
@@ -265,7 +363,7 @@ void StopDiscovery() {
     else
         DebugLog::log("[bt] Discovery stopped");
     g_discovering = false;
-    g_discoveredChanged = true;
+    g_discoveredChanged.store(true, std::memory_order_release);
 }
 
 bool IsDiscovering() { return g_discovering; }
@@ -275,6 +373,12 @@ bool IsDiscovering() { return g_discovering; }
 void Initialize() {}
 void Finalize() {}
 bool IsAvailable() { return false; }
+bool IsRadioEnabled() {
+    bool enabled = false;
+    setsysGetBluetoothEnableFlag(&enabled);
+    return enabled;
+}
+Result SetRadioEnabled(bool enabled) { return setsysSetBluetoothEnableFlag(enabled); }
 std::vector<BtmAudioDevice> ListPairedAudioDevices() { return {}; }
 bool HasPairedChanges() { return false; }
 BtmAudioDevice GetConnectedAudioDevice() { return {}; }

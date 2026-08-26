@@ -1,4 +1,6 @@
 #include "TabBuilders.hpp"
+#include "core/DebugLog.hpp"
+#include "core/NsService.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
 // sd_commit is outside the guard: saveApplicationSizeCache() is compiled in
@@ -319,12 +321,21 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
     using ItemType = SettingsScreen::ItemType;
     auto& i18n = nxui::I18n::instance();
 
+#ifdef SWITCHU_HOMEBREW
+    const bool nsReady = false;
+#else
+    const Result nsInitRc = switchu::menu::ensureNsService("settings-storage");
+    const bool nsReady = R_SUCCEEDED(nsInitRc);
+    if (!nsReady)
+        DebugLog::log("[settings] StorageTab ns unavailable rc=0x%X", nsInitRc);
+#endif
+
     Tab t;
     t.name = i18n.tr("settings.tabs.storage", "Storage");
 
     uint64_t internalTotal = 0;
     uint64_t internalFree  = 0;
-    bool internalOk = queryStorageSize(NcmStorageId_BuiltInUser, internalTotal, internalFree);
+    bool internalOk = nsReady && queryStorageSize(NcmStorageId_BuiltInUser, internalTotal, internalFree);
     uint64_t internalUsed = internalOk ? (internalTotal - internalFree) : 0;
 
     auto makeStorageSummary = [&](const std::string& totalText, const std::string& freeText, const std::string& usedText) {
@@ -357,7 +368,7 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
 
     uint64_t sdTotal = 0;
     uint64_t sdFree  = 0;
-    bool sdOk = queryStorageSize(NcmStorageId_SdCard, sdTotal, sdFree);
+    bool sdOk = nsReady && queryStorageSize(NcmStorageId_SdCard, sdTotal, sdFree);
     uint64_t sdUsed = sdOk ? (sdTotal - sdFree) : 0;
 
     SettingItem sdBar;
@@ -393,7 +404,7 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
 #ifndef SWITCHU_HOMEBREW
     NsApplicationRecord records[1024] = {};
     s32 recordCount = 0;
-    if (R_SUCCEEDED(nsListApplicationRecord(records, 1024, 0, &recordCount)) && recordCount > 0) {
+    if (nsReady && R_SUCCEEDED(nsListApplicationRecord(records, 1024, 0, &recordCount)) && recordCount > 0) {
         for (int i = 0; i < recordCount; ++i) {
             uint64_t titleId = records[i].application_id;
             if (titleId == 0)
@@ -499,7 +510,9 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
             message,
             {
                 { i18n.tr("button.delete", "Delete"), [app, &screen, &i18n]() {
-                    Result rc = nsDeleteApplicationCompletely(app.titleId);
+                    Result rc = switchu::menu::ensureNsService("settings-delete");
+                    if (R_SUCCEEDED(rc))
+                        rc = nsDeleteApplicationCompletely(app.titleId);
                     if (R_SUCCEEDED(rc)) {
                         screen.requestToast(i18n.tr("settings.storage.uninstall_success", "Uninstalled successfully."), 2.8f);
                         screen.rebuildCurrentTab();

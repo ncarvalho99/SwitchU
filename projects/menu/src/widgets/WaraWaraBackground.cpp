@@ -4,6 +4,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#ifdef __SWITCH__
+#include <switch.h>
+#endif
 
 namespace {
 
@@ -280,6 +283,11 @@ bool WaraWaraBackground::loadImageSequence(nxui::GpuDevice& gpu, nxui::Renderer&
     m_frameReaderStop = false;
     m_frameReaderDone = false;
     m_frameReader = std::thread([this, rest = std::move(rest)]() {
+#ifdef __SWITCH__
+        // Keep sequential SD reads and frame decompression away from the
+        // core-0 render/input loop. Core 2 is inside the menu's 0-2 mask.
+        svcSetThreadCoreMask(CUR_THREAD_HANDLE, 2, UINT64_C(1) << 2);
+#endif
         for (const std::string& path : rest) {
             if (m_frameReaderStop)
                 break;

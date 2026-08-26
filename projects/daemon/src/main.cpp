@@ -250,14 +250,24 @@ struct Action {
     ActionType type;
     uint64_t title_id = 0;
     AccountUid uid = {};
+    smi::LaunchTransitionTrace transition{};
+    uint64_t commandReceivedTick = 0;
 };
 
 static std::vector<Action> g_actionQueue;
+static smi::MenuClosingArgs g_lastMenuClosingTrace{};
+static uint64_t g_lastMenuClosingReceiveTick = 0;
 static bool g_foregroundAppletActive = false;
 static bool g_pendingForegroundAppletHome = false;
 static uint8_t g_lastBatteryPercent = 0xFF;
 static PsmChargerType g_lastChargerType = (PsmChargerType)0xFF;
 static int g_batteryPollCountdown = 0;
+
+static uint64_t tickDeltaUs(uint64_t start, uint64_t end) {
+    if (start == 0 || end == 0 || end < start)
+        return 0;
+    return armTicksToNs(end - start) / 1'000ULL;
+}
 
 static bool shouldDeferViewPolling() {
     return daemon::app::isRunning() &&
@@ -533,10 +543,14 @@ static void cancelViewPolling(const char* reason) {
     g_eventPollsRemaining = 0;
 }
 
-static smi::SystemStatus buildSystemStatus() {
+static smi::SystemStatus buildSystemStatus(
+    smi::MenuTransitionReason reason = smi::MenuTransitionReason::Unknown,
+    uint64_t originTick = 0) {
     smi::SystemStatus st{};
     st.suspended_app_id = daemon::app::suspendedTitleId();
     st.app_running = daemon::app::isRunning();
+    st.transition_origin_tick = originTick;
+    st.transition_reason = reason;
     return st;
 }
 
@@ -687,11 +701,23 @@ static void requestPowerStateChange(const char* source, bool reboot) {
 // and menu commands, so the wake notification never reached the menu and every
 // power action in the menu did nothing from then on.
 static void startSleepSequence(const char* source) {
-    switchu::FileLog::log("[power] sleep requested (%s)", source);
+    uint8_t batteryPercent = 0xFF;
+    PsmChargerType chargerType = (PsmChargerType)0xFF;
+    const bool batteryValid = queryBatteryStatus(batteryPercent, chargerType);
+    switchu::FileLog::log(
+        "[power] sleep requested source=%s battery_valid=%d percent=%u charger=%u "
+        "appRunning=%d appFg=%d menuActive=%d",
+        source, batteryValid ? 1 : 0, (unsigned)batteryPercent,
+        (unsigned)chargerType, daemon::app::isRunning() ? 1 : 0,
+        daemon::app::hasForeground() ? 1 : 0,
+        daemon::menu_la::isActive() ? 1 : 0);
     if (daemon::menu_la::isActive())
         pushNotification(smi::MenuMessage::SleepSequence);
-    // Cheap, and the console may never wake: a flat battery ends this in a
-    // power cut with whatever is outstanding still unwritten.
+
+    // Preserve the final reason and state even if sleep ends in a forced power
+    // loss. fflush must precede the device commit or the newest log data remains
+    // only in the process buffer.
+    switchu::FileLog::flush();
     switchu::commitSdCard("sleep");
     appletStartSleepSequence(true);
 }
@@ -751,6 +777,7 @@ static void startPowerSequence(const char* source, smi::SystemMessage action) {
 }
 
 static void openMenuFromHome(const char* source) {
+    const uint64_t homeTick = armGetSystemTick();
     logHomeState(source, "request");
     cancelViewPolling("home");
 
@@ -759,7 +786,8 @@ static void openMenuFromHome(const char* source) {
             switchu::FileLog::log("[%s] HOME aborted: foreground request failed", source);
             return;
         }
-        const auto status = buildSystemStatus();
+        const auto status = buildSystemStatus(smi::MenuTransitionReason::HomeRequest,
+                                              homeTick);
         switchu::FileLog::log("[%s] HOME launching MainMenu status.running=%d suspended=0x%016lX",
                               source, status.app_running ? 1 : 0, status.suspended_app_id);
         Result menuRc = daemon::menu_la::launch(smi::MenuStartMode::MainMenu, status);
@@ -778,7 +806,9 @@ static void openMenuFromHome(const char* source) {
         g_pendingForegroundAppletHome = true;
     } else {
         switchu::FileLog::log("[%s] HOME no app/menu active; launching MainMenu", source);
-        Result menuRc = daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+        Result menuRc = daemon::menu_la::launch(
+            smi::MenuStartMode::MainMenu,
+            buildSystemStatus(smi::MenuTransitionReason::HomeRequest, homeTick));
         switchu::FileLog::log("[%s] HOME MainMenu launch rc=0x%X", source, menuRc);
         if (R_SUCCEEDED(menuRc))
             g_appCatalogRefreshDelay = 80;
@@ -923,13 +953,20 @@ static void handleAppletMessages() {
         }
 
         case 22:
+        case 27:
+        case 28:
         case 29:
-        case 32:
-        switchu::FileLog::log("[ae] -> Sleep (msg=%u)", msg);
-        if (daemon::menu_la::isActive())
-            pushNotification(smi::MenuMessage::SleepSequence);
-        appletStartSleepSequence(true);
-        break;
+        case 32: {
+            const char* source =
+                msg == 22 ? "ae-power-button-short" :
+                msg == 27 ? "ae-high-temperature" :
+                msg == 28 ? "ae-low-battery" :
+                msg == 29 ? "ae-auto-power-down" :
+                            "ae-cec-standby";
+            switchu::FileLog::log("[ae] -> Sleep source=%s msg=%u", source, msg);
+            startSleepSequence(source);
+            break;
+        }
 
         case 26:
         switchu::FileLog::log("[ae] -> Wakeup");
@@ -946,7 +983,10 @@ static void handleAppletMessages() {
         if (daemon::menu_la::isActive()) {
             pushNotification(smi::MenuMessage::WakeUp);
         } else if (!daemon::app::isRunning()) {
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::WakeRecovery,
+                                  armGetSystemTick()));
         }
         break;
     }
@@ -1055,6 +1095,137 @@ static Result launchControllerPairing() {
     return rc;
 }
 
+static void logMenuReadyTrace(const smi::MenuReadyArgs& ready, uint64_t receiveTick) {
+    const auto& launch = daemon::menu_la::launchTrace();
+    daemon::menu_la::markMenuReady(receiveTick);
+    switchu::FileLog::log(
+        "[trace-return-ready] reason=%u origin_to_holder_us=%llu prepare_us=%llu registration_us=%llu create_us=%llu holder_start_us=%llu holder_to_main_us=%llu ready_ipc_us=%llu origin_to_ready_us=%llu cores=%u/%u catalog=%u",
+        static_cast<unsigned>(launch.reason),
+        (unsigned long long)tickDeltaUs(launch.originTick, launch.holderStartEndTick),
+        (unsigned long long)tickDeltaUs(launch.prepareStartTick, launch.holderStartCallTick),
+        (unsigned long long)tickDeltaUs(launch.registrationStartTick, launch.registrationEndTick),
+        (unsigned long long)tickDeltaUs(launch.createStartTick, launch.createEndTick),
+        (unsigned long long)tickDeltaUs(launch.holderStartCallTick, launch.holderStartEndTick),
+        (unsigned long long)tickDeltaUs(launch.holderStartEndTick, ready.menu_main_tick),
+        (unsigned long long)tickDeltaUs(ready.command_send_tick, receiveTick),
+        (unsigned long long)tickDeltaUs(launch.originTick, receiveTick),
+        ready.menu_main_core,
+        ready.activity_core,
+        ready.catalog_count);
+    switchu::FileLog::log(
+        "[trace-return-init] reason=%u main_to_init_us=%llu gpu_us=%llu renderer_us=%llu blank_us=%llu oncreate_us=%llu",
+        static_cast<unsigned>(launch.reason),
+        (unsigned long long)tickDeltaUs(ready.menu_main_tick, ready.initialize_start_tick),
+        (unsigned long long)tickDeltaUs(ready.initialize_start_tick, ready.gpu_ready_tick),
+        (unsigned long long)tickDeltaUs(ready.gpu_ready_tick, ready.renderer_ready_tick),
+        (unsigned long long)tickDeltaUs(ready.renderer_ready_tick, ready.blank_frame_tick),
+        (unsigned long long)tickDeltaUs(ready.activity_create_start_tick, ready.activity_create_end_tick));
+}
+
+static void logMenuFirstFrameTrace(const smi::MenuFirstFrameArgs& first,
+                                   uint64_t receiveTick) {
+    const auto& launch = daemon::menu_la::launchTrace();
+    switchu::FileLog::log(
+        "[trace-return-frame] reason=%u origin_to_frame_us=%llu ready_to_frame_us=%llu input_to_frame_us=%llu frame_ipc_us=%llu image_kib=%llu core=%u catalog=%u",
+        static_cast<unsigned>(launch.reason),
+        (unsigned long long)tickDeltaUs(launch.originTick, first.first_frame_tick),
+        (unsigned long long)tickDeltaUs(launch.menuReadyReceiveTick, first.first_frame_tick),
+        (unsigned long long)tickDeltaUs(first.first_input_tick, first.first_frame_tick),
+        (unsigned long long)tickDeltaUs(first.first_frame_tick, receiveTick),
+        (unsigned long long)(first.image_memory_bytes / 1024ULL),
+        first.core,
+        first.catalog_count);
+}
+
+static void logMenuExitTrace(uint64_t holderFinishedTick) {
+    const auto& closing = g_lastMenuClosingTrace;
+    switchu::FileLog::log(
+        "[trace-menu-exit] shutdown_to_drain_us=%llu gpu_drain_us=%llu destroy_to_cancel_us=%llu cancel_to_state_us=%llu state_to_http_us=%llu http_to_bt_us=%llu bt_to_closecmd_us=%llu closecmd_ipc_us=%llu closecmd_to_holder_us=%llu core=%u",
+        (unsigned long long)tickDeltaUs(closing.shutdown_start_tick, closing.gpu_drain_end_tick),
+        (unsigned long long)tickDeltaUs(closing.gpu_drain_start_tick, closing.gpu_drain_end_tick),
+        (unsigned long long)tickDeltaUs(closing.on_destroy_start_tick, closing.http_cancel_done_tick),
+        (unsigned long long)tickDeltaUs(closing.http_cancel_done_tick, closing.state_persist_done_tick),
+        (unsigned long long)tickDeltaUs(closing.state_persist_done_tick, closing.http_shutdown_done_tick),
+        (unsigned long long)tickDeltaUs(closing.http_shutdown_done_tick, closing.bluetooth_done_tick),
+        (unsigned long long)tickDeltaUs(closing.bluetooth_done_tick, closing.command_send_tick),
+        (unsigned long long)tickDeltaUs(closing.command_send_tick, g_lastMenuClosingReceiveTick),
+        (unsigned long long)tickDeltaUs(closing.command_send_tick, holderFinishedTick),
+        closing.core);
+}
+
+static void logApplicationLaunchTrace(const Action& action,
+                                      const daemon::app::LaunchTiming& timing,
+                                      uint64_t holderFinishedTick) {
+    const auto& trace = action.transition;
+    const auto& preflight = timing.preflight;
+    switchu::FileLog::log(
+        "[trace-preflight] title=0x%016lX activation_to_send_us=%llu ipc_us=%llu work_us=%llu touch_us=%llu saves_us=%llu lead_us=%llu tail_us=%llu end_to_action_us=%llu attempted=%d complete=%d cache_hit=%d core=%u",
+        action.title_id,
+        (unsigned long long)tickDeltaUs(trace.activation_tick, trace.preflight_send_tick),
+        (unsigned long long)tickDeltaUs(preflight.requestSendTick, preflight.commandReceiveTick),
+        (unsigned long long)tickDeltaUs(preflight.workStartTick, preflight.workEndTick),
+        (unsigned long long)tickDeltaUs(preflight.touchStartTick, preflight.touchEndTick),
+        (unsigned long long)tickDeltaUs(preflight.saveStartTick, preflight.saveEndTick),
+        (unsigned long long)tickDeltaUs(preflight.workEndTick, trace.command_send_tick),
+        (unsigned long long)tickDeltaUs(trace.command_send_tick, preflight.workEndTick),
+        (unsigned long long)tickDeltaUs(preflight.workEndTick, timing.actionStartTick),
+        preflight.attempted ? 1 : 0,
+        preflight.complete ? 1 : 0,
+        preflight.cacheHit ? 1 : 0,
+        preflight.core);
+    switchu::FileLog::log(
+        "[trace-launch] title=0x%016lX activation_to_user_us=%llu user_to_animation_us=%llu recency_total_us=%llu animation_to_commit_us=%llu activation_to_command_us=%llu command_ipc_us=%llu command_to_holder_us=%llu holder_to_action_us=%llu command_to_foreground_us=%llu activation_to_foreground_us=%llu core=%u",
+        action.title_id,
+        (unsigned long long)tickDeltaUs(trace.activation_tick, trace.user_selected_tick),
+        (unsigned long long)tickDeltaUs(trace.user_selected_tick, trace.animation_complete_tick),
+        (unsigned long long)tickDeltaUs(trace.recency_submit_tick, trace.recency_commit_complete_tick),
+        (unsigned long long)tickDeltaUs(trace.animation_complete_tick, trace.recency_commit_complete_tick),
+        (unsigned long long)tickDeltaUs(trace.activation_tick, trace.command_send_tick),
+        (unsigned long long)tickDeltaUs(trace.command_send_tick, action.commandReceivedTick),
+        (unsigned long long)tickDeltaUs(trace.command_send_tick, holderFinishedTick),
+        (unsigned long long)tickDeltaUs(holderFinishedTick, timing.actionStartTick),
+        (unsigned long long)tickDeltaUs(trace.command_send_tick, timing.foregroundEndTick),
+        (unsigned long long)tickDeltaUs(trace.activation_tick, timing.foregroundEndTick),
+        timing.core);
+    switchu::FileLog::log(
+        "[trace-launch-phases] title=0x%016lX previous_close_us=%llu touch_us=%llu saves_us=%llu create_us=%llu launch_parameter_us=%llu start_us=%llu foreground_us=%llu",
+        action.title_id,
+        (unsigned long long)tickDeltaUs(timing.previousExitRequestTick, timing.previousJoinedTick),
+        (unsigned long long)tickDeltaUs(timing.touchStartTick, timing.touchEndTick),
+        (unsigned long long)tickDeltaUs(timing.saveStartTick, timing.saveEndTick),
+        (unsigned long long)tickDeltaUs(timing.createStartTick, timing.createEndTick),
+        (unsigned long long)tickDeltaUs(timing.createEndTick, timing.startStartTick),
+        (unsigned long long)tickDeltaUs(timing.startStartTick, timing.startEndTick),
+        (unsigned long long)tickDeltaUs(timing.foregroundStartTick, timing.foregroundEndTick));
+    switchu::FileLog::log(
+        "[trace-save] title=0x%016lX account_us=%llu device_us=%llu temporary_us=%llu cache_us=%llu bcat_us=%llu total_us=%llu",
+        action.title_id,
+        (unsigned long long)armTicksToNs(timing.accountSaveTicks) / 1'000ULL,
+        (unsigned long long)armTicksToNs(timing.deviceSaveTicks) / 1'000ULL,
+        (unsigned long long)armTicksToNs(timing.temporarySaveTicks) / 1'000ULL,
+        (unsigned long long)armTicksToNs(timing.cacheSaveTicks) / 1'000ULL,
+        (unsigned long long)armTicksToNs(timing.bcatSaveTicks) / 1'000ULL,
+        (unsigned long long)tickDeltaUs(timing.saveStartTick, timing.saveEndTick));
+    logMenuExitTrace(holderFinishedTick);
+}
+
+static void logApplicationResumeTrace(const Action& action,
+                                      const daemon::app::ResumeTiming& timing,
+                                      uint64_t holderFinishedTick) {
+    const auto& trace = action.transition;
+    switchu::FileLog::log(
+        "[trace-resume] activation_to_animation_us=%llu activation_to_command_us=%llu command_ipc_us=%llu command_to_holder_us=%llu holder_to_action_us=%llu foreground_us=%llu activation_to_foreground_us=%llu core=%u",
+        (unsigned long long)tickDeltaUs(trace.activation_tick, trace.animation_complete_tick),
+        (unsigned long long)tickDeltaUs(trace.activation_tick, trace.command_send_tick),
+        (unsigned long long)tickDeltaUs(trace.command_send_tick, action.commandReceivedTick),
+        (unsigned long long)tickDeltaUs(trace.command_send_tick, holderFinishedTick),
+        (unsigned long long)tickDeltaUs(holderFinishedTick, timing.actionStartTick),
+        (unsigned long long)tickDeltaUs(timing.foregroundStartTick, timing.foregroundEndTick),
+        (unsigned long long)tickDeltaUs(trace.activation_tick, timing.foregroundEndTick),
+        timing.core);
+    logMenuExitTrace(holderFinishedTick);
+}
+
 static void handleMenuCommand() {
     if (!daemon::menu_la::isActive()) return;
 
@@ -1065,17 +1236,29 @@ static void handleMenuCommand() {
     if (!reader.valid()) return;
 
     auto msg = reader.systemMessage();
+    const uint64_t commandReceiveTick = armGetSystemTick();
     switchu::FileLog::log("[smi] command=%u", (u32)msg);
 
-    Result result = 0;
-
     switch (msg) {
+    case smi::SystemMessage::PrepareApplication: {
+        const auto args = reader.pop<smi::PrepareAppArgs>();
+        AccountUid uid{};
+        std::memcpy(&uid, args.user_uid, sizeof(uid));
+        daemon::app::prepare(args.title_id, uid, args.request_send_tick,
+                             commandReceiveTick);
+        break;
+    }
+
     case smi::SystemMessage::LaunchApplication: {
         auto args = reader.pop<smi::LaunchAppArgs>();
         Action action{};
         action.type = ActionType::LaunchApplication;
         action.title_id = args.title_id;
         std::memcpy(&action.uid, args.user_uid, sizeof(action.uid));
+        action.transition = args.trace;
+        action.commandReceivedTick = commandReceiveTick;
+        g_lastMenuClosingTrace = {};
+        g_lastMenuClosingReceiveTick = 0;
         g_actionQueue.push_back(action);
         switchu::FileLog::log("[smi] queued launch 0x%016lX (actions=%zu)", args.title_id, g_actionQueue.size());
         break;
@@ -1083,19 +1266,47 @@ static void handleMenuCommand() {
 
     case smi::SystemMessage::ResumeApplication:
         {
+            auto args = reader.pop<smi::ResumeAppArgs>();
             Action action{};
             action.type = ActionType::ResumeApplication;
+            action.transition = args.trace;
+            action.commandReceivedTick = commandReceiveTick;
+            g_lastMenuClosingTrace = {};
+            g_lastMenuClosingReceiveTick = 0;
             g_actionQueue.push_back(action);
         }
         switchu::FileLog::log("[smi] queued resume (actions=%zu)", g_actionQueue.size());
         break;
 
-    case smi::SystemMessage::TerminateApplication:
-        result = daemon::app::terminate();
-        if (R_SUCCEEDED(result)) {
+    case smi::SystemMessage::TerminateApplication: {
+        const bool hadRunningApplication = daemon::app::isRunning();
+        const Result result = daemon::app::beginTerminate();
+        if (R_FAILED(result)) {
+            switchu::FileLog::log("[smi] begin terminate FAIL: 0x%X", result);
+        } else if (!hadRunningApplication) {
             pushNotification(smi::MenuMessage::ApplicationExited);
         }
         break;
+    }
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    case smi::SystemMessage::DiagnosticTerminateHold: {
+        switchu::FileLog::log("[diagnostic] command terminate sleep-wake");
+        const Result result = daemon::app::beginTerminate(
+            daemon::app::TerminateDiagnosticMode::HoldForSleepWake);
+        if (R_FAILED(result))
+            switchu::FileLog::log("[diagnostic] begin sleep-wake terminate FAIL: 0x%X", result);
+        break;
+    }
+
+    case smi::SystemMessage::DiagnosticTerminateForce: {
+        switchu::FileLog::log("[diagnostic] command terminate force-at-deadline");
+        const Result result = daemon::app::beginTerminate(
+            daemon::app::TerminateDiagnosticMode::ForceAtDeadline);
+        if (R_FAILED(result))
+            switchu::FileLog::log("[diagnostic] begin forced terminate FAIL: 0x%X", result);
+        break;
+    }
+#endif
 
     case smi::SystemMessage::LaunchAlbum:
         {
@@ -1203,43 +1414,55 @@ static void handleMenuCommand() {
         return;
     }
 
-    case smi::SystemMessage::MenuReady:
+    case smi::SystemMessage::MenuReady: {
+        const auto args = reader.pop<smi::MenuReadyArgs>();
         switchu::FileLog::log("[smi] menu ready");
+        logMenuReadyTrace(args, commandReceiveTick);
         g_batteryRefreshPending.store(true);
         break;
+    }
 
     case smi::SystemMessage::MenuClosing:
+        g_lastMenuClosingTrace = reader.pop<smi::MenuClosingArgs>();
+        g_lastMenuClosingReceiveTick = commandReceiveTick;
         switchu::FileLog::log("[smi] menu closing");
         break;
 
+    case smi::SystemMessage::MenuFirstFrame: {
+        const auto args = reader.pop<smi::MenuFirstFrameArgs>();
+        logMenuFirstFrameTrace(args, commandReceiveTick);
+        break;
     }
 
-    if (msg != smi::SystemMessage::MenuClosing) {
-        smi::StorageWriter writer(result);
-        AppletStorage respSt;
-        Result respRc = writer.createStorage(respSt);
-        if (R_SUCCEEDED(respRc))
-            daemon::menu_la::pushStorage(&respSt);
-        else
-            switchu::FileLog::log("[smi] response create FAIL: 0x%X", respRc);
     }
+
+    // Commands are one-way. Their sender observes only whether its outgoing
+    // storage was accepted; launch completion and state changes arrive through
+    // MenuMessage notifications. Do not allocate and enqueue an unread reply.
 }
 
 static bool handleAction(Action& action) {
-    if (daemon::menu_la::hasHolder() || g_foregroundAppletActive)
+    if (daemon::menu_la::hasHolder() || g_foregroundAppletActive ||
+        daemon::app::isTerminating())
         return false;
 
     switchu::FileLog::log("[action] handling type=%u", (u32)action.type);
     switch (action.type) {
         case ActionType::LaunchApplication: {
-            Result rc = daemon::app::launch(action.title_id, action.uid);
+            const uint64_t holderFinishedTick = daemon::menu_la::lastFinishedTick();
+            daemon::app::LaunchTiming timing{};
+            Result rc = daemon::app::launch(action.title_id, action.uid, &timing);
+            logApplicationLaunchTrace(action, timing, holderFinishedTick);
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] launch 0x%016lX FAIL: 0x%X", action.title_id, rc);
             return true;
         }
 
         case ActionType::ResumeApplication: {
-            Result rc = daemon::app::resume();
+            const uint64_t holderFinishedTick = daemon::menu_la::lastFinishedTick();
+            daemon::app::ResumeTiming timing{};
+            Result rc = daemon::app::resume(&timing);
+            logApplicationResumeTrace(action, timing, holderFinishedTick);
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] resume FAIL: 0x%X", rc);
             return true;
@@ -1255,7 +1478,10 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] album FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after album");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
             return true;
         }
 
@@ -1271,7 +1497,10 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] Mii Editor FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after Mii Editor");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
             return true;
         }
 
@@ -1280,7 +1509,10 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] Controllers FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after Controllers");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
             return true;
         }
 
@@ -1292,7 +1524,10 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] NetConnect FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after NetConnect");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
             return true;
         }
 
@@ -1303,7 +1538,10 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] user creator FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after user creator");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
             return true;
         }
 
@@ -1312,7 +1550,10 @@ static bool handleAction(Action& action) {
             if (R_FAILED(rc))
                 switchu::FileLog::log("[action] User Page FAIL: 0x%X", rc);
             switchu::FileLog::log("[action] relaunching menu after User Page");
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
             return true;
         }
     }
@@ -1331,6 +1572,24 @@ static bool consumeOneAction() {
         }
     }
     return false;
+}
+
+static void routeFinishedApplication(const char* source) {
+    switchu::FileLog::log("[main] app exited source=%s", source);
+    if (daemon::menu_la::isActive()) {
+        pushNotification(smi::MenuMessage::ApplicationExited);
+    } else if (!g_actionQueue.empty()) {
+        // A close-then-launch handoff already has an authoritative destination.
+        // Starting a cold menu here would put a new holder in front of that
+        // action and waste an entire construction/destruction cycle.
+        switchu::FileLog::log("[main] menu relaunch skipped: queued actions=%zu",
+                              g_actionQueue.size());
+    } else {
+        daemon::menu_la::launch(
+            smi::MenuStartMode::MainMenu,
+            buildSystemStatus(smi::MenuTransitionReason::ApplicationFinished,
+                              daemon::app::lastFinishedTick()));
+    }
 }
 
 static void mainLoop() {
@@ -1443,15 +1702,15 @@ static void mainLoop() {
         didWork = true;
     }
 
+    if (daemon::app::pollTerminate()) {
+        routeFinishedApplication("terminate");
+        didWork = true;
+    }
+
     didWork |= consumeOneAction();
 
     if (daemon::app::checkFinished()) {
-        switchu::FileLog::log("[main] app exited");
-        if (daemon::menu_la::isActive()) {
-            pushNotification(smi::MenuMessage::ApplicationExited);
-        } else {
-            daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
-        }
+        routeFinishedApplication("natural");
         didWork = true;
     }
 
@@ -1459,7 +1718,10 @@ static void mainLoop() {
         !daemon::app::isRunning() && !daemon::menu_la::hasHolder() &&
         !g_foregroundAppletActive) {
         switchu::FileLog::log("[main] no app/menu active; relaunching menu");
-        daemon::menu_la::launch(smi::MenuStartMode::MainMenu, buildSystemStatus());
+        daemon::menu_la::launch(
+            smi::MenuStartMode::MainMenu,
+            buildSystemStatus(smi::MenuTransitionReason::IdleRecovery,
+                              armGetSystemTick()));
     }
 }
 
@@ -1564,7 +1826,7 @@ static void eventManagerThreadFunc(void* arg) {
 static Result startEventManager() {
     g_eventRunning.store(true);
     Result rc = threadCreate(&g_eventThread, eventManagerThreadFunc, nullptr,
-                             nullptr, 0x4000, 0x2C, -2);
+                             nullptr, 0x4000, 0x2C, 3);
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[event] threadCreate FAIL: 0x%X", rc);
         return rc;
@@ -1670,7 +1932,7 @@ static void controlCacheThreadFunc(void* arg) {
 static Result startControlCacheWorker() {
     g_controlCacheRunning.store(true);
     Result rc = threadCreate(&g_controlCacheThread, controlCacheThreadFunc, nullptr,
-                             nullptr, 0x10000, 0x2D, -2);
+                             nullptr, 0x10000, 0x2D, 3);
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[control-cache] threadCreate FAIL: 0x%X", rc);
         return rc;
@@ -1698,6 +1960,7 @@ static void stopControlCacheWorker() {
 }
 
 int main(int argc, char* argv[]) {
+    const uint64_t daemonMainTick = armGetSystemTick();
     switchu::FileLog::log("[daemon] main() entry");
 
     appletLoadAndApplyIdlePolicySettings();
@@ -1716,7 +1979,9 @@ int main(int argc, char* argv[]) {
     switchu::daemon::update::applyStagedUpdate();
 
     switchu::FileLog::log("[daemon] launching menu...");
-    rc = daemon::menu_la::launch(smi::MenuStartMode::StartupBoot, buildSystemStatus());
+    rc = daemon::menu_la::launch(
+        smi::MenuStartMode::StartupBoot,
+        buildSystemStatus(smi::MenuTransitionReason::StartupBoot, daemonMainTick));
     if (R_FAILED(rc))
         switchu::FileLog::log("[daemon] menu launch failed: 0x%X", rc);
 

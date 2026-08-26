@@ -29,6 +29,7 @@ enum class SystemMessage : uint32_t {
     LaunchApplication     =  1,
     ResumeApplication     =  2,
     TerminateApplication  =  3,
+    PrepareApplication    =  4,
 
     LaunchAlbum           = 10,
     LaunchMiiEditor       = 11,
@@ -57,6 +58,15 @@ enum class SystemMessage : uint32_t {
     // just made one has no way to say "look again" short of rebooting. Asked
     // for after exactly that.
     RefreshCatalog        = 42,
+    // Sent after the first real menu frame has been submitted. MenuReady
+    // measures construction; this measures the first usable visual frame.
+    MenuFirstFrame        = 43,
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    // Diagnostic-only commands. Production builds neither expose nor handle
+    // these IDs, so lifecycle fault injection cannot alter normal timing.
+    DiagnosticTerminateHold  = 44,
+    DiagnosticTerminateForce = 45,
+#endif
 };
 
 enum class MenuStartMode : uint32_t {
@@ -70,24 +80,106 @@ struct CommandHeader {
 };
 static_assert(sizeof(CommandHeader) == 8);
 
+// Raw ARM system-counter ticks are shared across the daemon and menu during a
+// boot. Carrying them through the existing command storage gives millisecond
+// transition measurements without synchronous SD logging on the hot path.
+struct LaunchTransitionTrace {
+    uint64_t activation_tick;
+    uint64_t user_selected_tick;
+    uint64_t preflight_send_tick;
+    uint64_t recency_submit_tick;
+    uint64_t animation_complete_tick;
+    uint64_t recency_commit_complete_tick;
+    uint64_t command_send_tick;
+};
+static_assert(sizeof(LaunchTransitionTrace) == 56);
+
+struct PrepareAppArgs {
+    uint64_t title_id;
+    uint8_t  user_uid[16];
+    uint64_t request_send_tick;
+};
+static_assert(sizeof(PrepareAppArgs) == 32);
+
 struct LaunchAppArgs {
     uint64_t title_id;
     uint8_t  user_uid[16];
+    LaunchTransitionTrace trace;
 };
-static_assert(sizeof(LaunchAppArgs) == 24);
+static_assert(sizeof(LaunchAppArgs) == 80);
+
+struct ResumeAppArgs {
+    LaunchTransitionTrace trace;
+};
+static_assert(sizeof(ResumeAppArgs) == 56);
 
 struct UserArgs {
     uint8_t user_uid[16];
 };
 static_assert(sizeof(UserArgs) == 16);
 
+enum class MenuTransitionReason : uint32_t {
+    Unknown             = 0,
+    StartupBoot         = 1,
+    HomeRequest         = 2,
+    ApplicationFinished = 3,
+    LibraryAppletReturn = 4,
+    WakeRecovery        = 5,
+    IdleRecovery        = 6,
+};
+
 struct SystemStatus {
     uint64_t  suspended_app_id;
     uint8_t   selected_user[16];
     bool      app_running;
     uint8_t   _pad[7];
+    uint64_t  transition_origin_tick;
+    MenuTransitionReason transition_reason;
+    uint32_t  _trace_pad;
 };
-static_assert(sizeof(SystemStatus) == 32);
+static_assert(sizeof(SystemStatus) == 48);
+
+struct MenuReadyArgs {
+    uint64_t transition_origin_tick;
+    uint64_t menu_main_tick;
+    uint64_t initialize_start_tick;
+    uint64_t gpu_ready_tick;
+    uint64_t renderer_ready_tick;
+    uint64_t blank_frame_tick;
+    uint64_t activity_create_start_tick;
+    uint64_t activity_create_end_tick;
+    uint64_t command_send_tick;
+    uint32_t menu_main_core;
+    uint32_t activity_core;
+    uint32_t catalog_count;
+    uint32_t _pad;
+};
+static_assert(sizeof(MenuReadyArgs) == 88);
+
+struct MenuFirstFrameArgs {
+    uint64_t transition_origin_tick;
+    uint64_t first_input_tick;
+    uint64_t first_frame_tick;
+    uint64_t image_memory_bytes;
+    uint32_t core;
+    uint32_t catalog_count;
+};
+static_assert(sizeof(MenuFirstFrameArgs) == 40);
+
+struct MenuClosingArgs {
+    uint64_t shutdown_start_tick;
+    uint64_t gpu_drain_start_tick;
+    uint64_t gpu_drain_end_tick;
+    uint64_t on_destroy_start_tick;
+    uint64_t http_cancel_done_tick;
+    uint64_t state_persist_done_tick;
+    uint64_t http_shutdown_done_tick;
+    uint64_t bluetooth_done_tick;
+    uint64_t command_send_tick;
+    uint32_t core;
+    uint32_t _pad;
+};
+static_assert(sizeof(MenuClosingArgs) == 80);
 
 struct AppEntryHeader {
     uint64_t  title_id;
