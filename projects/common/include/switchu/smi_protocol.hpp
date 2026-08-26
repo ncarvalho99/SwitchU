@@ -126,6 +126,7 @@ enum class MenuTransitionReason : uint32_t {
     LibraryAppletReturn = 4,
     WakeRecovery        = 5,
     IdleRecovery        = 6,
+    LaunchFailure       = 7,
 };
 
 struct SystemStatus {
