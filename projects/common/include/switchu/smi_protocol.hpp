@@ -67,6 +67,12 @@ enum class SystemMessage : uint32_t {
     DiagnosticTerminateHold  = 44,
     DiagnosticTerminateForce = 45,
 #endif
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    // Carries a real selected title through the ordinary launch queue, then
+    // injects a deterministic failure immediately before application creation.
+    // No guessed or uninstalled title ID ever reaches Horizon.
+    DiagnosticLaunchFailure  = 46,
+#endif
 };
 
 enum class MenuStartMode : uint32_t {

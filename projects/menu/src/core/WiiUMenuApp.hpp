@@ -169,7 +169,7 @@ private:
     void syncUpdateDownload();
     void publishUpdateState();
     void showReleaseNotes();
-    void closeActiveOverlays();
+    void closeActiveOverlays(bool preserveDialog = false);
     void handleTouch();
     std::shared_ptr<GlossyIcon> makeIcon(const AppEntry& entry);
     void wireFocusCallback();
@@ -369,6 +369,12 @@ private:
     nxui::Widget* m_gameGalleryReturnFocus = nullptr;
     nxui::Widget* m_gameDetailsReturnFocus = nullptr;
     bool m_dialogWasActive            = false;
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    // Diagnostic-only state. Production lock behavior still clears every
+    // overlay; the edge test keeps its single prepared-launch dialog alive.
+    bool m_preflightEdgePending       = false;
+    bool m_preflightEdgeLockObserved  = false;
+#endif
     bool m_suppressNextNavigateSfx    = false;
     bool m_pendingNetConnect          = false;
     int  m_deferredBluetoothInitFrames = 0;

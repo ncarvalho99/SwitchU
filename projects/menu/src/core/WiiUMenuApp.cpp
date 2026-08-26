@@ -41,13 +41,6 @@ static constexpr const char* kBuiltInSoundPreset = "wiiu";
 // locked menu responsive within roughly 350 ms while cutting CPU wakeups to
 // under three per second and eliminating GPU presentation work.
 static constexpr std::uint64_t kLockScreenLowPowerSleepNs = 250'000'000ULL;
-#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
-// Deliberately outside every installed retail/forwarder ID observed on the
-// test console. The diagnostic sends this only as the authoritative final
-// command; it never writes it to the catalog, recency config, or control cache.
-static constexpr std::uint64_t kDiagnosticInvalidApplicationId =
-    0x01FFFFFFFFFFF000ULL;
-#endif
 
 // How often the console's own sleep plan is re-read. It changes only when
 // somebody edits it in Settings, so once every few seconds is plenty and keeps
@@ -1203,30 +1196,48 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
 #ifdef SWITCHU_PREFLIGHT_EDGE_TEST
                 m_audio.playSfx(Sfx::ModalShow);
                 m_dialogReturnFocus = raw;
+                m_preflightEdgePending = true;
+                m_preflightEdgeLockObserved = false;
+                DebugLog::log(
+                    "[diagnostic-preflight-edge] dialog armed tid=%016lX",
+                    tid);
                 m_dialog->show(
                     "Preflight edge test",
                     "DIAGNOSTIC BUILD. Sleep test: leave this open, press POWER, "
                     "wake and unlock, then choose Launch selected. Failure test: "
-                    "choose Invalid recovery and wait for the menu to return.",
+                    "choose Failure recovery and wait for the menu to return.",
                     {
-                        {"Launch selected", [continueLaunch]() mutable {
+                        {"Launch selected", [this, continueLaunch]() mutable {
+                            DebugLog::log(
+                                "[diagnostic-preflight-edge] launch after wake observed=%d",
+                                m_preflightEdgeLockObserved ? 1 : 0);
+                            m_preflightEdgePending = false;
+                            m_preflightEdgeLockObserved = false;
                             continueLaunch();
                         }, true},
-                        {"Invalid recovery", [this, uid, transitionTrace]() mutable {
+                        {"Failure recovery", [this, tid, uid, transitionTrace]() mutable {
                             auto failureTrace = transitionTrace;
                             const uint64_t now = armGetSystemTick();
                             failureTrace.animation_complete_tick = now;
                             failureTrace.recency_commit_complete_tick = now;
+                            m_preflightEdgePending = false;
+                            m_preflightEdgeLockObserved = false;
                             DebugLog::log(
-                                "[diagnostic-preflight-edge] invalid launch tid=%016lX",
-                                kDiagnosticInvalidApplicationId);
-                            m_launcher.launchApplication(
-                                kDiagnosticInvalidApplicationId, uid, failureTrace);
+                                "[diagnostic-preflight-edge] requesting synthetic failure tid=%016lX",
+                                tid);
+                            m_launcher.launchApplicationFailureDiagnostic(
+                                tid, uid, failureTrace);
                         }, true},
-                        {"Cancel", []() {}, true},
+                        {"Cancel", [this]() {
+                            m_preflightEdgePending = false;
+                            m_preflightEdgeLockObserved = false;
+                        }, true},
                     },
                     0,
-                    {});
+                    [this]() {
+                        m_preflightEdgePending = false;
+                        m_preflightEdgeLockObserved = false;
+                    });
                 focusManager().setFocus(m_dialog.get());
 #else
                 continueLaunch();
@@ -1966,14 +1977,28 @@ void WiiUMenuApp::setupLockScreen() {
         // The daemon owns the real sleep sequence. Asking for it here is what
         // makes the panel actually go dark: stopping our own presentation only
         // ends GPU work, and Horizon keeps the backlight on regardless.
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+        if (m_preflightEdgePending)
+            DebugLog::log("[diagnostic-preflight-edge] preserving dialog for requested sleep");
+        closeActiveOverlays(m_preflightEdgePending);
+#else
         closeActiveOverlays();
+#endif
         m_launcher.enterSleep();
     });
 
     m_lockScreen.onLocked([this, &i18n]() {
         // Whatever was open goes with it. Coming back to a half-open menu the
         // owner cannot remember opening is worse than coming back to the grid.
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+        if (m_preflightEdgePending) {
+            m_preflightEdgeLockObserved = true;
+            DebugLog::log("[diagnostic-preflight-edge] preserving dialog across lock");
+        }
+        closeActiveOverlays(m_preflightEdgePending);
+#else
         closeActiveOverlays();
+#endif
         m_audio.stopAll();
         m_accessibility.announce(i18n.tr("lock_screen.locked",
                                          "Screen locked. Press the same button three times to unlock."),
