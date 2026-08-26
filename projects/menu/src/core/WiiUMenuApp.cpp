@@ -41,6 +41,13 @@ static constexpr const char* kBuiltInSoundPreset = "wiiu";
 // locked menu responsive within roughly 350 ms while cutting CPU wakeups to
 // under three per second and eliminating GPU presentation work.
 static constexpr std::uint64_t kLockScreenLowPowerSleepNs = 250'000'000ULL;
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+// Deliberately outside every installed retail/forwarder ID observed on the
+// test console. The diagnostic sends this only as the authoritative final
+// command; it never writes it to the catalog, recency config, or control cache.
+static constexpr std::uint64_t kDiagnosticInvalidApplicationId =
+    0x01FFFFFFFFFFF000ULL;
+#endif
 
 // How often the console's own sleep plan is re-read. It changes only when
 // somebody edits it in Settings, so once every few seconds is plenty and keeps
@@ -1153,42 +1160,77 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
             float  cr   = raw->cornerRadius();
             nxui::Color  base = m_theme.panelBase;
             nxui::Color  bord = m_theme.panelBorder;
-            auto startLaunch = [this, fr, tex, cr, base, bord, tid,
-                                transitionTrace](AccountUid uid) mutable {
+            auto startLaunch = [this, raw, fr, tex, cr, base, bord, tid,
+                                 transitionTrace](AccountUid uid) mutable {
                 transitionTrace.user_selected_tick = armGetSystemTick();
                 // Ask the persistent daemon to touch NS and ensure title save
                 // data while this process renders the acknowledgement. The
                 // final launch command remains authoritative and repeats this
                 // work if the bounded preflight cannot be reused safely.
                 m_launcher.prepareApplication(tid, uid, transitionTrace);
-                themeshop::http::cancelPendingRequests();
-                // Persist recency while the visual acknowledgement runs. The
-                // handoff still waits for this write and SD commit, preserving
-                // the existing durability guarantee without putting all of
-                // their latency after the animation.
-                if (m_configSaveFuture.valid())
-                    m_configSaveFuture.get();
-                const std::uint64_t openedAt = m_config.nextLastOpenedAt();
-                m_config.noteOpened(tid, openedAt);
-                m_configSaveFuture = m_threadPool.submit(
-                    [cfg = m_config, tid, openedAt]() {
-                        if (!cfg.save())
-                            DebugLog::log("[menu] could not save last-opened title=%016lX", tid);
-                        switchu::commitSdCard("last opened");
-                        DebugLog::log("[menu] last-opened title=%016lX at=%llu", tid,
-                                     (unsigned long long)openedAt);
-                    });
-                transitionTrace.recency_submit_tick = armGetSystemTick();
+                auto continueLaunch = [this, fr, tex, cr, base, bord, tid, uid,
+                                       transitionTrace]() mutable {
+                    themeshop::http::cancelPendingRequests();
+                    // Persist recency while the visual acknowledgement runs.
+                    // The handoff still waits for this write and SD commit,
+                    // preserving the existing durability guarantee without
+                    // putting all of their latency after the animation.
+                    if (m_configSaveFuture.valid())
+                        m_configSaveFuture.get();
+                    const std::uint64_t openedAt = m_config.nextLastOpenedAt();
+                    m_config.noteOpened(tid, openedAt);
+                    m_configSaveFuture = m_threadPool.submit(
+                        [cfg = m_config, tid, openedAt]() {
+                            if (!cfg.save())
+                                DebugLog::log("[menu] could not save last-opened title=%016lX", tid);
+                            switchu::commitSdCard("last opened");
+                            DebugLog::log("[menu] last-opened title=%016lX at=%llu", tid,
+                                         (unsigned long long)openedAt);
+                        });
+                    transitionTrace.recency_submit_tick = armGetSystemTick();
 
-                m_audio.playSfx(Sfx::LaunchGame);
-                m_launchAnim->start(fr, tex, cr, base, bord, tid, uid,
-                    [this, transitionTrace](uint64_t id, AccountUid u) mutable {
-                        transitionTrace.animation_complete_tick = armGetSystemTick();
-                        if (m_configSaveFuture.valid())
-                            m_configSaveFuture.get();
-                        transitionTrace.recency_commit_complete_tick = armGetSystemTick();
-                        m_launcher.launchApplication(id, u, transitionTrace);
-                    });
+                    m_audio.playSfx(Sfx::LaunchGame);
+                    m_launchAnim->start(fr, tex, cr, base, bord, tid, uid,
+                        [this, transitionTrace](uint64_t id, AccountUid u) mutable {
+                            transitionTrace.animation_complete_tick = armGetSystemTick();
+                            if (m_configSaveFuture.valid())
+                                m_configSaveFuture.get();
+                            transitionTrace.recency_commit_complete_tick = armGetSystemTick();
+                            m_launcher.launchApplication(id, u, transitionTrace);
+                        });
+                };
+
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+                m_audio.playSfx(Sfx::ModalShow);
+                m_dialogReturnFocus = raw;
+                m_dialog->show(
+                    "Preflight edge test",
+                    "DIAGNOSTIC BUILD. Sleep test: leave this open, press POWER, "
+                    "wake and unlock, then choose Launch selected. Failure test: "
+                    "choose Invalid recovery and wait for the menu to return.",
+                    {
+                        {"Launch selected", [continueLaunch]() mutable {
+                            continueLaunch();
+                        }, true},
+                        {"Invalid recovery", [this, uid, transitionTrace]() mutable {
+                            auto failureTrace = transitionTrace;
+                            const uint64_t now = armGetSystemTick();
+                            failureTrace.animation_complete_tick = now;
+                            failureTrace.recency_commit_complete_tick = now;
+                            DebugLog::log(
+                                "[diagnostic-preflight-edge] invalid launch tid=%016lX",
+                                kDiagnosticInvalidApplicationId);
+                            m_launcher.launchApplication(
+                                kDiagnosticInvalidApplicationId, uid, failureTrace);
+                        }, true},
+                        {"Cancel", []() {}, true},
+                    },
+                    0,
+                    {});
+                focusManager().setFocus(m_dialog.get());
+#else
+                continueLaunch();
+#endif
             };
             if (entry) {
                 if (!entry->startupUserKnown) {
