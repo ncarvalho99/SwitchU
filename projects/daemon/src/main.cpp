@@ -252,6 +252,9 @@ struct Action {
     AccountUid uid = {};
     smi::LaunchTransitionTrace transition{};
     uint64_t commandReceivedTick = 0;
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    bool injectLaunchFailure = false;
+#endif
 };
 
 static std::vector<Action> g_actionQueue;
@@ -1250,7 +1253,11 @@ static void handleMenuCommand() {
         break;
     }
 
-    case smi::SystemMessage::LaunchApplication: {
+    case smi::SystemMessage::LaunchApplication:
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    case smi::SystemMessage::DiagnosticLaunchFailure:
+#endif
+    {
         auto args = reader.pop<smi::LaunchAppArgs>();
         Action action{};
         action.type = ActionType::LaunchApplication;
@@ -1258,9 +1265,21 @@ static void handleMenuCommand() {
         std::memcpy(&action.uid, args.user_uid, sizeof(action.uid));
         action.transition = args.trace;
         action.commandReceivedTick = commandReceiveTick;
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+        action.injectLaunchFailure =
+            msg == smi::SystemMessage::DiagnosticLaunchFailure;
+#endif
         g_lastMenuClosingTrace = {};
         g_lastMenuClosingReceiveTick = 0;
         g_actionQueue.push_back(action);
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+        if (action.injectLaunchFailure) {
+            switchu::FileLog::log(
+                "[diagnostic-preflight-edge] queued synthetic create failure title=0x%016lX (actions=%zu)",
+                args.title_id, g_actionQueue.size());
+            break;
+        }
+#endif
         switchu::FileLog::log("[smi] queued launch 0x%016lX (actions=%zu)", args.title_id, g_actionQueue.size());
         break;
     }
@@ -1479,7 +1498,11 @@ static bool handleAction(Action& action) {
         case ActionType::LaunchApplication: {
             const uint64_t holderFinishedTick = daemon::menu_la::lastFinishedTick();
             daemon::app::LaunchTiming timing{};
-            Result rc = daemon::app::launch(action.title_id, action.uid, &timing);
+            Result rc = daemon::app::launch(action.title_id, action.uid, &timing
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+                                            , action.injectLaunchFailure
+#endif
+            );
             logApplicationLaunchTrace(action, timing, holderFinishedTick);
             if (R_FAILED(rc)) {
                 switchu::FileLog::log("[action] launch 0x%016lX FAIL: 0x%X", action.title_id, rc);

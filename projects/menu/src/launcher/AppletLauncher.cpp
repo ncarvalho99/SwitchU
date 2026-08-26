@@ -138,6 +138,23 @@ void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid,
     if (m_cb.requestExit) m_cb.requestExit();
 }
 
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+void AppletLauncher::launchApplicationFailureDiagnostic(
+    uint64_t titleId, AccountUid uid,
+    switchu::smi::LaunchTransitionTrace trace) {
+    DebugLog::log("[diagnostic-preflight-edge] sending synthetic create failure tid=%016lX",
+                  titleId);
+    const Result rc = switchu::menu::smi_cmd::launchApplicationFailureDiagnostic(
+        titleId, uid, trace);
+    if (R_FAILED(rc)) {
+        DebugLog::log("[diagnostic-preflight-edge] command enqueue FAIL: 0x%X", rc);
+        return;
+    }
+    DebugLog::log("[diagnostic-preflight-edge] command sent, closing menu");
+    if (m_cb.requestExit) m_cb.requestExit();
+}
+#endif
+
 void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace trace) {
     if (m_suspendedTitleId == 0) {
         DebugLog::log("[launcher] no app suspended!");

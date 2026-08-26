@@ -136,6 +136,10 @@ struct PreparedLaunch {
 
 static PreparedLaunch g_prepared{};
 static constexpr uint64_t kPreparedLaunchMaxAgeNs = 5'000'000'000ULL;
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+static constexpr Result kPreflightEdgeSyntheticCreateFailure =
+    MAKERESULT(Module_Libnx, 0xFC);
+#endif
 
 #ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
 enum class PreflightDiagnosticCase : uint8_t {
@@ -466,7 +470,11 @@ static inline void copyPreparedWork(LaunchTiming* dst, const LaunchTiming& src) 
     dst->bcatSaveTicks = src.bcatSaveTicks;
 }
 
-inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = nullptr) {
+inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = nullptr
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+                     , bool diagnosticForceCreateFailure = false
+#endif
+) {
     if (timing) {
         *timing = {};
         timing->actionStartTick = armGetSystemTick();
@@ -479,6 +487,18 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
                           g_suspendedTitleId,
                           accountUidIsValid(&uid) ? 1 : 0,
                           uid.uid[0], uid.uid[1]);
+
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    // Never let the diagnostic close a title the tester forgot to terminate.
+    // The ordinary launch path remains untouched and still replaces a running
+    // application exactly as before.
+    if (diagnosticForceCreateFailure && g_running) {
+        switchu::FileLog::log(
+            "[diagnostic-preflight-edge] synthetic failure refused while app running title=0x%016lX rc=0x%X",
+            title_id, kPreflightEdgeSyntheticCreateFailure);
+        return kPreflightEdgeSyntheticCreateFailure;
+    }
+#endif
 
 #ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
     injectPreflightDiagnosticFault();
@@ -559,6 +579,16 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
 
     if (timing)
         timing->createStartTick = armGetSystemTick();
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    if (diagnosticForceCreateFailure) {
+        if (timing)
+            timing->createEndTick = armGetSystemTick();
+        switchu::FileLog::log(
+            "[diagnostic-preflight-edge] synthetic CreateApp failure title=0x%016lX rc=0x%X",
+            title_id, kPreflightEdgeSyntheticCreateFailure);
+        return kPreflightEdgeSyntheticCreateFailure;
+    }
+#endif
     Result rc = appletCreateApplication(&g_app, title_id);
     if (timing)
         timing->createEndTick = armGetSystemTick();

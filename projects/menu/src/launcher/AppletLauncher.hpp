@@ -37,6 +37,11 @@ public:
                               switchu::smi::LaunchTransitionTrace& trace);
     void launchApplication(uint64_t titleId, AccountUid uid,
                            switchu::smi::LaunchTransitionTrace trace);
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    void launchApplicationFailureDiagnostic(
+        uint64_t titleId, AccountUid uid,
+        switchu::smi::LaunchTransitionTrace trace);
+#endif
     void resumeApplication(switchu::smi::LaunchTransitionTrace trace);
     void terminateApplication();
 #ifdef SWITCHU_TERMINATION_QUEUE_TEST

@@ -59,14 +59,15 @@ inline Result prepareApplication(uint64_t titleId, AccountUid uid,
     return pushOutStorage(buf, sizeof(buf));
 }
 
-inline Result launchApplication(uint64_t titleId, AccountUid uid,
-                                smi::LaunchTransitionTrace trace) {
+inline Result sendLaunchApplicationCommand(smi::SystemMessage message,
+                                           uint64_t titleId, AccountUid uid,
+                                           smi::LaunchTransitionTrace trace) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::LaunchAppArgs)]{};
     auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
     auto* args = reinterpret_cast<smi::LaunchAppArgs*>(buf + sizeof(smi::CommandHeader));
 
     hdr->magic    = smi::kCommandMagic;
-    hdr->message  = static_cast<uint32_t>(smi::SystemMessage::LaunchApplication);
+    hdr->message  = static_cast<uint32_t>(message);
     args->title_id = titleId;
     std::memcpy(args->user_uid, &uid, sizeof(uid));
     args->trace = trace;
@@ -74,6 +75,20 @@ inline Result launchApplication(uint64_t titleId, AccountUid uid,
 
     return pushOutStorage(buf, sizeof(buf));
 }
+
+inline Result launchApplication(uint64_t titleId, AccountUid uid,
+                                smi::LaunchTransitionTrace trace) {
+    return sendLaunchApplicationCommand(smi::SystemMessage::LaunchApplication,
+                                        titleId, uid, trace);
+}
+
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+inline Result launchApplicationFailureDiagnostic(
+    uint64_t titleId, AccountUid uid, smi::LaunchTransitionTrace trace) {
+    return sendLaunchApplicationCommand(smi::SystemMessage::DiagnosticLaunchFailure,
+                                        titleId, uid, trace);
+}
+#endif
 
 inline Result launchUserPage(AccountUid uid) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::UserArgs)]{};

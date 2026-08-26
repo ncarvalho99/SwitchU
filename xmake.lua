@@ -336,6 +336,9 @@ target("switchu-daemon")
     if has_config("preflight_matrix_test") then
         add_defines("SWITCHU_PREFLIGHT_MATRIX_TEST")
     end
+    if has_config("preflight_edge_test") then
+        add_defines("SWITCHU_PREFLIGHT_EDGE_TEST")
+    end
     add_cxxflags("-fno-rtti", "-fexceptions", "-std=gnu++23", {force = true})
     add_packages("zlib")
     add_linkdirs("lib/Atmosphere-libs/libstratosphere/lib/nintendo_nx_arm64_armv8a/release")

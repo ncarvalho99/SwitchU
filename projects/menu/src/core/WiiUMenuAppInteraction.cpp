@@ -704,12 +704,19 @@ void WiiUMenuApp::markSuspendedIcon(uint64_t titleId) {
     }
 }
 
-void WiiUMenuApp::closeActiveOverlays() {
+void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
+#ifdef SWITCHU_PREFLIGHT_EDGE_TEST
+    if (!preserveDialog && m_preflightEdgePending) {
+        DebugLog::log("[diagnostic-preflight-edge] pending dialog cancelled");
+        m_preflightEdgePending = false;
+        m_preflightEdgeLockObserved = false;
+    }
+#endif
     if (m_editMode)
         exitEditMode();
     if (m_userSelect && m_userSelect->isActive())
         m_userSelect->hide();
-    if (m_dialog && m_dialog->isActive())
+    if (!preserveDialog && m_dialog && m_dialog->isActive())
         m_dialog->hide();
     if (m_settings && m_settings->isActive())
         m_settings->hide();
