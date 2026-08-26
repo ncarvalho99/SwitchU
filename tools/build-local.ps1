@@ -10,10 +10,15 @@ param(
     [ValidateSet('release', 'debug')] [string] $Mode = 'release',
     [ValidateSet('sysmodule', 'homebrew')] [string] $Variant = 'sysmodule',
     [ValidatePattern('^[A-Za-z]:$')] [string] $ConsoleDrive = 'E:',
+    [switch] $TerminationQueueTest,
     [switch] $SkipConsoleDeploy
 )
 
 $ErrorActionPreference = 'Stop'
+$terminationQueueTestMode = if ($TerminationQueueTest) { 'on' } else { 'off' }
+if ($TerminationQueueTest -and $Variant -ne 'sysmodule') {
+    throw '-TerminationQueueTest is valid only for the sysmodule variant.'
+}
 $dockerRoot = 'C:\Program Files\Docker\Docker\resources\bin'
 $docker = Join-Path $dockerRoot 'docker.exe'
 
@@ -142,7 +147,7 @@ $started = Get-Date
 # every --rm run would make later builds incorrectly think dependencies exist.
 $ErrorActionPreference = 'Continue'
 & $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake `
-    $buildImage bash /src/tools/build-inside.sh $Mode $Variant |
+    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode |
     Tee-Object -FilePath $log
 $rc = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'

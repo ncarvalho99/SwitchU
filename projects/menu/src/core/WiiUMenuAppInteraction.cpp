@@ -2,6 +2,7 @@
 #include <fmt/format.h>
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
+#include "NsService.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -17,6 +18,13 @@ std::string titleIdHex(std::uint64_t titleId) {
 
 std::string installedDisplayVersion(std::uint64_t titleId) {
 #ifdef SWITCHU_MENU
+    const Result initRc = switchu::menu::ensureNsService("game-details");
+    if (R_FAILED(initRc)) {
+        DebugLog::log("[details] ns unavailable title=%016llX rc=0x%08X",
+                      static_cast<unsigned long long>(titleId), static_cast<unsigned int>(initRc));
+        return {};
+    }
+
     NsApplicationControlData control{};
     u64 actualSize = 0;
     const Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage, titleId,
@@ -916,28 +924,60 @@ void WiiUMenuApp::wireGlobalActions() {
         m_audio.playSfx(Sfx::ModalShow);
         m_dialogReturnFocus = cur;
         auto& i18n = nxui::I18n::instance();
+        const auto markCloseRequested = [this]() {
+            m_launcher.setAppRunning(false);
+            m_launcher.setAppHasForeground(false);
+            m_launcher.setSuspendedTitleId(0);
+            for (auto& ic : m_grid->allIcons())
+                ic->setSuspended(false);
+            if (auto* current = m_grid->focusManager().current()) {
+                auto* focusedIcon = static_cast<GlossyIcon*>(current);
+                m_titlePill->setText(focusedIcon->title());
+            }
+        };
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+        m_dialog->show(
+            "Lifecycle close test",
+            "DIAGNOSTIC BUILD. B cancels. Applet close: use after HOME from a game's "
+            "full-screen keyboard. Sleep powers down. Force 15s: wait.",
+            {
+                {"Applet close", [this, markCloseRequested]() {
+                    m_launcher.terminateApplication();
+                    markCloseRequested();
+                }, true},
+                {"Duplicate", [this, markCloseRequested]() {
+                    m_launcher.terminateApplicationDuplicate();
+                    markCloseRequested();
+                }, true},
+                {"Sleep test", [this, markCloseRequested]() {
+                    m_launcher.terminateApplicationHold();
+                    m_launcher.enterSleep();
+                    markCloseRequested();
+                }, true},
+                {"Force 15s", [this, markCloseRequested]() {
+                    m_launcher.terminateApplicationForce();
+                    markCloseRequested();
+                }, true}
+            },
+            0,
+            {}
+        );
+#else
         m_dialog->show(
             i18n.tr("game.close_title", "Close game"),
             i18n.tr("game.close_prefix", "Close") + std::string(" ") + icon->title()
                 + i18n.tr("game.close_suffix", "?\nUnsaved progress will be lost."),
             {
                 {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
-                {i18n.tr("button.close", "Close"),  [this]() {
+                {i18n.tr("button.close", "Close"),  [this, markCloseRequested]() {
                     m_launcher.terminateApplication();
-                    m_launcher.setAppRunning(false);
-                    m_launcher.setAppHasForeground(false);
-                    m_launcher.setSuspendedTitleId(0);
-                    for (auto& ic : m_grid->allIcons())
-                        ic->setSuspended(false);
-                    if (auto* cur = m_grid->focusManager().current()) {
-                        auto* icon = static_cast<GlossyIcon*>(cur);
-                        m_titlePill->setText(icon->title());
-                    }
+                    markCloseRequested();
                 }, true}
             },
             1,
             {}
         );
+#endif
         focusManager().setFocus(m_dialog.get());
     });
 #endif
@@ -1647,7 +1687,9 @@ void WiiUMenuApp::confirmDeleteSoftware(std::uint64_t titleId, const std::string
         {
             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
             {i18n.tr("button.delete", "Delete"), [this, titleId]() {
-                 const Result rc = nsDeleteApplicationCompletely(titleId);
+                 Result rc = switchu::menu::ensureNsService("delete-software");
+                 if (R_SUCCEEDED(rc))
+                     rc = nsDeleteApplicationCompletely(titleId);
                  DebugLog::log("[menu] delete 0x%016lX rc=0x%X", titleId, rc);
                  // The daemon notices the record change and asks for a
                  // refresh, which is what takes the icon off the grid. Doing

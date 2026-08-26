@@ -4,10 +4,27 @@
 #include <nxui/core/Input.hpp>
 #include <functional>
 #include <memory>
+#include <cstdint>
 
 namespace nxui {
 
 class Activity;
+
+struct ApplicationInitializeTrace {
+    std::uint64_t initializeStartTick = 0;
+    std::uint64_t gpuReadyTick = 0;
+    std::uint64_t rendererReadyTick = 0;
+    std::uint64_t blankFrameTick = 0;
+    std::uint64_t activityCreateStartTick = 0;
+    std::uint64_t activityCreateEndTick = 0;
+};
+
+struct ApplicationShutdownTrace {
+    std::uint64_t shutdownStartTick = 0;
+    std::uint64_t gpuDrainStartTick = 0;
+    std::uint64_t gpuDrainEndTick = 0;
+    std::uint64_t activityDestroyStartTick = 0;
+};
 
 /// Top-level application object.
 /// Owns the GPU device, Renderer, and Input, runs the main loop,
@@ -59,6 +76,18 @@ public:
     void setRenderEnabled(bool e) { m_renderEnabled = e; }
     bool renderEnabled() const    { return m_renderEnabled; }
 
+    const ApplicationInitializeTrace& initializeTrace() const { return m_initializeTrace; }
+    const ApplicationShutdownTrace& shutdownTrace() const { return m_shutdownTrace; }
+
+    // Called once, after the next real activity frame has been submitted.
+    // Registering resets first-input/frame capture, which also supports the
+    // tutorial handing control to the menu without reporting a tutorial frame.
+    void setFirstFrameCallback(std::function<void(std::uint64_t, std::uint64_t)> callback) {
+        m_firstFrameCallback = std::move(callback);
+        m_firstInputTick = 0;
+        m_firstFrameTick = 0;
+    }
+
 private:
     void dispatchInput();
     bool applyPendingActivity();
@@ -72,6 +101,11 @@ private:
     bool m_running = true;
     std::function<void(const char*)> m_logSink;
     bool m_renderEnabled = true;
+    ApplicationInitializeTrace m_initializeTrace{};
+    ApplicationShutdownTrace m_shutdownTrace{};
+    std::function<void(std::uint64_t, std::uint64_t)> m_firstFrameCallback;
+    std::uint64_t m_firstInputTick = 0;
+    std::uint64_t m_firstFrameTick = 0;
     int  m_navDebounce = 0;
     // Frames a direction has been held for. Navigation used to fire only on the
     // frame a button went down, so holding one moved a single icon and stopped.

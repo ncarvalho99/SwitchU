@@ -1,4 +1,5 @@
 #include "TabBuilders.hpp"
+#include "bluetooth/BluetoothManager.hpp"
 #include "core/DebugLog.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
@@ -185,7 +186,7 @@ SettingsScreen::Tab settings::tabs::InternetTab::build(SettingsScreen& screen) {
                 // switches exposed elsewhere in SwitchU, rather than merely
                 // block their traffic at the NIFM layer.
                 const Result wifiRc = setsysSetWirelessLanEnableFlag(false);
-                const Result bluetoothRc = setsysSetBluetoothEnableFlag(false);
+                const Result bluetoothRc = bluetooth::SetRadioEnabled(false);
                 const Result nfcRc = setsysSetNfcEnableFlag(false);
                 DebugLog::log("[internet] airplane dependent radios wifi=0x%X bluetooth=0x%X nfc=0x%X",
                               wifiRc, bluetoothRc, nfcRc);

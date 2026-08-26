@@ -2,6 +2,7 @@
 #include <functional>
 #include <atomic>
 #include <switch.h>
+#include <switchu/smi_protocol.hpp>
 
 class AppletLauncher {
 public:
@@ -32,9 +33,17 @@ public:
     // homebrew simplesmente nao faz nada.
     Result refreshCatalog();
 
-    void launchApplication(uint64_t titleId, AccountUid uid);
-    void resumeApplication();
+    Result prepareApplication(uint64_t titleId, AccountUid uid,
+                              switchu::smi::LaunchTransitionTrace& trace);
+    void launchApplication(uint64_t titleId, AccountUid uid,
+                           switchu::smi::LaunchTransitionTrace trace);
+    void resumeApplication(switchu::smi::LaunchTransitionTrace trace);
     void terminateApplication();
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    void terminateApplicationDuplicate();
+    void terminateApplicationHold();
+    void terminateApplicationForce();
+#endif
 
     void checkRunningApplication();
 

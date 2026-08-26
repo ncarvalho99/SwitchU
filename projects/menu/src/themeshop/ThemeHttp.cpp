@@ -3,16 +3,11 @@
 #include "core/DebugLog.hpp"
 
 #include <curl/curl.h>
-#include <curlpp/Easy.hpp>
-#include <curlpp/Infos.hpp>
-#include <curlpp/Options.hpp>
-#include <curlpp/cURLpp.hpp>
 #include <switch.h>
 
 #include <cstdio>
 #include <atomic>
 #include <mutex>
-#include <sstream>
 #include <stdexcept>
 
 namespace {
@@ -100,23 +95,6 @@ void ensureInternetConnectionReady(const std::string& url) {
     }
 }
 
-void configureRequest(curlpp::Easy& request,
-                      const std::string& url,
-                      std::ostringstream& response,
-                      const std::list<std::string>& headers) {
-    request.setOpt<curlpp::options::Url>(url);
-    request.setOpt<curlpp::options::FollowLocation>(true);
-    request.setOpt<curlpp::options::NoSignal>(true);
-    request.setOpt<curlpp::options::ConnectTimeout>(4L);
-    request.setOpt<curlpp::options::Timeout>(30L);
-    request.setOpt<curlpp::options::IpResolve>((long)CURL_IPRESOLVE_V4);
-    request.setOpt<curlpp::options::UserAgent>(std::string("SwitchU/") + SWITCHU_VERSION);
-    if (!headers.empty()) {
-        request.setOpt<curlpp::options::HttpHeader>(headers);
-    }
-    request.setOpt<curlpp::options::WriteStream>(&response);
-}
-
 size_t appendResponse(char* data, size_t size, size_t count, void* userData) {
     const size_t bytes = size * count;
     auto* response = static_cast<std::string*>(userData);
@@ -126,6 +104,34 @@ size_t appendResponse(char* data, size_t size, size_t count, void* userData) {
 
 int cancelIfAppletHandoff(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
     return g_cancelPendingRequests.load(std::memory_order_acquire) ? 1 : 0;
+}
+
+struct FileWriteContext {
+    std::FILE* out = nullptr;
+    std::uint64_t written = 0;
+    bool writeFailed = false;
+    const std::function<void(std::uint64_t, std::uint64_t)>* onProgress = nullptr;
+};
+
+size_t writeDownload(char* data, size_t size, size_t count, void* userData) {
+    auto* ctx = static_cast<FileWriteContext*>(userData);
+    const size_t bytes = size * count;
+    if (g_cancelPendingRequests.load(std::memory_order_acquire))
+        return 0;
+    if (std::fwrite(data, 1, bytes, ctx->out) != bytes) {
+        ctx->writeFailed = true;
+        return 0;
+    }
+    ctx->written += bytes;
+    if (ctx->onProgress && *ctx->onProgress) {
+        try {
+            (*ctx->onProgress)(ctx->written, 0);
+        } catch (...) {
+            ctx->writeFailed = true;
+            return 0;
+        }
+    }
+    return bytes;
 }
 
 std::vector<std::uint8_t> performRequestBytes(const std::string& url,
@@ -256,6 +262,8 @@ std::uint64_t getToFile(const std::string& url,
 
     std::string lastError = "Theme package download failed";
     for (int attempt = 1; attempt <= kRequestAttemptCount; ++attempt) {
+        if (g_cancelPendingRequests.load(std::memory_order_acquire))
+            throw std::runtime_error("HTTP request cancelled for applet handoff");
         if (!initializeRuntimeLocked())
             throw std::runtime_error("Theme Shop HTTP runtime is unavailable");
         ensureInternetConnectionReady(url);
@@ -264,46 +272,55 @@ std::uint64_t getToFile(const std::string& url,
         if (!out)
             throw std::runtime_error("Could not open " + destinationPath + " for writing");
 
-        std::uint64_t written = 0;
-        bool writeFailed = false;
         try {
-            curlpp::Easy request;
-            std::ostringstream discard;              // configureRequest quer um fluxo
-            configureRequest(request, url, discard, {});
-            // Sem limite de tempo total: um pacote de dezenas de megabytes por
-            // WiFi passa dos 30 segundos que serve para JSON. O tempo de conexao
-            // continua valendo, entao um servidor fora do ar ainda falha rapido.
-            request.setOpt<curlpp::options::Timeout>(0L);
-            request.setOpt<curlpp::options::LowSpeedLimit>(1024L);
-            request.setOpt<curlpp::options::LowSpeedTime>(30L);
-            request.setOpt<curlpp::options::WriteFunction>(
-                [&](char* buffer, std::size_t size, std::size_t count) -> std::size_t {
-                    const std::size_t bytes = size * count;
-                    if (std::fwrite(buffer, 1, bytes, out) != bytes) {
-                        writeFailed = true;
-                        return 0;                    // aborta a transferencia
-                    }
-                    written += bytes;
-                    if (onProgress)
-                        onProgress(written, 0);
-                    return bytes;
-                });
-            request.perform();
+            CURL* request = curl_easy_init();
+            if (!request)
+                throw std::runtime_error("Could not create HTTP request");
 
-            const long statusCode = curlpp::infos::ResponseCode::get(request);
+            FileWriteContext writeCtx{out, 0, false, &onProgress};
+            const std::string agent = std::string("SwitchU/") + SWITCHU_VERSION;
+            curl_easy_setopt(request, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(request, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(request, CURLOPT_NOSIGNAL, 1L);
+            curl_easy_setopt(request, CURLOPT_CONNECTTIMEOUT, 4L);
+            // Large packages have no total timeout, but the transfer callback
+            // can now abort even while no body data is arriving.
+            curl_easy_setopt(request, CURLOPT_TIMEOUT, 0L);
+            curl_easy_setopt(request, CURLOPT_LOW_SPEED_LIMIT, 1024L);
+            curl_easy_setopt(request, CURLOPT_LOW_SPEED_TIME, 30L);
+            curl_easy_setopt(request, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+            curl_easy_setopt(request, CURLOPT_USERAGENT, agent.c_str());
+            curl_easy_setopt(request, CURLOPT_WRITEFUNCTION, writeDownload);
+            curl_easy_setopt(request, CURLOPT_WRITEDATA, &writeCtx);
+            curl_easy_setopt(request, CURLOPT_NOPROGRESS, 0L);
+            curl_easy_setopt(request, CURLOPT_XFERINFOFUNCTION, cancelIfAppletHandoff);
+
+            const CURLcode result = curl_easy_perform(request);
+            long statusCode = 0;
+            curl_easy_getinfo(request, CURLINFO_RESPONSE_CODE, &statusCode);
+            curl_easy_cleanup(request);
+
+            if (result != CURLE_OK) {
+                if (g_cancelPendingRequests.load(std::memory_order_acquire))
+                    throw std::runtime_error("HTTP request cancelled for applet handoff");
+                throw std::runtime_error(std::string("HTTP request failed: ")
+                                         + curl_easy_strerror(result));
+            }
             if (statusCode < 200 || statusCode >= 300)
                 throw std::runtime_error("HTTP error " + std::to_string(statusCode));
 
-            std::fclose(out);
-            if (writeFailed)
+            if (writeCtx.writeFailed)
                 throw std::runtime_error("Could not write to " + destinationPath);
-            return written;
+            std::fclose(out);
+            return writeCtx.written;
         } catch (const std::exception& ex) {
             std::fclose(out);
             std::remove(destinationPath.c_str());    // nada pela metade fica no cartao
             lastError = ex.what();
             DebugLog::log("[themeshop] package download failed (%d/%d): %s -> %s",
                           attempt, kRequestAttemptCount, url.c_str(), lastError.c_str());
+            if (g_cancelPendingRequests.load(std::memory_order_acquire))
+                break;
             if (attempt < kRequestAttemptCount)
                 shutdownRuntimeLocked();
         }

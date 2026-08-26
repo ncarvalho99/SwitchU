@@ -2,6 +2,7 @@
 #include <switch.h>
 #include <switchu/control_cache.hpp>
 #include <switchu/file_log.hpp>
+#include <cstring>
 
 namespace switchu::daemon::app {
 
@@ -13,21 +14,124 @@ static bool g_lastLaunchAcceptsUser = true;
 static bool g_lastLaunchNeedsUser = true;
 static uint8_t g_lastStartupUserAccount = 1;
 static uint8_t g_lastStartupUserAccountOption = 0;
+static uint64_t g_lastFinishedTick = 0;
+
+enum class TerminatePhase : uint8_t {
+    Idle,
+    Graceful,
+    Forced,
+};
+
+struct TerminateTiming {
+    uint64_t beginTick = 0;
+    uint64_t libraryEndTick = 0;
+    uint64_t requestEndTick = 0;
+    uint64_t forceTick = 0;
+    uint64_t completeTick = 0;
+    uint32_t polls = 0;
+    uint32_t beginCore = 0;
+    uint32_t completeCore = 0;
+    Result libraryRc = 0;
+    Result requestRc = 0;
+    Result forceRc = 0;
+    AppletApplicationExitReason exitReason = AppletApplicationExitReason_Normal;
+    bool forced = false;
+};
+
+static TerminatePhase g_terminatePhase = TerminatePhase::Idle;
+static TerminateTiming g_terminateTiming{};
+static uint64_t g_terminateDeadlineTick = 0;
+static constexpr uint64_t kTerminateGraceNs = 15'000'000'000ULL;
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+enum class TerminateDiagnosticMode : uint8_t {
+    None,
+    HoldForSleepWake,
+    ForceAtDeadline,
+};
+static TerminateDiagnosticMode g_terminateDiagnosticMode = TerminateDiagnosticMode::None;
+// A human needs enough time to open Power > Sleep after selecting the close
+// action. Release before the unchanged 15-second production force deadline.
+static constexpr uint64_t kTerminateSleepWakeHoldNs = 12'000'000'000ULL;
+#endif
+
+struct PreflightTiming {
+    uint64_t requestSendTick = 0;
+    uint64_t commandReceiveTick = 0;
+    uint64_t workStartTick = 0;
+    uint64_t touchStartTick = 0;
+    uint64_t touchEndTick = 0;
+    uint64_t saveStartTick = 0;
+    uint64_t saveEndTick = 0;
+    uint64_t workEndTick = 0;
+    uint32_t core = 0;
+    bool attempted = false;
+    bool complete = false;
+    bool cacheHit = false;
+};
+
+struct LaunchTiming {
+    uint64_t actionStartTick = 0;
+    uint64_t previousExitRequestTick = 0;
+    uint64_t previousJoinedTick = 0;
+    uint64_t touchStartTick = 0;
+    uint64_t touchEndTick = 0;
+    uint64_t saveStartTick = 0;
+    uint64_t saveEndTick = 0;
+    uint64_t accountSaveTicks = 0;
+    uint64_t deviceSaveTicks = 0;
+    uint64_t temporarySaveTicks = 0;
+    uint64_t cacheSaveTicks = 0;
+    uint64_t bcatSaveTicks = 0;
+    uint64_t createStartTick = 0;
+    uint64_t createEndTick = 0;
+    uint64_t startStartTick = 0;
+    uint64_t startEndTick = 0;
+    uint64_t foregroundStartTick = 0;
+    uint64_t foregroundEndTick = 0;
+    uint32_t core = 0;
+    PreflightTiming preflight{};
+};
+
+struct ResumeTiming {
+    uint64_t actionStartTick = 0;
+    uint64_t foregroundStartTick = 0;
+    uint64_t foregroundEndTick = 0;
+    uint32_t core = 0;
+};
+
+struct PreparedLaunch {
+    bool present = false;
+    uint64_t titleId = 0;
+    AccountUid uid{};
+    switchu::control_cache::Meta meta{};
+    LaunchTiming work{};
+    PreflightTiming timing{};
+};
+
+static PreparedLaunch g_prepared{};
+static constexpr uint64_t kPreparedLaunchMaxAgeNs = 5'000'000'000ULL;
 
 inline bool isRunning() { return g_running; }
 inline bool hasForeground() { return g_hasForeground; }
+inline bool isTerminating() { return g_terminatePhase != TerminatePhase::Idle; }
 inline uint64_t suspendedTitleId() { return g_suspendedTitleId; }
+inline uint64_t lastFinishedTick() { return g_lastFinishedTick; }
 
 inline bool startupUserRequiresInteractiveSelection(uint8_t account, uint8_t option) {
     return account == 1 && option == 0;
 }
 
-static inline void ensureSaveData(uint64_t app_id, uint64_t owner_id,
-                                  AccountUid user_id, FsSaveDataType type,
-                                  FsSaveDataSpaceId space_id,
-                                  uint64_t save_size, uint64_t journal_size) {
+static inline uint64_t ensureSaveData(uint64_t app_id, uint64_t owner_id,
+                                      AccountUid user_id, FsSaveDataType type,
+                                      FsSaveDataSpaceId space_id,
+                                      uint64_t save_size, uint64_t journal_size,
+                                      bool* outSuccess) {
+    if (outSuccess)
+        *outSuccess = true;
     if (save_size == 0)
-        return;
+        return 0;
+
+    const uint64_t startTick = armGetSystemTick();
 
     FsSaveDataAttribute attr = {};
     attr.application_id = app_id;
@@ -50,22 +154,31 @@ static inline void ensureSaveData(uint64_t app_id, uint64_t owner_id,
     FsFileSystem fs;
     if (R_SUCCEEDED(fsOpenSaveDataFileSystem(&fs, space_id, &attr))) {
         fsFsClose(&fs);
-        return;
+        return armGetSystemTick() - startTick;
     }
 
     Result rc = fsCreateSaveDataFileSystem(&attr, &cr, &meta);
-    if (R_FAILED(rc))
+    if (R_FAILED(rc)) {
+        if (outSuccess)
+            *outSuccess = false;
         switchu::FileLog::log("[app] ensureSaveData type=%d FAIL: 0x%X", static_cast<int>(type), rc);
+    }
+    return armGetSystemTick() - startTick;
 }
 
 // Temporary storage is not a normal save-data filesystem. In particular, its
 // creation metadata must be empty; giving it the thumbnail metadata used by
 // account/device saves makes fs reject the request (0x402 on affected titles).
 // Use libnx's dedicated wrapper so its exact FS contract stays in one place.
-static inline void ensureTemporaryStorage(uint64_t app_id, uint64_t owner_id,
-                                          uint64_t storage_size) {
+static inline uint64_t ensureTemporaryStorage(uint64_t app_id, uint64_t owner_id,
+                                              uint64_t storage_size,
+                                              bool* outSuccess) {
+    if (outSuccess)
+        *outSuccess = true;
     if (storage_size == 0)
-        return;
+        return 0;
+
+    const uint64_t startTick = armGetSystemTick();
 
     FsSaveDataAttribute attr = {};
     attr.application_id = app_id;
@@ -74,54 +187,180 @@ static inline void ensureTemporaryStorage(uint64_t app_id, uint64_t owner_id,
     FsFileSystem fs;
     if (R_SUCCEEDED(fsOpenSaveDataFileSystem(&fs, FsSaveDataSpaceId_Temporary, &attr))) {
         fsFsClose(&fs);
-        return;
+        return armGetSystemTick() - startTick;
     }
 
     Result rc = fsCreate_TemporaryStorage(app_id, owner_id,
                                           static_cast<s64>(storage_size), 0);
-    if (R_FAILED(rc))
+    if (R_FAILED(rc)) {
+        if (outSuccess)
+            *outSuccess = false;
         switchu::FileLog::log("[app] ensureTemporaryStorage FAIL: 0x%X", rc);
+    }
+    return armGetSystemTick() - startTick;
 }
 
-static inline void ensureApplicationSaveData(uint64_t title_id, AccountUid uid) {
-    switchu::control_cache::Meta meta{};
-    if (!switchu::control_cache::readMeta(title_id, meta)) {
-        switchu::FileLog::log("[app] control cache missing for 0x%016lX; save data not precreated",
-                              title_id);
-        return;
-    }
+static inline void resetLaunchMetadata() {
+    g_lastLaunchAcceptsUser = true;
+    g_lastLaunchNeedsUser = true;
+    g_lastStartupUserAccount = 1;
+    g_lastStartupUserAccountOption = 0;
+}
 
+static inline void applyLaunchMetadata(const switchu::control_cache::Meta& meta) {
     g_lastStartupUserAccount = meta.startup_user_account;
     g_lastStartupUserAccountOption = meta.startup_user_account_option;
     g_lastLaunchAcceptsUser = g_lastStartupUserAccount != 0;
     g_lastLaunchNeedsUser = startupUserRequiresInteractiveSelection(g_lastStartupUserAccount,
                                                                     g_lastStartupUserAccountOption);
-
-    ensureSaveData(title_id, meta.save_data_owner_id, uid,
-                   FsSaveDataType_Account, FsSaveDataSpaceId_User,
-                   meta.user_account_save_data_size,
-                   meta.user_account_save_data_journal_size);
-
-    AccountUid emptyUid = {};
-    ensureSaveData(title_id, meta.save_data_owner_id, emptyUid,
-                   FsSaveDataType_Device, FsSaveDataSpaceId_User,
-                   meta.device_save_data_size,
-                   meta.device_save_data_journal_size);
-
-    ensureTemporaryStorage(title_id, meta.save_data_owner_id,
-                           meta.temporary_storage_size);
-
-    ensureSaveData(title_id, meta.save_data_owner_id, emptyUid,
-                   FsSaveDataType_Cache, FsSaveDataSpaceId_User,
-                   meta.cache_storage_size,
-                   meta.cache_storage_journal_size);
-
-    ensureSaveData(title_id, 0x010000000000000C, emptyUid,
-                   FsSaveDataType_Bcat, FsSaveDataSpaceId_User,
-                   meta.bcat_delivery_cache_storage_size, 0x200000);
 }
 
-inline Result launch(uint64_t title_id, AccountUid uid) {
+static inline bool ensureApplicationSaveDataFromMeta(
+    uint64_t title_id, AccountUid uid,
+    const switchu::control_cache::Meta& meta,
+    LaunchTiming* timing) {
+    if (timing)
+        timing->saveStartTick = armGetSystemTick();
+    applyLaunchMetadata(meta);
+
+    bool accountOk = true;
+    bool deviceOk = true;
+    bool temporaryOk = true;
+    bool cacheOk = true;
+    bool bcatOk = true;
+
+    const uint64_t accountTicks = ensureSaveData(
+        title_id, meta.save_data_owner_id, uid,
+        FsSaveDataType_Account, FsSaveDataSpaceId_User,
+        meta.user_account_save_data_size,
+        meta.user_account_save_data_journal_size, &accountOk);
+
+    AccountUid emptyUid = {};
+    const uint64_t deviceTicks = ensureSaveData(
+        title_id, meta.save_data_owner_id, emptyUid,
+        FsSaveDataType_Device, FsSaveDataSpaceId_User,
+        meta.device_save_data_size,
+        meta.device_save_data_journal_size, &deviceOk);
+
+    const uint64_t temporaryTicks = ensureTemporaryStorage(
+        title_id, meta.save_data_owner_id, meta.temporary_storage_size,
+        &temporaryOk);
+
+    const uint64_t cacheTicks = ensureSaveData(
+        title_id, meta.save_data_owner_id, emptyUid,
+        FsSaveDataType_Cache, FsSaveDataSpaceId_User,
+        meta.cache_storage_size,
+        meta.cache_storage_journal_size, &cacheOk);
+
+    const uint64_t bcatTicks = ensureSaveData(
+        title_id, 0x010000000000000C, emptyUid,
+        FsSaveDataType_Bcat, FsSaveDataSpaceId_User,
+        meta.bcat_delivery_cache_storage_size, 0x200000, &bcatOk);
+
+    if (timing) {
+        timing->accountSaveTicks = accountTicks;
+        timing->deviceSaveTicks = deviceTicks;
+        timing->temporarySaveTicks = temporaryTicks;
+        timing->cacheSaveTicks = cacheTicks;
+        timing->bcatSaveTicks = bcatTicks;
+        timing->saveEndTick = armGetSystemTick();
+    }
+    return accountOk && deviceOk && temporaryOk && cacheOk && bcatOk;
+}
+
+static inline bool ensureApplicationSaveData(
+    uint64_t title_id, AccountUid uid, LaunchTiming* timing,
+    switchu::control_cache::Meta* outMeta = nullptr,
+    bool* outMetaLoaded = nullptr) {
+    if (outMetaLoaded)
+        *outMetaLoaded = false;
+    switchu::control_cache::Meta meta{};
+    if (!switchu::control_cache::readMeta(title_id, meta)) {
+        if (timing) {
+            timing->saveStartTick = armGetSystemTick();
+            timing->saveEndTick = timing->saveStartTick;
+        }
+        switchu::FileLog::log("[app] control cache missing for 0x%016lX; save data not precreated",
+                              title_id);
+        return false;
+    }
+    if (outMeta)
+        *outMeta = meta;
+    if (outMetaLoaded)
+        *outMetaLoaded = true;
+    return ensureApplicationSaveDataFromMeta(title_id, uid, meta, timing);
+}
+
+static inline Result touchApplication(uint64_t title_id, LaunchTiming* timing) {
+    if (timing)
+        timing->touchStartTick = armGetSystemTick();
+    const Result rc = nsTouchApplication(title_id);
+    if (timing)
+        timing->touchEndTick = armGetSystemTick();
+    if (R_FAILED(rc))
+        switchu::FileLog::log("[app] nsTouchApplication FAIL: 0x%X (non-fatal)", rc);
+    else
+        switchu::FileLog::log("[app] nsTouchApplication ok");
+    return rc;
+}
+
+inline void prepare(uint64_t title_id, AccountUid uid,
+                    uint64_t requestSendTick, uint64_t commandReceiveTick) {
+    g_prepared = {};
+    g_prepared.present = true;
+    g_prepared.titleId = title_id;
+    g_prepared.uid = uid;
+    g_prepared.timing.attempted = true;
+    g_prepared.timing.requestSendTick = requestSendTick;
+    g_prepared.timing.commandReceiveTick = commandReceiveTick;
+    g_prepared.timing.workStartTick = armGetSystemTick();
+    g_prepared.timing.core = svcGetCurrentProcessorNumber();
+
+    resetLaunchMetadata();
+    const Result touchRc = touchApplication(title_id, &g_prepared.work);
+    bool metaLoaded = false;
+    const bool savesOk = ensureApplicationSaveData(
+        title_id, uid, &g_prepared.work, &g_prepared.meta, &metaLoaded);
+
+    g_prepared.timing.touchStartTick = g_prepared.work.touchStartTick;
+    g_prepared.timing.touchEndTick = g_prepared.work.touchEndTick;
+    g_prepared.timing.saveStartTick = g_prepared.work.saveStartTick;
+    g_prepared.timing.saveEndTick = g_prepared.work.saveEndTick;
+    g_prepared.timing.workEndTick = armGetSystemTick();
+    g_prepared.timing.complete = R_SUCCEEDED(touchRc) && metaLoaded && savesOk;
+}
+
+static inline bool samePreparedLaunch(uint64_t title_id, const AccountUid& uid) {
+    return g_prepared.present && g_prepared.titleId == title_id
+        && std::memcmp(&g_prepared.uid, &uid, sizeof(uid)) == 0;
+}
+
+static inline bool preparedLaunchFresh(uint64_t nowTick) {
+    return g_prepared.timing.workEndTick != 0
+        && nowTick >= g_prepared.timing.workEndTick
+        && armTicksToNs(nowTick - g_prepared.timing.workEndTick) <= kPreparedLaunchMaxAgeNs;
+}
+
+static inline void copyPreparedWork(LaunchTiming* dst, const LaunchTiming& src) {
+    if (!dst)
+        return;
+    dst->touchStartTick = src.touchStartTick;
+    dst->touchEndTick = src.touchEndTick;
+    dst->saveStartTick = src.saveStartTick;
+    dst->saveEndTick = src.saveEndTick;
+    dst->accountSaveTicks = src.accountSaveTicks;
+    dst->deviceSaveTicks = src.deviceSaveTicks;
+    dst->temporarySaveTicks = src.temporarySaveTicks;
+    dst->cacheSaveTicks = src.cacheSaveTicks;
+    dst->bcatSaveTicks = src.bcatSaveTicks;
+}
+
+inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = nullptr) {
+    if (timing) {
+        *timing = {};
+        timing->actionStartTick = armGetSystemTick();
+        timing->core = svcGetCurrentProcessorNumber();
+    }
     switchu::FileLog::log("[app] launch request title=0x%016lX running=%d fg=%d suspended=0x%016lX uid_valid=%d uid[0]=0x%016lX uid[1]=0x%016lX",
                           title_id,
                           g_running ? 1 : 0,
@@ -129,30 +368,54 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
                           g_suspendedTitleId,
                           accountUidIsValid(&uid) ? 1 : 0,
                           uid.uid[0], uid.uid[1]);
+
+    resetLaunchMetadata();
+    const uint64_t preflightCheckTick = armGetSystemTick();
+    const bool matchingPreflight = samePreparedLaunch(title_id, uid);
+    const bool preflightCandidate = matchingPreflight
+        && g_prepared.timing.complete
+        && preparedLaunchFresh(preflightCheckTick);
+    if (matchingPreflight) {
+        if (timing)
+            timing->preflight = g_prepared.timing;
+    }
+    g_prepared.present = false;
+
     if (g_running) {
         switchu::FileLog::log("[app] closing previous app before launch");
+        if (timing)
+            timing->previousExitRequestTick = armGetSystemTick();
         appletApplicationRequestExit(&g_app);
         appletApplicationJoin(&g_app);
+        if (timing)
+            timing->previousJoinedTick = armGetSystemTick();
         appletApplicationClose(&g_app);
         g_running = false;
     }
     appletApplicationClose(&g_app);
 
-    // nsTouchApplication prepares the title in the NS service (same as ulaunch/qlaunch).
-    // Non-fatal: some special titles (stubs, forwarders) may return an error here.
-    Result touchRc = nsTouchApplication(title_id);
-    if (R_FAILED(touchRc))
-        switchu::FileLog::log("[app] nsTouchApplication FAIL: 0x%X (non-fatal)", touchRc);
-    else
-        switchu::FileLog::log("[app] nsTouchApplication ok");
+    switchu::control_cache::Meta currentMeta{};
+    const bool usePreflight = preflightCandidate
+        && switchu::control_cache::readMeta(title_id, currentMeta)
+        && std::memcmp(&currentMeta, &g_prepared.meta, sizeof(currentMeta)) == 0;
+    if (timing)
+        timing->preflight.cacheHit = usePreflight;
 
-    g_lastLaunchAcceptsUser = true;
-    g_lastLaunchNeedsUser = true;
-    g_lastStartupUserAccount = 1;
-    g_lastStartupUserAccountOption = 0;
-    ensureApplicationSaveData(title_id, uid);
+    if (usePreflight) {
+        applyLaunchMetadata(g_prepared.meta);
+        copyPreparedWork(timing, g_prepared.work);
+    } else {
+        // The final command is authoritative. A missing, failed, stale, wrong-
+        // user, or metadata-mismatched preflight takes the original safe path.
+        touchApplication(title_id, timing);
+        ensureApplicationSaveData(title_id, uid, timing);
+    }
 
+    if (timing)
+        timing->createStartTick = armGetSystemTick();
     Result rc = appletCreateApplication(&g_app, title_id);
+    if (timing)
+        timing->createEndTick = armGetSystemTick();
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[app] CreateApp FAIL: 0x%X", rc);
         return rc;
@@ -206,7 +469,11 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
     appletUnlockForeground();
 
     switchu::FileLog::log("[app] Start call");
+    if (timing)
+        timing->startStartTick = armGetSystemTick();
     rc = appletApplicationStart(&g_app);
+    if (timing)
+        timing->startEndTick = armGetSystemTick();
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[app] Start FAIL: 0x%X", rc);
         appletApplicationClose(&g_app);
@@ -214,7 +481,11 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
     }
     switchu::FileLog::log("[app] Start ok");
 
+    if (timing)
+        timing->foregroundStartTick = armGetSystemTick();
     rc = appletApplicationRequestForApplicationToGetForeground(&g_app);
+    if (timing)
+        timing->foregroundEndTick = armGetSystemTick();
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[app] ReqFG FAIL: 0x%X", rc);
         appletApplicationClose(&g_app);
@@ -229,12 +500,21 @@ inline Result launch(uint64_t title_id, AccountUid uid) {
     return 0;
 }
 
-inline Result resume() {
+inline Result resume(ResumeTiming* timing = nullptr) {
     if (!g_running) return MAKERESULT(Module_Libnx, 0xFE);
+    if (timing) {
+        *timing = {};
+        timing->actionStartTick = armGetSystemTick();
+        timing->core = svcGetCurrentProcessorNumber();
+    }
     switchu::FileLog::log("[app] resume request fg=%d suspended=0x%016lX",
                           g_hasForeground ? 1 : 0, g_suspendedTitleId);
     appletUnlockForeground();
+    if (timing)
+        timing->foregroundStartTick = armGetSystemTick();
     Result rc = appletApplicationRequestForApplicationToGetForeground(&g_app);
+    if (timing)
+        timing->foregroundEndTick = armGetSystemTick();
     if (R_FAILED(rc))
         switchu::FileLog::log("[app] resume ReqFG FAIL: 0x%X", rc);
     else
@@ -243,59 +523,154 @@ inline Result resume() {
     return rc;
 }
 
-inline Result areLibraryAppletsLeft(bool* out) {
-    if (!out) return MAKERESULT(Module_Libnx, 0xFD);
-    *out = false;
-    if (!g_running) return 0;
-    Result rc = appletApplicationAreAnyLibraryAppletsLeft(&g_app, out);
-    if (R_FAILED(rc)) {
-        switchu::FileLog::log("[app] AreAnyLibraryAppletsLeft FAIL: 0x%X", rc);
-    } else {
-        switchu::FileLog::log("[app] AreAnyLibraryAppletsLeft -> %d", *out ? 1 : 0);
+inline Result beginTerminate(
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    TerminateDiagnosticMode diagnosticMode = TerminateDiagnosticMode::None
+#endif
+) {
+    if (!g_running) {
+        switchu::FileLog::log("[app] terminate request ignored: no running application");
+        return 0;
     }
-    return rc;
-}
+    if (isTerminating()) {
+        switchu::FileLog::log("[app] terminate request already pending phase=%u",
+                              static_cast<unsigned>(g_terminatePhase));
+        return 0;
+    }
 
-inline Result requestExitLibraryAppletOrTerminate(u64 timeout) {
-    if (!g_running) return 0;
-    switchu::FileLog::log("[app] RequestExitLibraryAppletOrTerminate timeout=%lu app=0x%016lX",
-                          timeout, g_suspendedTitleId);
-    Result rc = appletApplicationRequestExitLibraryAppletOrTerminate(&g_app, timeout);
-    if (R_FAILED(rc))
-        switchu::FileLog::log("[app] RequestExitLibraryAppletOrTerminate FAIL: 0x%X", rc);
-    else
-        switchu::FileLog::log("[app] RequestExitLibraryAppletOrTerminate ok");
-    return rc;
-}
+    g_terminateTiming = {};
+    g_terminateTiming.beginTick = armGetSystemTick();
+    g_terminateTiming.beginCore = svcGetCurrentProcessorNumber();
+    g_terminatePhase = TerminatePhase::Graceful;
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    g_terminateDiagnosticMode = diagnosticMode;
+#endif
 
-inline Result terminate() {
-    if (!g_running) return 0;
-    switchu::FileLog::log("[app] terminate request app=0x%016lX fg=%d",
+    switchu::FileLog::log("[app] terminate begin app=0x%016lX fg=%d",
                           g_suspendedTitleId, g_hasForeground ? 1 : 0);
-    Result libRc = appletApplicationTerminateAllLibraryApplets(&g_app);
-    switchu::FileLog::log("[app] terminate TerminateAllLibraryApplets rc=0x%X", libRc);
-    Result requestRc = appletApplicationRequestExit(&g_app);
-    switchu::FileLog::log("[app] terminate RequestExit rc=0x%X", requestRc);
-    Result waitRc = eventWait(&g_app.StateChangedEvent, 15'000'000'000ULL);
-    if (waitRc == KERNELRESULT(TimedOut)) {
-        switchu::FileLog::log("[app] terminate graceful wait timed out; forcing terminate");
-        Result forceRc = appletApplicationTerminate(&g_app);
-        switchu::FileLog::log("[app] terminate force rc=0x%X", forceRc);
-    } else {
-        switchu::FileLog::log("[app] terminate wait rc=0x%X", waitRc);
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    bool hadLibraryApplet = false;
+    const Result libraryProbeRc =
+        appletApplicationAreAnyLibraryAppletsLeft(&g_app, &hadLibraryApplet);
+    switchu::FileLog::log(
+        "[diagnostic] terminate library-applet-before active=%d rc=0x%X",
+        hadLibraryApplet ? 1 : 0, libraryProbeRc);
+#endif
+    g_terminateTiming.libraryRc = appletApplicationTerminateAllLibraryApplets(&g_app);
+    g_terminateTiming.libraryEndTick = armGetSystemTick();
+    switchu::FileLog::log("[app] terminate TerminateAllLibraryApplets rc=0x%X",
+                          g_terminateTiming.libraryRc);
+
+    g_terminateTiming.requestRc = appletApplicationRequestExit(&g_app);
+    g_terminateTiming.requestEndTick = armGetSystemTick();
+    g_terminateDeadlineTick = g_terminateTiming.requestEndTick + armNsToTicks(kTerminateGraceNs);
+    switchu::FileLog::log("[app] terminate RequestExit rc=0x%X; polling for up to 15s",
+                          g_terminateTiming.requestRc);
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    if (g_terminateDiagnosticMode == TerminateDiagnosticMode::HoldForSleepWake) {
+        switchu::FileLog::log("[diagnostic] terminate mode=sleep-wake hold_ms=%llu",
+                              (unsigned long long)(kTerminateSleepWakeHoldNs / 1'000'000ULL));
+    } else if (g_terminateDiagnosticMode == TerminateDiagnosticMode::ForceAtDeadline) {
+        switchu::FileLog::log("[diagnostic] terminate mode=force-at-deadline deadline_ms=%llu",
+                              (unsigned long long)(kTerminateGraceNs / 1'000'000ULL));
     }
-    Result resultRc = serviceDispatch(&g_app.s, 30);
-    switchu::FileLog::log("[app] terminate result rc=0x%X", resultRc);
-    appletApplicationClose(&g_app);
-    g_running = false;
-    g_hasForeground = false;
-    g_suspendedTitleId = 0;
+#endif
     return 0;
 }
 
+static inline uint64_t terminateTickDeltaUs(uint64_t start, uint64_t end) {
+    if (start == 0 || end == 0 || end < start)
+        return 0;
+    return armTicksToNs(end - start) / 1'000ULL;
+}
+
+inline bool pollTerminate() {
+    if (!isTerminating())
+        return false;
+
+    ++g_terminateTiming.polls;
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    const uint64_t now = armGetSystemTick();
+    const uint64_t sleepWakeReleaseTick =
+        g_terminateTiming.requestEndTick + armNsToTicks(kTerminateSleepWakeHoldNs);
+    if (g_terminateDiagnosticMode == TerminateDiagnosticMode::HoldForSleepWake &&
+        now < sleepWakeReleaseTick)
+        return false;
+    // The controlled force test suppresses only the observation of a
+    // cooperatively signalled event. At the real 15-second deadline it sends
+    // the same AM force command as production, then lets the next poll join.
+    const bool suppressFinished =
+        g_terminateDiagnosticMode == TerminateDiagnosticMode::ForceAtDeadline &&
+        g_terminatePhase == TerminatePhase::Graceful;
+#else
+    constexpr bool suppressFinished = false;
+#endif
+    if (!suppressFinished && appletApplicationCheckFinished(&g_app)) {
+        // CheckFinished observed the non-autoclear state event, so Join cannot
+        // block here; it only consumes GetResult and records the exit reason.
+        appletApplicationJoin(&g_app);
+        g_terminateTiming.completeTick = armGetSystemTick();
+        g_terminateTiming.completeCore = svcGetCurrentProcessorNumber();
+        g_terminateTiming.exitReason = appletApplicationGetExitReason(&g_app);
+        g_lastFinishedTick = g_terminateTiming.completeTick;
+
+        switchu::FileLog::log(
+            "[trace-terminate] begin_to_complete_us=%llu library_ipc_us=%llu request_ipc_us=%llu grace_us=%llu force_to_complete_us=%llu polls=%u forced=%d library_rc=0x%X request_rc=0x%X force_rc=0x%X reason=%u cores=%u/%u",
+            (unsigned long long)terminateTickDeltaUs(g_terminateTiming.beginTick,
+                                                     g_terminateTiming.completeTick),
+            (unsigned long long)terminateTickDeltaUs(g_terminateTiming.beginTick,
+                                                     g_terminateTiming.libraryEndTick),
+            (unsigned long long)terminateTickDeltaUs(g_terminateTiming.libraryEndTick,
+                                                     g_terminateTiming.requestEndTick),
+            (unsigned long long)terminateTickDeltaUs(
+                g_terminateTiming.requestEndTick,
+                g_terminateTiming.forced ? g_terminateTiming.forceTick
+                                         : g_terminateTiming.completeTick),
+            (unsigned long long)terminateTickDeltaUs(g_terminateTiming.forceTick,
+                                                     g_terminateTiming.completeTick),
+            g_terminateTiming.polls,
+            g_terminateTiming.forced ? 1 : 0,
+            g_terminateTiming.libraryRc,
+            g_terminateTiming.requestRc,
+            g_terminateTiming.forceRc,
+            static_cast<unsigned>(g_terminateTiming.exitReason),
+            g_terminateTiming.beginCore,
+            g_terminateTiming.completeCore);
+
+        appletApplicationClose(&g_app);
+        g_running = false;
+        g_hasForeground = false;
+        g_suspendedTitleId = 0;
+        g_terminatePhase = TerminatePhase::Idle;
+        g_terminateDeadlineTick = 0;
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+        g_terminateDiagnosticMode = TerminateDiagnosticMode::None;
+#endif
+        return true;
+    }
+
+#ifndef SWITCHU_TERMINATION_QUEUE_TEST
+    const uint64_t now = armGetSystemTick();
+#endif
+    if (g_terminatePhase == TerminatePhase::Graceful &&
+        now >= g_terminateDeadlineTick) {
+        g_terminateTiming.forceTick = now;
+        g_terminateTiming.forced = true;
+        g_terminateTiming.forceRc = appletApplicationTerminate(&g_app);
+        g_terminatePhase = TerminatePhase::Forced;
+        switchu::FileLog::log("[app] terminate grace expired; force rc=0x%X",
+                              g_terminateTiming.forceRc);
+    }
+    return false;
+}
+
 inline bool checkFinished() {
-    if (!g_running) return false;
+    // pollTerminate owns the same non-autoclear state event while a requested
+    // termination is active. Never let the ordinary natural-exit path consume
+    // and close it first.
+    if (!g_running || isTerminating()) return false;
     if (appletApplicationCheckFinished(&g_app)) {
+        g_lastFinishedTick = armGetSystemTick();
         switchu::FileLog::log("[app] finished (reason=%d)",
             (int)appletApplicationGetExitReason(&g_app));
         appletApplicationJoin(&g_app);
@@ -321,6 +696,11 @@ inline void cleanup() {
         appletApplicationClose(&g_app);
         g_running = false;
     }
+    g_terminatePhase = TerminatePhase::Idle;
+    g_terminateDeadlineTick = 0;
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+    g_terminateDiagnosticMode = TerminateDiagnosticMode::None;
+#endif
 }
 
 }

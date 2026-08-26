@@ -9,14 +9,14 @@ namespace switchu::smi {
 class StorageWriter {
 public:
     explicit StorageWriter(SystemMessage msg) {
-        m_buf.resize(kStorageSize, 0);
+        m_buf.resize(sizeof(CommandHeader), 0);
         CommandHeader hdr{kCommandMagic, static_cast<uint32_t>(msg)};
         std::memcpy(m_buf.data(), &hdr, sizeof(hdr));
         m_pos = sizeof(CommandHeader);
     }
 
     explicit StorageWriter(Result rc) {
-        m_buf.resize(kStorageSize, 0);
+        m_buf.resize(sizeof(CommandHeader), 0);
         CommandHeader hdr{kCommandMagic, static_cast<uint32_t>(rc)};
         std::memcpy(m_buf.data(), &hdr, sizeof(hdr));
         m_pos = sizeof(CommandHeader);
@@ -24,21 +24,24 @@ public:
 
     template<typename T>
     void push(const T& val) {
-        if (m_pos + sizeof(T) > m_buf.size()) return;
+        if (m_pos + sizeof(T) > kStorageSize) return;
+        m_buf.resize(m_pos + sizeof(T));
         std::memcpy(m_buf.data() + m_pos, &val, sizeof(T));
         m_pos += sizeof(T);
     }
 
     void pushBytes(const void* data, size_t len) {
-        if (m_pos + len > m_buf.size()) return;
+        if (m_pos + len > kStorageSize) return;
+        m_buf.resize(m_pos + len);
         std::memcpy(m_buf.data() + m_pos, data, len);
         m_pos += len;
     }
 
     Result createStorage(AppletStorage& st) const {
-        Result rc = appletCreateStorage(&st, kStorageSize);
+        const s64 size = static_cast<s64>(m_buf.size());
+        Result rc = appletCreateStorage(&st, size);
         if (R_SUCCEEDED(rc)) {
-            rc = appletStorageWrite(&st, 0, m_buf.data(), kStorageSize);
+            rc = appletStorageWrite(&st, 0, m_buf.data(), size);
             if (R_FAILED(rc))
                 appletStorageClose(&st);
         }
@@ -53,13 +56,13 @@ private:
 class StorageReader {
 public:
     explicit StorageReader(AppletStorage& st) {
-        m_buf.resize(kStorageSize);
         s64 sz = 0;
-        appletStorageGetSize(&st, &sz);
-        if (sz > 0) {
-            if ((size_t)sz < kStorageSize)
-                m_buf.resize((size_t)sz);
-            appletStorageRead(&st, 0, m_buf.data(), m_buf.size());
+        if (R_SUCCEEDED(appletStorageGetSize(&st, &sz)) && sz > 0) {
+            const size_t readSize = static_cast<size_t>(sz) < kStorageSize
+                ? static_cast<size_t>(sz) : kStorageSize;
+            m_buf.resize(readSize);
+            if (R_FAILED(appletStorageRead(&st, 0, m_buf.data(), readSize)))
+                m_buf.clear();
         }
         appletStorageClose(&st);
         m_pos = sizeof(CommandHeader);

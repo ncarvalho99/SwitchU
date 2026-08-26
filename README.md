@@ -22,6 +22,7 @@
 - [Screenshots](#screenshots)
 - [Installing](#installing)
 - [How to build](#how-to-build)
+- [Transition performance audit](#transition-performance-audit)
 - [Known issues](#known-issues)
 - [Help me](#help-me)
 - [Credits](#credits)
@@ -169,6 +170,13 @@ keep a build local. Read hardware logs directly with:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\read-console-logs.ps1
 ```
+
+## Transition performance audit
+
+The [launch, HOME-return, IPC, threading, memory, and GPU teardown audit](./docs/transition-speed-audit.md)
+contains measured baselines, exact bottlenecks, implemented fixes, staged C++ patches, and the
+hardware profiling protocol. Summarize raw-tick hardware traces with
+[`tools/analyze-transition-traces.ps1`](./tools/analyze-transition-traces.ps1).
 
 ## Known issues
 

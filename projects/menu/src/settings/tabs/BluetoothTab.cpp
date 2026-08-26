@@ -1,5 +1,6 @@
 #include "TabBuilders.hpp"
 #include "bluetooth/BluetoothManager.hpp"
+#include "core/DebugLog.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
 #include <cstdio>
@@ -97,7 +98,7 @@ void rebuildDynamicItems(SettingsScreen::Tab& t, TabbedOverlayScreen& screen) {
             t.items.push_back(std::move(it));
         }
 
-        if (bluetooth::IsDiscovering()) {
+        {
             auto discovered = bluetooth::ListDiscoveredAudioDevices();
             for (auto& device : discovered) {
                 SettingItem it;
@@ -143,12 +144,15 @@ SettingsScreen::Tab settings::tabs::BluetoothTab::build(SettingsScreen& screen) 
         SettingItem it;
         it.label = i18n.tr("settings.bluetooth.bluetooth", "Bluetooth");
         it.type = ItemType::Toggle;
-        bool val = true;
-        setsysGetBluetoothEnableFlag(&val);
+        bool val = bluetooth::IsRadioEnabled();
         it.boolVal = val;
         it.anim01 = val ? 1.f : 0.f;
         it.onChange = [](SettingItem& self) {
-            setsysSetBluetoothEnableFlag(self.boolVal);
+            Result rc = bluetooth::SetRadioEnabled(self.boolVal);
+            if (R_FAILED(rc)) {
+                self.boolVal = !self.boolVal;
+                DebugLog::log("[bt] Radio toggle failed: 0x%x", rc);
+            }
         };
         t.items.push_back(std::move(it));
     }

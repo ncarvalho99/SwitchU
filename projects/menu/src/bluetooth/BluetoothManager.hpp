@@ -11,6 +11,8 @@ void Initialize();
 void Finalize();
 
 bool IsAvailable();
+bool IsRadioEnabled();
+Result SetRadioEnabled(bool enabled);
 
 std::vector<BtmAudioDevice> ListPairedAudioDevices();
 bool HasPairedChanges();

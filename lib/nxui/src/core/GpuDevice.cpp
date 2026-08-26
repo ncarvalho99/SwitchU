@@ -26,6 +26,7 @@ void deviceDebug(void* userData, const char* context, DkResult result, const cha
 GpuDevice::DebugSink GpuDevice::s_debugSink = nullptr;
 
 bool GpuDevice::initialize() {
+    m_bulkTeardown = false;
     m_dev   = dk::DeviceMaker{}.setCbDebug(deviceDebug).create();
     m_queue = dk::QueueMaker{m_dev}.setFlags(DkQueueFlags_Graphics).create();
 
@@ -188,6 +189,13 @@ void GpuDevice::waitIdle() {
     if (m_queue) m_queue.waitIdle();
 }
 
+void GpuDevice::beginBulkTeardown() {
+    if (m_bulkTeardown)
+        return;
+    waitIdle();
+    m_bulkTeardown = true;
+}
+
 uint64_t GpuDevice::s_imageBudget = GpuDevice::kDefaultImageBudget;
 
 dk::UniqueMemBlock GpuDevice::allocImageMemory(uint32_t size) {
@@ -198,42 +206,21 @@ dk::UniqueMemBlock GpuDevice::allocImageMemory(uint32_t size) {
                      (unsigned long long)s_imageBudget);
         return {};  // return empty MemBlock — caller should check validity
     }
-    // O quanto sobra de verdade, e nao so o que a nossa contabilidade acha.
-    //
-    // s_imageBudget e um numero fixo escolhido por nos. Ele nao sabe que um
-    // jogo ou homebrew suspenso continua ocupando memoria: ao voltar do DBI, o
-    // menu tinha bem menos disponivel do que o orcamento supunha, o fundo
-    // animado de 140 MB pediu tudo assim mesmo, e a alocacao real falhou.
-    u64 total = 0, used = 0;
-    if (R_SUCCEEDED(svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0))
-     && R_SUCCEEDED(svcGetInfo(&used,  InfoType_UsedMemorySize,  CUR_PROCESS_HANDLE, 0))
-     && total > used) {
-        // Uma folga para o que nao passa por aqui: pilhas, buffers de comando,
-        // o proprio staging da subida.
-        constexpr u64 kHeadroom = 24ull * 1024 * 1024;
-        const u64 free = total - used;
-        if (free < (u64)size + kHeadroom) {
-            std::fprintf(stderr,
-                         "[GpuDevice] recusando %u bytes de imagem: livre %llu, folga %llu\n",
-                         size, (unsigned long long)free, (unsigned long long)kHeadroom);
-            return {};
-        }
-    }
+    // Do not treat TotalMemorySize - UsedMemorySize as malloc headroom here.
+    // svcSetHeapSize reserves the process heap and counts that reservation as
+    // used, so the difference can be small while the heap still has ample free
+    // space. The image budget bounds our allocations; the checked deko3d
+    // allocation below is the authoritative availability test.
 
     auto blk = dk::MemBlockMaker{m_dev, size}
         .setFlags(DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
         .create();
 
-    // O retorno nao era conferido. Uma alocacao que falha devolvia um bloco
-    // inutilizavel, o contador subia como se tivesse dado certo, e a imagem era
-    // inicializada em cima dele -- o deko3d so descobre no copyBufferToImage e
-    // responde com svcBreak, que e o relatorio "RaiseError sob calcLevelOffset"
-    // que chegou depois de voltar de um homebrew.
-    //
-    // Devolvendo vazio, quem chama ja sabe o que fazer: o fundo animado para de
-    // carregar quadros e fica com os que conseguiu.
+    // A failed allocation returns an unusable block. Keep the counter unchanged
+    // and let callers stop loading optional images instead of initializing a
+    // deko3d image with an invalid block.
     if (!blk) {
-        std::fprintf(stderr, "[GpuDevice] alocacao de imagem falhou (%u bytes)\n", size);
+        std::fprintf(stderr, "[GpuDevice] image allocation failed (%u bytes)\n", size);
         return {};
     }
 
@@ -355,7 +342,8 @@ bool GpuDevice::uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
 }
 
 void GpuDevice::shutdown() {
-    if (m_queue) m_queue.waitIdle();
+    if (!m_bulkTeardown && m_queue)
+        m_queue.waitIdle();
     m_swapchain    = {};
     for (int i = 0; i < NUM_FB; ++i)
         m_cmdbuf[i] = {};
@@ -376,6 +364,7 @@ void GpuDevice::shutdown() {
     m_imagePool = {};
     m_stagingPool = {};
     m_dev       = {};
+    m_bulkTeardown = false;
 }
 
 } // namespace nxui

@@ -118,9 +118,18 @@ Result AppletLauncher::refreshCatalog() {
     return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RefreshCatalog);
 }
 
-void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid) {
+Result AppletLauncher::prepareApplication(uint64_t titleId, AccountUid uid,
+                                          switchu::smi::LaunchTransitionTrace& trace) {
+    const Result rc = switchu::menu::smi_cmd::prepareApplication(titleId, uid, trace);
+    if (R_FAILED(rc))
+        DebugLog::log("[launcher] preflight enqueue failed tid=%016lX rc=0x%X", titleId, rc);
+    return rc;
+}
+
+void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid,
+                                       switchu::smi::LaunchTransitionTrace trace) {
     DebugLog::log("[launcher] tid=%016lX", titleId);
-    Result rc = switchu::menu::smi_cmd::launchApplication(titleId, uid);
+    Result rc = switchu::menu::smi_cmd::launchApplication(titleId, uid, trace);
     if (R_FAILED(rc)) {
         DebugLog::log("[launcher] FAIL: 0x%X", rc);
         return;
@@ -129,13 +138,13 @@ void AppletLauncher::launchApplication(uint64_t titleId, AccountUid uid) {
     if (m_cb.requestExit) m_cb.requestExit();
 }
 
-void AppletLauncher::resumeApplication() {
+void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace trace) {
     if (m_suspendedTitleId == 0) {
         DebugLog::log("[launcher] no app suspended!");
         return;
     }
     DebugLog::log("[launcher] resume, closing menu");
-    switchu::menu::smi_cmd::resumeApplication();
+    switchu::menu::smi_cmd::resumeApplication(trace);
     if (m_cb.requestExit) m_cb.requestExit();
 }
 
@@ -147,6 +156,39 @@ void AppletLauncher::terminateApplication() {
     DebugLog::log("[launcher] requesting terminate 0x%016lX", (uint64_t)m_suspendedTitleId);
     switchu::menu::smi_cmd::terminateApplication();
 }
+
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+void AppletLauncher::terminateApplicationDuplicate() {
+    if (m_suspendedTitleId == 0) {
+        DebugLog::log("[diagnostic] duplicate terminate ignored: no suspended app");
+        return;
+    }
+    const Result first = switchu::menu::smi_cmd::terminateApplication();
+    const Result second = switchu::menu::smi_cmd::terminateApplication();
+    DebugLog::log("[diagnostic] duplicate terminate sent tid=%016lX rc=0x%X/0x%X",
+                  (uint64_t)m_suspendedTitleId, first, second);
+}
+
+void AppletLauncher::terminateApplicationHold() {
+    if (m_suspendedTitleId == 0) {
+        DebugLog::log("[diagnostic] sleep/wake terminate ignored: no suspended app");
+        return;
+    }
+    const Result rc = switchu::menu::smi_cmd::terminateApplicationHold();
+    DebugLog::log("[diagnostic] sleep/wake terminate sent tid=%016lX rc=0x%X",
+                  (uint64_t)m_suspendedTitleId, rc);
+}
+
+void AppletLauncher::terminateApplicationForce() {
+    if (m_suspendedTitleId == 0) {
+        DebugLog::log("[diagnostic] forced terminate ignored: no suspended app");
+        return;
+    }
+    const Result rc = switchu::menu::smi_cmd::terminateApplicationForce();
+    DebugLog::log("[diagnostic] forced terminate sent tid=%016lX rc=0x%X",
+                  (uint64_t)m_suspendedTitleId, rc);
+}
+#endif
 
 void AppletLauncher::checkRunningApplication() {
 }
@@ -169,9 +211,12 @@ void AppletLauncher::launchUserPage(AccountUid) {}
 void AppletLauncher::enterSleep()              {}
 void AppletLauncher::shutdown()                {}
 void AppletLauncher::reboot()                  {}
-void AppletLauncher::launchApplication(uint64_t, AccountUid) {}
+Result AppletLauncher::prepareApplication(uint64_t, AccountUid,
+                                          switchu::smi::LaunchTransitionTrace&) { return 0; }
+void AppletLauncher::launchApplication(uint64_t, AccountUid,
+                                       switchu::smi::LaunchTransitionTrace) {}
 Result AppletLauncher::refreshCatalog()                { return 0; }
-void AppletLauncher::resumeApplication()       {}
+void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace) {}
 void AppletLauncher::terminateApplication()    {}
 void AppletLauncher::checkRunningApplication() {}
 

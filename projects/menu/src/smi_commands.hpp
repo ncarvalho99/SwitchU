@@ -43,7 +43,24 @@ inline Result sendSimple(smi::SystemMessage msg) {
     return pushOutStorage(&hdr, sizeof(hdr));
 }
 
-inline Result launchApplication(uint64_t titleId, AccountUid uid) {
+inline Result prepareApplication(uint64_t titleId, AccountUid uid,
+                                 smi::LaunchTransitionTrace& trace) {
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::PrepareAppArgs)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    auto* args = reinterpret_cast<smi::PrepareAppArgs*>(buf + sizeof(smi::CommandHeader));
+
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::PrepareApplication);
+    args->title_id = titleId;
+    std::memcpy(args->user_uid, &uid, sizeof(uid));
+    trace.preflight_send_tick = armGetSystemTick();
+    args->request_send_tick = trace.preflight_send_tick;
+
+    return pushOutStorage(buf, sizeof(buf));
+}
+
+inline Result launchApplication(uint64_t titleId, AccountUid uid,
+                                smi::LaunchTransitionTrace trace) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::LaunchAppArgs)]{};
     auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
     auto* args = reinterpret_cast<smi::LaunchAppArgs*>(buf + sizeof(smi::CommandHeader));
@@ -52,6 +69,8 @@ inline Result launchApplication(uint64_t titleId, AccountUid uid) {
     hdr->message  = static_cast<uint32_t>(smi::SystemMessage::LaunchApplication);
     args->title_id = titleId;
     std::memcpy(args->user_uid, &uid, sizeof(uid));
+    args->trace = trace;
+    args->trace.command_send_tick = armGetSystemTick();
 
     return pushOutStorage(buf, sizeof(buf));
 }
@@ -68,19 +87,62 @@ inline Result launchUserPage(AccountUid uid) {
     return pushOutStorage(buf, sizeof(buf));
 }
 
-inline Result resumeApplication() {
-    return sendSimple(smi::SystemMessage::ResumeApplication);
+inline Result resumeApplication(smi::LaunchTransitionTrace trace) {
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::ResumeAppArgs)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    auto* args = reinterpret_cast<smi::ResumeAppArgs*>(buf + sizeof(smi::CommandHeader));
+
+    hdr->magic   = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::ResumeApplication);
+    args->trace = trace;
+    args->trace.command_send_tick = armGetSystemTick();
+
+    return pushOutStorage(buf, sizeof(buf));
 }
 
 inline Result terminateApplication() {
     return sendSimple(smi::SystemMessage::TerminateApplication);
 }
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+inline Result terminateApplicationHold() {
+    return sendSimple(smi::SystemMessage::DiagnosticTerminateHold);
+}
+inline Result terminateApplicationForce() {
+    return sendSimple(smi::SystemMessage::DiagnosticTerminateForce);
+}
+#endif
 
 inline Result enterSleep()  { return sendSimple(smi::SystemMessage::EnterSleep); }
 inline Result shutdown()    { return sendSimple(smi::SystemMessage::Shutdown); }
 inline Result reboot()      { return sendSimple(smi::SystemMessage::Reboot); }
-inline Result menuReady()      { return sendSimple(smi::SystemMessage::MenuReady); }
-inline Result menuClosing()    { return sendSimple(smi::SystemMessage::MenuClosing); }
+inline Result menuReady(smi::MenuReadyArgs args) {
+    args.command_send_tick = armGetSystemTick();
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(args)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::MenuReady);
+    std::memcpy(buf + sizeof(*hdr), &args, sizeof(args));
+    return pushOutStorage(buf, sizeof(buf));
+}
+
+inline Result menuFirstFrame(const smi::MenuFirstFrameArgs& args) {
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(args)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::MenuFirstFrame);
+    std::memcpy(buf + sizeof(*hdr), &args, sizeof(args));
+    return pushOutStorage(buf, sizeof(buf));
+}
+
+inline Result menuClosing(smi::MenuClosingArgs args) {
+    args.command_send_tick = armGetSystemTick();
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(args)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::MenuClosing);
+    std::memcpy(buf + sizeof(*hdr), &args, sizeof(args));
+    return pushOutStorage(buf, sizeof(buf));
+}
 
 struct AppEntry {
     uint64_t titleId;
@@ -148,7 +210,7 @@ inline Result getSystemStatus(smi::SystemStatus& out) {
     Result rc = sendSimple(smi::SystemMessage::GetSystemStatus);
     if (R_FAILED(rc)) return rc;
 
-    uint8_t buf[smi::kStorageSize]{};
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::SystemStatus)]{};
     size_t actual = 0;
     for (int retry = 0; retry < 200; retry++) {
         rc = popInStorage(buf, sizeof(buf), &actual);

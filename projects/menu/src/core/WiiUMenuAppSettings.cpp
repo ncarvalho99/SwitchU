@@ -318,14 +318,6 @@ void WiiUMenuApp::createSettings() {
             m_settings->setDefaultProfileState(m_config.defaultProfileEnabled,
                                                m_config.defaultProfileUid);
     });
-    // The tuning struct already drives the cache: TabbedOverlayScreen compares
-    // the radius it last captured with, so writing it here is enough to make
-    // the backdrop refresh on the next frame.
-    applyGlassSharpness(m_config.glassSharpness);
-    // The sliders for sharpness, background speed and blur moved to the Themes
-    // screen, so the SettingsScreen hooks they used are gone with them. This
-    // call stays: it is what applies the saved sharpness at startup. Speed and
-    // blur are applied where the background is built, from the same config.
     m_settings->onAddUser([this]() {
         m_launcher.launchUserCreator();
     });
@@ -475,6 +467,14 @@ void WiiUMenuApp::createSettings() {
             focusManager().setFocus(m_sidebar.settingsButton());
         }
     });
+
+    // This screen is created on first use, after the shared overlays already
+    // exist. Restore their original z-order so settings-owned dialogs, launch
+    // blackouts, and the pointer remain above it.
+    raiseOverlay(m_dialog);
+    raiseOverlay(m_progressDialog);
+    raiseOverlay(m_launchAnim);
+    raiseOverlay(m_pointerCursor);
 
 }
 
@@ -770,6 +770,11 @@ void WiiUMenuApp::createThemeShop() {
             focusManager().setFocus(m_sidebar.themeShopButton());
         }
     });
+
+    raiseOverlay(m_dialog);
+    raiseOverlay(m_progressDialog);
+    raiseOverlay(m_launchAnim);
+    raiseOverlay(m_pointerCursor);
 
 }
 

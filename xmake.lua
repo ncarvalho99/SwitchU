@@ -49,6 +49,12 @@ option("backend")
     set_values("deko3d", "sdl2")
 option_end()
 
+option("termination_queue_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable explicit application lifecycle diagnostics")
+option_end()
+
 target("nxui")
     set_kind("static")
     set_default(false)
@@ -263,6 +269,9 @@ target("SwitchU")
         add_deps("switchu-daemon")
 
         add_defines("SWITCHU_MENU")
+        if has_config("termination_queue_test") then
+            add_defines("SWITCHU_TERMINATION_QUEUE_TEST")
+        end
         set_values("switch.name",    "switchu-menu")
         set_values("switch.author",  "PoloNX")
         set_values("switch.version", version)
@@ -306,6 +315,9 @@ target("switchu-daemon")
         "ATMOSPHERE_ARCH_ARM_V8A",
         "_GNU_SOURCE"
     )
+    if has_config("termination_queue_test") then
+        add_defines("SWITCHU_TERMINATION_QUEUE_TEST")
+    end
     add_cxxflags("-fno-rtti", "-fexceptions", "-std=gnu++23", {force = true})
     add_packages("zlib")
     add_linkdirs("lib/Atmosphere-libs/libstratosphere/lib/nintendo_nx_arm64_armv8a/release")

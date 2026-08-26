@@ -2,6 +2,7 @@
 #include "core/WiiUMenuApp.hpp"
 #include "core/DebugLog.hpp"
 #include "core/Config.hpp"
+#include "core/NsService.hpp"
 #include "tutorial/TutorialActivity.hpp"
 #include <nxui/Application.hpp>
 #include <fmt/format.h>
@@ -78,6 +79,7 @@ constexpr size_t kHeapLadder[] = {
     256u * 1024u * 1024u,
     kMenuAppletHeapSize,
 };
+
 }  // namespace
 
 // Preenchido no arranque, lido depois: nao da para registrar daqui, porque isto
@@ -106,7 +108,6 @@ extern "C" void __libnx_initheap(void) {
 #ifdef SWITCHU_HOMEBREW
 extern "C" void userAppInit(void) {
     timeInitialize();
-    plInitialize(PlServiceType_System);
     setInitialize();
     setsysInitialize();
     accountInitialize(AccountServiceType_Application);
@@ -121,7 +122,6 @@ extern "C" void userAppExit(void) {
     accountExit();
     setsysExit();
     setExit();
-    plExit();
     timeExit();
     romfsExit();
 }
@@ -151,8 +151,6 @@ extern "C" void __appInit(void) {
     __libnx_init_time();
     setsysInitialize();
     setInitialize();
-    plInitialize(PlServiceType_System);
-    psmInitialize();
     lblInitialize();
     splInitialize();
     accountInitialize(AccountServiceType_System);
@@ -174,12 +172,6 @@ extern "C" void __appInit(void) {
     DebugLog::openFileLog();
     DebugLog::log("[menu] __appInit complete (sd mount: 0x%X)", rc);
 
-    rc = nsInitialize();
-    if (R_FAILED(rc))
-        DebugLog::log("[menu] nsInitialize FAILED: 0x%X", rc);
-    else
-        DebugLog::log("[menu] nsInitialize OK");
-
     __nx_win_init();
     DebugLog::log("[menu] __nx_win_init done");
 
@@ -187,17 +179,15 @@ extern "C" void __appInit(void) {
 }
 
 extern "C" void __appExit(void) {
+    switchu::menu::shutdownNsService();
     DebugLog::closeFileLog();
     switchu::FileLog::close();
 
     __nx_win_exit();
 
-    nsExit();
     accountExit();
     splExit();
     lblExit();
-    psmExit();
-    plExit();
 
     hidExit();
     appletExit();
@@ -243,6 +233,11 @@ static switchu::smi::SystemStatus readSystemStatus() {
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
 
+#ifdef SWITCHU_MENU
+    const uint64_t menuMainTick = armGetSystemTick();
+    const uint32_t menuMainCore = svcGetCurrentProcessorNumber();
+#endif
+
     std::srand(static_cast<unsigned>(std::time(nullptr)));
 
 #ifdef SWITCHU_HOMEBREW
@@ -277,13 +272,15 @@ int main(int argc, char* argv[]) {
     {
         nxui::Application app;
 #ifdef SWITCHU_HOMEBREW
-        auto makeMenuActivity = [](bool fromTutorial = false) -> std::unique_ptr<nxui::Activity> {
+        AppConfig startupConfig;
+        startupConfig.load();
+        auto makeMenuActivity = [startupConfig](bool fromTutorial = false) -> std::unique_ptr<nxui::Activity> {
             auto activity = std::make_unique<WiiUMenuApp>();
+            if (!fromTutorial)
+                activity->setStartupConfig(startupConfig);
             activity->setTutorialStartupFade(fromTutorial);
             return activity;
         };
-        AppConfig startupConfig;
-        startupConfig.load();
         if (startupConfig.tutorialCompleted)
             app.setActivity(makeMenuActivity(false));
         else
@@ -300,19 +297,37 @@ int main(int argc, char* argv[]) {
         DebugLog::log("[hb] app.shutdown...");
         app.shutdown();
 #else
-        auto makeMenuActivity = [sysStatus](bool fromTutorial = false) -> std::unique_ptr<nxui::Activity> {
+        AppConfig startupConfig;
+        startupConfig.load();
+        auto makeMenuActivity = [sysStatus, startupConfig, menuMainTick, menuMainCore](bool fromTutorial = false) -> std::unique_ptr<nxui::Activity> {
             auto activity = std::make_unique<WiiUMenuApp>();
-            activity->setStartupStatus(sysStatus.suspended_app_id, sysStatus.app_running);
+            if (!fromTutorial)
+                activity->setStartupConfig(startupConfig);
+            activity->setStartupStatus(sysStatus);
+            activity->setMenuMainTrace(menuMainTick, menuMainCore);
             activity->setTutorialStartupFade(fromTutorial);
             return activity;
         };
-        AppConfig startupConfig;
-        startupConfig.load();
         if (startupConfig.tutorialCompleted)
             app.setActivity(makeMenuActivity(false));
         else
             app.setActivity(std::make_unique<TutorialActivity>(makeMenuActivity));
         DebugLog::log("[menu] app.initialize...");
+        {
+            u64 total = 0;
+            u64 used = 0;
+            const Result totalRc = svcGetInfo(
+                &total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+            const Result usedRc = svcGetInfo(
+                &used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
+            DebugLog::log(
+                "[mem-startup] heap_mib=%.1f process_mib=%.1f used_mib=%.1f "
+                "free_mib=%.1f total_rc=0x%X used_rc=0x%X",
+                g_switchuHeapSize / 1048576.0, total / 1048576.0,
+                used / 1048576.0,
+                total >= used ? (total - used) / 1048576.0 : 0.0,
+                totalRc, usedRc);
+        }
         app.setLogSink([](const char* msg) { DebugLog::log("%s", msg); });
         nxui::GpuDevice::setDebugSink([](const char* msg) { DebugLog::log("%s", msg); });
         if (app.initialize()) {

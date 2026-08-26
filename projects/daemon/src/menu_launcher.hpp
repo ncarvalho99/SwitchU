@@ -16,6 +16,26 @@ static bool g_active = false;
 static bool g_holderCreated = false;
 static bool g_externalRegistered = false;
 static LibAppletExitReason g_lastExitReason = LibAppletExitReason_Normal;
+static uint64_t g_lastFinishedTick = 0;
+
+struct MenuLaunchTrace {
+    uint64_t originTick = 0;
+    smi::MenuTransitionReason reason = smi::MenuTransitionReason::Unknown;
+    uint64_t prepareStartTick = 0;
+    uint64_t registrationStartTick = 0;
+    uint64_t registrationEndTick = 0;
+    uint64_t createStartTick = 0;
+    uint64_t createEndTick = 0;
+    uint64_t holderStartCallTick = 0;
+    uint64_t holderStartEndTick = 0;
+    uint64_t menuReadyReceiveTick = 0;
+};
+
+static MenuLaunchTrace g_launchTrace{};
+
+inline const MenuLaunchTrace& launchTrace() { return g_launchTrace; }
+inline uint64_t lastFinishedTick() { return g_lastFinishedTick; }
+inline void markMenuReady(uint64_t tick) { g_launchTrace.menuReadyReceiveTick = tick; }
 
 inline bool hasHolder() {
     return g_holderCreated;
@@ -26,16 +46,19 @@ inline bool isActive() {
 }
 
 inline Result create() {
+    g_launchTrace.createStartTick = armGetSystemTick();
     switchu::FileLog::log("[menu_la] create begin active=%d holderActive=%d",
                           g_active ? 1 : 0,
                           (g_active && appletHolderActive(&g_holder)) ? 1 : 0);
     Result rc = appletCreateLibraryApplet(&g_holder,
         kMenuAppletId, LibAppletMode_AllForeground);
     if (R_FAILED(rc)) {
+        g_launchTrace.createEndTick = armGetSystemTick();
         switchu::FileLog::log("[menu_la] CreateLibApplet id=0x%X FAIL: 0x%X",
                               (u32)kMenuAppletId, rc);
         return rc;
     }
+    g_launchTrace.createEndTick = armGetSystemTick();
     switchu::FileLog::log("[menu_la] create ok id=0x%X", (u32)kMenuAppletId);
     g_holderCreated = true;
     return 0;
@@ -61,8 +84,10 @@ inline Result prepare() {
         terminate();
     }
     if (kEnableExternalContentLaunch) {
+        g_launchTrace.registrationStartTick = armGetSystemTick();
         Result ecsRc = switchu::daemon::registerExternalContent(
             switchu::smi::kMenuTakeoverProgramId, "/switch/SwitchU/bin/menu");
+        g_launchTrace.registrationEndTick = armGetSystemTick();
         if (R_FAILED(ecsRc)) {
             switchu::FileLog::log("[menu_la] external content registration failed rc=0x%X", ecsRc);
             return ecsRc;
@@ -102,7 +127,9 @@ inline Result startPrepared(smi::MenuStartMode mode, const smi::SystemStatus& st
     }
 
     switchu::FileLog::log("[menu_la] holder start call");
+    g_launchTrace.holderStartCallTick = armGetSystemTick();
     rc = appletHolderStart(&g_holder);
+    g_launchTrace.holderStartEndTick = armGetSystemTick();
     if (R_FAILED(rc)) {
         switchu::FileLog::log("[menu_la] Start FAIL: 0x%X", rc);
         cleanupHolder();
@@ -117,6 +144,10 @@ inline Result startPrepared(smi::MenuStartMode mode, const smi::SystemStatus& st
 }
 
 inline Result launch(smi::MenuStartMode mode, const smi::SystemStatus& status) {
+    g_launchTrace = {};
+    g_launchTrace.originTick = status.transition_origin_tick;
+    g_launchTrace.reason = status.transition_reason;
+    g_launchTrace.prepareStartTick = armGetSystemTick();
     Result rc = prepare();
     if (R_FAILED(rc)) return rc;
     return startPrepared(mode, status);
@@ -139,6 +170,7 @@ inline void terminate() {
 inline bool checkFinished() {
     if (!g_active) return false;
     if (appletHolderCheckFinished(&g_holder)) {
+        g_lastFinishedTick = armGetSystemTick();
         g_lastExitReason = appletHolderGetExitReason(&g_holder);
         switchu::FileLog::log("[menu_la] holder finished reason=%d",
                               (int)g_lastExitReason);

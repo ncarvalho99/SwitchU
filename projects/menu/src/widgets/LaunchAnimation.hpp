@@ -29,12 +29,14 @@ private:
     bool  m_playing  = false;
     float m_timer    = 0.f;
 
-    static constexpr float kZoomDur   = 0.45f;
-    static constexpr float kHoldDur   = 0.35f;
-    static constexpr float kFadeDur   = 0.25f;
-    static constexpr float kBlackDur  = 0.30f;
-    static constexpr float kBlackHold = 0.10f;
-    static constexpr float kPostLaunchBlackHold = 0.15f;
+    // Keep a short visual acknowledgement, but do not make Horizon wait on a
+    // 1.45-second cosmetic sequence before it even receives the launch IPC.
+    static constexpr float kZoomDur   = 0.16f;
+    static constexpr float kHoldDur   = 0.02f;
+    static constexpr float kFadeDur   = 0.08f;
+    static constexpr float kBlackDur  = 0.06f;
+    static constexpr float kBlackHold = 0.02f;
+    static constexpr float kPostLaunchBlackHold = 0.00f;
     static constexpr float kTotalDur  = kZoomDur + kHoldDur + kFadeDur
                                       + kBlackDur + kBlackHold;
 

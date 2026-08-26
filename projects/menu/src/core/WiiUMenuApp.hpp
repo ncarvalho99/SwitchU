@@ -65,9 +65,11 @@ public:
     ~WiiUMenuApp();
 
     void setTutorialStartupFade(bool enabled);
+    void setStartupConfig(const AppConfig& config);
 
 #ifdef SWITCHU_MENU
-    void setStartupStatus(uint64_t suspendedTitleId, bool appRunning);
+    void setStartupStatus(const switchu::smi::SystemStatus& status);
+    void setMenuMainTrace(uint64_t tick, uint32_t core);
 #endif
 
     bool onCreate() override;
@@ -282,6 +284,11 @@ private:
     // is what losing a race with an in-flight write looks like.
     std::future<void>    m_configSaveFuture;
     bool                 m_audioStarted = false;
+#ifdef SWITCHU_MENU
+    uint64_t             m_transitionOriginTick = 0;
+    uint64_t             m_menuMainTick = 0;
+    uint32_t             m_menuMainCore = 0;
+#endif
     std::vector<std::string> m_availablePresets;
     bool                 m_presetChangePending = false;
     std::string          m_loadedSoundPreset;
@@ -348,6 +355,7 @@ private:
     int  m_refreshPrevPage       = 0;
 
     AppConfig m_config;
+    bool m_startupConfigProvided = false;
     bool m_settingsNeedRefresh        = false;
     std::string m_loadedRegularFontPath;
     std::string m_loadedSmallFontPath;
