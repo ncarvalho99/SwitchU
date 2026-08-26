@@ -12,19 +12,28 @@ param(
     [ValidatePattern('^[A-Za-z]:$')] [string] $ConsoleDrive = 'E:',
     [switch] $TerminationQueueTest,
     [switch] $PreflightMatrixTest,
+    [switch] $PreflightEdgeTest,
     [switch] $SkipConsoleDeploy
 )
 
 $ErrorActionPreference = 'Stop'
 $terminationQueueTestMode = if ($TerminationQueueTest) { 'on' } else { 'off' }
 $preflightMatrixTestMode = if ($PreflightMatrixTest) { 'on' } else { 'off' }
+$preflightEdgeTestMode = if ($PreflightEdgeTest) { 'on' } else { 'off' }
 if ($TerminationQueueTest -and $Variant -ne 'sysmodule') {
     throw '-TerminationQueueTest is valid only for the sysmodule variant.'
 }
 if ($PreflightMatrixTest -and $Variant -ne 'sysmodule') {
     throw '-PreflightMatrixTest is valid only for the sysmodule variant.'
 }
-if ($TerminationQueueTest -and $PreflightMatrixTest) {
+if ($PreflightEdgeTest -and $Variant -ne 'sysmodule') {
+    throw '-PreflightEdgeTest is valid only for the sysmodule variant.'
+}
+$diagnosticModeCount = @(
+    @($TerminationQueueTest, $PreflightMatrixTest, $PreflightEdgeTest) |
+        Where-Object { [bool]$_ }
+).Count
+if ($diagnosticModeCount -gt 1) {
     throw 'Use only one diagnostic build mode at a time.'
 }
 $dockerRoot = 'C:\Program Files\Docker\Docker\resources\bin'
@@ -155,7 +164,7 @@ $started = Get-Date
 # every --rm run would make later builds incorrectly think dependencies exist.
 $ErrorActionPreference = 'Continue'
 & $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake `
-    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode $preflightMatrixTestMode |
+    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode $preflightMatrixTestMode $preflightEdgeTestMode |
     Tee-Object -FilePath $log
 $rc = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'

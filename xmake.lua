@@ -61,6 +61,12 @@ option("preflight_matrix_test")
     set_description("Enable the RAM-only launch-preflight rejection matrix")
 option_end()
 
+option("preflight_edge_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable sleep/wake and failed-launch preflight diagnostics")
+option_end()
+
 target("nxui")
     set_kind("static")
     set_default(false)
@@ -277,6 +283,9 @@ target("SwitchU")
         add_defines("SWITCHU_MENU")
         if has_config("termination_queue_test") then
             add_defines("SWITCHU_TERMINATION_QUEUE_TEST")
+        end
+        if has_config("preflight_edge_test") then
+            add_defines("SWITCHU_PREFLIGHT_EDGE_TEST")
         end
         set_values("switch.name",    "switchu-menu")
         set_values("switch.author",  "PoloNX")

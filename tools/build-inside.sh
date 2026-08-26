@@ -8,12 +8,29 @@ MODE="${1:-release}"
 VARIANT="${2:-sysmodule}"
 TERMINATION_QUEUE_TEST="${3:-off}"
 PREFLIGHT_MATRIX_TEST="${4:-off}"
+PREFLIGHT_EDGE_TEST="${5:-off}"
 cd /src || exit 1
 
 case "$MODE" in release|debug) ;; *) echo "modo invalido: $MODE"; exit 2;; esac
 case "$VARIANT" in sysmodule|homebrew) ;; *) echo "variante invalida: $VARIANT"; exit 2;; esac
 case "$TERMINATION_QUEUE_TEST" in on|off) ;; *) echo "teste de fila invalido: $TERMINATION_QUEUE_TEST"; exit 2;; esac
 case "$PREFLIGHT_MATRIX_TEST" in on|off) ;; *) echo "teste de preflight invalido: $PREFLIGHT_MATRIX_TEST"; exit 2;; esac
+case "$PREFLIGHT_EDGE_TEST" in on|off) ;; *) echo "teste de borda de preflight invalido: $PREFLIGHT_EDGE_TEST"; exit 2;; esac
+
+DIAGNOSTIC_TEST_COUNT=0
+for DIAGNOSTIC_TEST_MODE in "$TERMINATION_QUEUE_TEST" "$PREFLIGHT_MATRIX_TEST" "$PREFLIGHT_EDGE_TEST"; do
+    if [ "$DIAGNOSTIC_TEST_MODE" = on ]; then
+        DIAGNOSTIC_TEST_COUNT=$((DIAGNOSTIC_TEST_COUNT + 1))
+    fi
+done
+if [ "$DIAGNOSTIC_TEST_COUNT" -gt 1 ]; then
+    echo "use apenas um modo de diagnostico por build"
+    exit 2
+fi
+if [ "$VARIANT" != sysmodule ] && [ "$DIAGNOSTIC_TEST_COUNT" -gt 0 ]; then
+    echo "modos de diagnostico sao validos apenas para sysmodule"
+    exit 2
+fi
 
 # CMake records the source directory. A cache produced outside Docker cannot
 # safely be reused under /src, but an already-valid Docker cache is retained.
@@ -49,7 +66,13 @@ else
     PREFLIGHT_MATRIX_TEST_ARG=--preflight_matrix_test=n
 fi
 
-xmake f --yes -p cross -m "$MODE" -a aarch64 --toolchain=devkita64 "$HOMEBREW" "$TERMINATION_QUEUE_TEST_ARG" "$PREFLIGHT_MATRIX_TEST_ARG" --root || exit $?
+if [ "$PREFLIGHT_EDGE_TEST" = on ]; then
+    PREFLIGHT_EDGE_TEST_ARG=--preflight_edge_test=y
+else
+    PREFLIGHT_EDGE_TEST_ARG=--preflight_edge_test=n
+fi
+
+xmake f --yes -p cross -m "$MODE" -a aarch64 --toolchain=devkita64 "$HOMEBREW" "$TERMINATION_QUEUE_TEST_ARG" "$PREFLIGHT_MATRIX_TEST_ARG" "$PREFLIGHT_EDGE_TEST_ARG" --root || exit $?
 xmake --root -j"$(nproc)" || exit $?
 
 DIST="dist/$VARIANT/$MODE"
