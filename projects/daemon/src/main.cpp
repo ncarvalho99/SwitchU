@@ -1213,6 +1213,19 @@ static void logApplicationLaunchTrace(const Action& action,
         (unsigned long long)armTicksToNs(timing.cacheSaveTicks) / 1'000ULL,
         (unsigned long long)armTicksToNs(timing.bcatSaveTicks) / 1'000ULL,
         (unsigned long long)tickDeltaUs(timing.saveStartTick, timing.saveEndTick));
+    switchu::FileLog::log(
+        "[trace-save-state] title=0x%016lX account=%s account_open_rc=0x%X account_create_rc=0x%X device=%s device_open_rc=0x%X device_create_rc=0x%X temporary=%s temporary_open_rc=0x%X temporary_create_rc=0x%X cache=%s cache_open_rc=0x%X cache_create_rc=0x%X bcat=%s bcat_open_rc=0x%X bcat_create_rc=0x%X",
+        action.title_id,
+        daemon::app::saveEnsureOutcomeName(timing.accountSaveEnsure.outcome),
+        timing.accountSaveEnsure.openRc, timing.accountSaveEnsure.createRc,
+        daemon::app::saveEnsureOutcomeName(timing.deviceSaveEnsure.outcome),
+        timing.deviceSaveEnsure.openRc, timing.deviceSaveEnsure.createRc,
+        daemon::app::saveEnsureOutcomeName(timing.temporarySaveEnsure.outcome),
+        timing.temporarySaveEnsure.openRc, timing.temporarySaveEnsure.createRc,
+        daemon::app::saveEnsureOutcomeName(timing.cacheSaveEnsure.outcome),
+        timing.cacheSaveEnsure.openRc, timing.cacheSaveEnsure.createRc,
+        daemon::app::saveEnsureOutcomeName(timing.bcatSaveEnsure.outcome),
+        timing.bcatSaveEnsure.openRc, timing.bcatSaveEnsure.createRc);
     logMenuExitTrace(holderFinishedTick);
 }
 

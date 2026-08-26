@@ -95,6 +95,29 @@ struct PreflightTiming {
     PreflightRejectReason rejectReason = PreflightRejectReason::None;
 };
 
+enum class SaveEnsureOutcome : uint8_t {
+    NotRequested = 0,
+    Existing,
+    Created,
+    Failed,
+};
+
+inline const char* saveEnsureOutcomeName(SaveEnsureOutcome outcome) {
+    switch (outcome) {
+    case SaveEnsureOutcome::NotRequested: return "not-requested";
+    case SaveEnsureOutcome::Existing:     return "existing";
+    case SaveEnsureOutcome::Created:      return "created";
+    case SaveEnsureOutcome::Failed:       return "failed";
+    }
+    return "unknown";
+}
+
+struct SaveEnsureTrace {
+    Result openRc = 0;
+    Result createRc = 0;
+    SaveEnsureOutcome outcome = SaveEnsureOutcome::NotRequested;
+};
+
 struct LaunchTiming {
     uint64_t actionStartTick = 0;
     uint64_t previousExitRequestTick = 0;
@@ -108,6 +131,11 @@ struct LaunchTiming {
     uint64_t temporarySaveTicks = 0;
     uint64_t cacheSaveTicks = 0;
     uint64_t bcatSaveTicks = 0;
+    SaveEnsureTrace accountSaveEnsure{};
+    SaveEnsureTrace deviceSaveEnsure{};
+    SaveEnsureTrace temporarySaveEnsure{};
+    SaveEnsureTrace cacheSaveEnsure{};
+    SaveEnsureTrace bcatSaveEnsure{};
     uint64_t createStartTick = 0;
     uint64_t createEndTick = 0;
     uint64_t startStartTick = 0;
@@ -252,9 +280,12 @@ static inline uint64_t ensureSaveData(uint64_t app_id, uint64_t owner_id,
                                       AccountUid user_id, FsSaveDataType type,
                                       FsSaveDataSpaceId space_id,
                                       uint64_t save_size, uint64_t journal_size,
-                                      bool* outSuccess) {
+                                      bool* outSuccess,
+                                      SaveEnsureTrace* outTrace) {
     if (outSuccess)
         *outSuccess = true;
+    if (outTrace)
+        *outTrace = {};
     if (save_size == 0)
         return 0;
 
@@ -279,12 +310,22 @@ static inline uint64_t ensureSaveData(uint64_t app_id, uint64_t owner_id,
                                             : FsSaveDataMetaType_Thumbnail;
 
     FsFileSystem fs;
-    if (R_SUCCEEDED(fsOpenSaveDataFileSystem(&fs, space_id, &attr))) {
+    const Result openRc = fsOpenSaveDataFileSystem(&fs, space_id, &attr);
+    if (outTrace)
+        outTrace->openRc = openRc;
+    if (R_SUCCEEDED(openRc)) {
         fsFsClose(&fs);
+        if (outTrace)
+            outTrace->outcome = SaveEnsureOutcome::Existing;
         return armGetSystemTick() - startTick;
     }
 
     Result rc = fsCreateSaveDataFileSystem(&attr, &cr, &meta);
+    if (outTrace) {
+        outTrace->createRc = rc;
+        outTrace->outcome = R_SUCCEEDED(rc) ? SaveEnsureOutcome::Created
+                                             : SaveEnsureOutcome::Failed;
+    }
     if (R_FAILED(rc)) {
         if (outSuccess)
             *outSuccess = false;
@@ -299,9 +340,12 @@ static inline uint64_t ensureSaveData(uint64_t app_id, uint64_t owner_id,
 // Use libnx's dedicated wrapper so its exact FS contract stays in one place.
 static inline uint64_t ensureTemporaryStorage(uint64_t app_id, uint64_t owner_id,
                                               uint64_t storage_size,
-                                              bool* outSuccess) {
+                                              bool* outSuccess,
+                                              SaveEnsureTrace* outTrace) {
     if (outSuccess)
         *outSuccess = true;
+    if (outTrace)
+        *outTrace = {};
     if (storage_size == 0)
         return 0;
 
@@ -312,13 +356,24 @@ static inline uint64_t ensureTemporaryStorage(uint64_t app_id, uint64_t owner_id
     attr.save_data_type = FsSaveDataType_Temporary;
 
     FsFileSystem fs;
-    if (R_SUCCEEDED(fsOpenSaveDataFileSystem(&fs, FsSaveDataSpaceId_Temporary, &attr))) {
+    const Result openRc = fsOpenSaveDataFileSystem(
+        &fs, FsSaveDataSpaceId_Temporary, &attr);
+    if (outTrace)
+        outTrace->openRc = openRc;
+    if (R_SUCCEEDED(openRc)) {
         fsFsClose(&fs);
+        if (outTrace)
+            outTrace->outcome = SaveEnsureOutcome::Existing;
         return armGetSystemTick() - startTick;
     }
 
     Result rc = fsCreate_TemporaryStorage(app_id, owner_id,
                                           static_cast<s64>(storage_size), 0);
+    if (outTrace) {
+        outTrace->createRc = rc;
+        outTrace->outcome = R_SUCCEEDED(rc) ? SaveEnsureOutcome::Created
+                                             : SaveEnsureOutcome::Failed;
+    }
     if (R_FAILED(rc)) {
         if (outSuccess)
             *outSuccess = false;
@@ -360,29 +415,33 @@ static inline bool ensureApplicationSaveDataFromMeta(
         title_id, meta.save_data_owner_id, uid,
         FsSaveDataType_Account, FsSaveDataSpaceId_User,
         meta.user_account_save_data_size,
-        meta.user_account_save_data_journal_size, &accountOk);
+        meta.user_account_save_data_journal_size, &accountOk,
+        timing ? &timing->accountSaveEnsure : nullptr);
 
     AccountUid emptyUid = {};
     const uint64_t deviceTicks = ensureSaveData(
         title_id, meta.save_data_owner_id, emptyUid,
         FsSaveDataType_Device, FsSaveDataSpaceId_User,
         meta.device_save_data_size,
-        meta.device_save_data_journal_size, &deviceOk);
+        meta.device_save_data_journal_size, &deviceOk,
+        timing ? &timing->deviceSaveEnsure : nullptr);
 
     const uint64_t temporaryTicks = ensureTemporaryStorage(
         title_id, meta.save_data_owner_id, meta.temporary_storage_size,
-        &temporaryOk);
+        &temporaryOk, timing ? &timing->temporarySaveEnsure : nullptr);
 
     const uint64_t cacheTicks = ensureSaveData(
         title_id, meta.save_data_owner_id, emptyUid,
         FsSaveDataType_Cache, FsSaveDataSpaceId_User,
         meta.cache_storage_size,
-        meta.cache_storage_journal_size, &cacheOk);
+        meta.cache_storage_journal_size, &cacheOk,
+        timing ? &timing->cacheSaveEnsure : nullptr);
 
     const uint64_t bcatTicks = ensureSaveData(
         title_id, 0x010000000000000C, emptyUid,
         FsSaveDataType_Bcat, FsSaveDataSpaceId_User,
-        meta.bcat_delivery_cache_storage_size, 0x200000, &bcatOk);
+        meta.bcat_delivery_cache_storage_size, 0x200000, &bcatOk,
+        timing ? &timing->bcatSaveEnsure : nullptr);
 
     if (timing) {
         timing->accountSaveTicks = accountTicks;
@@ -475,6 +534,11 @@ static inline void copyPreparedWork(LaunchTiming* dst, const LaunchTiming& src) 
     dst->temporarySaveTicks = src.temporarySaveTicks;
     dst->cacheSaveTicks = src.cacheSaveTicks;
     dst->bcatSaveTicks = src.bcatSaveTicks;
+    dst->accountSaveEnsure = src.accountSaveEnsure;
+    dst->deviceSaveEnsure = src.deviceSaveEnsure;
+    dst->temporarySaveEnsure = src.temporarySaveEnsure;
+    dst->cacheSaveEnsure = src.cacheSaveEnsure;
+    dst->bcatSaveEnsure = src.bcatSaveEnsure;
 }
 
 inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = nullptr
