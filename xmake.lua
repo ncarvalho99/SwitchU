@@ -55,6 +55,12 @@ option("termination_queue_test")
     set_description("Enable explicit application lifecycle diagnostics")
 option_end()
 
+option("preflight_matrix_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable the RAM-only launch-preflight rejection matrix")
+option_end()
+
 target("nxui")
     set_kind("static")
     set_default(false)
@@ -317,6 +323,9 @@ target("switchu-daemon")
     )
     if has_config("termination_queue_test") then
         add_defines("SWITCHU_TERMINATION_QUEUE_TEST")
+    end
+    if has_config("preflight_matrix_test") then
+        add_defines("SWITCHU_PREFLIGHT_MATRIX_TEST")
     end
     add_cxxflags("-fno-rtti", "-fexceptions", "-std=gnu++23", {force = true})
     add_packages("zlib")

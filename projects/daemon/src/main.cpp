@@ -1159,7 +1159,7 @@ static void logApplicationLaunchTrace(const Action& action,
     const auto& trace = action.transition;
     const auto& preflight = timing.preflight;
     switchu::FileLog::log(
-        "[trace-preflight] title=0x%016lX activation_to_send_us=%llu ipc_us=%llu work_us=%llu touch_us=%llu saves_us=%llu lead_us=%llu tail_us=%llu end_to_action_us=%llu attempted=%d complete=%d cache_hit=%d core=%u",
+        "[trace-preflight] title=0x%016lX activation_to_send_us=%llu ipc_us=%llu work_us=%llu touch_us=%llu saves_us=%llu lead_us=%llu tail_us=%llu end_to_action_us=%llu attempted=%d complete=%d cache_hit=%d reject=%u core=%u",
         action.title_id,
         (unsigned long long)tickDeltaUs(trace.activation_tick, trace.preflight_send_tick),
         (unsigned long long)tickDeltaUs(preflight.requestSendTick, preflight.commandReceiveTick),
@@ -1172,6 +1172,7 @@ static void logApplicationLaunchTrace(const Action& action,
         preflight.attempted ? 1 : 0,
         preflight.complete ? 1 : 0,
         preflight.cacheHit ? 1 : 0,
+        static_cast<unsigned>(preflight.rejectReason),
         preflight.core);
     switchu::FileLog::log(
         "[trace-launch] title=0x%016lX activation_to_user_us=%llu user_to_animation_us=%llu recency_total_us=%llu animation_to_commit_us=%llu activation_to_command_us=%llu command_ipc_us=%llu command_to_holder_us=%llu holder_to_action_us=%llu command_to_foreground_us=%llu activation_to_foreground_us=%llu core=%u",

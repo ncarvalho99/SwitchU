@@ -54,6 +54,31 @@ static TerminateDiagnosticMode g_terminateDiagnosticMode = TerminateDiagnosticMo
 static constexpr uint64_t kTerminateSleepWakeHoldNs = 12'000'000'000ULL;
 #endif
 
+enum class PreflightRejectReason : uint8_t {
+    None = 0,
+    Missing,
+    TitleMismatch,
+    UserMismatch,
+    Incomplete,
+    Stale,
+    MetadataMissing,
+    MetadataChanged,
+};
+
+inline const char* preflightRejectReasonName(PreflightRejectReason reason) {
+    switch (reason) {
+    case PreflightRejectReason::None:            return "none";
+    case PreflightRejectReason::Missing:         return "missing";
+    case PreflightRejectReason::TitleMismatch:   return "title-mismatch";
+    case PreflightRejectReason::UserMismatch:    return "user-mismatch";
+    case PreflightRejectReason::Incomplete:      return "incomplete";
+    case PreflightRejectReason::Stale:           return "stale";
+    case PreflightRejectReason::MetadataMissing: return "metadata-missing";
+    case PreflightRejectReason::MetadataChanged: return "metadata-changed";
+    }
+    return "unknown";
+}
+
 struct PreflightTiming {
     uint64_t requestSendTick = 0;
     uint64_t commandReceiveTick = 0;
@@ -67,6 +92,7 @@ struct PreflightTiming {
     bool attempted = false;
     bool complete = false;
     bool cacheHit = false;
+    PreflightRejectReason rejectReason = PreflightRejectReason::None;
 };
 
 struct LaunchTiming {
@@ -110,6 +136,96 @@ struct PreparedLaunch {
 
 static PreparedLaunch g_prepared{};
 static constexpr uint64_t kPreparedLaunchMaxAgeNs = 5'000'000'000ULL;
+
+#ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
+enum class PreflightDiagnosticCase : uint8_t {
+    BaselineHit = 0,
+    MissingPreparation,
+    TitleMismatch,
+    UserMismatch,
+    IncompletePreparation,
+    StalePreparation,
+    MetadataMissing,
+    MetadataChanged,
+    Count,
+};
+
+static uint32_t g_preflightDiagnosticSequence = 0;
+static uint32_t g_preflightDiagnosticActiveSequence = 0;
+static PreflightDiagnosticCase g_preflightDiagnosticCase =
+    PreflightDiagnosticCase::BaselineHit;
+static PreflightRejectReason g_preflightDiagnosticExpectedReason =
+    PreflightRejectReason::None;
+static bool g_preflightDiagnosticForceMetadataMissing = false;
+
+static inline const char* preflightDiagnosticCaseName(PreflightDiagnosticCase value) {
+    switch (value) {
+    case PreflightDiagnosticCase::BaselineHit:           return "baseline-hit";
+    case PreflightDiagnosticCase::MissingPreparation:    return "missing-preparation";
+    case PreflightDiagnosticCase::TitleMismatch:         return "title-mismatch";
+    case PreflightDiagnosticCase::UserMismatch:          return "user-mismatch";
+    case PreflightDiagnosticCase::IncompletePreparation: return "incomplete-preparation";
+    case PreflightDiagnosticCase::StalePreparation:      return "stale-preparation";
+    case PreflightDiagnosticCase::MetadataMissing:       return "metadata-missing";
+    case PreflightDiagnosticCase::MetadataChanged:       return "metadata-changed";
+    case PreflightDiagnosticCase::Count:                 break;
+    }
+    return "unknown";
+}
+
+static inline void injectPreflightDiagnosticFault() {
+    const uint32_t caseCount = static_cast<uint32_t>(PreflightDiagnosticCase::Count);
+    g_preflightDiagnosticActiveSequence = ++g_preflightDiagnosticSequence;
+    g_preflightDiagnosticCase = static_cast<PreflightDiagnosticCase>(
+        (g_preflightDiagnosticActiveSequence - 1) % caseCount);
+    g_preflightDiagnosticExpectedReason = PreflightRejectReason::None;
+    g_preflightDiagnosticForceMetadataMissing = false;
+
+    switch (g_preflightDiagnosticCase) {
+    case PreflightDiagnosticCase::BaselineHit:
+        break;
+    case PreflightDiagnosticCase::MissingPreparation:
+        g_prepared.present = false;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::Missing;
+        break;
+    case PreflightDiagnosticCase::TitleMismatch:
+        g_prepared.titleId ^= 1;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::TitleMismatch;
+        break;
+    case PreflightDiagnosticCase::UserMismatch:
+        g_prepared.uid.uid[0] ^= 1;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::UserMismatch;
+        break;
+    case PreflightDiagnosticCase::IncompletePreparation:
+        g_prepared.timing.complete = false;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::Incomplete;
+        break;
+    case PreflightDiagnosticCase::StalePreparation: {
+        const uint64_t staleTicks = armNsToTicks(kPreparedLaunchMaxAgeNs + 1'000'000'000ULL);
+        const uint64_t now = armGetSystemTick();
+        g_prepared.timing.workEndTick = now > staleTicks ? now - staleTicks : 1;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::Stale;
+        break;
+    }
+    case PreflightDiagnosticCase::MetadataMissing:
+        g_preflightDiagnosticForceMetadataMissing = true;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::MetadataMissing;
+        break;
+    case PreflightDiagnosticCase::MetadataChanged:
+        g_prepared.meta.version ^= 0x80000000U;
+        g_preflightDiagnosticExpectedReason = PreflightRejectReason::MetadataChanged;
+        break;
+    case PreflightDiagnosticCase::Count:
+        break;
+    }
+
+    switchu::FileLog::log(
+        "[diagnostic-preflight] begin sequence=%u/8 case=%s expected=%s",
+        g_preflightDiagnosticActiveSequence,
+        preflightDiagnosticCaseName(g_preflightDiagnosticCase),
+        preflightRejectReasonName(g_preflightDiagnosticExpectedReason));
+}
+#endif
 
 inline bool isRunning() { return g_running; }
 inline bool hasForeground() { return g_hasForeground; }
@@ -330,11 +446,6 @@ inline void prepare(uint64_t title_id, AccountUid uid,
     g_prepared.timing.complete = R_SUCCEEDED(touchRc) && metaLoaded && savesOk;
 }
 
-static inline bool samePreparedLaunch(uint64_t title_id, const AccountUid& uid) {
-    return g_prepared.present && g_prepared.titleId == title_id
-        && std::memcmp(&g_prepared.uid, &uid, sizeof(uid)) == 0;
-}
-
 static inline bool preparedLaunchFresh(uint64_t nowTick) {
     return g_prepared.timing.workEndTick != 0
         && nowTick >= g_prepared.timing.workEndTick
@@ -369,17 +480,25 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
                           accountUidIsValid(&uid) ? 1 : 0,
                           uid.uid[0], uid.uid[1]);
 
+#ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
+    injectPreflightDiagnosticFault();
+#endif
     resetLaunchMetadata();
     const uint64_t preflightCheckTick = armGetSystemTick();
-    const bool matchingPreflight = samePreparedLaunch(title_id, uid);
-    const bool preflightCandidate = matchingPreflight
-        && g_prepared.timing.complete
-        && preparedLaunchFresh(preflightCheckTick);
-    if (matchingPreflight) {
-        if (timing)
-            timing->preflight = g_prepared.timing;
-    }
-    g_prepared.present = false;
+    if (g_prepared.present && timing)
+        timing->preflight = g_prepared.timing;
+
+    PreflightRejectReason rejectReason = PreflightRejectReason::None;
+    if (!g_prepared.present)
+        rejectReason = PreflightRejectReason::Missing;
+    else if (g_prepared.titleId != title_id)
+        rejectReason = PreflightRejectReason::TitleMismatch;
+    else if (std::memcmp(&g_prepared.uid, &uid, sizeof(uid)) != 0)
+        rejectReason = PreflightRejectReason::UserMismatch;
+    else if (!g_prepared.timing.complete)
+        rejectReason = PreflightRejectReason::Incomplete;
+    else if (!preparedLaunchFresh(preflightCheckTick))
+        rejectReason = PreflightRejectReason::Stale;
 
     if (g_running) {
         switchu::FileLog::log("[app] closing previous app before launch");
@@ -395,11 +514,38 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
     appletApplicationClose(&g_app);
 
     switchu::control_cache::Meta currentMeta{};
-    const bool usePreflight = preflightCandidate
-        && switchu::control_cache::readMeta(title_id, currentMeta)
-        && std::memcmp(&currentMeta, &g_prepared.meta, sizeof(currentMeta)) == 0;
-    if (timing)
+    if (rejectReason == PreflightRejectReason::None) {
+#ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
+        const bool metaLoaded = !g_preflightDiagnosticForceMetadataMissing
+            && switchu::control_cache::readMeta(title_id, currentMeta);
+#else
+        const bool metaLoaded = switchu::control_cache::readMeta(title_id, currentMeta);
+#endif
+        if (!metaLoaded)
+            rejectReason = PreflightRejectReason::MetadataMissing;
+        else if (std::memcmp(&currentMeta, &g_prepared.meta, sizeof(currentMeta)) != 0)
+            rejectReason = PreflightRejectReason::MetadataChanged;
+    }
+    const bool usePreflight = rejectReason == PreflightRejectReason::None;
+    g_prepared.present = false;
+    if (timing) {
         timing->preflight.cacheHit = usePreflight;
+        timing->preflight.rejectReason = rejectReason;
+    }
+    switchu::FileLog::log("[preflight] cache_hit=%d reject=%s",
+                          usePreflight ? 1 : 0,
+                          preflightRejectReasonName(rejectReason));
+#ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
+    switchu::FileLog::log(
+        "[diagnostic-preflight] result sequence=%u/8 case=%s expected=%s actual=%s pass=%d cache_hit=%d",
+        g_preflightDiagnosticActiveSequence,
+        preflightDiagnosticCaseName(g_preflightDiagnosticCase),
+        preflightRejectReasonName(g_preflightDiagnosticExpectedReason),
+        preflightRejectReasonName(rejectReason),
+        rejectReason == g_preflightDiagnosticExpectedReason ? 1 : 0,
+        usePreflight ? 1 : 0);
+    g_preflightDiagnosticForceMetadataMissing = false;
+#endif
 
     if (usePreflight) {
         applyLaunchMetadata(g_prepared.meta);
