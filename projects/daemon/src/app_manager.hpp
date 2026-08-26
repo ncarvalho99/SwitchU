@@ -120,8 +120,11 @@ struct LaunchTiming {
 
 struct ResumeTiming {
     uint64_t actionStartTick = 0;
+    uint64_t unlockStartTick = 0;
+    uint64_t unlockEndTick = 0;
     uint64_t foregroundStartTick = 0;
     uint64_t foregroundEndTick = 0;
+    Result unlockResult = 0;
     uint32_t core = 0;
 };
 
@@ -139,6 +142,10 @@ static constexpr uint64_t kPreparedLaunchMaxAgeNs = 5'000'000'000ULL;
 #ifdef SWITCHU_PREFLIGHT_EDGE_TEST
 static constexpr Result kPreflightEdgeSyntheticCreateFailure =
     MAKERESULT(Module_Libnx, 0xFC);
+#endif
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+static constexpr Result kResumeSyntheticForegroundFailure =
+    MAKERESULT(Module_Libnx, 0xFB);
 #endif
 
 #ifdef SWITCHU_PREFLIGHT_MATRIX_TEST
@@ -676,7 +683,11 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
     return 0;
 }
 
-inline Result resume(ResumeTiming* timing = nullptr) {
+inline Result resume(ResumeTiming* timing = nullptr
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+                     , bool diagnosticForceForegroundFailure = false
+#endif
+) {
     if (!g_running) return MAKERESULT(Module_Libnx, 0xFE);
     if (timing) {
         *timing = {};
@@ -685,9 +696,28 @@ inline Result resume(ResumeTiming* timing = nullptr) {
     }
     switchu::FileLog::log("[app] resume request fg=%d suspended=0x%016lX",
                           g_hasForeground ? 1 : 0, g_suspendedTitleId);
-    appletUnlockForeground();
+    if (timing)
+        timing->unlockStartTick = armGetSystemTick();
+    const Result unlockRc = appletUnlockForeground();
+    if (timing) {
+        timing->unlockEndTick = armGetSystemTick();
+        timing->unlockResult = unlockRc;
+    }
+    switchu::FileLog::log("[app] resume UnlockForeground rc=0x%X", unlockRc);
     if (timing)
         timing->foregroundStartTick = armGetSystemTick();
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+    if (diagnosticForceForegroundFailure) {
+        if (timing)
+            timing->foregroundEndTick = armGetSystemTick();
+        g_hasForeground = false;
+        switchu::FileLog::log(
+            "[diagnostic-resume] synthetic ReqFG failure rc=0x%X unlock_rc=0x%X running=%d suspended=0x%016lX",
+            kResumeSyntheticForegroundFailure, unlockRc,
+            g_running ? 1 : 0, g_suspendedTitleId);
+        return kResumeSyntheticForegroundFailure;
+    }
+#endif
     Result rc = appletApplicationRequestForApplicationToGetForeground(&g_app);
     if (timing)
         timing->foregroundEndTick = armGetSystemTick();

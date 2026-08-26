@@ -1103,21 +1103,54 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
         transitionTrace.activation_tick = armGetSystemTick();
         uint64_t tid = raw->titleId();
         if (m_launcher.isAppSuspended(tid)) {
-            m_audio.playSfx(Sfx::LaunchGame);
             nxui::Rect   fr   = raw->focusRect();
             const nxui::Texture* tex = raw->texture();
             float  cr   = raw->cornerRadius();
             nxui::Color  base = m_theme.panelBase;
             nxui::Color  bord = m_theme.panelBorder;
             transitionTrace.user_selected_tick = transitionTrace.activation_tick;
-            m_launchAnim->start(fr, tex, cr, base, bord, 0, {},
-                nullptr,
-                [this, transitionTrace]() mutable {
-                    transitionTrace.animation_complete_tick = armGetSystemTick();
-                    transitionTrace.recency_commit_complete_tick =
-                        transitionTrace.animation_complete_tick;
-                    m_launcher.resumeApplication(transitionTrace);
-                });
+            auto continueResume = [this, fr, tex, cr, base, bord,
+                                   transitionTrace]() mutable {
+                m_audio.playSfx(Sfx::LaunchGame);
+                m_launchAnim->start(fr, tex, cr, base, bord, 0, {},
+                    nullptr,
+                    [this, transitionTrace]() mutable {
+                        transitionTrace.animation_complete_tick = armGetSystemTick();
+                        transitionTrace.recency_commit_complete_tick =
+                            transitionTrace.animation_complete_tick;
+                        m_launcher.resumeApplication(transitionTrace);
+                    });
+            };
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+            m_audio.playSfx(Sfx::ModalShow);
+            m_dialogReturnFocus = raw;
+            DebugLog::log("[diagnostic-resume] dialog armed tid=%016lX", tid);
+            m_dialog->show(
+                "Resume recovery test",
+                "DIAGNOSTIC BUILD. Failure recovery keeps the suspended title "
+                "alive. After SwitchU returns, select it again and choose Resume selected.",
+                {
+                    {"Resume selected", [continueResume]() mutable {
+                        continueResume();
+                    }, true},
+                    {"Failure recovery", [this, tid, transitionTrace]() mutable {
+                        auto failureTrace = transitionTrace;
+                        const uint64_t now = armGetSystemTick();
+                        failureTrace.animation_complete_tick = now;
+                        failureTrace.recency_commit_complete_tick = now;
+                        DebugLog::log(
+                            "[diagnostic-resume] requesting synthetic foreground failure tid=%016lX",
+                            tid);
+                        m_launcher.resumeApplicationFailureDiagnostic(failureTrace);
+                    }, true},
+                    {"Cancel", []() {}, true},
+                },
+                0,
+                {});
+            focusManager().setFocus(m_dialog.get());
+#else
+            continueResume();
+#endif
         } else {
             AppEntry* entry = nullptr;
             int entryIndex = findTitleIndex(tid);
