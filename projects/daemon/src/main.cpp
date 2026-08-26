@@ -1419,6 +1419,16 @@ static void handleMenuCommand() {
         const auto args = reader.pop<smi::MenuReadyArgs>();
         switchu::FileLog::log("[smi] menu ready");
         logMenuReadyTrace(args, commandReceiveTick);
+        if (g_menuFastExitCount != 0 || g_menuRelaunchCooldown != 0) {
+            switchu::FileLog::log(
+                "[main] healthy menu reset fast-exit guard count=%d cooldown=%d",
+                g_menuFastExitCount, g_menuRelaunchCooldown);
+        }
+        // A menu that completed initialization is not part of a startup crash
+        // loop. Normal title handoffs must not accumulate forever and delay a
+        // later launch-failure recovery by the five-second crash-loop guard.
+        g_menuFastExitCount = 0;
+        g_menuRelaunchCooldown = 0;
         g_batteryRefreshPending.store(true);
         break;
     }
@@ -1442,6 +1452,23 @@ static void handleMenuCommand() {
     // MenuMessage notifications. Do not allocate and enqueue an unread reply.
 }
 
+static void recoverMenuAfterApplicationHandoffFailure(
+    const char* operation, uint64_t titleId, Result failureRc) {
+    const uint64_t recoveryTick = armGetSystemTick();
+    switchu::FileLog::log(
+        "[recovery] %s failed title=0x%016lX rc=0x%X; relaunching menu",
+        operation, titleId, failureRc);
+    const Result menuRc = daemon::menu_la::launch(
+        smi::MenuStartMode::MainMenu,
+        buildSystemStatus(smi::MenuTransitionReason::LaunchFailure,
+                          recoveryTick));
+    switchu::FileLog::log(
+        "[recovery] %s menu relaunch rc=0x%X running=%d suspended=0x%016lX",
+        operation, menuRc,
+        daemon::app::isRunning() ? 1 : 0,
+        daemon::app::suspendedTitleId());
+}
+
 static bool handleAction(Action& action) {
     if (daemon::menu_la::hasHolder() || g_foregroundAppletActive ||
         daemon::app::isTerminating())
@@ -1454,8 +1481,10 @@ static bool handleAction(Action& action) {
             daemon::app::LaunchTiming timing{};
             Result rc = daemon::app::launch(action.title_id, action.uid, &timing);
             logApplicationLaunchTrace(action, timing, holderFinishedTick);
-            if (R_FAILED(rc))
+            if (R_FAILED(rc)) {
                 switchu::FileLog::log("[action] launch 0x%016lX FAIL: 0x%X", action.title_id, rc);
+                recoverMenuAfterApplicationHandoffFailure("launch", action.title_id, rc);
+            }
             return true;
         }
 
@@ -1464,8 +1493,11 @@ static bool handleAction(Action& action) {
             daemon::app::ResumeTiming timing{};
             Result rc = daemon::app::resume(&timing);
             logApplicationResumeTrace(action, timing, holderFinishedTick);
-            if (R_FAILED(rc))
+            if (R_FAILED(rc)) {
                 switchu::FileLog::log("[action] resume FAIL: 0x%X", rc);
+                recoverMenuAfterApplicationHandoffFailure(
+                    "resume", daemon::app::suspendedTitleId(), rc);
+            }
             return true;
         }
 

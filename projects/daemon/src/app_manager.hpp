@@ -661,11 +661,13 @@ inline Result resume(ResumeTiming* timing = nullptr) {
     Result rc = appletApplicationRequestForApplicationToGetForeground(&g_app);
     if (timing)
         timing->foregroundEndTick = armGetSystemTick();
-    if (R_FAILED(rc))
+    if (R_FAILED(rc)) {
         switchu::FileLog::log("[app] resume ReqFG FAIL: 0x%X", rc);
-    else
+        g_hasForeground = false;
+    } else {
         switchu::FileLog::log("[app] resume ReqFG ok");
-    g_hasForeground = true;
+        g_hasForeground = true;
+    }
     return rc;
 }
 
