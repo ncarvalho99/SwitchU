@@ -13,6 +13,7 @@ param(
     [switch] $TerminationQueueTest,
     [switch] $PreflightMatrixTest,
     [switch] $PreflightEdgeTest,
+    [switch] $ResumeFailureTest,
     [switch] $SkipConsoleDeploy
 )
 
@@ -20,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 $terminationQueueTestMode = if ($TerminationQueueTest) { 'on' } else { 'off' }
 $preflightMatrixTestMode = if ($PreflightMatrixTest) { 'on' } else { 'off' }
 $preflightEdgeTestMode = if ($PreflightEdgeTest) { 'on' } else { 'off' }
+$resumeFailureTestMode = if ($ResumeFailureTest) { 'on' } else { 'off' }
 if ($TerminationQueueTest -and $Variant -ne 'sysmodule') {
     throw '-TerminationQueueTest is valid only for the sysmodule variant.'
 }
@@ -29,8 +31,11 @@ if ($PreflightMatrixTest -and $Variant -ne 'sysmodule') {
 if ($PreflightEdgeTest -and $Variant -ne 'sysmodule') {
     throw '-PreflightEdgeTest is valid only for the sysmodule variant.'
 }
+if ($ResumeFailureTest -and $Variant -ne 'sysmodule') {
+    throw '-ResumeFailureTest is valid only for the sysmodule variant.'
+}
 $diagnosticModeCount = @(
-    @($TerminationQueueTest, $PreflightMatrixTest, $PreflightEdgeTest) |
+    @($TerminationQueueTest, $PreflightMatrixTest, $PreflightEdgeTest, $ResumeFailureTest) |
         Where-Object { [bool]$_ }
 ).Count
 if ($diagnosticModeCount -gt 1) {
@@ -164,7 +169,7 @@ $started = Get-Date
 # every --rm run would make later builds incorrectly think dependencies exist.
 $ErrorActionPreference = 'Continue'
 & $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake `
-    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode $preflightMatrixTestMode $preflightEdgeTestMode |
+    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode $preflightMatrixTestMode $preflightEdgeTestMode $resumeFailureTestMode |
     Tee-Object -FilePath $log
 $rc = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'

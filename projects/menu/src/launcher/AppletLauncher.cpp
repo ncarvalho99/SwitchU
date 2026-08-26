@@ -160,10 +160,33 @@ void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace trace
         DebugLog::log("[launcher] no app suspended!");
         return;
     }
-    DebugLog::log("[launcher] resume, closing menu");
-    switchu::menu::smi_cmd::resumeApplication(trace);
+    const Result rc = switchu::menu::smi_cmd::resumeApplication(trace);
+    if (R_FAILED(rc)) {
+        DebugLog::log("[launcher] resume enqueue FAIL: 0x%X", rc);
+        return;
+    }
+    DebugLog::log("[launcher] resume command sent, closing menu");
     if (m_cb.requestExit) m_cb.requestExit();
 }
+
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+void AppletLauncher::resumeApplicationFailureDiagnostic(
+    switchu::smi::LaunchTransitionTrace trace) {
+    if (m_suspendedTitleId == 0) {
+        DebugLog::log("[diagnostic-resume] ignored: no suspended application");
+        return;
+    }
+    DebugLog::log("[diagnostic-resume] sending synthetic foreground failure tid=%016lX",
+                  (uint64_t)m_suspendedTitleId);
+    const Result rc = switchu::menu::smi_cmd::resumeApplicationFailureDiagnostic(trace);
+    if (R_FAILED(rc)) {
+        DebugLog::log("[diagnostic-resume] command enqueue FAIL: 0x%X", rc);
+        return;
+    }
+    DebugLog::log("[diagnostic-resume] command sent, closing menu");
+    if (m_cb.requestExit) m_cb.requestExit();
+}
+#endif
 
 void AppletLauncher::terminateApplication() {
     if (m_suspendedTitleId == 0) {

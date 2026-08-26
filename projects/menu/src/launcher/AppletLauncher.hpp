@@ -43,6 +43,10 @@ public:
         switchu::smi::LaunchTransitionTrace trace);
 #endif
     void resumeApplication(switchu::smi::LaunchTransitionTrace trace);
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+    void resumeApplicationFailureDiagnostic(
+        switchu::smi::LaunchTransitionTrace trace);
+#endif
     void terminateApplication();
 #ifdef SWITCHU_TERMINATION_QUEUE_TEST
     void terminateApplicationDuplicate();

@@ -255,6 +255,9 @@ struct Action {
 #ifdef SWITCHU_PREFLIGHT_EDGE_TEST
     bool injectLaunchFailure = false;
 #endif
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+    bool injectResumeForegroundFailure = false;
+#endif
 };
 
 static std::vector<Action> g_actionQueue;
@@ -1218,12 +1221,15 @@ static void logApplicationResumeTrace(const Action& action,
                                       uint64_t holderFinishedTick) {
     const auto& trace = action.transition;
     switchu::FileLog::log(
-        "[trace-resume] activation_to_animation_us=%llu activation_to_command_us=%llu command_ipc_us=%llu command_to_holder_us=%llu holder_to_action_us=%llu foreground_us=%llu activation_to_foreground_us=%llu core=%u",
+        "[trace-resume] title=0x%016lX activation_to_animation_us=%llu activation_to_command_us=%llu command_ipc_us=%llu command_to_holder_us=%llu holder_to_action_us=%llu unlock_us=%llu unlock_rc=0x%X foreground_us=%llu activation_to_foreground_us=%llu core=%u",
+        action.title_id,
         (unsigned long long)tickDeltaUs(trace.activation_tick, trace.animation_complete_tick),
         (unsigned long long)tickDeltaUs(trace.activation_tick, trace.command_send_tick),
         (unsigned long long)tickDeltaUs(trace.command_send_tick, action.commandReceivedTick),
         (unsigned long long)tickDeltaUs(trace.command_send_tick, holderFinishedTick),
         (unsigned long long)tickDeltaUs(holderFinishedTick, timing.actionStartTick),
+        (unsigned long long)tickDeltaUs(timing.unlockStartTick, timing.unlockEndTick),
+        timing.unlockResult,
         (unsigned long long)tickDeltaUs(timing.foregroundStartTick, timing.foregroundEndTick),
         (unsigned long long)tickDeltaUs(trace.activation_tick, timing.foregroundEndTick),
         timing.core);
@@ -1285,18 +1291,34 @@ static void handleMenuCommand() {
     }
 
     case smi::SystemMessage::ResumeApplication:
-        {
-            auto args = reader.pop<smi::ResumeAppArgs>();
-            Action action{};
-            action.type = ActionType::ResumeApplication;
-            action.transition = args.trace;
-            action.commandReceivedTick = commandReceiveTick;
-            g_lastMenuClosingTrace = {};
-            g_lastMenuClosingReceiveTick = 0;
-            g_actionQueue.push_back(action);
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+    case smi::SystemMessage::DiagnosticResumeFailure:
+#endif
+    {
+        auto args = reader.pop<smi::ResumeAppArgs>();
+        Action action{};
+        action.type = ActionType::ResumeApplication;
+        action.title_id = daemon::app::suspendedTitleId();
+        action.transition = args.trace;
+        action.commandReceivedTick = commandReceiveTick;
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+        action.injectResumeForegroundFailure =
+            msg == smi::SystemMessage::DiagnosticResumeFailure;
+#endif
+        g_lastMenuClosingTrace = {};
+        g_lastMenuClosingReceiveTick = 0;
+        g_actionQueue.push_back(action);
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+        if (action.injectResumeForegroundFailure) {
+            switchu::FileLog::log(
+                "[diagnostic-resume] queued synthetic foreground failure title=0x%016lX (actions=%zu)",
+                action.title_id, g_actionQueue.size());
+            break;
         }
+#endif
         switchu::FileLog::log("[smi] queued resume (actions=%zu)", g_actionQueue.size());
         break;
+    }
 
     case smi::SystemMessage::TerminateApplication: {
         const bool hadRunningApplication = daemon::app::isRunning();
@@ -1514,12 +1536,16 @@ static bool handleAction(Action& action) {
         case ActionType::ResumeApplication: {
             const uint64_t holderFinishedTick = daemon::menu_la::lastFinishedTick();
             daemon::app::ResumeTiming timing{};
-            Result rc = daemon::app::resume(&timing);
+            Result rc = daemon::app::resume(&timing
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+                                            , action.injectResumeForegroundFailure
+#endif
+            );
             logApplicationResumeTrace(action, timing, holderFinishedTick);
             if (R_FAILED(rc)) {
                 switchu::FileLog::log("[action] resume FAIL: 0x%X", rc);
                 recoverMenuAfterApplicationHandoffFailure(
-                    "resume", daemon::app::suspendedTitleId(), rc);
+                    "resume", action.title_id, rc);
             }
             return true;
         }

@@ -73,6 +73,11 @@ enum class SystemMessage : uint32_t {
     // No guessed or uninstalled title ID ever reaches Horizon.
     DiagnosticLaunchFailure  = 46,
 #endif
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+    // Preserves the real suspended application but substitutes a deterministic
+    // result at the foreground-request boundary.
+    DiagnosticResumeFailure  = 47,
+#endif
 };
 
 enum class MenuStartMode : uint32_t {

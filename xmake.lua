@@ -67,6 +67,12 @@ option("preflight_edge_test")
     set_description("Enable sleep/wake and failed-launch preflight diagnostics")
 option_end()
 
+option("resume_failure_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable deterministic suspended-application resume failure diagnostics")
+option_end()
+
 target("nxui")
     set_kind("static")
     set_default(false)
@@ -287,6 +293,9 @@ target("SwitchU")
         if has_config("preflight_edge_test") then
             add_defines("SWITCHU_PREFLIGHT_EDGE_TEST")
         end
+        if has_config("resume_failure_test") then
+            add_defines("SWITCHU_RESUME_FAILURE_TEST")
+        end
         set_values("switch.name",    "switchu-menu")
         set_values("switch.author",  "PoloNX")
         set_values("switch.version", version)
@@ -338,6 +347,9 @@ target("switchu-daemon")
     end
     if has_config("preflight_edge_test") then
         add_defines("SWITCHU_PREFLIGHT_EDGE_TEST")
+    end
+    if has_config("resume_failure_test") then
+        add_defines("SWITCHU_RESUME_FAILURE_TEST")
     end
     add_cxxflags("-fno-rtti", "-fexceptions", "-std=gnu++23", {force = true})
     add_packages("zlib")

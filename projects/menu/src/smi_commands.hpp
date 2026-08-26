@@ -102,18 +102,32 @@ inline Result launchUserPage(AccountUid uid) {
     return pushOutStorage(buf, sizeof(buf));
 }
 
-inline Result resumeApplication(smi::LaunchTransitionTrace trace) {
+inline Result sendResumeApplicationCommand(smi::SystemMessage message,
+                                           smi::LaunchTransitionTrace trace) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::ResumeAppArgs)]{};
     auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
     auto* args = reinterpret_cast<smi::ResumeAppArgs*>(buf + sizeof(smi::CommandHeader));
 
     hdr->magic   = smi::kCommandMagic;
-    hdr->message = static_cast<uint32_t>(smi::SystemMessage::ResumeApplication);
+    hdr->message = static_cast<uint32_t>(message);
     args->trace = trace;
     args->trace.command_send_tick = armGetSystemTick();
 
     return pushOutStorage(buf, sizeof(buf));
 }
+
+inline Result resumeApplication(smi::LaunchTransitionTrace trace) {
+    return sendResumeApplicationCommand(smi::SystemMessage::ResumeApplication,
+                                        trace);
+}
+
+#ifdef SWITCHU_RESUME_FAILURE_TEST
+inline Result resumeApplicationFailureDiagnostic(
+    smi::LaunchTransitionTrace trace) {
+    return sendResumeApplicationCommand(smi::SystemMessage::DiagnosticResumeFailure,
+                                        trace);
+}
+#endif
 
 inline Result terminateApplication() {
     return sendSimple(smi::SystemMessage::TerminateApplication);
