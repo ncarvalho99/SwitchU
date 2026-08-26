@@ -11,13 +11,21 @@ param(
     [ValidateSet('sysmodule', 'homebrew')] [string] $Variant = 'sysmodule',
     [ValidatePattern('^[A-Za-z]:$')] [string] $ConsoleDrive = 'E:',
     [switch] $TerminationQueueTest,
+    [switch] $PreflightMatrixTest,
     [switch] $SkipConsoleDeploy
 )
 
 $ErrorActionPreference = 'Stop'
 $terminationQueueTestMode = if ($TerminationQueueTest) { 'on' } else { 'off' }
+$preflightMatrixTestMode = if ($PreflightMatrixTest) { 'on' } else { 'off' }
 if ($TerminationQueueTest -and $Variant -ne 'sysmodule') {
     throw '-TerminationQueueTest is valid only for the sysmodule variant.'
+}
+if ($PreflightMatrixTest -and $Variant -ne 'sysmodule') {
+    throw '-PreflightMatrixTest is valid only for the sysmodule variant.'
+}
+if ($TerminationQueueTest -and $PreflightMatrixTest) {
+    throw 'Use only one diagnostic build mode at a time.'
 }
 $dockerRoot = 'C:\Program Files\Docker\Docker\resources\bin'
 $docker = Join-Path $dockerRoot 'docker.exe'
@@ -147,7 +155,7 @@ $started = Get-Date
 # every --rm run would make later builds incorrectly think dependencies exist.
 $ErrorActionPreference = 'Continue'
 & $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake `
-    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode |
+    $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode $preflightMatrixTestMode |
     Tee-Object -FilePath $log
 $rc = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
