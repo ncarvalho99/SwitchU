@@ -1,15 +1,15 @@
 # SwitchU transition-speed audit
 
 - Audit date: 2026-08-24
-- Latest hardware follow-up: 2026-08-25
-- Audited source: `309735b` plus the latency changes described here
+- Latest hardware follow-up: 2026-08-27
+- Audited source: `309735b` plus the latency changes described here; latest controlled production build `c952106`
 - Production topology: qlaunch-replacement daemon plus external all-foreground library-applet menu
 
 ## Outcome
 
 The largest launch delay was not Horizon title creation. SwitchU deliberately waited for a 1.45-second visual sequence before sending any launch or resume command. After the command, the daemon waited for the disposable menu process to die before starting the title. The recorded median from command receipt to application foreground request completion was 1.1 seconds. Thus, the pre-audit median lower bound from activation to the foreground request was about 2.55 seconds, plus the unmeasured synchronous configuration write and SD commit.
 
-This audit lands a conservative optimization set. The visual gate is now 340 ms, the recency write overlaps it, startup catalog I/O overlaps other initialization, unused overlay trees are created on first use, redundant service sessions and IPC payloads are removed, render and background work are separated by core, and process teardown no longer repeats global GPU waits or waits on polling/network timeouts. The source-level launch gate is 1.11 seconds shorter. A later ARM-counter trace proved 321.839-333.480 ms user-to-animation intervals and only 0.002-0.003 ms from animation completion to durable recency completion. Sample count is still too small to claim a distribution-level speedup.
+This audit lands a conservative optimization set. The visual gate is now 340 ms, the recency write overlaps it, startup catalog I/O overlaps other initialization, unused overlay trees are created on first use, redundant service sessions and IPC payloads are removed, render and background work are separated by core, and process teardown no longer repeats global GPU waits or waits on polling/network timeouts. The source-level launch gate is 1.11 seconds shorter. ARM-counter traces prove that the recency commit is hidden by the animation, and the controlled production matrix below establishes current-build distributions. A same-console pre-change distribution is still absent, so these results do not by themselves prove a distribution-level speedup.
 
 The largest remaining return cost is architectural. SwitchU destroys the menu process before a title receives the foreground, then creates a new menu process after HOME or title exit. The daemon survives, but the menu's heap, widget tree, fonts, GPU context, textures, and service sessions do not. Existing logs show a median 1.8 seconds from HOME to `MenuReady` and 1.9 seconds from natural application exit to `MenuReady`.
 
@@ -59,7 +59,7 @@ The functional results from the first build were mixed:
 - The 340 ms launch gate and overlapped recency commit cannot be measured from these logs. Menu-side launch messages were buffered away at process exit, and there are no activation, animation-complete, commit-complete, or GPU-drain markers.
 - The Bluetooth stop-event change failed on every fresh menu with `0x10801`, Horizon kernel `ResultLimitReached` (description 132). The follow-up source removes that event, clears `g_threadRunning`, cancels the existing worker wait with `svcCancelSynchronization(g_thread.handle)`, and retains the 500 ms timeout only as a race fallback. Misleading unconditional initialization messages were also corrected. The fix is built and deployed; Bluetooth connect/disconnect and handoff teardown still require hardware validation.
 
-This session is a smoke test, not the required performance run. The deployed follow-up build now transports raw ARM-system-tick landmarks across menu/daemon IPC and emits bounded `[trace-*]` records only after the measured endpoint. The 30-sample matrix and 100-cycle soak below remain pending.
+This session was a smoke test, not the required performance run. The deployed follow-up build transports raw ARM-system-tick landmarks across menu/daemon IPC and emits bounded `[trace-*]` records only after the measured endpoint. The controlled matrix was completed later as recorded below; the 100-cycle soak remains pending.
 
 ## Hardware follow-up: millisecond traces and empty Bluetooth discovery
 
@@ -97,6 +97,28 @@ Hardware then exercised that exact branch. The diagnostic close retained ownersh
 The same opt-in switch now builds an explicit edge-test suite instead of applying the old eight-second hold to every close. The diagnostic close dialog exposes ordinary close, duplicate close, sleep/wake, and force-at-15-seconds actions. Duplicate sends two ordinary command-3 storages back to back. Sleep sends the sleep request automatically and keeps AM event ownership for 12 seconds, leaving the original deadline untouched. Force deliberately ignores an already-signalled cooperative completion until 15 seconds, sends the exact production `appletApplicationTerminate` IPC once, and permits the next loop to observe/join. That last action validates state-machine ordering and single-route behavior; it is not evidence from a live title that truly refuses graceful exit.
 
 Hardware passed three suite actions on official title `01006BB00C6F0000`. Duplicate close completed once in 345.147 ms after one begin and one already-pending guard: 5.699 ms library IPC, 38.143 ms request IPC, 301.304 ms graceful polling, eight polls, no force, reason 0, and cores `3/3`. Sleep/wake requested sleep 0.2 seconds after close began, woke about 5.2 seconds later, restored the menu and 60 FPS rendering, then completed once at 12,039.924 ms after the deliberate 12-second hold; all AM results were `0x0`, `forced=0`, reason 0, and cores `3/3`. Controlled force sent `appletApplicationTerminate` once at 15,004.329 ms after request IPC and completed 12.732 ms later: 15,053.634 ms total, 1,475 polls, `forced=1`, all results `0x0`, reason 2, and cores `3/3`. Session totals were exactly three begins, three traces, three `source=terminate` routes, and three outgoing notifications. Duplicate and force notifications were durably received by the menu; the sleep menu's buffered tail ended before its receive record, but daemon delivery had one push and the next title launch succeeded. No duplicate route or log-visible lifecycle, holder, foreground, Bluetooth, rendering, or fatal fault appeared.
+
+## Controlled transition matrix: normal production build
+
+The final normal-build matrix used Stardew Valley `0100E65002BB8000` as the official title and installed sphaira forwarder `05446530ACA7E000`. It contains ten accepted cold official-title cycles, ten strict cold-forwarder cycles, and fifteen Stardew-to-sphaira replacements. The owner performed five replacement cycles beyond the planned minimum; all are retained because conditions stayed controlled and no sample was selected by result or duration. Three additional forwarder activations that overlapped a preceding close remain separate stress evidence rather than cold timing samples.
+
+| Interval (ms, p50 / p95) | Cold official, n=10 | Cold forwarder, n=10 | Official-to-forwarder replacement, n=15 |
+| --- | ---: | ---: | ---: |
+| Activation to command | 1,292.530 / 1,376.532 | 334.578 / 343.461 | 335.861 / 345.452 |
+| Command to foreground | 822.114 / 877.504 | 757.767 / 866.783 | 1,035.525 / 1,119.299 |
+| Previous-title close | 0 / 0 | 0 / 0 | 197.638 / 230.212 |
+| Preflight lead | 254.583 / 261.667 | 235.012 / 254.856 | 243.991 / 259.877 |
+| Preflight tail | 0 / 0 | 0 / 0 | 0 / 0 |
+| Menu GPU drain | 29.450 / 30.229 | 20.900 / 30.433 | 21.169 / 30.317 |
+| HOME to menu ready | 1,650.329 / 1,805.206 | 1,626.706 / 1,904.257 | 1,628.264 / 2,143.496 |
+| HOME to first input frame | 1,907.834 / 2,135.597 | 1,882.814 / 2,267.658 | 1,900.519 / 2,547.046 |
+| Return `onCreate` | 933.912 / 981.375 | 869.159 / 915.337 | 843.244 / 960.558 |
+
+All 35 accepted cycles reused complete preflight work with no post-command tail, reached foreground, returned through HOME, and completed the requested close without a lifecycle error or forced termination. Across the baseline-to-final interval, fatal and top-level crash inventories stayed at 8/18. All 71 new ERPT files contained routine code `2123-0011`; none contained forced-shutdown code `2165-1002`.
+
+No replacement-confirmation dialog is expected in this architecture. SwitchU is the qlaunch replacement and [launchApplication](../projects/daemon/src/app_manager.hpp#L594) directly requests graceful exit and joins the suspended application before creating the destination. Every one of the fifteen destination requests recorded Stardew as suspended, entered `closing previous app before launch`, and measured a nonzero previous close of 185.025-230.212 ms. The missing stock dialog therefore did not skip replacement; it confirms that SwitchU used its own direct handoff. Full derived evidence and distributions are in the [replacement analysis](../.logs/transition-matrix-replacement-20260827-152624/analysis.md).
+
+The matrix establishes the current build's distribution, not a causal before/after comparison. HOME return remains dominated by rebuilding the disposable menu, especially `onCreate`. On replacement, the old-title close adds about 200 ms while application Start and foreground IPC remain only tens of microseconds. These results make GPU upload batching and cold asset-construction deduplication the next measurable optimization stage.
 
 ## Execution model
 
@@ -457,7 +479,8 @@ Before accepting a speed change, run 100-cycle launch/HOME/resume and A-to-B rep
 ## Priority order
 
 1. Complete the remaining real-state gates: optional-user modes and physical game-card removal/update. The connected catalog currently has no optional-user candidate. Required-user launch, no-user forwarder launch, A-to-B replacement, a distinct second UID, first-ever account-save creation followed by existing-save reuse, all seven rejection fallbacks, physical sleep/wake stale fallback, and deterministic launch/resume failed-handoff recovery now pass on hardware.
-2. Run the 30-sample matrix with `analyze-transition-traces.ps1`: 10 cold official launches, 10 installed-forwarder launches, and 10 A-to-B replacements, each with HOME return. Compare command-to-foreground and preflight lead/tail metrics on the restored normal build.
-3. After lifecycle gates, implement fence-based upload batching, unique shader-file loading, and cached animated-background manifests; current return traces place cold `onCreate` at 843-1,101 ms.
-4. If arbitrary NRO launch is a product requirement, build the dedicated hbloader-compatible NRO host and private request transport described above; installed forwarders already use the normal title-ID path.
-5. Decide whether sub-second return justifies a persistent-renderer redesign; do not retain the current large menu heap beside applications without a verified Horizon resource model.
+2. Preserve the completed controlled matrix as the current-build baseline: 10 cold official launches, 10 strict cold-forwarder launches, and 15 A-to-B replacements. Do not claim a before/after speedup without a comparable pre-change build, and retain the 100-cycle lifecycle soak as the release gate.
+3. Implement fence-based upload batching first. Validate deko3d debug output, pending-upload launch, cache eviction, theme change, and glyph-cache clear before comparing HOME-to-frame and `onCreate` against this matrix.
+4. Deduplicate shader-file loads and cache animated-background manifests, measuring each independently so their return-time effects are not conflated.
+5. If arbitrary NRO launch is a product requirement, build the dedicated hbloader-compatible NRO host and private request transport described above; installed forwarders already use the normal title-ID path.
+6. Decide whether sub-second return justifies a persistent-renderer redesign; do not retain the current large menu heap beside applications without a verified Horizon resource model.
