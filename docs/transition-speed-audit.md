@@ -358,11 +358,13 @@ The daemon and its SD filesystem server survive every menu. Test making registra
 
 Add an explicit daemon-shutdown function that terminates the holder and unregisters once. Validate at least 100 HOME/launch cycles, sleep/wake, staged updater reboot, SD removal, and a menu crash. If Atmosphere consumes or invalidates the external-code server after one load on any supported version, retain the current per-holder registration.
 
-### 4. Batch GPU uploads instead of removing synchronization blindly
+### Implemented, awaiting hardware: fence-batched GPU uploads
 
-The current staging buffer is reused immediately, so deleting `waitIdle()` would allow the CPU to overwrite bytes still consumed by the GPU. Replace it with a small ring of upload command/staging slots. Each slot owns a fence; wait only when that slot wraps, record multiple copies, signal its fence, then move to the next slot. Initial fonts, game-card art, avatars, and first-page icons can be submitted as one batch. Never release an image descriptor or memory block until the fence that references it signals.
+[GpuDevice](../lib/nxui/src/core/GpuDevice.cpp) now owns four upload slots. Each has a 1 MiB fixed staging arena, a dedicated 64 KiB command arena, and a fence. Up to 32 ordinary texture copies share one command list. A source larger than 1 MiB gets a slot-owned temporary block and is submitted alone; that block remains alive until the same slot's fence signals. Slot allocation is checked before any command-buffer or CPU-address use.
 
-This is the highest-value remaining rendering change. It requires deko3d validation with GPU debug output enabled, icon-cache eviction, theme changes, language glyph-cache clears, and rapid launch during pending uploads.
+`uploadTexture` copies caller bytes into owned staging memory and returns without a queue-wide wait. The batch ends with a full image-cache barrier and fence. [beginFrame/endFrame](../lib/nxui/src/core/GpuDevice.cpp) submit update-time and render-time uploads before the drawing list that can sample them. Ring reuse waits only for the oldest slot, while explicit resource retirement and shutdown still call `waitIdle`, which first submits any pending batch and then releases slot-owned temporary memory. This preserves source, destination, descriptor, and teardown lifetimes; it does not pretend that GPU synchronization can be deleted.
+
+The normal release/sysmodule compiles with all diagnostic modes disabled. Runtime telemetry now reports upload count, batch count, and ring-wrap CPU wait. Hardware must still validate startup/return, icon-cache eviction, animated and static theme changes, language glyph-cache clears, Theme Shop/gallery previews, and rapid launch while uploads are pending. No return-time improvement is claimed before those checks and a comparison against the completed matrix.
 
 ## Memory and warm-state decision
 
@@ -480,7 +482,7 @@ Before accepting a speed change, run 100-cycle launch/HOME/resume and A-to-B rep
 
 1. Complete the remaining real-state gates: optional-user modes and physical game-card removal/update. The connected catalog currently has no optional-user candidate. Required-user launch, no-user forwarder launch, A-to-B replacement, a distinct second UID, first-ever account-save creation followed by existing-save reuse, all seven rejection fallbacks, physical sleep/wake stale fallback, and deterministic launch/resume failed-handoff recovery now pass on hardware.
 2. Preserve the completed controlled matrix as the current-build baseline: 10 cold official launches, 10 strict cold-forwarder launches, and 15 A-to-B replacements. Do not claim a before/after speedup without a comparable pre-change build, and retain the 100-cycle lifecycle soak as the release gate.
-3. Implement fence-based upload batching first. Validate deko3d debug output, pending-upload launch, cache eviction, theme change, and glyph-cache clear before comparing HOME-to-frame and `onCreate` against this matrix.
-4. Deduplicate shader-file loads and cache animated-background manifests, measuring each independently so their return-time effects are not conflated.
+3. Hardware-validate the implemented fence-based upload batching: deko3d debug output, pending-upload launch, cache eviction, static/animated theme changes, preview loading, and glyph-cache clear. Then compare HOME-to-frame and `onCreate` against this matrix.
+4. After that gate, deduplicate shader-file loads and cache animated-background manifests, measuring each independently so their return-time effects are not conflated.
 5. If arbitrary NRO launch is a product requirement, build the dedicated hbloader-compatible NRO host and private request transport described above; installed forwarders already use the normal title-ID path.
 6. Decide whether sub-second return justifies a persistent-renderer redesign; do not retain the current large menu heap beside applications without a verified Horizon resource model.
