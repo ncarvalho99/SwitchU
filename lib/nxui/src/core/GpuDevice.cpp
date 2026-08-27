@@ -27,6 +27,14 @@ GpuDevice::DebugSink GpuDevice::s_debugSink = nullptr;
 
 bool GpuDevice::initialize() {
     m_bulkTeardown = false;
+    m_uploadSlot = 0;
+    m_uploadBatchOpen = false;
+    m_frameUploads = 0;
+    m_lastFrameUploads = 0;
+    m_frameUploadBatches = 0;
+    m_lastFrameUploadBatches = 0;
+    m_frameUploadWaitNs = 0;
+    m_lastFrameUploadWaitNs = 0;
     m_dev   = dk::DeviceMaker{}.setCbDebug(deviceDebug).create();
     m_queue = dk::QueueMaker{m_dev}.setFlags(DkQueueFlags_Graphics).create();
 
@@ -36,9 +44,22 @@ bool GpuDevice::initialize() {
         m_cmdbuf[i].addMemory(m_cmdPool[i].block, 0, CMD_BUF_SIZE);
     }
 
-    m_uploadCmdPool.create(m_dev, 64 * 1024, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
-    m_uploadCmdbuf = dk::CmdBufMaker{m_dev}.create();
-    m_uploadCmdbuf.addMemory(m_uploadCmdPool.block, 0, 64 * 1024);
+    for (int i = 0; i < UPLOAD_SLOT_COUNT; ++i) {
+        m_uploadInFlight[i] = false;
+        m_uploadCopyCount[i] = 0;
+        if (!m_uploadCmdPool[i].create(
+                m_dev, UPLOAD_CMD_BUF_SIZE,
+                DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached) ||
+            !m_uploadStagingPool[i].create(
+                m_dev, UPLOAD_STAGING_SIZE,
+                DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)) {
+            std::fprintf(stderr,
+                         "[GpuDevice] upload slot %d allocation failed\n", i);
+            return false;
+        }
+        m_uploadCmdbuf[i] = dk::CmdBufMaker{m_dev}.create();
+        m_uploadCmdbuf[i].addMemory(m_uploadCmdPool[i].block, 0, UPLOAD_CMD_BUF_SIZE);
+    }
 
     m_codePool.create(m_dev, CODE_POOL_SIZE,
         DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code);
@@ -64,8 +85,6 @@ bool GpuDevice::initialize() {
     m_imgDescOff = m_dataPool.alloc(MAX_TEXTURES * sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT);
     m_samDescOff = m_dataPool.alloc(MAX_SAMPLERS * sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT);
 
-    m_stagingPool.create(m_dev, 256 * 1024, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
-
     createFramebuffers();
     createDepthStencil();
     createOffscreenTargets();
@@ -73,6 +92,9 @@ bool GpuDevice::initialize() {
     std::array<DkImage const*, NUM_FB> fbArray;
     for (int i = 0; i < NUM_FB; ++i) fbArray[i] = &m_fbImages[i];
     m_swapchain = dk::SwapchainMaker{m_dev, nwindowGetDefault(), fbArray}.create();
+
+    std::printf("[GpuDevice] upload ring: %d slots, %u KiB staging each\n",
+                UPLOAD_SLOT_COUNT, UPLOAD_STAGING_SIZE / 1024u);
 
     return true;
 }
@@ -146,6 +168,11 @@ void GpuDevice::createOffscreenTargets() {
 }
 
 int GpuDevice::beginFrame() {
+    // Most texture work happens in Activity::onUpdate, before beginFrame. Send
+    // that batch now so it can execute while acquireImage waits for display.
+    // A second flush in endFrame covers glyphs created during rendering.
+    submitUploadBatch();
+
     // These two waits mean different things and have to be told apart.
     //
     // acquireImage blocks until the display releases a buffer, so it absorbs
@@ -166,7 +193,11 @@ int GpuDevice::beginFrame() {
     m_lastAcquireNs = armTicksToNs(tFence - tAcquire);
     m_lastFenceWaitNs = armTicksToNs(tDone - tFence);
     m_lastFrameUploads = m_frameUploads;
+    m_lastFrameUploadBatches = m_frameUploadBatches;
+    m_lastFrameUploadWaitNs = m_frameUploadWaitNs;
     m_frameUploads = 0;
+    m_frameUploadBatches = 0;
+    m_frameUploadWaitNs = 0;
 
     // Reset command buffer and re-feed its memory (clear invalidates memory
     // tracking — following the deko3d sample framework pattern).
@@ -176,6 +207,11 @@ int GpuDevice::beginFrame() {
 }
 
 void GpuDevice::endFrame() {
+    // Upload lists must enter the queue before the frame that can sample their
+    // destination images. Queue submission order supplies the GPU dependency;
+    // no device-wide idle is needed here.
+    submitUploadBatch();
+
     // Signal the fence for this slot so the NEXT time beginFrame()
     // acquires the same slot, it can wait for completion.
     m_cmdbuf[m_slot].signalFence(m_frameFences[m_slot]);
@@ -185,8 +221,68 @@ void GpuDevice::endFrame() {
     m_queue.presentImage(m_swapchain, m_slot);
 }
 
+void GpuDevice::beginUploadBatch() {
+    if (m_uploadBatchOpen)
+        return;
+
+    const int slot = m_uploadSlot;
+    if (m_uploadInFlight[slot]) {
+        const uint64_t waitStart = armGetSystemTick();
+        m_uploadFences[slot].wait();
+        const uint64_t waitEnd = armGetSystemTick();
+        m_frameUploadWaitNs += armTicksToNs(waitEnd - waitStart);
+        m_uploadInFlight[slot] = false;
+    }
+
+    // The fence above is the lifetime boundary for both command memory and any
+    // oversized source block owned by this slot.
+    m_uploadTempStaging[slot] = {};
+    m_uploadStagingPool[slot].used = 0;
+    m_uploadCopyCount[slot] = 0;
+    m_uploadCmdbuf[slot].clear();
+    m_uploadCmdbuf[slot].addMemory(
+        m_uploadCmdPool[slot].block, 0, UPLOAD_CMD_BUF_SIZE);
+    m_uploadBatchOpen = true;
+}
+
+void GpuDevice::submitUploadBatch() {
+    if (!m_uploadBatchOpen)
+        return;
+
+    const int slot = m_uploadSlot;
+    if (m_uploadCopyCount[slot] == 0) {
+        m_uploadBatchOpen = false;
+        return;
+    }
+
+    // copyBufferToImage uses the 2D engine. Make every image write visible to
+    // later texture sampling before signalling that this slot may be reused.
+    m_uploadCmdbuf[slot].barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+    m_uploadCmdbuf[slot].signalFence(m_uploadFences[slot]);
+    m_queue.submitCommands(m_uploadCmdbuf[slot].finishList());
+    m_uploadInFlight[slot] = true;
+    ++m_frameUploadBatches;
+    m_uploadBatchOpen = false;
+    m_uploadSlot = (slot + 1) % UPLOAD_SLOT_COUNT;
+}
+
+void GpuDevice::retireSubmittedUploads() {
+    for (int i = 0; i < UPLOAD_SLOT_COUNT; ++i) {
+        m_uploadInFlight[i] = false;
+        m_uploadCopyCount[i] = 0;
+        m_uploadTempStaging[i] = {};
+        m_uploadStagingPool[i].used = 0;
+    }
+    m_uploadBatchOpen = false;
+    m_uploadSlot = 0;
+}
+
 void GpuDevice::waitIdle() {
-    if (m_queue) m_queue.waitIdle();
+    if (!m_queue)
+        return;
+    submitUploadBatch();
+    m_queue.waitIdle();
+    retireSubmittedUploads();
 }
 
 void GpuDevice::beginBulkTeardown() {
@@ -300,54 +396,89 @@ bool GpuDevice::uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
         return false;
     }
 
-    const void* srcCpu = nullptr;
-    DkGpuAddr srcGpu = 0;
-    dk::UniqueMemBlock tempStaging;
+    beginUploadBatch();
 
-    if (size <= m_stagingPool.size) {
-        srcCpu = m_stagingPool.cpuBase;
-        srcGpu = m_stagingPool.block.getGpuAddr();
+    const bool oversized = size > UPLOAD_STAGING_SIZE;
+    const auto& currentStaging = m_uploadStagingPool[m_uploadSlot];
+    const uint32_t alignedUsed =
+        (currentStaging.used + 255u) & ~255u;
+    const bool stagingHasRoom = alignedUsed <= currentStaging.size &&
+        size <= currentStaging.size - alignedUsed;
+    if (!oversized &&
+        (m_uploadCopyCount[m_uploadSlot] >= UPLOAD_COPIES_PER_BATCH ||
+         !stagingHasRoom)) {
+        submitUploadBatch();
+        beginUploadBatch();
+    } else if (oversized && m_uploadCopyCount[m_uploadSlot] > 0) {
+        // Keep a large source alone: its slot owns one temporary block until
+        // the fence signals, while ordinary uploads keep using fixed arenas.
+        submitUploadBatch();
+        beginUploadBatch();
+    }
+
+    const int slot = m_uploadSlot;
+    void* srcCpu = nullptr;
+    DkGpuAddr srcGpu = 0;
+
+    if (!oversized) {
+        const uint32_t offset = m_uploadStagingPool[slot].alloc(size, 256);
+        if (offset == UINT32_MAX) {
+            std::fprintf(stderr,
+                         "[GpuDevice] upload staging allocation failed for texture (%u bytes)\n",
+                         size);
+            return false;
+        }
+        srcCpu = m_uploadStagingPool[slot].cpuAddr(offset);
+        srcGpu = m_uploadStagingPool[slot].gpuAddr(offset);
     } else {
-        uint32_t allocSize = (size + kGpuAlign - 1) & ~(kGpuAlign - 1);
-        tempStaging = dk::MemBlockMaker{m_dev, allocSize}
+        const uint32_t allocSize = (size + kGpuAlign - 1) & ~(kGpuAlign - 1);
+        m_uploadTempStaging[slot] = dk::MemBlockMaker{m_dev, allocSize}
             .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
             .create();
-
-        srcCpu = tempStaging.getCpuAddr();
-        srcGpu = tempStaging.getGpuAddr();
-
+        srcCpu = m_uploadTempStaging[slot].getCpuAddr();
+        srcGpu = m_uploadTempStaging[slot].getGpuAddr();
         if (!srcCpu || !srcGpu) {
-            std::fprintf(stderr, "[GpuDevice] Failed temp staging allocation for texture (%u bytes)\n", size);
+            m_uploadTempStaging[slot] = {};
+            std::fprintf(stderr,
+                         "[GpuDevice] failed temp staging allocation for texture (%u bytes)\n",
+                         size);
             return false;
         }
     }
 
-    std::memcpy(const_cast<void*>(srcCpu), pixels, size);
-
-    // Use dedicated upload command buffer
-    m_uploadCmdbuf.clear();
-    m_uploadCmdbuf.addMemory(m_uploadCmdPool.block, 0, 64 * 1024);
+    std::memcpy(srcCpu, pixels, size);
 
     dk::ImageView view{dst};
-    m_uploadCmdbuf.copyBufferToImage(
+    m_uploadCmdbuf[slot].copyBufferToImage(
         {srcGpu, 0, 0},
         view,
         {0, 0, 0, w, h, 1}
     );
 
-    m_queue.submitCommands(m_uploadCmdbuf.finishList());
-    m_queue.waitIdle();
+    ++m_uploadCopyCount[slot];
     ++m_frameUploads;
+
+    // A large upload owns the slot's only temporary source block. Submit it
+    // now; normal batches flush at capacity or immediately before endFrame.
+    if (oversized || m_uploadCopyCount[slot] >= UPLOAD_COPIES_PER_BATCH)
+        submitUploadBatch();
     return true;
 }
 
 void GpuDevice::shutdown() {
-    if (!m_bulkTeardown && m_queue)
-        m_queue.waitIdle();
+    bool uploadWorkOutstanding = m_uploadBatchOpen;
+    for (int i = 0; i < UPLOAD_SLOT_COUNT && !uploadWorkOutstanding; ++i)
+        uploadWorkOutstanding = m_uploadInFlight[i];
+
+    // beginBulkTeardown already drained the queue, but preserve the lifetime
+    // boundary if anything managed to enqueue after that one-time drain.
+    if (m_queue && (!m_bulkTeardown || uploadWorkOutstanding))
+        waitIdle();
     m_swapchain    = {};
     for (int i = 0; i < NUM_FB; ++i)
         m_cmdbuf[i] = {};
-    m_uploadCmdbuf = {};
+    for (int i = 0; i < UPLOAD_SLOT_COUNT; ++i)
+        m_uploadCmdbuf[i] = {};
     m_queue        = {};
     m_imageChunks.clear();
     m_imageMemUsed = 0;
@@ -358,13 +489,20 @@ void GpuDevice::shutdown() {
     m_offscreenReady = false;
     for (int i = 0; i < NUM_FB; ++i)
         m_cmdPool[i] = {};
-    m_uploadCmdPool = {};
+    for (int i = 0; i < UPLOAD_SLOT_COUNT; ++i) {
+        m_uploadTempStaging[i] = {};
+        m_uploadCmdPool[i] = {};
+        m_uploadStagingPool[i] = {};
+        m_uploadInFlight[i] = false;
+        m_uploadCopyCount[i] = 0;
+    }
     m_codePool    = {};
     m_dataPool  = {};
     m_imagePool = {};
-    m_stagingPool = {};
     m_dev       = {};
     m_bulkTeardown = false;
+    m_uploadBatchOpen = false;
+    m_uploadSlot = 0;
 }
 
 } // namespace nxui

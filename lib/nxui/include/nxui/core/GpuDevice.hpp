@@ -31,10 +31,16 @@ struct GpuPool {
     bool create(dk::Device dev, uint32_t sz, uint32_t flags) {
         size = (sz + kGpuAlign - 1) & ~(kGpuAlign - 1);
         block = dk::MemBlockMaker{dev, size}.setFlags(flags).create();
+        used = 0;
+        cpuBase = nullptr;
+        gpuBase = 0;
+        if (!block) {
+            size = 0;
+            return false;
+        }
         if (flags & DkMemBlockFlags_CpuUncached)
             cpuBase = block.getCpuAddr();
         gpuBase = block.getGpuAddr();
-        used = 0;
         return true;
     }
 
@@ -102,15 +108,12 @@ public:
     uint64_t lastAcquireNs()   const { return m_lastAcquireNs; }
     uint64_t lastFenceWaitNs() const { return m_lastFenceWaitNs; }
 
-    // uploadTexture calls a full device waitIdle unconditionally, on every
-    // call, regardless of how small the texture is — already the cause of one
-    // stall bug fixed for icons this session. The draw/vert/blur/capture
-    // counters above account for GPU submission almost completely except this
-    // path, which none of them see. If something is missing a font glyph cache
-    // hit every frame — the cache is 384 entries, shared by the whole app,
-    // and the settings overlay alone can push 150+ distinct label strings
-    // through it during warmup — this is where that would show up.
-    uint32_t lastFrameUploads() const { return m_lastFrameUploads; }
+    // Uploads are packed into fenced staging/command slots and submitted before
+    // the frame that can sample them. These counters show whether work batched
+    // and whether wrapping the ring ever blocked the CPU.
+    uint32_t lastFrameUploads()       const { return m_lastFrameUploads; }
+    uint32_t lastFrameUploadBatches() const { return m_lastFrameUploadBatches; }
+    uint64_t lastFrameUploadWaitNs()  const { return m_lastFrameUploadWaitNs; }
 
     int  width()  const { return FB_WIDTH; }
     int  height() const { return FB_HEIGHT; }
@@ -201,6 +204,9 @@ public:
     // the uncompressed w*h*4. It exists because the short-buffer check below is
     // the guard that turns a bad upload into a failure instead of an svcBreak,
     // and a block-compressed image legitimately carries a fraction of that.
+    // Source bytes are copied before return. GPU completion is asynchronous;
+    // beginFrame/endFrame submit batches before their drawing commands, and
+    // waitIdle flushes any pending batch before waiting.
     bool uploadTexture(dk::Image& dst, const void* pixels, uint32_t size,
                        uint32_t width, uint32_t height, uint64_t expectedBytes = 0);
 
@@ -258,24 +264,41 @@ public:
 
 private:
 #ifdef NXUI_BACKEND_DEKO3D
+    static constexpr int      UPLOAD_SLOT_COUNT = 4;
+    static constexpr uint32_t UPLOAD_CMD_BUF_SIZE = 64u * 1024u;
+    static constexpr uint32_t UPLOAD_STAGING_SIZE = 1024u * 1024u;
+    static constexpr uint32_t UPLOAD_COPIES_PER_BATCH = 32;
+
     void createFramebuffers();
     void createDepthStencil();
     void createOffscreenTargets();
+    void beginUploadBatch();
+    void submitUploadBatch();
+    void retireSubmittedUploads();
 
     dk::UniqueDevice    m_dev;
     dk::UniqueQueue     m_queue;
     dk::UniqueCmdBuf    m_cmdbuf[NUM_FB];
-    dk::UniqueCmdBuf    m_uploadCmdbuf;
+    dk::UniqueCmdBuf    m_uploadCmdbuf[UPLOAD_SLOT_COUNT];
     dk::UniqueSwapchain m_swapchain;
 
     GpuPool m_fbPool;
     GpuPool m_dsPool;
     GpuPool m_cmdPool[NUM_FB];
-    GpuPool m_uploadCmdPool;
+    GpuPool m_uploadCmdPool[UPLOAD_SLOT_COUNT];
     GpuPool m_codePool;
     GpuPool m_dataPool;
     GpuPool m_imagePool;
-    GpuPool m_stagingPool;
+    GpuPool m_uploadStagingPool[UPLOAD_SLOT_COUNT];
+
+    // Normal icons, glyphs, and BC1 frames share a fixed arena per slot. A
+    // larger upload owns one temporary block until the slot fence signals.
+    dk::UniqueMemBlock m_uploadTempStaging[UPLOAD_SLOT_COUNT];
+    dk::Fence m_uploadFences[UPLOAD_SLOT_COUNT];
+    bool m_uploadInFlight[UPLOAD_SLOT_COUNT] {};
+    uint32_t m_uploadCopyCount[UPLOAD_SLOT_COUNT] {};
+    int m_uploadSlot = 0;
+    bool m_uploadBatchOpen = false;
 
     dk::Image  m_fbImages[NUM_FB];
     dk::Image  m_dsImage;
@@ -314,6 +337,10 @@ private:
     int m_slot = -1;
     uint32_t m_frameUploads = 0;
     uint32_t m_lastFrameUploads = 0;
+    uint32_t m_frameUploadBatches = 0;
+    uint32_t m_lastFrameUploadBatches = 0;
+    uint64_t m_frameUploadWaitNs = 0;
+    uint64_t m_lastFrameUploadWaitNs = 0;
     uint64_t m_lastAcquireNs = 0;
     uint64_t m_lastFenceWaitNs = 0;
     bool m_bulkTeardown = false;

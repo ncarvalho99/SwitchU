@@ -500,8 +500,8 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     }
 
     // Timing breakdown so the split between SD reads, JPEG decoding and GPU
-    // uploads is visible in menu.log. upload is the interesting one: every
-    // texture currently costs a full queue waitIdle inside GpuDevice.
+    // upload recording is visible in menu.log. GpuDevice now packs these
+    // copies into fenced batches; ring-wrap wait is reported by [perf].
     const uint64_t tickEnd = armGetSystemTick();
     auto elapsedMs = [](uint64_t from, uint64_t to) -> unsigned {
         return static_cast<unsigned>(armTicksToNs(to - from) / 1000000ULL);
