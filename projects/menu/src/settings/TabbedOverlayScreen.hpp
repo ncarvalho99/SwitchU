@@ -6,6 +6,7 @@
 #include <nxui/core/Animation.hpp>
 #include <nxui/widgets/GlassWidget.hpp>
 #include "widgets/SelectionCursor.hpp"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <functional>
@@ -148,6 +149,8 @@ protected:
     // investigation. The base consumes it once per rendered frame so a custom
     // layout cannot accidentally leave the trace armed when its tab changes.
     virtual bool consumeRenderDiagnosticsFrame() { return false; }
+    // End of the previous traced render, for the frame trace's outside_us.
+    std::uint64_t m_traceLastRenderEndTick = 0;
     virtual void drawCustomContent(nxui::Renderer&, const nxui::Rect&, const nxui::Rect&, float) {}
     virtual void updateCustomContent(float) {}
     virtual bool handleCustomPressA() { return false; }

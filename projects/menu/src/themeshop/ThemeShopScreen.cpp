@@ -47,6 +47,11 @@ constexpr int kCommunityPreviewMaxSide = 640;
 // inteira.
 constexpr int kPreviewSheetMaxSide = 2560;   // a folha HD tem 2560x1152
 
+// Covers come off the card, so nothing is gained by reading several at once,
+// and something is lost: each decode holds the image at its source size before
+// the downscale, and the menu has little heap to spare.
+constexpr int kMaxInstalledPreviewDecodesInFlight = 1;
+
 bool isPreviewSheetPath(const std::string& path) {
     return path.find("preview_sheet") != std::string::npos;
 }
@@ -574,6 +579,36 @@ void ThemeShopScreen::primeInstalledPreview(const std::string& previewPath) {
         return;
     }
 
+    // One decode at a time.
+    //
+    // Submitting all five covers at once measured worse than the synchronous
+    // version it replaced: the opening frame fell from 287.738 ms to 110.553 ms
+    // of content, but a 1,414.1 ms frame appeared right behind it. stbi_load
+    // allocates the image at its full source size before the downscale, two
+    // pool workers hold one of those each, and the decoded results then queued
+    // up waiting to upload -- on a process already sitting at 429.5 MB of
+    // 457.9 MB. The old path was slow but only ever held one of these buffers,
+    // and freed it before reading the next file.
+    //
+    // Serialised, the transient cost is strictly lower than what the render
+    // thread used to pay, and it is no longer paid in the frame.
+    int decodesInFlight = 0;
+    for (const auto& cached : m_installedPreviewCache) {
+        if (!cached.second || cached.second == slot)
+            continue;
+        std::lock_guard<std::mutex> lk(cached.second->mutex);
+        if (cached.second->phase == PreviewPhase::Loading)
+            ++decodesInFlight;
+    }
+    if (decodesInFlight >= kMaxInstalledPreviewDecodesInFlight) {
+        // Back to Idle so the next frame asks again. The grid calls this every
+        // frame for every card it draws, so no queue of its own is needed.
+        std::lock_guard<std::mutex> lk(slot->mutex);
+        if (slot->phase == PreviewPhase::Loading)
+            slot->phase = PreviewPhase::Idle;
+        return;
+    }
+
     m_hasPendingInstalledPreviewWork = true;
     auto state = slot;
     slot->future = m_threadPool->submit([state, previewPath, maxSide]() {
@@ -601,7 +636,6 @@ void ThemeShopScreen::syncFinishedInstalledPreviewLoads() {
         return;
 
     bool hasPendingWork = false;
-    int uploadsThisFrame = 0;
 
     for (auto& entry : m_installedPreviewCache) {
         auto state = entry.second;
@@ -636,10 +670,6 @@ void ThemeShopScreen::syncFinishedInstalledPreviewLoads() {
             std::lock_guard<std::mutex> lk(state->mutex);
             if (state->phase != PreviewPhase::Downloaded)
                 continue;
-            if (uploadsThisFrame >= kMaxPreviewUploadsPerFrame) {
-                hasPendingWork = true;
-                continue;
-            }
             // Moved, not copied. Unlike a community preview, whose compressed
             // bytes are worth keeping so it can come back without the network,
             // this one is already on the card: re-reading it is a file open.
@@ -647,7 +677,11 @@ void ThemeShopScreen::syncFinishedInstalledPreviewLoads() {
             state->decoded = nxui::DecodedImage();
         }
 
-        ++uploadsThisFrame;
+        // Uploaded the same frame it is ready, with no per-frame cap. The cap
+        // the community uploads use is there to spread network arrivals; here
+        // only one decode exists at a time, and holding its pixels for a later
+        // frame is exactly the retained megabytes that made the first opening
+        // stall. The upload itself is microseconds.
         nxui::Texture uploaded;
         bool ok = uploaded.loadFromDecoded(*m_gpu, *m_renderer, image);
         std::lock_guard<std::mutex> lk(state->mutex);
