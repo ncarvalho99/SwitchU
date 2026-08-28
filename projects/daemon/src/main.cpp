@@ -1146,11 +1146,12 @@ static void logMenuFirstFrameTrace(const smi::MenuFirstFrameArgs& first,
 static void logMenuExitTrace(uint64_t holderFinishedTick) {
     const auto& closing = g_lastMenuClosingTrace;
     switchu::FileLog::log(
-        "[trace-menu-exit] shutdown_to_drain_us=%llu gpu_drain_us=%llu destroy_to_cancel_us=%llu cancel_to_state_us=%llu state_to_http_us=%llu http_to_bt_us=%llu bt_to_closecmd_us=%llu closecmd_ipc_us=%llu closecmd_to_holder_us=%llu core=%u",
+        "[trace-menu-exit] shutdown_to_drain_us=%llu gpu_drain_us=%llu destroy_to_cancel_us=%llu cancel_to_workers_us=%llu workers_to_state_us=%llu state_to_http_us=%llu http_to_bt_us=%llu bt_to_closecmd_us=%llu closecmd_ipc_us=%llu closecmd_to_holder_us=%llu core=%u",
         (unsigned long long)tickDeltaUs(closing.shutdown_start_tick, closing.gpu_drain_end_tick),
         (unsigned long long)tickDeltaUs(closing.gpu_drain_start_tick, closing.gpu_drain_end_tick),
         (unsigned long long)tickDeltaUs(closing.on_destroy_start_tick, closing.http_cancel_done_tick),
-        (unsigned long long)tickDeltaUs(closing.http_cancel_done_tick, closing.state_persist_done_tick),
+        (unsigned long long)tickDeltaUs(closing.http_cancel_done_tick, closing.worker_drain_done_tick),
+        (unsigned long long)tickDeltaUs(closing.worker_drain_done_tick, closing.state_persist_done_tick),
         (unsigned long long)tickDeltaUs(closing.state_persist_done_tick, closing.http_shutdown_done_tick),
         (unsigned long long)tickDeltaUs(closing.http_shutdown_done_tick, closing.bluetooth_done_tick),
         (unsigned long long)tickDeltaUs(closing.bluetooth_done_tick, closing.command_send_tick),
