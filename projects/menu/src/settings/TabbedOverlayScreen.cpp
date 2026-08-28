@@ -439,6 +439,8 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
 
     float opacity = visibilityProgress();
     nxui::Rect p = panelRect(scale());
+    const bool traceRender = consumeRenderDiagnosticsFrame();
+    const uint64_t traceStart = traceRender ? armGetSystemTick() : 0;
 
     if (m_theme)
         m_focusCursor.setColor(m_theme->cursorNormal);
@@ -475,6 +477,7 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
             m_cachedBlurIterations = tuning.blurIterations;
         }
     }
+    const uint64_t traceAfterBackdrop = traceRender ? armGetSystemTick() : 0;
 
     // Once the overlay is fully open and settled, nothing it samples through
     // the glass changes: the blurred backdrop is already cached, and the panel
@@ -528,8 +531,10 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
 
         ren.liquidGlassSettings() = savedGlass;
     }
+    const uint64_t traceAfterGlass = traceRender ? armGetSystemTick() : 0;
 
     onContentRender(ren);
+    const uint64_t traceAfterContent = traceRender ? armGetSystemTick() : 0;
 
     if (ren.boxWireframeEnabled()) {
         syncDebugWireframeRects(p);
@@ -538,6 +543,23 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
     }
 
     m_focusCursor.render(ren);
+
+    if (traceRender) {
+        const uint64_t traceEnd = armGetSystemTick();
+        auto elapsedUs = [](uint64_t start, uint64_t end) {
+            return (unsigned long long)(armTicksToNs(end - start) / 1000ULL);
+        };
+        DebugLog::log("[themeshop-frame] tab=%d opacity=%.2f backdrop_refresh=%d scene_hidden=%d backdrop_us=%llu glass_us=%llu content_us=%llu cursor_us=%llu total_us=%llu",
+                      m_tabIndex,
+                      opacity,
+                      needsBackdropRefresh ? 1 : 0,
+                      m_sceneHidden ? 1 : 0,
+                      elapsedUs(traceStart, traceAfterBackdrop),
+                      elapsedUs(traceAfterBackdrop, traceAfterGlass),
+                      elapsedUs(traceAfterGlass, traceAfterContent),
+                      elapsedUs(traceAfterContent, traceEnd),
+                      elapsedUs(traceStart, traceEnd));
+    }
 }
 
 void TabbedOverlayScreen::onContentRender(nxui::Renderer& ren) {

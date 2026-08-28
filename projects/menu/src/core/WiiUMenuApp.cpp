@@ -1626,6 +1626,10 @@ void WiiUMenuApp::buildGrid() {
         publishUpdateState();
         refreshThemeShopState();
         m_themeShop->endStateRefreshBatch();
+        // Capture only the first visible frames. The base overlay records the
+        // backdrop, glass, content, and cursor command-build costs so the
+        // remaining Theme Shop opening spike can be measured safely.
+        m_themeShop->requestRenderDiagnostics(8);
         m_themeShop->show();
         focusManager().setFocus(m_themeShop.get());
     };

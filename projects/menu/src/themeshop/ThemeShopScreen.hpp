@@ -142,6 +142,7 @@ public:
 protected:
     void buildTabs() override;
     bool usesCustomContentLayout() const override { return m_tabIndex < 3; }
+    bool consumeRenderDiagnosticsFrame() override;
     void drawCustomContent(nxui::Renderer& ren, const nxui::Rect& panel, const nxui::Rect& content, float opacity) override;
     void updateCustomContent(float dt) override;
     bool handleCustomPressA() override;
@@ -358,4 +359,5 @@ private:
     float m_themeTouchStartX = 0.f;
     float m_themeTouchStartY = 0.f;
     int m_renderDebugFrames = 0;
+    bool m_renderDiagnosticsActive = false;
 };
