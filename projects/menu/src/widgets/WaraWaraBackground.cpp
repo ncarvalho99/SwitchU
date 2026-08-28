@@ -144,7 +144,15 @@ bool WaraWaraBackground::loadImage(nxui::GpuDevice& gpu, nxui::Renderer& ren, co
     if (!texture.loadFromFile(gpu, ren, path, 0))
         return false;
 
+    // Keep the current wallpaper alive until the replacement has loaded, but
+    // retire every part of it before publishing the still image. Otherwise an
+    // animated theme leaves m_frames populated and currentBackground() keeps
+    // selecting those stale frames ahead of the newly loaded image.
+    const size_t replacedFrames = m_frames.size();
+    clearImage();
     m_backgroundImage = std::move(texture);
+    if (replacedFrames > 0)
+        DebugLog::log("[background] still image replaced %zu animated frames", replacedFrames);
     return true;
 }
 
