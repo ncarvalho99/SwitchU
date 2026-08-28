@@ -982,6 +982,10 @@ void ThemeShopScreen::updateCustomContent(float dt) {
         m_lastPreviewPrimeKey.clear();
     }
 
+    // The installed grid asks for its covers from inside the frame; the worker
+    // that reads and decodes one answers here, on the thread allowed to upload.
+    syncFinishedInstalledPreviewLoads();
+
     int headerButtonCount = isCommunityTab() ? 2 : 1;
     m_headerButtonIndex = std::clamp(m_headerButtonIndex, 0, std::max(0, headerButtonCount - 1));
 
