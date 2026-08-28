@@ -130,6 +130,29 @@ void ThemeShopScreen::setRenderContext(nxui::GpuDevice* gpu, nxui::Renderer* ren
     m_renderer = renderer;
 }
 
+void ThemeShopScreen::beginStateRefreshBatch() {
+    ++m_stateRefreshBatchDepth;
+}
+
+void ThemeShopScreen::endStateRefreshBatch() {
+    if (m_stateRefreshBatchDepth == 0)
+        return;
+    if (--m_stateRefreshBatchDepth != 0 || !m_stateRefreshPending)
+        return;
+
+    m_stateRefreshPending = false;
+    rebuildCurrentTab();
+}
+
+void ThemeShopScreen::refreshState() {
+    if (m_stateRefreshBatchDepth != 0) {
+        m_stateRefreshPending = true;
+        return;
+    }
+
+    rebuildCurrentTab();
+}
+
 void ThemeShopScreen::refreshCommunityCatalog() {
     if (!m_threadPool)
         return;

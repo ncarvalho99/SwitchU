@@ -63,8 +63,11 @@ public:
         m_updateLatestVersion = std::move(latestVersion);
         m_updateLatestNotes = std::move(latestNotes);
         m_updateRestartPending = restartPending;
-        rebuildCurrentTab();
+        refreshState();
     }
+    void beginStateRefreshBatch();
+    void endStateRefreshBatch();
+    void refreshState();
     void onReleaseNotes(std::function<void()> cb) { m_releaseNotesCb = std::move(cb); }
     void onMusicVolumeChange(FloatCb cb) { m_musicVolumeCb = std::move(cb); }
     void onSfxVolumeChange(FloatCb cb)   { m_sfxVolumeCb = std::move(cb); }
@@ -348,6 +351,8 @@ private:
     int m_lastCustomTabIndex = -1;
     std::string m_lastPreviewPrimeKey;
     float m_previewTrimTimer = 0.f;
+    unsigned m_stateRefreshBatchDepth = 0;
+    bool m_stateRefreshPending = false;
     ThemeTouchTarget m_themeTouchTarget = ThemeTouchTarget::None;
     int m_themeTouchIndex = -1;
     float m_themeTouchStartX = 0.f;

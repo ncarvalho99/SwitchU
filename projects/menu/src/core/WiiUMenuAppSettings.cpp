@@ -1117,7 +1117,7 @@ void WiiUMenuApp::refreshThemeShopState() {
     m_themeShop->setTheme(&m_theme);
     m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
     m_themeShop->setThemeShopState(buildThemeShopEntries(), activeId);
-    m_themeShop->rebuildCurrentTab();
+    m_themeShop->refreshState();
 }
 
 void WiiUMenuApp::activateThemePreset(ThemePreset* preset, bool applyBundledSound) {
