@@ -88,6 +88,14 @@ public:
         m_firstFrameTick = 0;
     }
 
+    // How long the previous loop iteration actually took, before the clamp the
+    // activity delta carries. The clamp exists so a stall does not teleport
+    // every animation, but it also rewrote any frame over 100 ms as a 16 ms
+    // frame -- which meant the worst-frame figure in the menu's perf line could
+    // not report a stall at all, and a measured 287 ms Theme Shop opening frame
+    // was being logged as 84.8 ms. Measure with this; animate with the delta.
+    float lastFrameSeconds() const { return m_lastFrameSeconds; }
+
 private:
     void dispatchInput();
     bool applyPendingActivity();
@@ -106,6 +114,7 @@ private:
     std::function<void(std::uint64_t, std::uint64_t)> m_firstFrameCallback;
     std::uint64_t m_firstInputTick = 0;
     std::uint64_t m_firstFrameTick = 0;
+    float m_lastFrameSeconds = 0.f;
     int  m_navDebounce = 0;
     // Frames a direction has been held for. Navigation used to fire only on the
     // frame a button went down, so holding one moved a single icon and stopped.
