@@ -247,6 +247,10 @@ void Application::run() {
         float dt = static_cast<float>(nowTick - prevTick)
                  / static_cast<float>(armGetSystemTickFreq());
         prevTick = nowTick;
+        // Kept before the clamp. This is the only place that still knows how
+        // long the frame really took; everything downstream sees the clamped
+        // value, which is right for animation and wrong for measurement.
+        m_lastFrameSeconds = dt;
         if (dt > 0.1f) dt = 0.016f;
 
         m_input.update();

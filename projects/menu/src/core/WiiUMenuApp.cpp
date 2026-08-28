@@ -2185,9 +2185,16 @@ void WiiUMenuApp::onUpdate(float dt) {
     // Comparing the home grid against the settings overlay says whether its
     // 10-15 fps comes from submission count or from fragment shading, which
     // reading the render path did not settle.
-    m_perfAccumDt += dt;
+    //
+    // Sampled from the real frame time, not from dt. The activity delta is
+    // clamped to 0.1 s before it gets here, so every frame slower than that was
+    // counted as 16 ms: the Theme Shop opening frame measured 287.790 ms by its
+    // own trace and was reported on this line as worst=84.8ms in the same
+    // second. Animation still uses dt; only the measurement changed.
+    const float frameSeconds = app().lastFrameSeconds();
+    m_perfAccumDt += frameSeconds;
     ++m_perfFrames;
-    m_perfWorstDt = std::max(m_perfWorstDt, dt);
+    m_perfWorstDt = std::max(m_perfWorstDt, frameSeconds);
     if (m_perfAccumDt >= 1.0f) {
         const auto& ren = app().renderer();
         // fps alone cannot show the margin: vsync pins anything between 16.7ms
