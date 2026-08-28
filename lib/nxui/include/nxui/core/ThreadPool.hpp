@@ -65,6 +65,20 @@ public:
         return future;
     }
 
+    // Wait until work submitted before this call has completed.  Applet
+    // handoff uses this while all services are still valid: destroying a
+    // service runtime before one of its worker requests has returned can turn
+    // an otherwise orderly menu exit into a process abort.
+    //
+    // This is intentionally a main-thread operation.  Calling it from a pool
+    // worker would wait for that worker itself and deadlock.
+    void waitForIdle() {
+        std::unique_lock<std::mutex> lk(m_mutex);
+        m_idleCv.wait(lk, [this]() {
+            return m_queue.empty() && m_activeTasks == 0;
+        });
+    }
+
 private:
     void workerLoop(std::size_t workerIndex) {
 #ifdef __SWITCH__
@@ -84,8 +98,15 @@ private:
                 if (m_stop && m_queue.empty()) return;
                 task = std::move(m_queue.front());
                 m_queue.pop();
+                ++m_activeTasks;
             }
             task();
+            {
+                std::lock_guard<std::mutex> lk(m_mutex);
+                --m_activeTasks;
+                if (m_queue.empty() && m_activeTasks == 0)
+                    m_idleCv.notify_all();
+            }
         }
     }
 
@@ -93,6 +114,8 @@ private:
     std::queue<std::function<void()>>   m_queue;
     std::mutex                          m_mutex;
     std::condition_variable             m_cv;
+    std::condition_variable             m_idleCv;
+    std::size_t                         m_activeTasks = 0;
     bool                                m_stop = false;
 };
 

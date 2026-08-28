@@ -465,6 +465,23 @@ void WiiUMenuApp::onDestroy() {
 
     if (m_audioFuture.valid()) m_audioFuture.get();
 
+    // Theme Shop, Gallery, metadata, icon, and artwork work all shares this
+    // pool.  The old order stopped libcurl/Bluetooth first and relied on the
+    // ThreadPool destructor much later to join workers.  A launch immediately
+    // after Theme Shop/Gallery activity could therefore tear down a runtime
+    // while one of those workers was still using it.  Drain while every owner
+    // is still alive; normal launch animation time already absorbs this wait.
+    const uint64_t workerDrainStartTick = armGetSystemTick();
+    m_threadPool.waitForIdle();
+    const uint64_t workerDrainUs =
+        (armGetSystemTick() - workerDrainStartTick) * 1'000'000ULL /
+        armGetSystemTickFreq();
+    DebugLog::log("[menu] handoff workers quiesced in %llu us",
+                  (unsigned long long)workerDrainUs);
+#ifdef SWITCHU_MENU
+    closingTrace.worker_drain_done_tick = armGetSystemTick();
+#endif
+
 #ifdef SWITCHU_MENU
     // Remember where we were. Returning from a suspended game already jumps to
     // its page, but closing a game outright or opening an applet suspends

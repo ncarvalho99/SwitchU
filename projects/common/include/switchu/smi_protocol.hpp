@@ -184,6 +184,7 @@ struct MenuClosingArgs {
     uint64_t gpu_drain_end_tick;
     uint64_t on_destroy_start_tick;
     uint64_t http_cancel_done_tick;
+    uint64_t worker_drain_done_tick;
     uint64_t state_persist_done_tick;
     uint64_t http_shutdown_done_tick;
     uint64_t bluetooth_done_tick;
@@ -191,7 +192,7 @@ struct MenuClosingArgs {
     uint32_t core;
     uint32_t _pad;
 };
-static_assert(sizeof(MenuClosingArgs) == 80);
+static_assert(sizeof(MenuClosingArgs) == 88);
 
 struct AppEntryHeader {
     uint64_t  title_id;
