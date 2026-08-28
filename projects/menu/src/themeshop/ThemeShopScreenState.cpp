@@ -28,6 +28,9 @@ void ThemeShopScreen::buildTabs() {
     m_cachedTabContentWidgets.clear();
     m_cachedTabContentWidgets.resize(m_tabs.size());
 
-    if (m_tabBar) rebuildTabBar();
-    if (m_tabContent) rebuildContentItems();
+    // TabbedOverlayScreen owns the presentation refresh after every build:
+    // warmup(), refreshTranslations(), and rebuildCurrentTab() all restore the
+    // selected tab before rebuilding its widgets.  Rebuilding here used the
+    // old Update-tab selection and then rebuildCurrentTab() immediately did
+    // the same work again.  Keep this method to data/cache construction only.
 }
