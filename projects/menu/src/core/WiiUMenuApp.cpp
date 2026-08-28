@@ -1622,8 +1622,10 @@ void WiiUMenuApp::buildGrid() {
         if (!m_themeShop) return;
         if (m_settings && m_settings->isActive())
             m_settings->hide();
+        m_themeShop->beginStateRefreshBatch();
         publishUpdateState();
         refreshThemeShopState();
+        m_themeShop->endStateRefreshBatch();
         m_themeShop->show();
         focusManager().setFocus(m_themeShop.get());
     };
