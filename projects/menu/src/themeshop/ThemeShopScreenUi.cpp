@@ -1790,7 +1790,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     float contentOpacity = opacity * slideT;
     int count = currentEntryCount();
 
-    if (m_renderDebugFrames > 0) {
+    if (m_renderDiagnosticsActive) {
         const ThemeShopEntry* installed = selectedThemeShopEntry();
         const ThemeCatalogClient::Entry* community = selectedCommunityThemeEntry();
         DebugLog::log("[themeshop-render] tab=%d count=%d installedCount=%zu communityCount=%zu selectedInstalled=%s selectedCommunity=%s detail=%d fullscreen=%d focusArea=%d contentFocus=%d active=%d visible=%d opacity=%.2f contentOpacity=%.2f",
@@ -1808,7 +1808,6 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                       isVisible() ? 1 : 0,
                       opacity,
                       contentOpacity);
-        --m_renderDebugFrames;
     }
 
     layout.header.y += slideOffset;

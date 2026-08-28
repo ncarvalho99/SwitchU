@@ -144,6 +144,10 @@ protected:
     // border visible through translucent artwork.
     virtual bool drawsCustomContentPanel() const { return true; }
     virtual bool hidesTabRail() const { return false; }
+    // A derived screen may arm a short render trace for a focused performance
+    // investigation. The base consumes it once per rendered frame so a custom
+    // layout cannot accidentally leave the trace armed when its tab changes.
+    virtual bool consumeRenderDiagnosticsFrame() { return false; }
     virtual void drawCustomContent(nxui::Renderer&, const nxui::Rect&, const nxui::Rect&, float) {}
     virtual void updateCustomContent(float) {}
     virtual bool handleCustomPressA() { return false; }

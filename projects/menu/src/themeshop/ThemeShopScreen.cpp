@@ -130,6 +130,16 @@ void ThemeShopScreen::setRenderContext(nxui::GpuDevice* gpu, nxui::Renderer* ren
     m_renderer = renderer;
 }
 
+bool ThemeShopScreen::consumeRenderDiagnosticsFrame() {
+    m_renderDiagnosticsActive = false;
+    if (m_renderDebugFrames <= 0)
+        return false;
+
+    --m_renderDebugFrames;
+    m_renderDiagnosticsActive = true;
+    return true;
+}
+
 void ThemeShopScreen::beginStateRefreshBatch() {
     ++m_stateRefreshBatchDepth;
 }
