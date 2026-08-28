@@ -1,27 +1,57 @@
 
-Automatic sleep
-- SwitchU now runs the idle countdown behind Rest Mode > Automatic Sleep. The setting was always there and always saved, but nothing acted on it, so a console left alone in the launcher simply never slept. It now follows the handheld or docked delay you chose and genuinely suspends: the screen goes off and the console draws almost nothing, exactly as it does from the stock home menu.
-- Sleeping from Rest Mode > Sleep no longer disables the background service. Every power option, Sleep, Restart and Shutdown, kept working only until the first sleep of a session and then silently stopped responding. Waking the console also failed to reach the launcher for the same reason. Both are fixed.
+SwitchU Language
+- System > SwitchU Language is now the first row of the System settings, and changing it switches the launcher's language while you watch. Press A to pick one; the choice is remembered. All eight languages the launcher ships with are in the list.
+- Console Language, below it, now says it is read-only, which is what it always was. It reports what the Nintendo Switch itself is set to and is changed in the console's own System Settings, not here.
 
-Lock screen
-- Waking the console now shows a lock screen with the clock, in the shape the stock home menu uses. Press the same button three times to get back in, any face, shoulder, d-pad or stick button, or tap the screen three times when no controller is attached. A half-finished sequence forgets a press after a couple of seconds, so a console loose in a bag cannot let itself in.
-- HOME unlocks immediately, since the console's own system layer has already answered for that press.
-- There is nothing to configure. The lock screen is what greets you after the console sleeps, and it is not shown while you are using the launcher, where it would only keep the screen lit in front of a sleep that was already coming.
+Bluetooth audio
+- Bluetooth headphones now pair and connect from the launcher. The Bluetooth screen used to change only the saved setting, so it could show Bluetooth as on while the console's radio was off and a scan would find nothing. It now turns the real radio on, keeps checking for devices while the scan runs, and leaves the results on screen.
+- Airplane Mode now switches the Bluetooth radio off as well, instead of only recording that it should be off.
+
+Launching and returning
+- A launch that fails now brings you back to the launcher instead of leaving a blank screen. Resuming a game you left suspended recovers the same way.
+- Starting a game for the first time on a newly created account now creates that account's save data for it, instead of failing on an account that has never played the game.
+- Closing a game from the launcher no longer holds up everything else while it waits. The console asks the game to exit, keeps running, and only forces it after the full grace period has passed.
+- Pressing HOME while a game had its on-screen keyboard open no longer crashes the launcher on the way back.
+- The launch animation now runs for 340 milliseconds instead of 1.45 seconds, and the launcher does its save-data checks and bookkeeping while it plays rather than after. How long the console itself then takes to bring a game up is unchanged.
+
+Themes
+- Installing a still-image theme over an animated one now actually replaces the wallpaper. The new picture was being loaded without clearing the animation already in memory, so the old frames kept playing over it.
+
+Theme Shop
+- Opening the Theme Shop again no longer pauses. It used to rebuild the whole screen every time, re-reading and decoding every installed theme's screenshot in the frame the shop appeared.
+- Installed screenshots now load in the background. A card shows "Loading screenshot..." for a moment instead of the whole shop waiting on the picture.
+- Browsing and downloading themes no longer risks the shop stalling while artwork reaches the graphics card. Uploads are batched and the queue is emptied before anything waits on it.
+- Some of the opening is still the graphics work behind the frosted-glass panel, and that is not addressed here.
 
 Other changes
-- The UI Wireframe developer toggle no longer appears in Settings. It drew debug outlines around every element and was never meant to be reachable.
-- Game descriptions recover from a translation service outage instead of falling back to English on the first failure.
+- Settings and the Theme Shop are built the first time you open them instead of at boot, so a session that never opens them never pays for them.
+- Leaving the launcher for a game no longer waits on background work still finishing, which could catch the Gallery or the Theme Shop mid-task.
 --pt-BR--
 
-Descanso automático
-- O SwitchU agora executa a contagem de inatividade de Modo de Descanso > Suspensão automática. A opção sempre existiu e sempre foi salva, mas nada agia sobre ela, então um console deixado parado no launcher simplesmente nunca dormia. Agora ele respeita o tempo escolhido para portátil ou base e suspende de verdade: a tela apaga e o console passa a consumir quase nada, exatamente como pelo menu original.
-- Suspender por Modo de Descanso > Suspender não desliga mais o serviço em segundo plano. Todas as opções de energia, Suspender, Reiniciar e Desligar, funcionavam apenas até o primeiro descanso da sessão e depois paravam de responder em silêncio. Acordar o console também não chegava ao launcher pelo mesmo motivo. Os dois casos estão corrigidos.
+Idioma do SwitchU
+- Sistema > Idioma do SwitchU agora é a primeira linha das configurações de Sistema, e trocá-lo muda o idioma do launcher na hora. Pressione A para escolher; a escolha fica salva. Os oito idiomas que o launcher traz estão na lista.
+- Idioma do Console, logo abaixo, agora diz que é somente leitura, que é o que sempre foi. Ele mostra como o Nintendo Switch está configurado e é alterado nas configurações do próprio console, não aqui.
 
-Tela de bloqueio
-- Ao acordar, o console mostra uma tela de bloqueio com o relógio, no formato do menu original. Pressione o mesmo botão três vezes para voltar, qualquer botão frontal, gatilho, direcional ou clique de analógico, ou toque a tela três vezes quando não houver controle conectado. Uma sequência pela metade esquece um toque depois de alguns segundos, então um console solto na mochila não consegue se desbloquear sozinho.
-- HOME desbloqueia na hora, porque o próprio sistema do console já respondeu por esse toque.
-- Não há nada para configurar. A tela de bloqueio é o que recebe você depois que o console dorme, e não aparece enquanto você está usando o launcher, onde só manteria a tela acesa na frente de um descanso que já estava chegando.
+Áudio Bluetooth
+- Fones Bluetooth agora pareiam e conectam pelo launcher. A tela de Bluetooth alterava apenas a configuração salva, então podia mostrar o Bluetooth ligado enquanto o rádio do console estava desligado e a busca não encontrava nada. Agora ela liga o rádio de verdade, consulta os dispositivos enquanto a busca acontece e mantém os resultados na tela.
+- O Modo Avião agora desliga também o rádio Bluetooth, em vez de apenas registrar que ele deveria estar desligado.
+
+Iniciar e voltar
+- Um jogo que falha ao iniciar agora devolve você ao launcher, em vez de deixar a tela em branco. Retomar um jogo deixado suspenso se recupera do mesmo jeito.
+- Iniciar um jogo pela primeira vez em uma conta recém-criada agora cria o save daquela conta, em vez de falhar em uma conta que nunca jogou aquele título.
+- Fechar um jogo pelo launcher não trava mais o resto enquanto espera. O console pede para o jogo sair, continua funcionando e só força a saída depois que todo o prazo de tolerância passa.
+- Pressionar HOME com o teclado na tela de um jogo aberto não derruba mais o launcher na volta.
+- A animação de abertura agora dura 340 milissegundos em vez de 1,45 segundo, e o launcher faz as verificações de save e o registro interno enquanto ela roda, em vez de depois. O tempo que o console leva para colocar o jogo no ar não muda.
+
+Temas
+- Instalar um tema de imagem parada sobre um animado agora troca o papel de parede de verdade. A imagem nova era carregada sem limpar a animação que já estava na memória, então os quadros antigos continuavam rodando por cima.
+
+Loja de Temas
+- Abrir a Loja de Temas de novo não trava mais. Ela reconstruía a tela inteira a cada abertura, relendo e decodificando a captura de cada tema instalado no quadro em que a loja aparecia.
+- As capturas dos temas instalados agora carregam em segundo plano. O cartão mostra "Carregando captura..." por um instante, em vez de a loja inteira esperar pela imagem.
+- Navegar e baixar temas não corre mais o risco de travar a loja enquanto as imagens chegam à placa de vídeo. Os envios são agrupados e a fila é esvaziada antes de qualquer espera.
+- Parte da abertura ainda é o trabalho gráfico por trás do painel de vidro fosco, e isso não está resolvido aqui.
 
 Outras mudanças
-- O ajuste de desenvolvedor UI Wireframe não aparece mais nas Configurações. Ele desenhava contornos de depuração em volta de cada elemento e nunca deveria estar acessível.
-- As descrições dos jogos se recuperam de uma indisponibilidade do serviço de tradução em vez de cair para o inglês na primeira falha.
+- Configurações e Loja de Temas passam a ser montadas na primeira vez que você as abre, em vez de na inicialização, então uma sessão que nunca as abre não paga por elas.
+- Sair do launcher para um jogo não espera mais por trabalho em segundo plano ainda em andamento, que podia pegar a Galeria ou a Loja de Temas no meio de uma tarefa.
