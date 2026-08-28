@@ -441,6 +441,13 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
     nxui::Rect p = panelRect(scale());
     const bool traceRender = consumeRenderDiagnosticsFrame();
     const uint64_t traceStart = traceRender ? armGetSystemTick() : 0;
+    // Everything between the end of the previous traced render and the start of
+    // this one: the update phase, the scene below, GPU begin/end, and the vsync
+    // wait. Without it the trace could only say the cost was not in this render
+    // -- which is exactly what the first reading said, while the perf line for
+    // the same second reported a 1,414.1 ms frame.
+    const uint64_t tracePrologue = (traceRender && m_traceLastRenderEndTick != 0)
+        ? traceStart - m_traceLastRenderEndTick : 0;
 
     if (m_theme)
         m_focusCursor.setColor(m_theme->cursorNormal);
@@ -549,16 +556,23 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
         auto elapsedUs = [](uint64_t start, uint64_t end) {
             return (unsigned long long)(armTicksToNs(end - start) / 1000ULL);
         };
-        DebugLog::log("[themeshop-frame] tab=%d opacity=%.2f backdrop_refresh=%d scene_hidden=%d backdrop_us=%llu glass_us=%llu content_us=%llu cursor_us=%llu total_us=%llu",
+        DebugLog::log("[themeshop-frame] tab=%d opacity=%.2f backdrop_refresh=%d scene_hidden=%d outside_us=%llu backdrop_us=%llu glass_us=%llu content_us=%llu cursor_us=%llu total_us=%llu",
                       m_tabIndex,
                       opacity,
                       needsBackdropRefresh ? 1 : 0,
                       m_sceneHidden ? 1 : 0,
+                      (unsigned long long)(armTicksToNs(tracePrologue) / 1000ULL),
                       elapsedUs(traceStart, traceAfterBackdrop),
                       elapsedUs(traceAfterBackdrop, traceAfterGlass),
                       elapsedUs(traceAfterGlass, traceAfterContent),
                       elapsedUs(traceAfterContent, traceEnd),
                       elapsedUs(traceStart, traceEnd));
+        m_traceLastRenderEndTick = traceEnd;
+    } else {
+        // Left at zero while the trace is not armed, so the first traced frame
+        // of an opening reports no prologue rather than the whole time the
+        // overlay was closed.
+        m_traceLastRenderEndTick = 0;
     }
 }
 
