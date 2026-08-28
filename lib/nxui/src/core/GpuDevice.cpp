@@ -170,8 +170,12 @@ void GpuDevice::createOffscreenTargets() {
 int GpuDevice::beginFrame() {
     // Most texture work happens in Activity::onUpdate, before beginFrame. Send
     // that batch now so it can execute while acquireImage waits for display.
-    // A second flush in endFrame covers glyphs created during rendering.
+    // A second batch submission in endFrame covers glyphs created while rendering.
+    const bool submittedUploads = m_uploadBatchOpen &&
+        m_uploadCopyCount[m_uploadSlot] > 0;
     submitUploadBatch();
+    if (submittedUploads)
+        m_queue.flush();
 
     // These two waits mean different things and have to be told apart.
     //
@@ -227,6 +231,11 @@ void GpuDevice::beginUploadBatch() {
 
     const int slot = m_uploadSlot;
     if (m_uploadInFlight[slot]) {
+        // submitCommands may keep small lists in deko3d's queue buffer until
+        // the flush threshold or present. A same-frame upload burst can wrap
+        // all slots before either occurs, so kick their fence signals before
+        // waiting. Without this, Theme Shop's first glyph burst deadlocks.
+        m_queue.flush();
         const uint64_t waitStart = armGetSystemTick();
         m_uploadFences[slot].wait();
         const uint64_t waitEnd = armGetSystemTick();
