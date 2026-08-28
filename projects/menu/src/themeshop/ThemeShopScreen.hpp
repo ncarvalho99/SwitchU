@@ -181,6 +181,12 @@ private:
         bool cancelled = false;
         std::string url;
         std::vector<std::uint8_t> bytes;
+        // Pixels an installed preview's worker produced, waiting for the one
+        // step that has to happen on the render thread. Community previews
+        // carry compressed `bytes` instead: theirs arrive from the network and
+        // are worth keeping small, while these come off the card and are only
+        // held for the frame that uploads them.
+        nxui::DecodedImage decoded;
         std::future<void> future;
         nxui::Texture texture;
     };
@@ -257,6 +263,9 @@ private:
     PreviewPhase installedPreviewPhase(const std::string& previewPath) const;
     const nxui::Texture* installedPreviewTexture(const std::string& previewPath) const;
     void primeInstalledPreview(const std::string& previewPath);
+    void syncFinishedInstalledPreviewLoads();
+    void clearInstalledPreviewCache();
+    void pruneInstalledPreviewCache(const std::vector<ThemeShopEntry>& entries);
     void primeCommunityPreview(const std::string& previewPath);
     void primeCommunityPreview(const ThemeCatalogClient::Entry& entry);
     void primeVisibleCommunityPreviews();
@@ -334,6 +343,7 @@ private:
     std::string m_packageTransferThemeId;
     bool m_packageTransferInstallMode = false;
     bool m_hasPendingCommunityPreviewWork = false;
+    bool m_hasPendingInstalledPreviewWork = false;
     std::uint64_t m_communityRevision = 0;
     bool m_detailOpen = false;
     bool m_detailFullscreen = false;

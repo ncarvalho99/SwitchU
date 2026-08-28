@@ -51,6 +51,19 @@ bool isPreviewSheetPath(const std::string& path) {
     return path.find("preview_sheet") != std::string::npos;
 }
 
+// A cover stored as compressed blocks goes to the DDS loader instead of the
+// stb_image decoder, and only loadFromFile knows how to pick between them. Such
+// a path keeps the synchronous route: the read is the whole cost there, and it
+// is already a fraction of a decode.
+bool isBlockCompressedPath(const std::string& path) {
+    if (path.size() < 4)
+        return false;
+    std::string tail = path.substr(path.size() - 4);
+    for (char& c : tail)
+        c = (char)std::tolower((unsigned char)c);
+    return tail == ".dds";
+}
+
 bool startsWith(const std::string& value, const std::string& prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
 }
@@ -174,7 +187,7 @@ void ThemeShopScreen::refreshCommunityCatalog() {
 void ThemeShopScreen::setThemeShopState(const std::vector<ThemeShopEntry>& entries,
                                         const std::string& activeId) {
     m_allThemeShopEntries = entries;
-    m_installedPreviewCache.clear();
+    pruneInstalledPreviewCache(entries);
     applySearchFilter();
     // Um tema recém-instalado entra aqui, então é aqui que a medição do que ele
     // ocupa é enfileirada. Quem já foi medido não é medido de novo.
@@ -499,6 +512,20 @@ const nxui::Texture* ThemeShopScreen::installedPreviewTexture(const std::string&
     return &it->second->texture;
 }
 
+// Asked for from inside the frame, for every installed card the grid is about
+// to draw. It used to answer by doing the whole job right there: read the cover
+// off the card, decode it, and upload it, on the render thread, mid-draw.
+//
+// Measured on the console with the opening-frame trace, five installed covers
+// (a 694 KB PNG, an 87 KB JPEG and three around 30 KB) cost 287.738 ms of
+// content command-build on the first visible frame, against 0.31-1.35 ms on
+// every frame after it. That one frame was the whole Theme Shop opening stall;
+// nothing else in the frame came near a millisecond.
+//
+// So only the upload stays here. Reading and decoding go to the pool, exactly
+// as community previews already do, and the card shows its "Loading
+// screenshot..." placeholder for the frames in between -- which is the state
+// the grid was already written to draw.
 void ThemeShopScreen::primeInstalledPreview(const std::string& previewPath) {
     if (!m_gpu || !m_renderer || previewPath.empty())
         return;
@@ -507,31 +534,204 @@ void ThemeShopScreen::primeInstalledPreview(const std::string& previewPath) {
     if (!slot)
         slot = std::make_shared<PreviewImageState>();
 
+    const int maxSide = isPreviewSheetPath(previewPath)
+        ? kPreviewSheetMaxSide : kCommunityPreviewMaxSide;
+
     {
         std::lock_guard<std::mutex> lk(slot->mutex);
         if (slot->url != previewPath) {
             slot->url = previewPath;
             slot->phase = PreviewPhase::Idle;
             slot->failureCount = 0;
+            slot->cancelled = false;
+            slot->decoded = nxui::DecodedImage();
             slot->texture = nxui::Texture();
         }
-        if (slot->phase == PreviewPhase::Ready || slot->phase == PreviewPhase::Failed)
+        // Loading is a worker already on it and Downloaded is pixels waiting for
+        // the next frame to upload them. Neither wants a second task.
+        if (slot->phase != PreviewPhase::Idle)
             return;
+        slot->cancelled = false;
         slot->phase = PreviewPhase::Loading;
     }
 
-    nxui::Texture uploaded;
-    bool ok = uploaded.loadFromFile(*m_gpu, *m_renderer, previewPath,
-                                    isPreviewSheetPath(previewPath)
-                                        ? kPreviewSheetMaxSide : kCommunityPreviewMaxSide);
-    std::lock_guard<std::mutex> lk(slot->mutex);
-    if (ok) {
-        slot->texture = std::move(uploaded);
-        slot->phase = PreviewPhase::Ready;
-        slot->failureCount = 0;
-    } else {
-        slot->phase = PreviewPhase::Failed;
-        slot->failureCount += 1;
+    // No pool, or a format the decoder does not handle: keep the original
+    // synchronous path rather than leaving the card blank forever. decodeFile
+    // is stb_image, and loadFromFile is the one that knows to route a DDS to
+    // the compressed-block loader.
+    if (!m_threadPool || isBlockCompressedPath(previewPath)) {
+        nxui::Texture uploaded;
+        bool ok = uploaded.loadFromFile(*m_gpu, *m_renderer, previewPath, maxSide);
+        std::lock_guard<std::mutex> lk(slot->mutex);
+        if (ok) {
+            slot->texture = std::move(uploaded);
+            slot->phase = PreviewPhase::Ready;
+            slot->failureCount = 0;
+        } else {
+            slot->phase = PreviewPhase::Failed;
+            slot->failureCount += 1;
+        }
+        return;
+    }
+
+    m_hasPendingInstalledPreviewWork = true;
+    auto state = slot;
+    slot->future = m_threadPool->submit([state, previewPath, maxSide]() {
+        nxui::DecodedImage image = nxui::Texture::decodeFile(previewPath, maxSide);
+        std::lock_guard<std::mutex> lk(state->mutex);
+        // Dropped while it was decoding. The pixels go, and the phase is left
+        // where the cancelling side put it.
+        if (state->cancelled)
+            return;
+        if (!image.valid()) {
+            state->phase = PreviewPhase::Failed;
+            state->failureCount += 1;
+            return;
+        }
+        state->decoded = std::move(image);
+        state->phase = PreviewPhase::Downloaded;
+    });
+}
+
+// The render-thread half. Uploading decoded pixels is microseconds, but it is
+// still the one step that has to touch the GPU from this thread, so it is
+// capped per frame the way the community uploads are.
+void ThemeShopScreen::syncFinishedInstalledPreviewLoads() {
+    if (!m_gpu || !m_renderer || !m_hasPendingInstalledPreviewWork)
+        return;
+
+    bool hasPendingWork = false;
+    int uploadsThisFrame = 0;
+
+    for (auto& entry : m_installedPreviewCache) {
+        auto state = entry.second;
+        if (!state)
+            continue;
+
+        if (state->future.valid()) {
+            if (state->future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                try {
+                    state->future.get();
+                } catch (const std::exception& ex) {
+                    std::lock_guard<std::mutex> lk(state->mutex);
+                    state->phase = PreviewPhase::Failed;
+                    state->failureCount += 1;
+                    state->decoded = nxui::DecodedImage();
+                    DebugLog::log("[themeshop] installed preview task failed: %s", ex.what());
+                } catch (...) {
+                    std::lock_guard<std::mutex> lk(state->mutex);
+                    state->phase = PreviewPhase::Failed;
+                    state->failureCount += 1;
+                    state->decoded = nxui::DecodedImage();
+                    DebugLog::log("[themeshop] installed preview task failed: unknown error");
+                }
+            } else {
+                hasPendingWork = true;
+                continue;
+            }
+        }
+
+        nxui::DecodedImage image;
+        {
+            std::lock_guard<std::mutex> lk(state->mutex);
+            if (state->phase != PreviewPhase::Downloaded)
+                continue;
+            if (uploadsThisFrame >= kMaxPreviewUploadsPerFrame) {
+                hasPendingWork = true;
+                continue;
+            }
+            // Moved, not copied. Unlike a community preview, whose compressed
+            // bytes are worth keeping so it can come back without the network,
+            // this one is already on the card: re-reading it is a file open.
+            image = std::move(state->decoded);
+            state->decoded = nxui::DecodedImage();
+        }
+
+        ++uploadsThisFrame;
+        nxui::Texture uploaded;
+        bool ok = uploaded.loadFromDecoded(*m_gpu, *m_renderer, image);
+        std::lock_guard<std::mutex> lk(state->mutex);
+        if (ok) {
+            state->texture = std::move(uploaded);
+            state->phase = PreviewPhase::Ready;
+            state->failureCount = 0;
+        } else {
+            state->phase = PreviewPhase::Failed;
+            state->failureCount += 1;
+            DebugLog::log("[themeshop] previa instalada nao subiu (%dx%d): imagem em %.1f de %.1f MB",
+                          image.width, image.height,
+                          m_gpu->imageMemoryUsed() / 1048576.0,
+                          nxui::GpuDevice::imageBudget() / 1048576.0);
+        }
+    }
+
+    m_hasPendingInstalledPreviewWork = hasPendingWork;
+}
+
+void ThemeShopScreen::clearInstalledPreviewCache() {
+    if (m_installedPreviewCache.empty())
+        return;
+
+    if (m_gpu)
+        m_gpu->waitIdle();
+
+    // A worker may still hold this state through its shared_ptr. Retiring the
+    // texture here, on the thread that owns the GPU, is what keeps a decode
+    // finishing late from destroying an image behind the render thread's back.
+    for (auto& entry : m_installedPreviewCache) {
+        auto& state = entry.second;
+        if (!state)
+            continue;
+
+        std::lock_guard<std::mutex> lk(state->mutex);
+        state->cancelled = true;
+        state->decoded = nxui::DecodedImage();
+        state->texture = nxui::Texture();
+    }
+
+    m_installedPreviewCache.clear();
+    m_hasPendingInstalledPreviewWork = false;
+}
+
+// Publishing the installed list used to drop every cached preview, and the list
+// is republished each time the sidebar opens the Theme Shop. That made the
+// decode above unavoidable on every single opening, not only the first one.
+// Keep what the new list still refers to; only what left the list goes.
+void ThemeShopScreen::pruneInstalledPreviewCache(const std::vector<ThemeShopEntry>& entries) {
+    if (m_installedPreviewCache.empty())
+        return;
+
+    std::unordered_set<std::string> retained;
+    for (const auto& entry : entries) {
+        if (!entry.coverPath.empty())
+            retained.insert(entry.coverPath);
+    }
+
+    bool willErase = false;
+    for (const auto& entry : m_installedPreviewCache) {
+        if (retained.find(entry.first) == retained.end()) {
+            willErase = true;
+            break;
+        }
+    }
+    if (!willErase)
+        return;
+
+    if (m_gpu)
+        m_gpu->waitIdle();
+
+    for (auto it = m_installedPreviewCache.begin(); it != m_installedPreviewCache.end();) {
+        if (retained.find(it->first) != retained.end()) {
+            ++it;
+            continue;
+        }
+        if (it->second) {
+            std::lock_guard<std::mutex> lk(it->second->mutex);
+            it->second->cancelled = true;
+            it->second->decoded = nxui::DecodedImage();
+            it->second->texture = nxui::Texture();
+        }
+        it = m_installedPreviewCache.erase(it);
     }
 }
 
