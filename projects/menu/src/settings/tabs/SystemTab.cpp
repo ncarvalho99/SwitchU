@@ -68,6 +68,36 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     t.name = i18n.tr("settings.tabs.system", "System");
 
     {
+        // Keep SwitchU's own language first. The console language shown later
+        // is read-only, and placing both among hardware details made users find
+        // that value while missing the actual selector.
+        SettingItem it;
+        it.label = i18n.tr("settings.system.ui_language", "SwitchU Language");
+        it.description = i18n.tr("settings.system.ui_language_desc",
+                                 "Press A to choose the language used by SwitchU.");
+        it.type = ItemType::Selector;
+
+        std::vector<std::string> tags = nxui::I18n::supportedLanguageTags();
+        it.options.reserve(tags.size());
+        for (const auto& tag : tags) {
+            if (tag == "auto") it.options.push_back(i18n.tr("common.auto", "Auto"));
+            else it.options.push_back(i18n.tr(std::string("languages.") + tag, tag));
+        }
+
+        auto itTag = std::find(tags.begin(), tags.end(), screen.m_uiLanguageOverride);
+        it.intVal = (itTag != tags.end()) ? (int)std::distance(tags.begin(), itTag) : 0;
+
+        it.onChange = [&screen, tags = std::move(tags)](SettingItem& self) {
+            int idx = std::clamp(self.intVal, 0, std::max(0, (int)tags.size() - 1));
+            const std::string& selected = tags[idx];
+            screen.m_uiLanguageOverride = selected;
+            if (screen.m_uiLanguageCb) screen.m_uiLanguageCb(selected);
+        };
+
+        t.items.push_back(std::move(it));
+    }
+
+    {
         SetSysFirmwareVersion fw{};
         SettingItem it; it.label = i18n.tr("settings.system.firmware", "Firmware Version"); it.type = ItemType::Info;
         if (R_SUCCEEDED(setsysGetFirmwareVersion(&fw)))
@@ -173,29 +203,6 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
-        SettingItem it; it.label = i18n.tr("settings.system.ui_language", "UI Language"); it.type = ItemType::Selector;
-
-        std::vector<std::string> tags = nxui::I18n::supportedLanguageTags();
-        it.options.reserve(tags.size());
-        for (const auto& tag : tags) {
-            if (tag == "auto") it.options.push_back(i18n.tr("common.auto", "Auto"));
-            else it.options.push_back(i18n.tr(std::string("languages.") + tag, tag));
-        }
-
-        auto itTag = std::find(tags.begin(), tags.end(), screen.m_uiLanguageOverride);
-        it.intVal = (itTag != tags.end()) ? (int)std::distance(tags.begin(), itTag) : 0;
-
-        it.onChange = [&screen, tags = std::move(tags)](SettingItem& self) {
-            int idx = std::clamp(self.intVal, 0, std::max(0, (int)tags.size() - 1));
-            const std::string& selected = tags[idx];
-            screen.m_uiLanguageOverride = selected;
-            if (screen.m_uiLanguageCb) screen.m_uiLanguageCb(selected);
-        };
-
-        t.items.push_back(std::move(it));
-    }
-
-    {
         // Opens the system's own account creation applet. Deleting an account
         // is deliberately not offered: it takes the save data with it, and the
         // system reserves that for Settings, behind its own confirmations.
@@ -243,6 +250,8 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
 
     {
         SettingItem it; it.label = i18n.tr("settings.system.console_language", "Console Language"); it.type = ItemType::Info;
+        it.description = i18n.tr("settings.system.console_language_desc",
+                                 "Read-only. Change this in Nintendo Switch System Settings.");
         u64 langCode = 0;
         if (R_SUCCEEDED(setGetSystemLanguage(&langCode))) {
             SetLanguage lang = SetLanguage_ENUS;
