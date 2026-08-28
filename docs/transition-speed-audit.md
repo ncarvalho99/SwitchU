@@ -358,7 +358,7 @@ The daemon and its SD filesystem server survive every menu. Test making registra
 
 Add an explicit daemon-shutdown function that terminates the holder and unregisters once. Validate at least 100 HOME/launch cycles, sleep/wake, staged updater reboot, SD removal, and a menu crash. If Atmosphere consumes or invalidates the external-code server after one load on any supported version, retain the current per-holder registration.
 
-### Implemented, hardware validation in progress: fence-batched GPU uploads
+### Implemented and hardware-confirmed: fence-batched GPU uploads
 
 [GpuDevice](../lib/nxui/src/core/GpuDevice.cpp) now owns four upload slots. Each has a 1 MiB fixed staging arena, a dedicated 64 KiB command arena, and a fence. Up to 32 ordinary texture copies share one command list. A source larger than 1 MiB gets a slot-owned temporary block and is submitted alone; that block remains alive until the same slot's fence signals. Slot allocation is checked before any command-buffer or CPU-address use.
 
@@ -370,7 +370,11 @@ The corrected `db40931` build passed the focused Theme Shop hardware gate on 202
 
 The pass also exposed one smaller CPU/allocation inefficiency rather than a correctness failure: after the operator left Theme Shop on its non-custom Update tab, one reopen called `buildTabs()` twice in the same 100 ms log bucket. `publishUpdateState()` and `refreshThemeShopState()` each rebuild the current non-custom tab before `show()` resets selection. Consolidating that reopen refresh into one state rebuild is a follow-up optimization; it is not evidence of another fence stall.
 
-The normal release/sysmodule compiles with all diagnostic modes disabled. Runtime telemetry now reports upload count, batch count, and ring-wrap CPU wait. Theme Shop browsing, preview-cache eviction, and repeated reopen are now validated. Hardware must still validate title startup/return, animated and static theme changes, language glyph-cache clears, gallery previews, and rapid launch while uploads are pending. No return-time improvement is claimed before those checks and a comparison against the completed matrix.
+The normal release/sysmodule compiles with all diagnostic modes disabled. Runtime telemetry reports upload count, batch count, and ring-wrap CPU wait. Theme Shop browsing, preview-cache eviction, repeated reopen, title startup/return, animated/static replacement, live language change with glyph-cache reset, and Gallery preview/background work are hardware-validated.
+
+The final ordering gate was a Gallery/Theme Shop-to-launch handoff. The first session showed shared menu-pool work could outlive menu-owned service runtimes during teardown; this was an asynchronous shutdown-ordering defect, not a GPU-fence defect. Commit `62c42a4` drains queued and active menu-pool work after HTTP cancellation and before service teardown, with daemon-side timing markers. The connected console then passed five focused cycles after Gallery background work and a completed two-source 92-entry Theme Shop refresh: all five holders exited normally, titles foregrounded, and HOME returned to a healthy menu frame. Worker drain took 31-34 microseconds. Four new ERPT records were routine `2123-0011`; no new fatal/crash report or `2165-1002` record appeared. Evidence is preserved at `.logs/pending-launch-worker-drain-five-cycle-pass-20260828-142034`.
+
+This closes the implementation and focused hardware-acceptance gate for fenced uploads. It is not a broad lifecycle/performance claim: retain the 100-cycle soak as the release gate, and use a deko3d debug/error-injection build only when that dedicated diagnostic environment is available.
 
 ### Implemented and hardware-confirmed: animated-to-static theme replacement
 
@@ -500,7 +504,7 @@ Before accepting a speed change, run 100-cycle launch/HOME/resume and A-to-B rep
 
 1. Complete the remaining real-state gates: optional-user modes and physical game-card removal/update. The connected catalog currently has no optional-user candidate. Required-user launch, no-user forwarder launch, A-to-B replacement, a distinct second UID, first-ever account-save creation followed by existing-save reuse, all seven rejection fallbacks, physical sleep/wake stale fallback, and deterministic launch/resume failed-handoff recovery now pass on hardware.
 2. Preserve the completed controlled matrix as the current-build baseline: 10 cold official launches, 10 strict cold-forwarder launches, and 15 A-to-B replacements. Do not claim a before/after speedup without a comparable pre-change build, and retain the 100-cycle lifecycle soak as the release gate.
-3. Hardware-validate the implemented fence-based upload batching: deko3d debug output, pending-upload launch, cache eviction, static/animated theme changes, preview loading, and glyph-cache clear. Then compare HOME-to-frame and `onCreate` against this matrix.
-4. After that gate, deduplicate shader-file loads and cache animated-background manifests, measuring each independently so their return-time effects are not conflated.
+3. Fence-based upload batching is implemented and focused hardware-accepted: pending-work launch, cache eviction, static/animated theme changes, preview/background loading, live language/glyph-cache reset, and title startup/return all pass. Keep the 100-cycle lifecycle soak as the release gate; exercise deliberate deko3d debug/error injection only in a dedicated diagnostic environment.
+4. After that, deduplicate shader-file loads and cache animated-background manifests, measuring each independently so their return-time effects are not conflated.
 5. If arbitrary NRO launch is a product requirement, build the dedicated hbloader-compatible NRO host and private request transport described above; installed forwarders already use the normal title-ID path.
 6. Decide whether sub-second return justifies a persistent-renderer redesign; do not retain the current large menu heap beside applications without a verified Horizon resource model.
