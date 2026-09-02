@@ -863,33 +863,11 @@ void WiiUMenuApp::handleSortShortcutRelease(float dt) {
     // and R has nothing to offer it.
     if (m_appLayoutMode == AppLayoutMode::DynamicLine)
         return;
-    // Inside a folder R takes the focused title out of it. Sorting is blocked
-    // there for the reason above, which leaves the button advertised and inert:
-    // the one free press on that screen. A, B, X, Y, ZL, ZR, Plus and Minus are
-    // all spoken for -- launch, leave, close a suspended title, move, page,
-    // options, switch view.
-    //
-    // No confirmation. Taking a title out of a folder puts it back on the home
-    // screen, and putting it back is the same two presses again; asking first
-    // would cost more than the mistake does.
-    if (m_openFolderId != 0) {
-        if (focusRoot() != &rootBox() || m_editMode)
-            return;
-        auto* current = focusManager().current();
-        if (!current || current->tag() != "glossy_icon")
-            return;
-        const std::uint64_t titleId = static_cast<GlossyIcon*>(current)->titleId();
-        // Folder and widget ids share this space; only a real title can leave.
-        if (titleId == 0 || (titleId >> 56) == 0xF1ULL || (titleId >> 56) == 0xF2ULL)
-            return;
-        if (m_folderStore.folderForTitle(titleId) != m_openFolderId)
-            return;
-        DebugLog::log("[folders] R removes %016llX from folder %u",
-                      static_cast<unsigned long long>(titleId), m_openFolderId);
-        removeTitleFromFolder(titleId);
-        return;
-    }
-    if (focusRoot() != &rootBox() ||
+    // Taking a title out of a folder briefly lived here, and moved to X so that
+    // one button does both halves of the same job. R stays inert inside a
+    // folder, for the reason above.
+    if (m_openFolderId != 0 ||
+        focusRoot() != &rootBox() ||
         (m_dialog && m_dialog->isActive()) ||
         (m_contextMenu && m_contextMenu->isActive()) ||
         (m_themeShop && m_themeShop->isActive()) ||
@@ -1047,23 +1025,31 @@ void WiiUMenuApp::wireGlobalActions() {
         if (!cur || cur->tag() != "glossy_icon") return;
         auto* icon = static_cast<GlossyIcon*>(cur);
 
-        // X files the focused title into a folder, mirroring the R that takes
-        // one out of an open folder. It is the only free press on the home
-        // screen: A launches, B is back, Y moves, R sorts, ZL and ZR page, Plus
-        // opens the options, Minus switches view, and L repeats the
-        // announcement. X itself is spoken for only while a title is suspended,
-        // where it closes it -- that case is checked first and keeps the button,
-        // and the hint bar already says which of the two it is.
+        // X is the folder button, both ways round: on the home screen it files
+        // the focused title into a folder, and inside an open folder it takes
+        // the focused title out. One button for one idea, rather than X to put
+        // in and R to take out.
         //
-        // Not offered inside an open folder: the title is in one, and R there
-        // takes it out.
-        if (m_openFolderId == 0 &&
-            !(m_launcher.suspendedTitleId() != 0 &&
+        // It is the only free press on either screen: A launches, B is back, Y
+        // moves, R sorts, ZL and ZR page, Plus opens the options, Minus switches
+        // view, L repeats the announcement. X itself is claimed only while a
+        // title is suspended, where it closes it -- that case is tested first
+        // and keeps the button, and the hint bar says which of the two it is.
+        if (!(m_launcher.suspendedTitleId() != 0 &&
               m_launcher.isAppSuspended(icon->titleId()))) {
             const std::uint64_t titleId = icon->titleId();
-            // Folder and widget tiles share the id space and cannot be filed.
+            // Folder and widget tiles share the id space and are neither filed
+            // nor removed.
             if (titleId == 0 || (titleId >> 56) == 0xF1ULL || (titleId >> 56) == 0xF2ULL)
                 return;
+            if (m_openFolderId != 0) {
+                if (m_folderStore.folderForTitle(titleId) != m_openFolderId)
+                    return;
+                DebugLog::log("[folders] X removes %016llX from folder %u",
+                              static_cast<unsigned long long>(titleId), m_openFolderId);
+                removeTitleFromFolder(titleId);
+                return;
+            }
             m_dialogReturnFocus = cur;
             showFolderAssignment(titleId, icon->title());
             return;
@@ -1365,19 +1351,13 @@ void WiiUMenuApp::showNonGameOptions(std::uint64_t titleId, const std::string& t
     // Homebrew has no dossier, so its folder action lives here. It can be filed
     // like anything else: FolderStore keys on the title id and does not care that
     // the entry is a forwarder.
-    const bool inFolder = m_folderStore.folderForTitle(titleId) != 0;
     m_dialog->show(
         title,
-        i18n.tr("dialog.non_game_options_body_folder",
+        i18n.tr("dialog.non_game_options_body",
                 "Homebrew and ports have no game details, artwork or mods to "
-                "manage. They can be filed into a folder or removed."),
+                "manage."),
         {
             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
-            // Removing is R inside the open folder now, so this row only files
-            // a title into one. Keeping both meant opening a menu to undo what a
-            // single press does.
-            {i18n.tr("folder.add_game", "Add to folder"),
-             [this, titleId, title]() { showFolderAssignment(titleId, title); }, true},
             {i18n.tr("button.delete", "Delete"), [this, titleId, title]() {
                  confirmDeleteSoftware(titleId, title);
              }, false},
@@ -1567,13 +1547,6 @@ void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& titl
         m_gameDetailsReturnFocus = m_dialogReturnFocus;
     m_dialogReturnFocus = m_gameDetails.get();
     m_audio.playSfx(Sfx::ModalShow);
-    {
-        auto& folderI18n = nxui::I18n::instance();
-        // Always "Add to folder": removing moved to R inside the open folder,
-        // which is where the title is when you want it gone.
-        m_gameDetails->setFolderActionLabel(
-            folderI18n.tr("folder.add_game", "Add to folder"));
-    }
     m_gameDetails->openForGame(titleId, title, std::move(cover), liveCover,
                                installedDisplayVersion(titleId), installedModSummary(titleId),
                                installedPlayTime(titleId));

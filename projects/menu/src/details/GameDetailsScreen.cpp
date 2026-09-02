@@ -330,7 +330,7 @@ bool GameDetailsScreen::handleCustomNavDown() {
         ++m_summaryScrollLine;
         if (m_navSfxCb) m_navSfxCb();
     } else if (m_focusZone == FocusZone::Actions) {
-        m_selectedAction = std::min(5, m_selectedAction + 1);
+        m_selectedAction = std::min(4, m_selectedAction + 1);
         if (m_navSfxCb) m_navSfxCb();
     }
     return true;
@@ -385,8 +385,9 @@ void GameDetailsScreen::activateAction() {
         case 1: if (m_showArtworkCb) m_showArtworkCb(); break;
         case 2: if (m_restoreArtworkCb) m_restoreArtworkCb(); break;
         case 3: if (m_manageModsCb) m_manageModsCb(); break;
-        case 4: if (m_folderActionCb) m_folderActionCb(); break;
-        case 5: if (m_deleteSoftwareCb) m_deleteSoftwareCb(); break;
+        // Filing into a folder is X on the home screen now, so the row is gone
+        // and delete moves up into its place.
+        case 4: if (m_deleteSoftwareCb) m_deleteSoftwareCb(); break;
     }
 }
 
@@ -454,11 +455,9 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
         i18n.tr("dialog.customize_active_art", "Active artwork"),
         i18n.tr("dialog.customize_restore_default", "Restore default"),
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
-        m_folderActionLabel.empty() ? i18n.tr("folder.add_game", "Add to folder")
-                                    : m_folderActionLabel,
         i18n.tr("dialog.icon_options_delete", "Delete software"),
     };
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 5; ++i) {
         const nxui::Rect action = {rail.x + 18.f, rail.y + 244.f + i * 36.f, rail.width - 36.f, 32.f};
         const bool selected = m_focusZone == FocusZone::Actions && i == m_selectedAction;
         ren.drawRoundedRect(action, m_theme->panelBase.withAlpha((selected ? 0.20f : 0.07f) * opacity), 11.f);

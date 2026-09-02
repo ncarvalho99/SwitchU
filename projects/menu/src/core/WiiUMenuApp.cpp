@@ -6403,9 +6403,11 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
                     : i18n.tr("hint.launch", "Launch"));
             if (m_launcher.isAppSuspended(icon->titleId()))
                 add(buttonGlyph(nxui::Button::X), i18n.tr("hint.close", "Close"));
-            else if (m_openFolderId == 0)
+            else
                 add(buttonGlyph(nxui::Button::X),
-                    i18n.tr("folder.add_game", "Add to folder"));
+                    m_openFolderId != 0
+                        ? i18n.tr("folder.remove_game", "Remove from folder")
+                        : i18n.tr("folder.add_game", "Add to folder"));
 #else
             add(buttonGlyph(nxui::Button::A), i18n.tr("hint.open", "Open"));
 #endif
@@ -6417,10 +6419,7 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             // row rearranged itself around the cursor for no gain. Advertising
             // a button that now does nothing there would be worse than not
             // having it.
-            if (m_openFolderId != 0)
-                add(buttonGlyph(nxui::Button::R),
-                    i18n.tr("folder.remove_game", "Remove from folder"));
-            else if (m_appLayoutMode != AppLayoutMode::DynamicLine)
+            if (m_openFolderId == 0 && m_appLayoutMode != AppLayoutMode::DynamicLine)
                 add(buttonGlyph(nxui::Button::R), sortModeLabel());
 #ifdef SWITCHU_MENU
             // The options menu was reachable and unannounced: every other
