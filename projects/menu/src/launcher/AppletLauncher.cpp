@@ -59,6 +59,17 @@ void AppletLauncher::launchControllerPairing() {
     }
 }
 
+void AppletLauncher::launchControllerRemapping() {
+    DebugLog::log("[launcher] requesting Controller remapping via daemon");
+    Result rc = switchu::menu::smi_cmd::sendSimple(
+        switchu::smi::SystemMessage::LaunchControllerRemapping);
+    DebugLog::log("[launcher] controller remapping rc=0x%X", rc);
+    if (R_SUCCEEDED(rc)) {
+        if (m_cb.playSfxModalHide) m_cb.playSfxModalHide();
+        if (m_cb.requestExit)      m_cb.requestExit();
+    }
+}
+
 void AppletLauncher::launchNetConnect() {
     DebugLog::log("[launcher] requesting NetConnect launch via daemon");
     Result rc = switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::LaunchNetConnect);
@@ -194,7 +205,9 @@ void AppletLauncher::terminateApplication() {
         return;
     }
     DebugLog::log("[launcher] requesting terminate 0x%016lX", (uint64_t)m_suspendedTitleId);
-    switchu::menu::smi_cmd::terminateApplication();
+    const Result rc = switchu::menu::smi_cmd::terminateApplication();
+    if (R_FAILED(rc))
+        DebugLog::log("[launcher] terminate command FAIL: 0x%X", rc);
 }
 
 #ifdef SWITCHU_TERMINATION_QUEUE_TEST
@@ -246,6 +259,7 @@ void AppletLauncher::launchAlbum()             {}
 void AppletLauncher::launchMiiEditor()         {}
 void AppletLauncher::launchUserCreator()       {}
 void AppletLauncher::launchControllerPairing() {}
+void AppletLauncher::launchControllerRemapping() {}
 void AppletLauncher::launchNetConnect()        {}
 void AppletLauncher::launchUserPage(AccountUid) {}
 void AppletLauncher::enterSleep()              {}

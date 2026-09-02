@@ -172,7 +172,7 @@ void Renderer::setupSampler() {
 }
 
 int Renderer::registerTexture(const dk::ImageView& view) {
-    if (m_nextDescSlot >= GpuDevice::MAX_TEXTURES) {
+    if (m_nextDescSlot >= GpuDevice::MAX_TEXTURES && m_freeDescSlots.empty()) {
         std::fprintf(stderr, "[Renderer] texture descriptor overflow: slot=%d max=%d\n",
                      m_nextDescSlot, GpuDevice::MAX_TEXTURES);
         return -1;
@@ -199,6 +199,11 @@ void Renderer::releaseTextureSlot(int slot) {
     m_freeDescSlots.push_back(slot);
 }
 
+void Renderer::reclaimReleasedTextureSlotsAfterIdle() {
+    // Texture retirement in this fork already waits for GPU idle before the
+    // descriptor slot and backing memory are released.
+}
+
 void Renderer::updateTexture(int slot, const dk::ImageView& view) {
     dk::ImageDescriptor desc;
     desc.initialize(view);
@@ -213,6 +218,7 @@ void Renderer::resetTextureSlots() {
         firstFree = 1 + GpuDevice::NUM_OFFSCREEN;
     m_nextDescSlot = firstFree;
     m_curTexSlot = -1;
+    m_freeDescSlots.clear();
 
     if (m_gpu.offscreenReady()) {
         for (int i = 0; i < GpuDevice::NUM_OFFSCREEN; ++i) {
@@ -879,6 +885,25 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
     endShape();
 }
 
+void Renderer::drawFrostedInset(const Rect& r, const Color& tint,
+                                const Color& border, const Color& highlight,
+                                float radius, float opacity) {
+    const float alpha = std::clamp(opacity, 0.f, 1.f);
+    if (alpha <= 0.01f || r.width <= 0.f || r.height <= 0.f)
+        return;
+
+    drawRoundedRect({r.x, r.y + 3.f, r.width, r.height},
+                    Color::black().withAlpha(0.12f * alpha), radius);
+    drawRoundedRect(r, tint.withAlpha(tint.a * alpha), radius);
+    drawRoundedRectOutline(r, border.withAlpha(border.a * alpha), radius, 1.f);
+    drawRoundedRectOutline(r.shrunk(1.5f),
+                           highlight.withAlpha(highlight.a * alpha),
+                           std::max(0.f, radius - 1.5f), 1.f);
+    drawRoundedRectOutline(r.shrunk(3.f),
+                           Color::black().withAlpha(0.045f * alpha),
+                           std::max(0.f, radius - 3.f), 1.f);
+}
+
 // A circle is the mask with the radius pinned to half the shorter side, so it
 // shares the fill path rather than keeping a fan of its own. The segment count
 // no longer means anything: the edge is exact at any size.
@@ -975,6 +1000,12 @@ void Renderer::drawTextureRoundedSub(const Texture* tex, const Rect& src,
     }
     drawRoundedMasked(dest, std::min(radius, std::min(dest.width, dest.height) * 0.5f),
                       tint, uv);
+}
+
+void Renderer::drawTextureSubRounded(const Texture* tex, const Rect& src,
+                                     const Rect& dest, float radius,
+                                     const Color& tint) {
+    drawTextureRoundedSub(tex, src, dest, radius, tint);
 }
 
 void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,

@@ -14,9 +14,7 @@ namespace switchu::control_cache {
 
 inline constexpr const char* kCacheDir = "sdmc:/config/SwitchU/control_cache";
 inline constexpr uint32_t kMetaMagic = 0x53554343;
-// v2 rejects NACP names that aren't valid UTF-8. Bumping the version
-// invalidates caches written by v1, which may hold such a name.
-inline constexpr uint32_t kMetaVersion = 2;
+inline constexpr uint32_t kMetaVersion = 5;
 
 struct Meta {
     uint32_t magic = kMetaMagic;
@@ -34,13 +32,72 @@ struct Meta {
     uint64_t cache_storage_size = 0;
     uint64_t cache_storage_journal_size = 0;
     uint64_t bcat_delivery_cache_storage_size = 0;
+    char display_version[0x10] = {};
     char name[0x201] = {};
+    char english_name[0x201] = {};
+    char publisher[0x101] = {};
 };
 
 inline std::string formatTitleId(uint64_t titleId) {
     char buf[17] = {};
     std::snprintf(buf, sizeof(buf), "%016lX", static_cast<unsigned long>(titleId));
     return std::string(buf);
+}
+
+inline bool isValidUtf8(const char* value, size_t capacity) {
+    if (!value || capacity == 0)
+        return false;
+
+    const auto* bytes = reinterpret_cast<const unsigned char*>(value);
+    size_t i = 0;
+    bool terminated = false;
+    while (i < capacity) {
+        const unsigned char lead = bytes[i];
+        if (lead == 0) {
+            terminated = true;
+            break;
+        }
+        if (lead < 0x80) {
+            // Reject control bytes other than the whitespace used by titles.
+            if (lead < 0x20 && lead != '\t' && lead != '\n' && lead != '\r')
+                return false;
+            ++i;
+            continue;
+        }
+
+        size_t continuationCount = 0;
+        uint32_t codepoint = 0;
+        if (lead >= 0xC2 && lead <= 0xDF) {
+            continuationCount = 1;
+            codepoint = lead & 0x1F;
+        } else if (lead >= 0xE0 && lead <= 0xEF) {
+            continuationCount = 2;
+            codepoint = lead & 0x0F;
+        } else if (lead >= 0xF0 && lead <= 0xF4) {
+            continuationCount = 3;
+            codepoint = lead & 0x07;
+        } else {
+            return false;
+        }
+
+        if (i + continuationCount >= capacity)
+            return false;
+        for (size_t n = 1; n <= continuationCount; ++n) {
+            const unsigned char next = bytes[i + n];
+            if ((next & 0xC0) != 0x80)
+                return false;
+            codepoint = (codepoint << 6) | (next & 0x3F);
+        }
+
+        const uint32_t minimum = continuationCount == 1 ? 0x80
+                               : continuationCount == 2 ? 0x800 : 0x10000;
+        if (codepoint < minimum || codepoint > 0x10FFFF
+            || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+            return false;
+        }
+        i += continuationCount + 1;
+    }
+    return terminated;
 }
 
 inline std::string metaPath(uint64_t titleId) {
@@ -72,13 +129,21 @@ inline bool readMeta(uint64_t titleId, Meta& out) {
     if (meta.magic != kMetaMagic || meta.version != kMetaVersion || meta.title_id != titleId)
         return false;
 
-    // The writer always terminates this, but the reader must not depend on the
-    // writer: a file truncated by a power cut, or written by an older build,
-    // can leave 0x201 bytes with no terminator, and every consumer of this
-    // field turns it straight into a std::string. That read would run off the
-    // end of the struct, which is how a name ends up in a register that is
-    // about to be used as a pointer.
-    meta.name[sizeof(meta.name) - 1] = 0;
+    meta.display_version[sizeof(meta.display_version) - 1] = '\0';
+    meta.name[sizeof(meta.name) - 1] = '\0';
+    meta.english_name[sizeof(meta.english_name) - 1] = '\0';
+    meta.publisher[sizeof(meta.publisher) - 1] = '\0';
+    if (!isValidUtf8(meta.name, sizeof(meta.name)))
+        return false;
+    if (meta.english_name[0] != '\0'
+        && !isValidUtf8(meta.english_name, sizeof(meta.english_name)))
+        meta.english_name[0] = '\0';
+    if (meta.publisher[0] != '\0' && !isValidUtf8(meta.publisher, sizeof(meta.publisher)))
+        meta.publisher[0] = '\0';
+    if (meta.display_version[0] != '\0'
+        && !isValidUtf8(meta.display_version, sizeof(meta.display_version))) {
+        meta.display_version[0] = '\0';
+    }
 
     out = meta;
     return true;
@@ -89,13 +154,8 @@ inline bool hasMeta(uint64_t titleId) {
     return readMeta(titleId, meta);
 }
 
-// Throw away what was cached for a title, so the next pass fetches it again.
-//
-// The cache is keyed by title id and the worker skips anything that already has
-// a .meta, which is right while a title stays the same title. It is wrong the
-// moment an id is reused: a forwarder shortcut deleted and made again for a
-// different app keeps the same id, and the old name and icon came back with it.
-// Reported as shortcuts showing the icon of the app they replaced.
+// Remove cached metadata and art when a title id is reused by a different
+// forwarder. The next catalogue pass will repopulate both files.
 inline void forget(uint64_t titleId) {
     std::remove(metaPath(titleId).c_str());
     std::remove(iconPath(titleId).c_str());
@@ -147,31 +207,6 @@ inline void copyString(char* dst, size_t dstSize, const char* src, size_t srcSiz
     dst[len] = '\0';
 }
 
-// Titles are drawn with TTF_RenderUTF8_Blended, which renders noise for byte
-// sequences that aren't valid UTF-8. At least one repacked title ships a NACP
-// whose name field holds 309 bytes of binary data, so entries are validated
-// before being accepted rather than trusting the NACP.
-inline bool isValidUtf8(const char* s, size_t maxLen) {
-    const auto* p = reinterpret_cast<const unsigned char*>(s);
-    size_t n = 0;
-    while (n < maxLen && p[n] != '\0')
-        ++n;
-    for (size_t i = 0; i < n;) {
-        const unsigned char c = p[i];
-        size_t extra;
-        if (c < 0x80)                extra = 0;
-        else if ((c & 0xE0) == 0xC0) extra = 1;
-        else if ((c & 0xF0) == 0xE0) extra = 2;
-        else if ((c & 0xF8) == 0xF0) extra = 3;
-        else return false;
-        if (i + extra >= n && extra > 0) return false;
-        for (size_t k = 1; k <= extra; ++k)
-            if ((p[i + k] & 0xC0) != 0x80) return false;
-        i += extra + 1;
-    }
-    return true;
-}
-
 inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControlData& controlData,
                                     Meta& out) {
     Meta meta{};
@@ -187,33 +222,60 @@ inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControl
     meta.cache_storage_size = controlData.nacp.cache_storage_size;
     meta.cache_storage_journal_size = controlData.nacp.cache_storage_journal_size;
     meta.bcat_delivery_cache_storage_size = controlData.nacp.bcat_delivery_cache_storage_size;
-
-    auto usableName = [](const NacpLanguageEntry* e) {
-        return e && e->name[0] != '\0' && isValidUtf8(e->name, sizeof(e->name));
-    };
+    copyString(meta.display_version, sizeof(meta.display_version),
+               controlData.nacp.display_version,
+               sizeof(controlData.nacp.display_version));
 
     NacpLanguageEntry* langEntry = nullptr;
-    if (R_FAILED(nacpGetLanguageEntry(const_cast<NacpStruct*>(&controlData.nacp), &langEntry)) ||
-        !usableName(langEntry)) {
-        // Preferred entry missing or unrenderable — take the first language
-        // entry that is actually valid UTF-8.
-        langEntry = nullptr;
+    NacpLanguageEntry* preferred = nullptr;
+    if (R_SUCCEEDED(nacpGetLanguageEntry(
+            const_cast<NacpStruct*>(&controlData.nacp), &preferred))
+        && preferred && preferred->name[0] != '\0'
+        && isValidUtf8(preferred->name, sizeof(preferred->name))) {
+        langEntry = preferred;
+    }
+    if (!langEntry) {
         for (int i = 0; i < 16; ++i) {
             auto* candidate = const_cast<NacpLanguageEntry*>(&controlData.nacp.lang[i]);
-            if (usableName(candidate)) {
+            if (candidate->name[0] != '\0'
+                && isValidUtf8(candidate->name, sizeof(candidate->name))) {
                 langEntry = candidate;
                 break;
             }
         }
     }
 
-    if (langEntry)
+    if (langEntry) {
         copyString(meta.name, sizeof(meta.name), langEntry->name, sizeof(langEntry->name));
+        if (isValidUtf8(langEntry->author, sizeof(langEntry->author))) {
+            copyString(meta.publisher, sizeof(meta.publisher),
+                       langEntry->author, sizeof(langEntry->author));
+        }
+    }
+
+    // NACP slots 0 and 1 are American and British English. Keep this stable
+    // search title independent from the console's display language.
+    const NacpLanguageEntry* englishEntry = nullptr;
+    for (int languageIndex : {0, 1}) {
+        const auto* candidate = &controlData.nacp.lang[languageIndex];
+        if (candidate->name[0] != '\0'
+            && isValidUtf8(candidate->name, sizeof(candidate->name))) {
+            englishEntry = candidate;
+            break;
+        }
+    }
+    if (englishEntry) {
+        copyString(meta.english_name, sizeof(meta.english_name),
+                   englishEntry->name, sizeof(englishEntry->name));
+    }
 
     if (meta.name[0] == '\0') {
         const std::string fallback = formatTitleId(titleId);
         copyString(meta.name, sizeof(meta.name), fallback.c_str(), fallback.size());
     }
+    if (meta.english_name[0] == '\0')
+        copyString(meta.english_name, sizeof(meta.english_name),
+                   meta.name, sizeof(meta.name));
 
     out = meta;
     return true;

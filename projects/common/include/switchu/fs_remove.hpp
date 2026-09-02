@@ -1,5 +1,7 @@
 #pragma once
+#include <atomic>
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
@@ -25,7 +27,10 @@ namespace switchu {
 //
 // failedPath, when given, receives the first path that could not be removed --
 // the caller has the logger, this does not.
-inline bool removeRecursive(const std::string& path, std::string* failedPath = nullptr) {
+// removedCount, when given, is incremented once per file and once per directory
+// actually removed, so a caller can drive a progress bar from another thread.
+inline bool removeRecursive(const std::string& path, std::string* failedPath = nullptr,
+                            std::atomic<std::uint64_t>* removedCount = nullptr) {
     struct stat st {};
     if (stat(path.c_str(), &st) != 0) {
         // Already gone is the outcome asked for.
@@ -36,8 +41,10 @@ inline bool removeRecursive(const std::string& path, std::string* failedPath = n
     }
 
     if (!S_ISDIR(st.st_mode)) {
-        if (std::remove(path.c_str()) == 0 || errno == ENOENT)
+        if (std::remove(path.c_str()) == 0 || errno == ENOENT) {
+            if (removedCount) removedCount->fetch_add(1, std::memory_order_relaxed);
             return true;
+        }
         if (failedPath) *failedPath = path;
         return false;
     }
@@ -57,7 +64,7 @@ inline bool removeRecursive(const std::string& path, std::string* failedPath = n
         if (!child.empty() && child.back() != '/')
             child.push_back('/');
         child += name;
-        if (!removeRecursive(child, failedPath)) {
+        if (!removeRecursive(child, failedPath, removedCount)) {
             ok = false;
             break;
         }
@@ -66,8 +73,10 @@ inline bool removeRecursive(const std::string& path, std::string* failedPath = n
 
     if (!ok)
         return false;
-    if (rmdir(path.c_str()) == 0 || errno == ENOENT)
+    if (rmdir(path.c_str()) == 0 || errno == ENOENT) {
+        if (removedCount) removedCount->fetch_add(1, std::memory_order_relaxed);
         return true;
+    }
 
     if (failedPath) *failedPath = path;
     return false;

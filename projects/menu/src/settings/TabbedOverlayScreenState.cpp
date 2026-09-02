@@ -68,9 +68,27 @@ void TabbedOverlayScreen::rebuildCurrentTab() {
     rebuildContentItems();
 }
 
+void TabbedOverlayScreen::refreshCurrentTabWidgets() {
+    if (usesCustomContentLayout()) {
+        rebuildContentItems();
+        return;
+    }
+    if (m_tabIndex >= 0 && m_tabIndex < (int)m_cachedTabContentWidgets.size())
+        m_cachedTabContentWidgets[(size_t)m_tabIndex].clear();
+    clampContentIdx();
+    m_contentIdx = std::clamp(m_contentIdx, 0, std::max(0, focusableCount() - 1));
+    rebuildContentItems();
+}
+
 void TabbedOverlayScreen::requestDialog(const std::string& title, const std::string& msg,
                                    std::vector<DialogButtonDef> buttons) {
     if (m_dialogRequestCb) m_dialogRequestCb(title, msg, std::move(buttons));
+}
+
+void TabbedOverlayScreen::requestDateTimeEditor(
+    const DateTimeEditorValue& initial, DateTimeCommitCb onCommit) {
+    if (m_dateTimeEditorRequestCb)
+        m_dateTimeEditorRequestCb(initial, std::move(onCommit));
 }
 
 void TabbedOverlayScreen::requestToast(const std::string& msg, float holdSeconds) {
@@ -241,7 +259,9 @@ nxui::Rect TabbedOverlayScreen::tabsRect() const {
 }
 
 nxui::Rect TabbedOverlayScreen::tabsRect(const nxui::Rect& panel) const {
-    return { panel.x + kInnerPad, panel.y + kInnerPad, kTabWidth, panel.height - 2 * kInnerPad };
+    const float headerH = overlayHeaderHeight();
+    return { panel.x + kInnerPad, panel.y + kInnerPad + headerH,
+             overlayTabWidth(), panel.height - 2 * kInnerPad - headerH };
 }
 
 nxui::Rect TabbedOverlayScreen::contentRect() const {
@@ -250,9 +270,11 @@ nxui::Rect TabbedOverlayScreen::contentRect() const {
 }
 
 nxui::Rect TabbedOverlayScreen::contentRect(const nxui::Rect& panel) const {
-    float left = panel.x + kInnerPad + kTabWidth + kInnerPad;
-    return { left, panel.y + kInnerPad,
-             panel.right() - kInnerPad - left, panel.height - 2 * kInnerPad };
+    const float headerH = overlayHeaderHeight();
+    float left = panel.x + kInnerPad + overlayTabWidth() + kInnerPad;
+    return { left, panel.y + kInnerPad + headerH,
+             panel.right() - kInnerPad - left,
+             panel.height - 2 * kInnerPad - headerH };
 }
 
 float TabbedOverlayScreen::contentTotalHeight() const {

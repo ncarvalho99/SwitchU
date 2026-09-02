@@ -17,12 +17,22 @@
 #include "core/AccessibilityManager.hpp"
 #include "widgets/LaunchAnimation.hpp"
 #include "widgets/OverlayDialog.hpp"
+#include "widgets/ContextMenu.hpp"
 #include "widgets/ProgressDialog.hpp"
 #include "widgets/LockScreen.hpp"
 #include "widgets/AppletButton.hpp"
 #include "widgets/PageIndicator.hpp"
 #include "widgets/UserAvatarButton.hpp"
+#include "widgets/FolderBackdrop.hpp"
+#include "widgets/SteamGridDbBackdrop.hpp"
+#include "steamgriddb/SteamGridDbManager.hpp"
+#include "steamgriddb/ArtworkCache.hpp"
 #include "settings/SettingsScreen.hpp"
+#include "settings/GameOptionsScreen.hpp"
+#include "settings/SteamGridDbPickerScreen.hpp"
+#include "settings/FolderOptionsScreen.hpp"
+#include "settings/ControllerTestScreen.hpp"
+#include "settings/TextEntryScreen.hpp"
 #include "themeshop/ThemeShopScreen.hpp"
 #include "gallery/GameGalleryScreen.hpp"
 #include "details/GameDetailsScreen.hpp"
@@ -30,23 +40,31 @@
 #include "mods/GameModsScreen.hpp"
 #include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
+#include "core/FolderStore.hpp"
+#include "core/WidgetStore.hpp"
 #include "core/ThemePreset.hpp"
 #include "sidebar/SidebarManager.hpp"
 #include "launcher/AppletLauncher.hpp"
 #include "launcher/AppListLoader.hpp"
 #include "launcher/IconStreamer.hpp"
 #include "core/SystemMessages.hpp"
+#include "navigation/MenuNavigator.hpp"
+#include "services/ClockService.hpp"
 #ifdef SWITCHU_DEBUG_UI
 #include "debug/DebugImGuiOverlay.hpp"
 #endif
 #include <nxui/widgets/Background.hpp>
 #include <nxui/widgets/Box.hpp>
+#include <nxui/widgets/GlassPanel.hpp>
+#include <nxui/widgets/Label.hpp>
 #include <cstdint>
 #include <memory>
 #include <vector>
 #include <mutex>
 #include <atomic>
 #include <future>
+#include <utility>
+#include <unordered_map>
 #include <switch.h>
 #ifdef SWITCHU_MENU
 #include <switchu/smi_protocol.hpp>
@@ -88,8 +106,11 @@ private:
     };
 
     void loadResources();
+    void loadStaticTextures();
     void setupLockScreen();
     GridLayoutMetrics computeGridLayoutMetrics() const;
+    GridLayoutMetrics computeGridLayoutMetrics(int columns, int rows) const;
+    std::pair<int, int> folderGridDimensions(std::uint32_t folderId) const;
     void reflowHomeGrid();
     void buildGrid();
     void applyGlassSharpness(float sharpness);
@@ -128,9 +149,119 @@ private:
     void syncGameArtworkSave();
     void refreshGameArtworkBackdrop(std::uint64_t titleId);
     void confirmDeleteSoftware(std::uint64_t titleId, const std::string& title);
-    void buildUserAvatarBar();
+    void buildUserAvatarBar(bool loadImmediately = true);
+    void loadNextUserAvatar();
+    void appendAddUserButton();
+    void wireUserAvatarNavigation();
+    void composeRootPending(std::vector<PendingApp>& apps);
+    GridModel buildRootFolderModel();
+    GridModel buildOpenFolderModel(std::uint32_t folderId) const;
+    void applyDisplayModel(GridModel model, std::uint64_t focusId, bool animate);
+    void syncPageIndicator();
+    void flipPageFromEdge(int dir);
+    void requestOpenFolder(std::uint32_t folderId, std::uint64_t focusTitleId = 0);
+    void openCapturedFolder();
+    void closeFolder(bool preserveEditMode = false);
+    void showFolderAssignment(std::uint64_t titleId, const std::string& title);
+    void assignTitleToFolder(std::uint32_t folderId, std::uint64_t titleId);
+    void removeTitleFromFolder(std::uint64_t titleId);
+    void createFolder(int targetSlot = -1);
+    void finishCreateFolder(int targetSlot, const std::string& typed);
+    void showAddContextMenu(int targetSlot, const nxui::Rect& anchor);
+    void showWidgetTypeMenu(int targetSlot, const nxui::Rect& anchor);
+    void showWidgetSizeMenu(int targetSlot, const nxui::Rect& anchor,
+                            switchu::widgets::WidgetType type);
+    void showWidgetAssetMenu(int targetSlot, const nxui::Rect& anchor,
+                             switchu::widgets::WidgetType type,
+                             switchu::widgets::WidgetSize size);
+    void showWidgetOptionsMenu(std::uint32_t widgetId, int slot,
+                               const nxui::Rect& anchor);
+    void createWidget(int targetSlot, switchu::widgets::WidgetType type,
+                      switchu::widgets::WidgetSize size,
+                      const std::string& assetRef = {});
+    bool saveWidgetsOrReport(const char* operation);
+    bool canPlaceWidget(int targetSlot, switchu::widgets::WidgetSize size,
+                        std::uint32_t ignoringWidgetId = 0) const;
+    void normalizeWidgetPlacements();
+    // Cells a multi-cell tile spans hold 0 in the layout, exactly like free
+    // space. These two tell them apart so nothing is dropped into a tile's
+    // own footprint; see the comment on the definitions.
+    std::vector<bool> layoutSpanCoverage(
+        const std::vector<std::uint64_t>& slots) const;
+    void claimFreeLayoutSlot(std::vector<std::uint64_t>& slots,
+                             std::vector<bool>& covered,
+                             std::uint64_t titleId) const;
+    std::vector<std::pair<std::string, std::string>> listWidgetAssets(bool screenshotsOnly) const;
+    std::string resolveWidgetAssetRef(const std::string& assetRef) const;
+    void commitLaunchRecency(std::uint64_t titleId, const std::string& title);
+    // Folder tiles show the icons of the titles inside them. The textures are
+    // owned here, one set per folder, keyed by the member list so a membership
+    // change is noticed; the icons only borrow raw pointers to them.
+    struct FolderPreviewDecode {
+        std::uint32_t folderId = 0;
+        std::string signature;
+        std::vector<IconStreamer::DecodedIcon> icons;
+        std::atomic<bool> cancelled{false};
+    };
+    struct FolderPreviewAssets {
+        std::string signature;
+        std::vector<std::unique_ptr<nxui::Texture>> textures;
+    };
+    void syncFolderPreviews();
+    std::string folderPreviewSignature(const switchu::folders::Folder& folder) const;
+    std::unordered_map<std::uint32_t, FolderPreviewAssets> m_folderPreviews;
+    std::shared_ptr<FolderPreviewDecode> m_folderPreviewDecode;
+    std::future<void> m_folderPreviewFuture;
+    std::size_t m_folderPreviewUploadStage = 0;
+    // std::future is consumed by get(), so readiness cannot be re-tested
+    // through it on the frames that follow.
+    bool m_folderPreviewDecoded = false;
+    void syncWidgetIconContent();
+    void syncWidgetPageAssets();
+    std::string randomScreenshotPath(std::uint32_t widgetId) const;
+    std::string widgetTypeLabel(switchu::widgets::WidgetType type) const;
+    std::string widgetDurationLabel(std::uint64_t seconds) const;
+    void refreshRecentActivityDuration();
+    void ensureRecentWidgetAssets(std::uint64_t titleId);
+    void pollRecentWidgetAssets();
+    void syncRecentWidgetTextures();
+    void ensureGameArtwork(std::uint64_t titleId);
+    void startNextGameArtworkDecode();
+    void pollGameArtworkAssets();
+    void syncGameArtworkTextures(std::uint64_t titleId);
+    switchu::widgets::WidgetSize gameGridSize(std::uint64_t titleId,
+                                               AppLayoutMode mode) const;
+    bool canPlaceGridItem(int targetSlot, switchu::widgets::WidgetSize size,
+                          std::uint64_t ignoringTitleId = 0,
+                          std::uint64_t alsoIgnoringTitleId = 0) const;
+#ifdef SWITCHU_MENU
+    void activateApplication(GlossyIcon* source, AppEntry* entry,
+                             std::uint64_t titleId,
+                             const std::string& launchTitle);
+#endif
+    void renameFolder(std::uint32_t folderId);
+    void showFolderContextMenu(std::uint32_t folderId);
+    bool saveFoldersOrReport(const char* operation);
+    // Text entry is asynchronous: the on-screen keyboard runs for as many frames
+    // as the player needs, so callers hand over what to do with the result
+    // instead of waiting for a return value.
+    void requestTextEntry(const std::string& title, const std::string& guide,
+                          const std::string& initial, int maxLength, bool password,
+                          std::function<void(const std::string&)> onAccept);
+    void createTextEntry();
+    std::string defaultFolderName() const;
+    void editSteamGridDbApiKey();
+    void startSteamGridDbScrape();
+    void openSteamGridDbPicker(GameOptionsScreen::ArtworkKind kind,
+                               const std::string& query = std::string());
+    void editSteamGridDbPickerQuery();
+    void applySteamGridDbCandidate(const SteamGridDbManager::BrowseResult& browse,
+                                   const SteamGridDbManager::Candidate& candidate);
+    void syncSteamGridDb();
+    void showFocusedSteamGridDbArtwork(bool forceReload = false);
     void applyTheme();
     void applyThemeResources(const ThemePreset& preset);
+    void retryPendingBackgroundImage();
     void applyThemeMusic(const std::vector<std::string>& tracks);
     // Faixas que o tema atual traz. O preset de som carrega em outra thread e
     // chegava depois, sobrescrevendo o que o tema tinha posto -- entao quem
@@ -142,13 +273,49 @@ private:
     std::string resolveThemeAssetPath(const ThemePreset& preset, const std::string& rawPath) const;
     ThemePreset* findPresetPtr(const std::string& name);
     void deletePreset(const std::string& presetId);
+    void startSoftwareDeletion(uint64_t titleId, const std::string& title,
+                               bool closeGameOptionsOnSuccess);
+    void syncSoftwareDeletion();
     void updateCursor();
     struct ActionHint {
         std::string icon;
         std::string label;
     };
     std::vector<ActionHint> buildActionHints();
+    struct HintCapsule {
+        std::string icon;
+        std::string label;
+        std::string outgoing;
+        float width = 0.f;
+        float widthFrom = 0.f, widthTo = 0.f;
+        float widthT = 1.f;
+        float swapT = 1.f;
+    };
+    std::vector<HintCapsule> m_hintCapsules;
+    void syncHintCapsules(float dt);
+    float hintCapsuleWidth(const std::string& icon, const std::string& label);
     void renderActionHintBar(nxui::Renderer& ren);
+    void renderActionHintPanel(nxui::Renderer& ren);
+    void renderPageArrows(nxui::Renderer& ren);
+    bool pagingAvailable();
+    int  dynamicLineNeighbour(int dir) const;
+    int   m_lineRepeatDir = 0;
+    float m_lineRepeatTimer = 0.f;
+    bool stepDynamicLine(int dir);
+    struct PageArrowAnim {
+        float show = 0.f;
+        float press = 0.f;
+    };
+    PageArrowAnim m_arrowAnimLeft, m_arrowAnimRight;
+    bool m_touchArrowLeft = false, m_touchArrowRight = false;
+    nxui::Rect pageArrowRect(bool left);
+    void kickPageArrow(int dir);
+    bool flipPage(int dir);
+    bool addPageAvailable();
+    void createFolderPage();
+    float m_addPageHold = 0.f;
+    bool m_addPageMode = false;
+    bool m_addPageTouchHold = false;
     int findTitleIndex(uint64_t titleId) const;
     bool focusTitle(uint64_t titleId);
     // Devolve o seletor para a grade quando não há um título específico para
@@ -184,6 +351,9 @@ private:
     std::string accessibilityPositionFor(nxui::Widget* w) const;
     void createSettings();
     void createThemeShop();
+    void createGameOptions();
+    void createFolderOptions();
+    void createControllerTest();
     void createGameGallery();
     void createGameDetails();
     void reloadThemePresets();
@@ -201,9 +371,13 @@ private:
     void quiesceWritersForPowerAction();
     void applyMenuLayoutToPending(std::vector<PendingApp>& apps);
     void startEditGhost(GlossyIcon* sourceIcon);
+    nxui::Texture* adoptEditGhostTexture(GlossyIcon* sourceIcon);
+    void detachEditSourceIcon();
+    void reattachEditSourceIcon();
     void stopEditGhost();
     void updateEditGhost(float dt);
     bool commitEditModePlacement();
+    bool activateEditModeTarget();
     bool moveFocusedIcon(nxui::FocusDirection dir);
     void enterEditMode();
     void exitEditMode();
@@ -214,10 +388,16 @@ private:
     std::string accessibilityContextFor(nxui::Widget* w) const;
     std::string accessibilityActionsFor(nxui::Widget* w) const;
 
+    void toggleAppLayoutMode();
+    void setAppLayoutMode(AppLayoutMode mode);
+    void configureDynamicLineNavigation();
+    AppLayoutMode appLayoutMode() const { return m_appLayoutMode; }
+
 #ifdef SWITCHU_MENU
     void refreshAppList();
     void finalizeRefresh();
     void handleSystemAction(SysAction a);
+    void showGameContextMenu(GlossyIcon* icon);
 #endif
 
     nxui::Font  m_fontNormal;
@@ -229,6 +409,7 @@ private:
 
     GridModel    m_model;
     nxui::Theme  m_theme;
+    switchu::services::ClockService m_clockService;
 
     // Drawn last and outside the widget tree: while it is up focusRoot()
     // hands back nothing, so no widget can be navigated or activated
@@ -258,14 +439,27 @@ private:
     std::shared_ptr<LaunchAnimation>   m_launchAnim;
     std::shared_ptr<OverlayDialog>     m_userSelect;
     std::shared_ptr<OverlayDialog>     m_dialog;
+    std::shared_ptr<ContextMenu>       m_contextMenu;
     std::shared_ptr<ProgressDialog>    m_progressDialog;
     std::shared_ptr<SettingsScreen>    m_settings;
     std::shared_ptr<ThemeShopScreen>   m_themeShop;
     std::shared_ptr<GameGalleryScreen> m_gameGallery;
     std::shared_ptr<GameDetailsScreen> m_gameDetails;
     std::shared_ptr<GameModsScreen>    m_gameMods;
+    std::shared_ptr<GameOptionsScreen> m_gameOptions;
+    std::shared_ptr<SteamGridDbPickerScreen> m_steamGridDbPicker;
+    std::shared_ptr<FolderOptionsScreen> m_folderOptions;
+    std::shared_ptr<ControllerTestScreen> m_controllerTest;
+    std::shared_ptr<TextEntryScreen>      m_textEntry;
 
     nxui::Texture m_gameCardTex;
+    nxui::Texture m_arrowTexLeft;
+    nxui::Texture m_arrowTexRight;
+    nxui::Texture m_batteryConsoleTex;
+    nxui::Texture m_batteryJoyconLeftTex;
+    nxui::Texture m_batteryJoyconRightTex;
+    nxui::AnimatedFloat m_arrowCenterY;
+    bool m_arrowCenterInit = false;
 
     std::shared_ptr<nxui::Box> m_bgLayer;
     std::shared_ptr<nxui::Box> m_contentLayer;
@@ -274,6 +468,10 @@ private:
     std::shared_ptr<nxui::Box> m_leftSidebar;
     std::shared_ptr<nxui::Box> m_rightSidebar;
     std::shared_ptr<nxui::Box> m_userAvatarBar;
+    std::shared_ptr<FolderBackdrop> m_folderBackdrop;
+    std::shared_ptr<SteamGridDbBackdrop> m_steamGridDbBackdrop;
+    std::shared_ptr<nxui::GlassPanel> m_folderHeader;
+    std::shared_ptr<nxui::Label> m_folderHeaderLabel;
     std::vector<std::shared_ptr<UserAvatarButton>> m_userAvatarButtons;
 
     AudioManager m_audio;
@@ -283,7 +481,9 @@ private:
     // it: the corruption is intermittent at roughly one reboot in three, which
     // is what losing a race with an in-flight write looks like.
     std::future<void>    m_configSaveFuture;
+    std::future<void>    m_themeDeleteFuture;
     bool                 m_audioStarted = false;
+    bool                 m_musicFadeActive = false;
 #ifdef SWITCHU_MENU
     uint64_t             m_transitionOriginTick = 0;
     uint64_t             m_menuMainTick = 0;
@@ -307,6 +507,12 @@ private:
         std::mutex mutex;
         gallery::ArtworkSaveResult result;
     };
+    struct SteamGridDbApplyProgressShared {
+        std::mutex mutex;
+        std::string message;
+        float progress01 = 0.f;
+        std::uint64_t revision = 0;
+    };
 
     nxui::ThreadPool m_threadPool{2};
     SidebarManager  m_sidebar;
@@ -314,6 +520,7 @@ private:
     AppListLoader   m_appLoader;
     IconStreamer    m_iconStreamer;
     SystemMessages  m_sysMsg;
+    switchu::navigation::MenuNavigator m_navigator;
 
     bool m_showDebugOverlay  = false;
 #ifdef SWITCHU_DEBUG_UI
@@ -322,14 +529,77 @@ private:
     bool m_showWireframe     = false;
     bool m_editMode          = false;
     int  m_editSourceIndex   = -1;
+    int  m_editTargetIndex   = -1;
+    int  m_editOriginRootSlot = -1;
+    int  m_editOriginFolderIndex = -1;
+    std::uint32_t m_editOriginFolderId = 0;
+    std::uint64_t m_editHeldTitleId = 0;
     std::string m_editHeldTitle;
     GlossyIcon* m_editBoundIcon = nullptr;
     GlossyIcon* m_editSourceIcon = nullptr;
     std::shared_ptr<GlossyIcon> m_editGhostIcon;
+    std::unique_ptr<nxui::Texture> m_editGhostTexture;
     nxui::Rect m_editGhostTargetRect {0.f, 0.f, 0.f, 0.f};
     float m_editGhostPulse = 0.f;
     std::vector<uint64_t> m_layoutSlots;
+    std::unordered_map<std::uint64_t, switchu::widgets::WidgetSize> m_gameSizes;
     bool m_layoutDirty = false;
+    switchu::folders::FolderStore m_folderStore;
+    switchu::widgets::WidgetStore m_widgetStore;
+    std::uint64_t m_recentWidgetAssetTitleId = 0;
+    std::uint64_t m_recentWidgetLoadedTitleId = 0;
+    std::unique_ptr<nxui::Texture> m_recentWidgetHero;
+    std::unique_ptr<nxui::Texture> m_recentWidgetLogo;
+    std::unique_ptr<nxui::Texture> m_recentWidgetIcon;
+    struct RecentWidgetAssetDecodeState {
+        std::uint64_t titleId = 0;
+        steamgriddb::artwork::DecodedImage hero;
+        steamgriddb::artwork::DecodedImage logo;
+        IconStreamer::DecodedIcon icon;
+        std::atomic<bool> cancelled{false};
+        std::int64_t elapsedMs = 0;
+    };
+    std::shared_ptr<RecentWidgetAssetDecodeState> m_recentWidgetAssetDecode;
+    std::shared_ptr<RecentWidgetAssetDecodeState> m_recentWidgetAssetReady;
+    std::future<void> m_recentWidgetAssetFuture;
+    int m_recentWidgetAssetUploadStage = 0;
+    struct GameArtworkTextures {
+        std::unique_ptr<nxui::Texture> hero;
+        std::unique_ptr<nxui::Texture> logo;
+    };
+    std::unordered_map<std::uint64_t, GameArtworkTextures> m_gameArtwork;
+    struct GameArtworkDecodeState {
+        std::uint64_t titleId = 0;
+        steamgriddb::artwork::DecodedImage hero;
+        steamgriddb::artwork::DecodedImage logo;
+        std::atomic<bool> cancelled{false};
+        std::int64_t elapsedMs = 0;
+    };
+    std::vector<std::uint64_t> m_gameArtworkDecodeQueue;
+    std::shared_ptr<GameArtworkDecodeState> m_gameArtworkDecode;
+    std::shared_ptr<GameArtworkDecodeState> m_gameArtworkReady;
+    std::future<void> m_gameArtworkFuture;
+    GameArtworkTextures m_gameArtworkUploadTextures;
+    int m_gameArtworkUploadStage = 0;
+    struct RetainedImagePin {
+        std::string assetRef;
+        std::string assetPath;
+        std::shared_ptr<GlossyIcon> icon;
+    };
+    std::unordered_map<std::uint64_t, RetainedImagePin> m_retainedImagePins;
+    int m_widgetAssetPage = -1;
+    bool m_widgetAssetsWereSliding = false;
+    std::vector<std::uint8_t> m_widgetAssetCurrentScratch;
+    std::vector<std::uint8_t> m_widgetAssetKeepScratch;
+    int m_consoleBatteryPercent = 0;
+    bool m_consoleBatteryCharging = false;
+    std::vector<AppEntry> m_allApps;
+    std::uint32_t m_openFolderId = 0;
+    std::uint32_t m_requestedFolderId = 0;
+    std::uint64_t m_folderOpenFocusTitleId = 0;
+    bool m_folderCaptureRequested = false;
+    bool m_folderCaptureReady = false;
+    bool m_gridSliding = false;
     // Frames the log stays unbuffered for after the run loop starts, so a hang
     // in early-frame work (deferred asset uploads) still reaches the SD card.
     int m_logImmediateFrames = 300;
@@ -355,6 +625,14 @@ private:
     int  m_refreshPrevPage       = 0;
 
     AppConfig m_config;
+    SteamGridDbManager m_steamGridDb;
+    std::future<SteamGridDbManager::BrowseResult> m_steamGridDbBrowseFuture;
+    std::future<SteamGridDbManager::ApplyResult> m_steamGridDbApplyFuture;
+    std::shared_ptr<SteamGridDbApplyProgressShared> m_steamGridDbApplyProgress;
+    std::uint64_t m_steamGridDbApplyProgressUiRevision = 0;
+    std::uint64_t m_steamGridDbUiRevision = 0;
+    std::uint64_t m_steamGridDbLastCompletedTitleId = 0;
+    bool m_steamGridDbWasRunning = false;
     bool m_startupConfigProvided = false;
     bool m_settingsNeedRefresh        = false;
     std::string m_loadedRegularFontPath;
@@ -362,7 +640,13 @@ private:
     std::string m_loadedGameCardPath;
     std::string m_loadedBackgroundImagePath;
     bool m_backgroundImageLoaded      = false;
+    std::string m_pendingBackgroundImagePath;
+    int m_backgroundImageRetryFrames = 0;
+    int m_backgroundImageRetryAttempts = 0;
     bool m_forceThemeResourceReload   = false;
+    std::uint64_t m_gameOptionsTitleId = 0;
+    std::uint32_t m_folderOptionsId = 0;
+    nxui::Widget* m_contextMenuReturnFocus = nullptr;
     nxui::Widget* m_dialogReturnFocus = nullptr;
     // The Gallery is launched from a close-on-press dialog. Its return focus
     // must outlive that dialog's own return-focus handoff.
@@ -379,7 +663,36 @@ private:
     bool m_pendingNetConnect          = false;
     int  m_deferredBluetoothInitFrames = 0;
     int  m_deferredInitialAssetFrames = 0;
+    bool m_deferredStaticTextures = false;
+    int m_deferredProfileFrames = 0;
+    struct DeferredProfileList {
+        std::vector<AccountUid> uids;
+        Result result = 0;
+    };
+    std::shared_ptr<DeferredProfileList> m_deferredProfileList;
+    std::future<void> m_deferredProfileListFuture;
+    std::vector<AccountUid> m_pendingProfileUids;
+    std::size_t m_pendingProfileIndex = 0;
+    std::future<void> m_accessibilityFuture;
+    bool m_accessibilityReady = false;
+    std::uint64_t m_fastReturnStartupTick = 0;
+    bool m_audioInitPending = false;
+    bool m_audioHeldLogged = false;
+    bool m_fastReturnRequested = false;
     std::future<void> m_themePackageTransferFuture;
+    std::future<void> m_softwareDeleteFuture;
+    Result m_softwareDeleteResult = 0;
+    std::string m_softwareDeleteTitle;
+    std::uint64_t m_softwareDeleteTitleId = 0;
+    bool m_softwareDeleteClosesGameOptions = false;
+    // What the SD sweep did, alongside the ns result: a port that was never
+    // registered fails the ns call and still has content to remove, and a
+    // registered title can have both.
+    int m_softwareDeleteSdRemoved = 0;
+    std::string m_softwareDeleteSdFailure;
+    // Written by the worker, read by the frame that draws the bar.
+    std::atomic<std::uint64_t> m_softwareDeleteDone{0};
+    std::atomic<std::uint64_t> m_softwareDeleteTotal{0};
     std::future<void> m_gameArtworkSaveFuture;
     std::shared_ptr<GameArtworkSaveShared> m_gameArtworkSave;
     std::shared_ptr<ThemePackageTransferShared> m_themePackageTransfer;
@@ -389,8 +702,10 @@ private:
 
     float m_returnFadeTimer = 0.f;
     float m_tutorialStartupFadeTimer = 0.f;
+    std::uint64_t m_tutorialStartupFadeDeadlineTick = 0;
     bool  m_tutorialStartupFade = false;
     bool m_hintPanelInitialized = false;
+    bool m_hintCapsulesInitialized = false;
     bool m_accessibilityToggleComboHeld = false;
     // Set while R is held so a release only sorts when the press began here,
     // and not when R was already down on the way back from another screen.
@@ -409,6 +724,7 @@ private:
     bool m_sortShortcutArmed = false;
     float m_sortShortcutHeld = 0.f;
     bool m_plusExitPending = false;
+    AppLayoutMode m_appLayoutMode = AppLayoutMode::Grid;
     float m_plusExitPendingTimer = 0.f;
     nxui::AnimatedFloat m_hintPanelW{0.f};
     nxui::AnimatedFloat m_hintPanelH{0.f};

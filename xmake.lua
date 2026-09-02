@@ -1,5 +1,6 @@
 set_project("SwitchU")
 
+add_repositories("switchu-repo local-repo")
 add_repositories("switch-repo https://github.com/PoloNX/switch-repo.git")
 
 includes("toolchain/*.lua")
@@ -17,10 +18,10 @@ add_rules("mode.debug", "mode.release")
 --
 -- What it is built from has its own line on the About screen, fed by
 -- upstream_version below, which is where that belongs.
-local version = "2.2.0"
+local version = "2.3.0"
 -- The PoloNX release this fork descends from. Shown as "Based on", never as
 -- our own version.
-local upstream_version = "1.1.0"
+local upstream_version = "1.2.0"
 local version_define = string.format('SWITCHU_VERSION="%s"', version)
 local upstream_define = string.format('SWITCHU_UPSTREAM_VERSION="%s"', upstream_version)
 
@@ -109,7 +110,7 @@ target("nxui")
 
     add_cxxflags("-frtti", "-fexceptions", {force = true})
     if get_config("backend") == "deko3d" then
-        add_packages("deko3d")
+        add_packages("deko3d", {links = is_mode("debug") and "deko3dd" or "deko3d"})
     end
 
     if is_mode("release") then
@@ -214,6 +215,8 @@ target("SwitchU")
     add_includedirs("projects/menu/src", {public = false})
     add_files("projects/menu/src/**.cpp")
     add_packages("nlohmann_json", "fmt", "libsdl", "libsdl_mixer", "libsdl_ttf", "zlib", "libwebp", "libcurl", "curlpp")
+    add_linkgroups("SDL2_ttf", "harfbuzz-subset", "harfbuzz", "freetype", "png16", "bz2", "z", {group = true})
+    add_linkgroups("SDL2_mixer", "FLAC++", "FLAC", "vorbisidec", "ogg", "modplug", "opusurl", "opusfile", "opus", {group = true})
 
     if is_mode("debug") and get_config("backend") ~= "sdl2" then
         add_packages("imgui")
@@ -222,7 +225,8 @@ target("SwitchU")
 
     add_cxxflags("-frtti", "-fexceptions", {force = true})
     if get_config("backend") == "deko3d" then
-        add_packages("deko3d")
+        add_packages("deko3d", {links = is_mode("debug") and "deko3dd" or "deko3d"})
+        add_linkorders(is_mode("debug") and "deko3dd" or "deko3d", "nx")
     end
     add_syslinks("nx")
 
@@ -306,6 +310,57 @@ target("SwitchU")
         set_values("switch.assets_dir", "SwitchU")
         set_values("switch.raw_exefs_dir", "switch/SwitchU/bin/menu")
     end
+target_end()
+
+target("SwitchU-Manager")
+    set_kind("binary")
+    if not is_plat("cross") then return end
+
+    set_toolchains("devkita64")
+    set_languages("c++20")
+    add_rules("switch")
+
+    add_deps("nxui")
+    add_includedirs("projects/common/include", {public = false})
+    add_includedirs("projects/menu/src", {public = false})
+    add_includedirs("projects/manager/src", {public = false})
+    add_files("projects/manager/src/**.cpp")
+    add_files("projects/menu/src/widgets/ActionButton.cpp")
+    add_files("projects/menu/src/widgets/OverlayDialog.cpp")
+    add_files("projects/menu/src/widgets/SelectionCursor.cpp")
+    add_packages("libsdl", "libsdl_ttf", "zlib", "libwebp", "libcurl", "nlohmann_json")
+    add_links("minizip")
+    add_linkgroups("SDL2_ttf", "harfbuzz-subset", "harfbuzz", "freetype", "png16", "bz2", "z", {group = true})
+
+    add_cxxflags("-frtti", "-fexceptions", {force = true})
+    if get_config("backend") == "deko3d" then
+        add_packages("deko3d", {links = is_mode("debug") and "deko3dd" or "deko3d"})
+        add_linkorders(is_mode("debug") and "deko3dd" or "deko3d", "nx")
+    end
+    add_syslinks("nx")
+    add_defines(version_define)
+
+    if is_mode("release") then
+        add_cxflags("-O3", "-flto=auto", "-ffast-math", {force = true})
+        add_ldflags("-flto=auto", {force = true})
+    end
+
+    before_build(function(target)
+        local romfs_dir = path.join(os.projectdir(), "build/manager-romfs")
+        local font_dir = path.join(romfs_dir, "fonts")
+        local i18n_dir = path.join(romfs_dir, "i18n")
+        os.mkdir(font_dir)
+        os.mkdir(i18n_dir)
+        os.cp(path.join(os.projectdir(), "romfs/fonts/DejaVuSans.ttf"), font_dir)
+        os.cp(path.join(os.projectdir(), "projects/manager/romfs/i18n/*.json"), i18n_dir)
+    end)
+
+    set_values("switch.name",    "SwitchU-Manager")
+    set_values("switch.author",  "PoloNX")
+    set_values("switch.version", version)
+    set_values("switch.romfs",   "build/manager-romfs")
+    set_values("switch.icon",    "projects/manager/icon.jpg")
+    set_values("switch.format",  "nro")
 target_end()
 
 target("switchu-daemon")

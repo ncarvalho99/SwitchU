@@ -3,6 +3,7 @@
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 #include "NsService.hpp"
+#include <switchu/title_footprint.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -85,13 +86,16 @@ std::string installedPlayTime(std::uint64_t titleId) {
 
 } // namespace
 
+#if 0 // Replaced by the folder/widget-aware 1.2 implementation.
 bool WiiUMenuApp::isEditableIcon(nxui::Widget* w) const {
     if (!w || w->tag() != "glossy_icon")
         return false;
     auto* icon = static_cast<GlossyIcon*>(w);
     return icon->titleId() != 0;
 }
+#endif
 
+#if 0 // Replaced by folder/widget-aware 1.2 accessibility descriptions.
 std::string WiiUMenuApp::accessibilityContextFor(nxui::Widget* w) const {
     auto& i18n = nxui::I18n::instance();
     if (!w)
@@ -226,7 +230,9 @@ void WiiUMenuApp::announceFocusedWidget(nxui::Widget* w) {
     if ((m_accessibility.speakHints() && !hint.empty()) || !m_accessibility.speakHints())
         w->setAccessibilityHint(originalHint);
 }
+#endif
 
+#if 0 // Replaced by the folder/widget-aware 1.2 editing implementation.
 void WiiUMenuApp::startEditGhost(GlossyIcon* sourceIcon) {
     stopEditGhost();
     if (!sourceIcon)
@@ -578,6 +584,7 @@ void WiiUMenuApp::wireFocusCallback() {
         }
     }
 }
+#endif
 
 void WiiUMenuApp::refreshGameArtworkBackdrop(std::uint64_t titleId) {
     if (!m_gameArtworkBackdrop)
@@ -607,6 +614,17 @@ void WiiUMenuApp::raiseOverlay(const std::shared_ptr<nxui::Widget>& overlay) {
 
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
+    if (m_contextMenu && m_contextMenu.get() == w) return w->isFocusable();
+    if (m_gameOptions && m_gameOptions.get() == w) return w->isFocusable();
+    if (m_folderOptions && m_folderOptions.get() == w) return w->isFocusable();
+    if (m_controllerTest && m_controllerTest.get() == w) return w->isFocusable();
+    // The folder header is a control while a folder is open, and renaming from
+    // it returns focus here. Without this the restore failed silently, focus
+    // stayed on the hidden keyboard, and the selection ring was left framing the
+    // panel that had just closed.
+    if (m_folderHeader && m_folderHeader.get() == w) return w->isFocusable();
+    if (m_textEntry && m_textEntry.get() == w) return w->isFocusable();
+    if (m_steamGridDbPicker && m_steamGridDbPicker.get() == w) return w->isFocusable();
     if (m_gameGallery && m_gameGallery.get() == w) return w->isFocusable();
     if (m_gameMods && m_gameMods.get() == w) return w->isFocusable();
     if (m_gameDetails && m_gameDetails.get() == w) return w->isFocusable();
@@ -634,6 +652,7 @@ int WiiUMenuApp::findTitleIndex(uint64_t titleId) const {
     return -1;
 }
 
+#if 0 // Replaced by the folder-aware 1.2 implementation.
 bool WiiUMenuApp::focusTitle(uint64_t titleId) {
     if (!m_grid)
         return false;
@@ -665,6 +684,8 @@ bool WiiUMenuApp::focusTitle(uint64_t titleId) {
 // isso deixava o cursor parado no botão da barra lateral que abriu a tela --
 // com o nome do jogo escrito embaixo, apontando para outra coisa. Era esse
 // desencontro que aparecia no relato.
+#endif
+
 bool WiiUMenuApp::focusGridSelection() {
     if (!m_grid)
         return false;
@@ -705,6 +726,7 @@ void WiiUMenuApp::markSuspendedIcon(uint64_t titleId) {
 }
 
 void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
+    m_navigator.resetToHome();
 #ifdef SWITCHU_PREFLIGHT_EDGE_TEST
     if (!preserveDialog && m_preflightEdgePending) {
         DebugLog::log("[diagnostic-preflight-edge] pending dialog cancelled");
@@ -714,6 +736,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
 #endif
     if (m_editMode)
         exitEditMode();
+    if (m_contextMenu && m_contextMenu->isActive())
+        m_contextMenu->hide();
     if (m_userSelect && m_userSelect->isActive())
         m_userSelect->hide();
     if (!preserveDialog && m_dialog && m_dialog->isActive())
@@ -728,6 +752,18 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         m_gameMods->hide();
     if (m_gameDetails && m_gameDetails->isActive())
         m_gameDetails->hide();
+    if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
+        m_steamGridDbPicker->hide();
+    if (m_gameOptions && m_gameOptions->isActive())
+        m_gameOptions->hide();
+    if (m_folderOptions && m_folderOptions->isActive())
+        m_folderOptions->hide();
+    if (m_textEntry && m_textEntry->isActive())
+        m_textEntry->hide(false);
+    if (m_controllerTest && m_controllerTest->isActive())
+        m_controllerTest->hide();
+    if (m_openFolderId != 0)
+        closeFolder();
 }
 
 nxui::Widget* WiiUMenuApp::focusRoot() {
@@ -736,7 +772,15 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     // guarantee this screen has to make; it reads its own presses from the pad.
     if (m_lockScreen.isLocked()) return nullptr;
     if (m_launchAnim && m_launchAnim->isPlaying()) return nullptr;
+    if (m_folderCaptureRequested) return nullptr;
+    if (m_progressDialog && m_progressDialog->isActive()) return m_progressDialog.get();
+    if (m_contextMenu && m_contextMenu->isActive()) return m_contextMenu.get();
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
+    if (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) return m_steamGridDbPicker.get();
+    if (m_textEntry && m_textEntry->isActive()) return m_textEntry.get();
+    if (m_controllerTest && m_controllerTest->isActive()) return m_controllerTest.get();
+    if (m_folderOptions && m_folderOptions->isActive()) return m_folderOptions.get();
+    if (m_gameOptions && m_gameOptions->isActive()) return m_gameOptions.get();
     if (m_gameMods && m_gameMods->isActive()) return m_gameMods.get();
     if (m_gameGallery && m_gameGallery->isActive()) return m_gameGallery.get();
     if (m_gameDetails && m_gameDetails->isActive()) return m_gameDetails.get();
@@ -760,6 +804,10 @@ void WiiUMenuApp::toggleAccessibilitySpeech() {
         m_gameMods->setAccessibilityVoiceEnabled(enabled);
     if (m_gameDetails)
         m_gameDetails->setAccessibilityVoiceEnabled(enabled);
+    if (m_gameOptions)
+        m_gameOptions->setAccessibilityVoiceEnabled(enabled);
+    if (m_folderOptions)
+        m_folderOptions->setAccessibilityVoiceEnabled(enabled);
 
     if (enabled) {
         m_audio.playSfx(Sfx::ThemeToggle);
@@ -796,11 +844,37 @@ void WiiUMenuApp::handleSortShortcutRelease(float dt) {
         return;
     // Anything with its own R meaning, or any overlay covering the grid, keeps
     // the shortcut out of the way: the sort belongs to the grid alone.
-    if ((m_dialog && m_dialog->isActive()) ||
+    //
+    // focusRoot() is the general test and comes first: it is whatever owns input
+    // right now, so an overlay added later cannot forget to appear in the list
+    // below. The on-screen keyboard did exactly that, and its L/R page switch
+    // reached this shortcut and re-sorted the home grid behind it.
+    // A folder is not an overlay -- it is the same grid showing other contents --
+    // so focusRoot() is still the root box with one open and the guard below let
+    // R through. It sorted the home grid behind the folder, and worse: with a
+    // folder open reflowHomeGrid() takes its generic path, which rebuilds the
+    // saved slots from whatever m_model holds. That model is the folder's
+    // contents, so every home entry missing from the folder -- every widget
+    // included -- was cleared out of m_layoutSlots and written to disk. The
+    // widgets then came back as 1x1 wherever the filler could place them.
+    // The dynamic line renders slot order as a ring, so a sort projected onto
+    // the same slots rearranged the row around the cursor and left the icons it
+    // moved reloading. Order in that view is the arrangement the owner built,
+    // and R has nothing to offer it.
+    if (m_appLayoutMode == AppLayoutMode::DynamicLine)
+        return;
+    if (m_openFolderId != 0 ||
+        focusRoot() != &rootBox() ||
+        (m_dialog && m_dialog->isActive()) ||
+        (m_contextMenu && m_contextMenu->isActive()) ||
         (m_themeShop && m_themeShop->isActive()) ||
         (m_gameGallery && m_gameGallery->isActive()) ||
         (m_gameMods && m_gameMods->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||
+        (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+        (m_gameOptions && m_gameOptions->isActive()) ||
+        (m_folderOptions && m_folderOptions->isActive()) ||
+        (m_controllerTest && m_controllerTest->isActive()) ||
         (m_settings && m_settings->isActive()) ||
         (m_userSelect && m_userSelect->isActive()) ||
         m_editMode) {
@@ -810,6 +884,8 @@ void WiiUMenuApp::handleSortShortcutRelease(float dt) {
 }
 
 bool WiiUMenuApp::handleAccessibilityToggleCombo() {
+    if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
+        return false;
     auto& input = app().input();
     if (!input.isDown(nxui::Button::Plus) || !input.isDown(nxui::Button::Minus))
         return false;
@@ -825,7 +901,24 @@ bool WiiUMenuApp::handleAccessibilityToggleCombo() {
 void WiiUMenuApp::wireGlobalActions() {
     auto& root = rootBox();
 
+    root.addAction(static_cast<uint64_t>(nxui::Button::B), [this]() {
+        // Actions bubble to the root, so this fires even when an overlay has
+        // already handled B. focusRoot() is the general test for "something
+        // else owns input", and it replaces a hand-kept list that could not
+        // know about screens added later: the on-screen keyboard was missing
+        // from it, so cancelling a folder rename with B closed the keyboard
+        // and the folder behind it in the same press, dropping the player out
+        // to the home grid. isActive() covers the close animation, so the
+        // guard still holds on the frame the overlay is dismissed.
+        if (focusRoot() != &rootBox())
+            return;
+        if (m_openFolderId != 0)
+            closeFolder();
+    });
+
     root.addAction(static_cast<uint64_t>(nxui::Button::L), [this]() {
+        if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
+            return;
         m_accessibility.repeatLastAnnouncement();
     });
 
@@ -836,26 +929,29 @@ void WiiUMenuApp::wireGlobalActions() {
     // The hint panel still advertises R, which is drawn from sortModeLabel().
 
     root.addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() {
-        int p = m_grid->currentPage() - 1;
-        if (p >= 0 && !m_grid->isTransitioning()) {
-            m_grid->startWaveTransition(p);
-            m_audio.playSfx(Sfx::PageChange);
-        }
+        if (m_navigator.route() != switchu::navigation::Route::Home ||
+            focusRoot() != &rootBox())
+            return;
+        flipPage(-1);
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::ZR), [this]() {
-        int p = m_grid->currentPage() + 1;
-        if (p < m_grid->totalPages() && !m_grid->isTransitioning()) {
-            m_grid->startWaveTransition(p);
-            m_audio.playSfx(Sfx::PageChange);
-        }
+        if (m_navigator.route() != switchu::navigation::Route::Home ||
+            focusRoot() != &rootBox())
+            return;
+        flipPage(+1);
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::Y), [this]() {
         if ((m_dialog && m_dialog->isActive()) ||
+            (m_contextMenu && m_contextMenu->isActive()) ||
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
             (m_gameMods && m_gameMods->isActive()) ||
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
+            (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+            (m_gameOptions && m_gameOptions->isActive()) ||
+            (m_folderOptions && m_folderOptions->isActive()) ||
+            (m_controllerTest && m_controllerTest->isActive()) ||
             (m_userSelect && m_userSelect->isActive())) {
             return;
         }
@@ -894,6 +990,8 @@ void WiiUMenuApp::wireGlobalActions() {
     });
 #ifdef SWITCHU_DEBUG_UI
     root.addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
+        if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
+            return;
         if (handleAccessibilityToggleCombo())
             return;
         m_showDebugOverlay = !m_showDebugOverlay;
@@ -901,21 +999,19 @@ void WiiUMenuApp::wireGlobalActions() {
     });
 #else
     root.addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
+        if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
+            return;
         handleAccessibilityToggleCombo();
     });
 #endif
 #ifdef SWITCHU_HOMEBREW
     root.addAction(static_cast<uint64_t>(nxui::Button::Plus), [this]() {
+        if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
+            return;
         if (handleAccessibilityToggleCombo())
             return;
         m_plusExitPending = true;
         m_plusExitPendingTimer = 0.80f;
-    });
-#else
-    root.addAction(static_cast<uint64_t>(nxui::Button::Plus), [this]() {
-        if (handleAccessibilityToggleCombo())
-            return;
-        showIconOptions();
     });
 #endif
 
@@ -990,6 +1086,7 @@ void WiiUMenuApp::wireGlobalActions() {
 #endif
 }
 
+#if 0 // Replaced by the folder/page-arrow-aware 1.2 implementation.
 void WiiUMenuApp::handleTouch() {
     constexpr float kSwipeThreshold = 80.f;
     constexpr float kLongPressThreshold = 0.55f;
@@ -1118,8 +1215,10 @@ void WiiUMenuApp::handleTouch() {
         m_touchEditDragActive = false;
     }
 }
+#endif
 
 #ifdef SWITCHU_MENU
+#if 0 // Replaced by the widget/folder-aware 1.2 implementation.
 void WiiUMenuApp::handleSystemAction(SysAction a) {
     switch (a) {
         case SysAction::HomeButton:
@@ -1147,7 +1246,9 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
     }
 }
 #endif
+#endif
 
+#if 0 // Replaced by the dynamic-layout-aware 1.2 implementation.
 void WiiUMenuApp::updateCursor() {
     if ((m_themeShop && m_themeShop->isActive()) ||
         (m_gameGallery && m_gameGallery->isActive()) ||
@@ -1167,6 +1268,7 @@ void WiiUMenuApp::updateCursor() {
         m_cursor->setVisible(false);
     }
 }
+#endif
 
 // Pressing + enters the game dossier directly. The old first dialog cost an
 // unnecessary action and hid the very information the player asked for.
@@ -1212,13 +1314,20 @@ void WiiUMenuApp::showNonGameOptions(std::uint64_t titleId, const std::string& t
     // the end of the tree before being shown.
     raiseOverlay(m_dialog);
     m_audio.playSfx(Sfx::ModalShow);
+    // Homebrew has no dossier, so its folder action lives here. It can be filed
+    // like anything else: FolderStore keys on the title id and does not care that
+    // the entry is a forwarder.
+    const bool inFolder = m_folderStore.folderForTitle(titleId) != 0;
     m_dialog->show(
         title,
-        i18n.tr("dialog.non_game_options_body",
-                "Homebrew and ports have no game details, artwork or mods to manage. "
-                "Removing it is the only action available here."),
+        i18n.tr("dialog.non_game_options_body_folder",
+                "Homebrew and ports have no game details, artwork or mods to "
+                "manage. They can be filed into a folder or removed."),
         {
             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+            {inFolder ? i18n.tr("folder.remove_game", "Remove from folder")
+                      : i18n.tr("folder.add_game", "Add to folder"),
+             [this, titleId, title]() { showFolderAssignment(titleId, title); }, true},
             {i18n.tr("button.delete", "Delete"), [this, titleId, title]() {
                  confirmDeleteSoftware(titleId, title);
              }, false},
@@ -1408,6 +1517,13 @@ void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& titl
         m_gameDetailsReturnFocus = m_dialogReturnFocus;
     m_dialogReturnFocus = m_gameDetails.get();
     m_audio.playSfx(Sfx::ModalShow);
+    {
+        auto& folderI18n = nxui::I18n::instance();
+        m_gameDetails->setFolderActionLabel(
+            m_folderStore.folderForTitle(titleId) != 0
+                ? folderI18n.tr("folder.remove_game", "Remove from folder")
+                : folderI18n.tr("folder.add_game", "Add to folder"));
+    }
     m_gameDetails->openForGame(titleId, title, std::move(cover), liveCover,
                                installedDisplayVersion(titleId), installedModSummary(titleId),
                                installedPlayTime(titleId));
@@ -1687,31 +1803,34 @@ void WiiUMenuApp::confirmDeleteSoftware(std::uint64_t titleId, const std::string
                 "This removes the software from the console. It cannot be undone "
                 "here -- the software has to be downloaded or installed again."));
 
+    // Name the folders that go with it. A port keeps its content in
+    // atmosphere/contents, which is where the space actually is: without this
+    // the dialog promised a delete, the card never gained a byte back, and
+    // there was no way to tell beforehand that anything would be left behind.
+    const auto footprint = switchu::titles::sdFootprint(titleId);
+    if (!footprint.empty()) {
+        body += "\n\n";
+        body += i18n.tr("dialog.delete_software_files",
+                        "These folders on the SD card will be removed too:");
+        for (const std::string& path : footprint)
+            body += "\n" + path;
+    }
+
     m_audio.playSfx(Sfx::ModalShow);
     m_dialog->show(
         i18n.tr("dialog.delete_software", "Delete software?"),
         body,
         {
             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
-            {i18n.tr("button.delete", "Delete"), [this, titleId]() {
-                 Result rc = switchu::menu::ensureNsService("delete-software");
-                 if (R_SUCCEEDED(rc))
-                     rc = nsDeleteApplicationCompletely(titleId);
-                 DebugLog::log("[menu] delete 0x%016lX rc=0x%X", titleId, rc);
-                 // The daemon notices the record change and asks for a
-                 // refresh, which is what takes the icon off the grid. Doing
-                 // it here as well would rebuild the grid from under the
-                 // dialog that is still closing.
-                 auto& tr = nxui::I18n::instance();
-                 m_dialog->show(
-                     tr.tr("dialog.delete_software", "Delete software?"),
-                     R_SUCCEEDED(rc)
-                         ? tr.tr("dialog.delete_software_done", "The software was deleted.")
-                         : tr.tr("dialog.delete_software_failed",
-                                 "The software could not be deleted."),
-                     {{tr.tr("button.ok", "OK"), [this]() {}, true}},
-                     0, {});
-                 focusManager().setFocus(m_dialog.get());
+            {i18n.tr("button.delete", "Delete"), [this, titleId, title]() {
+                 // Was its own inline nsDeleteApplicationCompletely() call, which
+                 // removed only registered content, blocked the frame while it
+                 // ran, and reported success whenever ns was happy -- so a port
+                 // whose files were all still on the card was announced as
+                 // deleted. startSoftwareDeletion() is the one implementation:
+                 // it runs on a worker behind the progress dialog and sweeps the
+                 // SD locations ns knows nothing about.
+                 startSoftwareDeletion(titleId, title, false);
              }, false},
         },
         0, {});

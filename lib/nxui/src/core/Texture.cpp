@@ -117,6 +117,8 @@ bool Texture::loadImageData(GpuDevice& gpu, Renderer& ren,
 
         m_mem = gpu.allocImageMemory(needed);
         if (!m_mem) {
+            if (oldSlot >= 0)
+                ren.releaseTextureSlot(oldSlot);
             std::printf("[Texture] allocImageMemory FAILED (%dx%d) — GPU budget exhausted\n", w, h);
             // Two things had to be put right here, and both of them showed up
             // as a crash rather than as a missing texture.

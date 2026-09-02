@@ -1,4 +1,5 @@
 #include "BatteryWidget.hpp"
+#include "BatteryDrawing.hpp"
 #include <nxui/core/Renderer.hpp>
 #include <switch.h>
 #include <cstdio>

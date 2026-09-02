@@ -18,6 +18,13 @@ namespace {
 
 static constexpr float kTabRailInset = 14.f;
 static constexpr float kTabCardGap = 10.f;
+// Below this a tab label stops being comfortably readable, so the rail would
+// have to scroll instead. Eleven tabs still fit above it.
+static constexpr float kTabCardMinHeight = 34.f;
+// Share of the text column a wrapped description gets once the row has reserved
+// its control column, and the height the label above it occupies.
+static constexpr float kDescriptionWidthRatio = 0.66f;
+static constexpr float kLabelBlockHeight = 30.f;
 static constexpr float kContentCardInsetX = 18.f;
 
 static constexpr float kContentCardInsetY = 8.f;
@@ -224,14 +231,34 @@ TabbedOverlayScreen::~TabbedOverlayScreen() {
 
 float TabbedOverlayScreen::itemHeight(const SettingItem& it, float contentWidth) const {
     if (it.type == ItemType::Section) return kSectionHeight;
-    if (!it.wrapLabel)                return kRowHeight;
 
-    nxui::Label probe(it.label);
-    if (m_font) probe.setFont(m_font);
-    probe.setScale(0.94f);
-    probe.setMultiline(true);
-    const float labelW = std::max(1.f, contentWidth - kContentCardInsetX * 2.f - 20.f);
-    return std::max(kRowHeight, probe.measureWrappedText(labelW).y + 34.f);
+    const float textW = std::max(1.f, contentWidth - kContentCardInsetX * 2.f - 20.f);
+    float height = kRowHeight;
+
+    if (it.wrapLabel) {
+        nxui::Label probe(it.label);
+        if (m_font) probe.setFont(m_font);
+        probe.setScale(0.94f);
+        probe.setMultiline(true);
+        height = std::max(height, probe.measureWrappedText(textW).y + 34.f);
+    }
+
+    // Only the label was ever measured. The description wraps as well, and a
+    // two-line one drew straight through the bottom of its own card. The row
+    // keeps its right-hand column for the toggle or button, so the text gets
+    // roughly two thirds of the width; measuring against that is what the drawn
+    // description actually gets.
+    if (!it.description.empty()) {
+        nxui::Label probe(it.description);
+        if (m_smallFont) probe.setFont(m_smallFont);
+        probe.setScale(0.74f);
+        probe.setMultiline(true);
+        const float descW = std::max(1.f, textW * kDescriptionWidthRatio);
+        const float labelBlock = it.wrapLabel ? height - 34.f : kLabelBlockHeight;
+        height = std::max(height,
+                          labelBlock + probe.measureWrappedText(descW).y + 34.f);
+    }
+    return height;
 }
 
 void TabbedOverlayScreen::setTheme(const nxui::Theme* t) {
@@ -365,6 +392,16 @@ void TabbedOverlayScreen::closeDropdown(bool animated) {
 }
 
 
+float TabbedOverlayScreen::tabCardHeight(int tabCount, const nxui::Rect& rail) const {
+    const float natural = kTabRowHeight - kTabCardGap;
+    if (tabCount <= 1)
+        return natural;
+    const float available = std::max(0.f, rail.height - kTabRailInset * 2.f);
+    const float fitted = (available - kTabCardGap * static_cast<float>(tabCount - 1))
+                       / static_cast<float>(tabCount);
+    return std::clamp(fitted, kTabCardMinHeight, natural);
+}
+
 void TabbedOverlayScreen::rebuildTabBar() {
     m_tabBar->clearChildren();
     nxui::Rect tr = tabsRect();
@@ -373,7 +410,7 @@ void TabbedOverlayScreen::rebuildTabBar() {
     float tabX = tr.x + kTabRailInset;
     float tabY = tr.y + kTabRailInset;
     float tabW = std::max(0.f, tr.width - kTabRailInset * 2.f);
-    float tabH = kTabRowHeight - kTabCardGap;
+    float tabH = tabCardHeight((int)m_tabs.size(), tr);
 
     for (int i = 0; i < (int)m_tabs.size(); ++i) {
         auto tabBox = std::make_shared<SettingsTabWidget>(m_tabs[i].name);
@@ -582,6 +619,7 @@ void TabbedOverlayScreen::onContentRender(nxui::Renderer& ren) {
     float textOp = m_showing ? opacity : opacity * opacity;
 
     ren.pushClipRect(p);
+    drawOverlayHeader(ren, p, textOp);
     drawTabs(ren, p, textOp);
     drawContent(ren, p, textOp);
     drawDropdown(ren, p, textOp);
@@ -599,7 +637,7 @@ void TabbedOverlayScreen::syncDebugWireframeRects(const nxui::Rect& panel) {
     auto& tabChildren = m_tabBar->children();
     float tabY = tr.y + kTabRailInset;
     float tabW = std::max(0.f, tr.width - kTabRailInset * 2.f);
-    float tabH = kTabRowHeight - kTabCardGap;
+    float tabH = tabCardHeight((int)tabChildren.size(), tr);
     for (int i = 0; i < (int)tabChildren.size(); ++i) {
         tabChildren[i]->setRect({tr.x + kTabRailInset, tabY, tabW, tabH});
         tabY += tabH + kTabCardGap;
@@ -658,7 +696,10 @@ void TabbedOverlayScreen::drawTabs(nxui::Renderer& ren, const nxui::Rect& panel,
     float reveal = std::clamp(m_tabReveal.value(), 0.f, 1.f);
     float tabY = tr.y + kTabRailInset;
     float tabW = std::max(0.f, tr.width - kTabRailInset * 2.f);
-    float tabH = kTabRowHeight - kTabCardGap;
+    // This is the height that actually reaches the screen: drawTabs() sets the
+    // child rects again every frame, so shrinking the cards in rebuildTabBar()
+    // and in the layout pass alone left the last tab hanging off the panel.
+    float tabH = tabCardHeight((int)std::min(tabChildren.size(), m_tabs.size()), tr);
     float rowOpacity = opacity * reveal;
     float rowYOffset = (1.f - reveal) * 6.f;
 

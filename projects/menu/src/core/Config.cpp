@@ -48,6 +48,15 @@ bool AppConfig::load() {
     readJsonOpt(j, "sfxVolume", sfxVolume);
     readJsonOpt(j, "gridColumns", gridColumns);
     readJsonOpt(j, "gridRows", gridRows);
+    {
+        std::string mode;
+        readJsonOpt(j, "appLayoutMode", mode);
+        if (mode == "dynamic_line" || mode == "line")
+            appLayoutMode = AppLayoutMode::DynamicLine;
+        else if (mode == "grid")
+            appLayoutMode = AppLayoutMode::Grid;
+    }
+    readJsonOpt(j, "actionHintStyle", actionHintStyle);
     readJsonOpt(j, "uiLanguageOverride", uiLanguageOverride);
     readJsonOpt(j, "soundPreset", soundPreset);
     readJsonOpt(j, "defaultProfileEnabled", defaultProfileEnabled);
@@ -64,6 +73,8 @@ bool AppConfig::load() {
     readJsonOpt(j, "accessibilitySpeakContextEveryFocus", accessibilitySpeakContextEveryFocus);
     readJsonOpt(j, "accessibilitySpeakPosition", accessibilitySpeakPosition);
     readJsonOpt(j, "accessibilitySpeechRate", accessibilitySpeechRate);
+    readJsonOpt(j, "steamGridDbEnabled", steamGridDbEnabled);
+    readJsonOpt(j, "steamGridDbApiKey", steamGridDbApiKey);
     readJsonOpt(j, "themePreset", themePreset);
     readJsonOpt(j, "lastPageTitleId", lastPageTitleId);
     readJsonOpt(j, "sortMode", sortMode);
@@ -76,13 +87,14 @@ bool AppConfig::load() {
                                     v.get<std::uint64_t>());
         }
     }
-
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
     if (sfxVolume   < 0.f) sfxVolume   = 0.f;
     if (sfxVolume   > 1.f) sfxVolume   = 1.f;
     gridColumns = std::clamp(gridColumns, 3, 8);
     gridRows = std::clamp(gridRows, 2, 5);
+    if (actionHintStyle != "panel" && actionHintStyle != "capsules")
+        actionHintStyle = "capsules";
     if (uiLanguageOverride.empty()) uiLanguageOverride = "auto";
     if (soundPreset.empty()) soundPreset = "wiiu";
     if (!defaultProfileEnabled) defaultProfileUid.clear();
@@ -104,6 +116,8 @@ bool AppConfig::save() const {
     j["sfxVolume"] = sfxVolume;
     j["gridColumns"] = std::clamp(gridColumns, 3, 8);
     j["gridRows"] = std::clamp(gridRows, 2, 5);
+    j["appLayoutMode"] = appLayoutMode == AppLayoutMode::DynamicLine ? "dynamic_line" : "grid";
+    j["actionHintStyle"] = actionHintStyle == "panel" ? "panel" : "capsules";
     j["uiLanguageOverride"] = uiLanguageOverride;
     j["soundPreset"] = soundPreset;
     j["defaultProfileEnabled"] = defaultProfileEnabled;
@@ -120,6 +134,8 @@ bool AppConfig::save() const {
     j["accessibilitySpeakContextEveryFocus"] = accessibilitySpeakContextEveryFocus;
     j["accessibilitySpeakPosition"] = accessibilitySpeakPosition;
     j["accessibilitySpeechRate"] = std::clamp(accessibilitySpeechRate, 120, 320);
+    j["steamGridDbEnabled"] = steamGridDbEnabled;
+    j["steamGridDbApiKey"] = steamGridDbApiKey;
     j["themePreset"] = themePreset;
     j["lastPageTitleId"] = lastPageTitleId;
     j["sortMode"] = sortMode;

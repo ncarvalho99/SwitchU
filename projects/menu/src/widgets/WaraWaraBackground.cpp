@@ -8,6 +8,7 @@
 #include <switch.h>
 #endif
 
+#if 0 // Superseded by the fork's stricter handheld render budgets below.
 namespace {
 
 // Vertices held back from the background so the foreground UI always fits in
@@ -19,6 +20,113 @@ constexpr int kGlassShapeLayers = 3;
 constexpr int kGridRenderedShapeBudget = 448;
 constexpr int kFloatingRenderedShapeBudget = 160;
 constexpr int kDenseRenderCopyThreshold = 96;
+constexpr float kPi = 3.14159265358979323846f;
+constexpr float kHalfPi = kPi * 0.5f;
+constexpr float kShapeBodyAlphaMin = 0.84f;
+constexpr float kShapeBodyAlphaMax = 0.92f;
+constexpr float kShapeHighlightAlpha = 0.18f;
+constexpr float kFloatingShapeEdgeAlpha = 0.11f;
+constexpr float kGridShapeEdgeAlpha = 0.08f;
+
+float degreesToRadians(float degrees) {
+    return degrees * kPi / 180.f;
+}
+
+void appendArcPoints(std::vector<nxui::Vec2>& points,
+                     float centerX,
+                     float centerY,
+                     float radius,
+                     float startAngle,
+                     float endAngle,
+                     int segments,
+                     bool includeStart)
+{
+    int startIndex = includeStart ? 0 : 1;
+    for (int i = startIndex; i <= segments; ++i) {
+        float t = segments > 0 ? (float)i / (float)segments : 0.f;
+        float angle = startAngle + (endAngle - startAngle) * t;
+        points.push_back({centerX + std::cos(angle) * radius,
+                          centerY + std::sin(angle) * radius});
+    }
+}
+
+float random01() {
+    return (std::rand() % 1000) / 1000.f;
+}
+
+float randomRange(float minValue, float maxValue) {
+    return minValue + (maxValue - minValue) * random01();
+}
+
+float wrapValue(float value, float minValue, float maxValue) {
+    float span = maxValue - minValue;
+    if (span <= 0.f)
+        return minValue;
+    while (value < minValue)
+        value += span;
+    while (value > maxValue)
+        value -= span;
+    return value;
+}
+
+int symmetryMultiplier(WaraWaraBackground::Symmetry symmetry) {
+    switch (symmetry) {
+        case WaraWaraBackground::Symmetry::MirrorHorizontal:
+        case WaraWaraBackground::Symmetry::MirrorVertical:
+            return 2;
+        case WaraWaraBackground::Symmetry::Quad:
+            return 4;
+        case WaraWaraBackground::Symmetry::None:
+        default:
+            return 1;
+    }
+}
+
+int maxSafeBaseShapeCount(const WaraWaraBackground::Config& config) {
+    const int multiplier = std::max(1, symmetryMultiplier(config.symmetry));
+    const int maxBudget = std::max(1, nxui::GpuDevice::MAX_VERTICES - kBackgroundRenderReserveVertices);
+    const int perShapeBudget = std::max(1, kWorstCaseShapeVertices * kGlassShapeLayers * multiplier);
+    return std::max(1, maxBudget / perShapeBudget);
+}
+
+int maxVisualBaseShapeCount(const WaraWaraBackground::Config& config) {
+    const int multiplier = std::max(1, symmetryMultiplier(config.symmetry));
+    const int renderedBudget = (config.layout == WaraWaraBackground::Layout::Grid)
+        ? kGridRenderedShapeBudget
+        : kFloatingRenderedShapeBudget;
+    return std::max(1, renderedBudget / multiplier);
+}
+
+int renderedShapeCopies(const WaraWaraBackground::Config& config, int baseShapeCount) {
+    return std::max(0, baseShapeCount) * std::max(1, symmetryMultiplier(config.symmetry));
+}
+
+bool useDenseRenderMode(const WaraWaraBackground::Config& config, int baseShapeCount) {
+    return config.layout == WaraWaraBackground::Layout::Grid
+        && renderedShapeCopies(config, baseShapeCount) >= kDenseRenderCopyThreshold;
+}
+
+std::uint64_t estimateVertexCount(const WaraWaraBackground::Config& config, int baseShapeCount) {
+    return (std::uint64_t)std::max(0, baseShapeCount)
+        * (std::uint64_t)std::max(1, symmetryMultiplier(config.symmetry))
+        * (std::uint64_t)kWorstCaseShapeVertices
+        * (std::uint64_t)kGlassShapeLayers;
+}
+
+} // namespace
+#endif
+
+namespace {
+
+constexpr int kBackgroundRenderReserveVertices = 13312;
+constexpr int kWorstCaseShapeVertices = 36;
+constexpr int kGlassShapeLayers = 3;
+// Theme manifests are untrusted configuration. A 14x8 grid combined with
+// quad symmetry previously expanded to 448 shapes per frame. Preserve the
+// composition while bounding fill/geometry cost on the handheld GPU.
+constexpr int kGridRenderedShapeBudget = 160;
+constexpr int kFloatingRenderedShapeBudget = 80;
+constexpr int kDenseRenderCopyThreshold = 64;
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kHalfPi = kPi * 0.5f;
 constexpr float kShapeBodyAlphaMin = 0.84f;

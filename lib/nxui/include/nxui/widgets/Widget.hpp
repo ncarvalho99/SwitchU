@@ -19,7 +19,7 @@ public:
     using Ptr = std::shared_ptr<Widget>;
 
     Widget() = default;
-    virtual ~Widget() = default;
+    virtual ~Widget(); // unregisters from every FocusManager caching this pointer
 
     // Tree
     void addChild(Ptr child);
@@ -92,6 +92,7 @@ public:
     /// Register a callback for a specific button press while this widget has focus.
     /// e.g. btn->addAction(Button::A, [](){ ... });
     void addAction(uint64_t button, std::function<void()> cb);
+    void removeAction(uint64_t button);
     void clearActions();
     /// Fire matching actions for buttons pressed this frame.
     /// Returns a bitmask of consumed buttons (buttons that had actions).
@@ -144,6 +145,9 @@ protected:
     virtual void onUpdate(float dt) {}
     virtual void onRender(Renderer& ren) {}
 
+    void beginChildTraversal();
+    void endChildTraversal();
+
     Rect  m_rect;
     float m_opacity = 1.f;
     bool  m_visible = true;
@@ -169,6 +173,19 @@ protected:
     Widget* m_parent = nullptr;
     std::vector<Ptr> m_children;
 
+private:
+    enum class ChildMutationType { Add, Remove, Clear };
+    struct ChildMutation {
+        ChildMutationType type;
+        Ptr child;
+        Widget* target = nullptr;
+    };
+    void applyChildMutations();
+
+    unsigned m_childTraversalDepth = 0;
+    std::vector<ChildMutation> m_childMutations;
+
+protected:
     // Custom navigation overrides (direction → target widget)
     std::unordered_map<int, Widget*> m_customNav;
 

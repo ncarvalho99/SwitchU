@@ -4,6 +4,7 @@
 #include <nxui/core/Animation.hpp>
 #include <nxui/core/Texture.hpp>
 #include <switch/services/acc.h>
+#include <algorithm>
 #include <functional>
 
 
@@ -20,6 +21,10 @@ public:
 
     bool isPlaying() const { return m_playing; }
     void stop() { m_playing = false; m_tex = nullptr; }
+
+    float musicFadeProgress() const { // between 0 and 1, where 0 is the initial state
+        return m_playing ? std::min(m_timer / kMusicFadeDur, 1.f) : 1.f;
+    }
 
 protected:
     void onUpdate(float dt) override;
@@ -39,6 +44,7 @@ private:
     static constexpr float kPostLaunchBlackHold = 0.00f;
     static constexpr float kTotalDur  = kZoomDur + kHoldDur + kFadeDur
                                       + kBlackDur + kBlackHold;
+    static constexpr float kMusicFadeDur = kZoomDur + kHoldDur + kFadeDur + kBlackDur;
 
     nxui::Rect     m_from;
     nxui::Rect     m_target;

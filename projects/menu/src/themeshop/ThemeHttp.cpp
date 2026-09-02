@@ -102,6 +102,26 @@ size_t appendResponse(char* data, size_t size, size_t count, void* userData) {
     return bytes;
 }
 
+struct BytesProgressContext {
+    const themeshop::http::ProgressCallback* onProgress = nullptr;
+};
+
+int reportBytesProgress(void* userData, curl_off_t total, curl_off_t downloaded,
+                        curl_off_t, curl_off_t) {
+    if (g_cancelPendingRequests.load(std::memory_order_acquire))
+        return 1;
+    auto* context = static_cast<BytesProgressContext*>(userData);
+    if (context && context->onProgress && *context->onProgress) {
+        try {
+            (*context->onProgress)(downloaded > 0 ? static_cast<std::uint64_t>(downloaded) : 0,
+                                   total > 0 ? static_cast<std::uint64_t>(total) : 0);
+        } catch (...) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int cancelIfAppletHandoff(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
     return g_cancelPendingRequests.load(std::memory_order_acquire) ? 1 : 0;
 }
@@ -135,7 +155,8 @@ size_t writeDownload(char* data, size_t size, size_t count, void* userData) {
 }
 
 std::vector<std::uint8_t> performRequestBytes(const std::string& url,
-                                              const std::list<std::string>& headers) {
+                                              const std::list<std::string>& headers,
+                                              const themeshop::http::ProgressCallback& onProgress) {
     CURL* request = curl_easy_init();
     if (!request)
         throw std::runtime_error("Could not create HTTP request");
@@ -152,7 +173,9 @@ std::vector<std::uint8_t> performRequestBytes(const std::string& url,
     curl_easy_setopt(request, CURLOPT_WRITEFUNCTION, appendResponse);
     curl_easy_setopt(request, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(request, CURLOPT_NOPROGRESS, 0L);
-    curl_easy_setopt(request, CURLOPT_XFERINFOFUNCTION, cancelIfAppletHandoff);
+    BytesProgressContext progressContext{&onProgress};
+    curl_easy_setopt(request, CURLOPT_XFERINFOFUNCTION, reportBytesProgress);
+    curl_easy_setopt(request, CURLOPT_XFERINFODATA, &progressContext);
 
     struct curl_slist* requestHeaders = nullptr;
     for (const auto& header : headers)
@@ -183,7 +206,8 @@ std::vector<std::uint8_t> performRequestBytes(const std::string& url,
 }
 
 std::vector<std::uint8_t> performBytes(const std::string& url,
-                                       const std::list<std::string>& headers) {
+                                       const std::list<std::string>& headers,
+                                       const themeshop::http::ProgressCallback& onProgress = {}) {
     std::lock_guard<std::mutex> lk(g_themeHttpMutex);
 
     std::string lastError = "Theme Shop HTTP request failed";
@@ -196,7 +220,7 @@ std::vector<std::uint8_t> performBytes(const std::string& url,
             }
 
             ensureInternetConnectionReady(url);
-            auto bytes = performRequestBytes(url, headers);
+            auto bytes = performRequestBytes(url, headers, onProgress);
             if (attempt > 1) {
                 DebugLog::log("[themeshop] request recovered on retry %d: %s", attempt, url.c_str());
             }
@@ -251,8 +275,9 @@ void cancelPendingRequests() {
 }
 
 std::vector<std::uint8_t> getBytes(const std::string& url,
-                                   const std::list<std::string>& headers) {
-    return performBytes(url, headers);
+                                   const std::list<std::string>& headers,
+                                   const ProgressCallback& onProgress) {
+    return performBytes(url, headers, onProgress);
 }
 
 std::uint64_t getToFile(const std::string& url,

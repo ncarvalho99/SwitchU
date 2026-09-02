@@ -10,10 +10,13 @@
 #include <future>
 #include <cstdint>
 #include <functional>
+#include <exception>
+#include <memory>
 
 struct PendingApp {
     std::string         id;
     std::string         title;
+    std::string         englishTitle;
     uint64_t            titleId = 0;
     uint32_t            viewFlags = 0;
     bool                userRequired = true;
@@ -21,6 +24,15 @@ struct PendingApp {
     uint8_t             startupUserAccount = 1;
     uint8_t             startupUserAccountOption = 0;
     std::vector<uint8_t> iconData;
+    GridEntryKind        kind = GridEntryKind::Application;
+    std::uint32_t        folderId = 0;
+    int                  folderPreviewCount = 0;
+    int                  folderColorIndex = 0;
+    std::uint32_t        widgetId = 0;
+    switchu::widgets::WidgetType widgetType = switchu::widgets::WidgetType::Clock;
+    int                  widgetColumns = 1;
+    int                  widgetRows = 1;
+    std::string          widgetAssetRef;
 };
 
 class AppListLoader {
@@ -35,16 +47,24 @@ public:
 
     bool isReady() const;
 
-    void finalize(GridModel& model, IconStreamer& streamer);
+    bool finalize(GridModel& model, IconStreamer& streamer);
 
     void setPendingTransform(PendingTransform transform) {
         m_pendingTransform = std::move(transform);
     }
+    void setPrefetchIcons(bool enabled) { m_prefetchIcons = enabled; }
 
 private:
-    void fetchApps();
+    static void fetchApps(std::vector<PendingApp>& output, bool prefetchIcons);
+
+    struct AsyncLoadState {
+        std::vector<PendingApp> pending;
+        std::exception_ptr error;
+    };
 
     std::future<void>       m_future;
     std::vector<PendingApp> m_pending;
+    std::shared_ptr<AsyncLoadState> m_asyncState;
     PendingTransform        m_pendingTransform;
+    bool                    m_prefetchIcons = true;
 };

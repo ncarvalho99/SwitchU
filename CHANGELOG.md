@@ -1,3 +1,167 @@
+# SwitchU 2.3.0
+
+## English
+
+This release rebases the fork onto [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.2.0. Folders, home widgets, the single-row view, the game dossier and the
+SteamGridDB artwork scan all arrive from upstream, and the About screen now reads
+**Based on SwitchU 1.2.0**. Most of the work here went into making those features
+hold up on hardware, and a good part of it is repair rather than addition.
+
+### From PoloNX 1.2.0
+
+- **Folders** on the home screen, with their own page, name and colour.
+- **Home widgets**: clock, battery, recently played and playtime, image pins and
+  random screenshots, in 1x1 and 2x1 sizes.
+- **A single-row view**, reached with Minus, showing one large icon with its
+  neighbours either side.
+- **The game dossier** on Plus, with artwork, mods, playtime and store details.
+- **SteamGridDB artwork**, scanned for the whole library or chosen per title.
+- **A controller test screen**, and the SwitchU Manager updater.
+
+### What this fork does differently
+
+- **The on-screen keyboard is our own.** The system keyboard cannot be called
+  from a library applet: `swkbdShow()` never returns, and the console froze on
+  the first rename. SwitchU draws its own keyboard instead, with accented
+  characters, a symbols page and touch.
+- **SteamGridDB works without your own API key.** Searches, heroes and grids go
+  through the fork's own service. A personal key is still accepted and unlocks
+  logos, which the service has no endpoint for.
+- **The single-row view is a real carousel.** It wraps in both directions, skips
+  empty slots, repeats while ZL, ZR or the d-pad is held, and shows the game's
+  logo above the row. Sorting with R is switched off there: order in that view is
+  the arrangement you built.
+- **Folders hold homebrew as well as games**, can be renamed from their own
+  header, and their tile draws up to nine member icons on clear glass, in a grid
+  that follows how many are inside.
+- **Deleting software removes it.** The upstream delete only asks the system to
+  drop what it installed, which leaves a port copied onto the card untouched: one
+  such title reported "deleted" and left 49 GB behind. SwitchU now also sweeps
+  `atmosphere/contents`, the older `atmosphere/titles`, the SX OS layout and its
+  own artwork caches, names the folders before you confirm, and shows a progress
+  bar while it works.
+- **Changing the language no longer needs a restart.** Widget labels and the
+  update screen follow the setting immediately.
+
+### Fixed since 1.2.0
+
+- The home arrangement stopped rewriting itself. Placing a new entry looked for
+  the first empty cell, which is the second half of a 2x1 tile, and the tile was
+  then moved elsewhere and saved: creating one folder was enough to scatter every
+  widget across the pages.
+- Pressing R inside an open folder rebuilt the saved layout out of that folder's
+  contents, clearing every home entry that was not in it. R is now ignored there.
+- Restarting into the single-row view, or deleting a game while in it, left one
+  icon alone with nothing either side and no way to move.
+- The artwork backdrop was never constructed, so the hero, its gradient and the
+  logo above the row had never once been drawn.
+- The artwork prefetch queued eight neighbours against a two-entry cache and
+  re-read them off the card indefinitely, starving the icons of both worker
+  threads.
+- The selection ring froze in place whenever an overlay left the menu's route
+  behind, most visibly after opening the SwitchU screen.
+- The battery, playtime and recently-played widgets showed nothing at all.
+- The keyboard read as clear glass over the settings overlay, and the SteamGridDB
+  key was masked while typing although it is stored in plain text.
+- A folder kept titles that had been deleted, drawing a blank coloured square in
+  their place.
+- Long game names ran into the button hints along the bottom; the hints now wrap
+  onto a second row instead.
+
+### Carried over from before the rebase
+
+- Everything in 2.2.0 is still here: the separate SwitchU language, Bluetooth
+  pairing from the launcher, the recovery paths for launching and returning, and
+  the Theme Shop that opens without a pause.
+
+### Credit
+
+PoloNX remains credited in the About screen. This fork keeps its own version
+number, and the upstream release it descends from is shown beside it.
+
+## Português
+
+Esta versão rebaseia o fork sobre o [PoloNX/SwitchU](https://github.com/PoloNX/SwitchU)
+1.2.0. Pastas, widgets na tela inicial, a visualização de linha única, a ficha do
+jogo e a busca de artes no SteamGridDB vêm todos do upstream, e a tela Sobre agora
+mostra **Baseado no SwitchU 1.2.0**. A maior parte do trabalho aqui foi fazer
+esses recursos se sustentarem no console, e boa parte dele é conserto, não adição.
+
+### Vindo do PoloNX 1.2.0
+
+- **Pastas** na tela inicial, com página, nome e cor próprios.
+- **Widgets**: relógio, bateria, jogados recentemente e tempo de jogo, imagens
+  fixadas e captura aleatória, nos tamanhos 1x1 e 2x1.
+- **Uma visualização de linha única**, acessada com Menos, que mostra um ícone
+  grande com os vizinhos dos dois lados.
+- **A ficha do jogo** no Mais, com artes, mods, tempo de jogo e dados da loja.
+- **Artes do SteamGridDB**, buscadas para a biblioteca inteira ou escolhidas
+  título a título.
+- **Uma tela de teste de controle** e o atualizador SwitchU Manager.
+
+### O que este fork faz de diferente
+
+- **O teclado na tela é nosso.** O teclado do sistema não pode ser chamado de um
+  library applet: `swkbdShow()` nunca retorna, e o console travava ao renomear
+  pela primeira vez. O SwitchU desenha o próprio teclado, com acentos, página de
+  símbolos e toque.
+- **O SteamGridDB funciona sem a sua própria chave de API.** Buscas, heroes e
+  grids passam pelo serviço do próprio fork. Uma chave pessoal continua aceita e
+  libera os logos, para os quais o serviço não tem endpoint.
+- **A visualização de linha única é um carrossel de verdade.** Dá a volta nos dois
+  sentidos, pula espaços vazios, repete enquanto ZL, ZR ou o direcional ficam
+  pressionados, e mostra o logo do jogo acima da linha. Ordenar com R fica
+  desligado ali: a ordem naquela visualização é o arranjo que você montou.
+- **Pastas guardam homebrews além de jogos**, podem ser renomeadas pelo próprio
+  cabeçalho, e o ladrilho desenha até nove ícones dos membros sobre vidro limpo,
+  numa grade que acompanha quantos estão dentro.
+- **Apagar um software apaga de verdade.** A exclusão do upstream só pede ao
+  sistema que descarte o que ele instalou, o que deixa intacto um port copiado
+  para o cartão: um título assim informou "apagado" e deixou 49 GB para trás. O
+  SwitchU agora também varre `atmosphere/contents`, o antigo `atmosphere/titles`,
+  o layout do SX OS e os próprios caches de arte, mostra as pastas antes de você
+  confirmar e exibe uma barra de progresso enquanto trabalha.
+- **Trocar o idioma não exige mais reiniciar.** Os rótulos dos widgets e a tela de
+  atualização acompanham a mudança na hora.
+
+### Corrigido desde a 1.2.0
+
+- O arranjo da tela inicial parou de se reescrever sozinho. Colocar uma entrada
+  nova procurava a primeira célula vazia, que é a segunda metade de um ladrilho
+  2x1, e o ladrilho era então movido para outro lugar e salvo: criar uma pasta já
+  bastava para espalhar todos os widgets pelas páginas.
+- Pressionar R dentro de uma pasta aberta reconstruía o layout salvo a partir do
+  conteúdo daquela pasta, apagando todas as entradas da tela inicial que não
+  estavam nela. R agora é ignorado ali.
+- Reiniciar na visualização de linha única, ou apagar um jogo estando nela,
+  deixava um ícone sozinho, sem nada dos lados e sem como se mover.
+- O fundo de arte nunca era construído, então o hero, seu degradê e o logo acima
+  da linha nunca tinham sido desenhados uma única vez.
+- A pré-carga de artes enfileirava oito vizinhos contra um cache de duas entradas
+  e os relia do cartão indefinidamente, deixando os ícones sem as duas threads de
+  trabalho.
+- O anel de seleção congelava no lugar sempre que uma sobreposição deixava a rota
+  do menu para trás, o que aparecia principalmente depois de abrir a tela SwitchU.
+- Os widgets de bateria, tempo de jogo e jogados recentemente não mostravam nada.
+- O teclado parecia vidro limpo sobre a tela de configurações, e a chave do
+  SteamGridDB era ocultada durante a digitação embora fique salva em texto puro.
+- Uma pasta mantinha títulos que já haviam sido apagados, desenhando um quadrado
+  colorido em branco no lugar deles.
+- Nomes de jogos longos invadiam as dicas de botões na parte de baixo; as dicas
+  agora quebram para uma segunda linha.
+
+### Mantido de antes do rebase
+
+- Tudo da 2.2.0 continua aqui: o idioma próprio do SwitchU, o pareamento Bluetooth
+  pelo launcher, os caminhos de recuperação ao iniciar e voltar de um jogo, e a
+  Loja de Temas que abre sem pausa.
+
+### Créditos
+
+O PoloNX segue creditado na tela Sobre. Este fork mantém o próprio número de
+versão, e a versão upstream da qual descende é mostrada ao lado dele.
+
 # SwitchU 2.2.0
 
 ## English

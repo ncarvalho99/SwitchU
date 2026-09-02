@@ -5,6 +5,7 @@
 #include <nxui/core/Texture.hpp>
 #include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
+#include <nxui/Theme.hpp>
 #include <switch.h>
 
 #include <cstddef>
@@ -34,7 +35,10 @@ public:
         setAccessibilityHint(i18n.tr("accessibility.hints.open_user_page", "A to open the user page."));
     }
     const std::string& nickname() const { return m_nickname; }
+    void setAddUserMode(bool enabled);
+    bool addUserMode() const { return m_addUserMode; }
     void setChromeEnabled(bool enabled);
+    void setTheme(const nxui::Theme* theme);
 
     void setOnActivate(ActivateCallback cb) { m_onActivate = std::move(cb); }
 
@@ -60,4 +64,5 @@ private:
     bool m_focusable = true;
     bool m_focused = false;
     bool m_chromeEnabled = true;
+    bool m_addUserMode = false;
 };

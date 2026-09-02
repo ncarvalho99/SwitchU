@@ -34,6 +34,12 @@ bool Font::load(GpuDevice& gpu, Renderer& ren,
 
 Vec2 Font::measure(const std::string& text) const {
     if (!m_font || text.empty()) return {0, 0};
+    // Rendered strings already carry their exact dimensions. Avoid invoking
+    // SDL_ttf again for every label on every frame.
+    const auto cached = m_lruMap.find(text);
+    if (cached != m_lruMap.end())
+        return {static_cast<float>(cached->second->w),
+                static_cast<float>(cached->second->h)};
     int w = 0, h = 0;
     TTF_SizeUTF8(m_font, text.c_str(), &w, &h);
     return {(float)w, (float)h};
@@ -42,6 +48,20 @@ Vec2 Font::measure(const std::string& text) const {
 void Font::clearCache() {
     m_lruList.clear();
     m_lruMap.clear();
+    m_cacheBytes = 0;
+    m_maintenanceRequested = false;
+}
+
+void Font::trimCache(std::size_t maxEntries, std::size_t maxBytes) {
+    while (!m_lruList.empty() &&
+           (m_lruList.size() > maxEntries || m_cacheBytes > maxBytes)) {
+        auto victim = std::prev(m_lruList.end());
+        const std::size_t bytes = victim->tex.allocationSize();
+        m_lruMap.erase(victim->key);
+        m_lruList.erase(victim);
+        m_cacheBytes = bytes <= m_cacheBytes ? m_cacheBytes - bytes : 0;
+    }
+    m_maintenanceRequested = false;
 }
 
 Texture* Font::getOrRender(GpuDevice& gpu, Renderer& ren, const std::string& text) {
@@ -90,6 +110,20 @@ Texture* Font::getOrRender(GpuDevice& gpu, Renderer& ren, const std::string& tex
         entry.h = h;
         entry.tex.loadFromSurface(gpu, ren, pixels, w, h, pitch);
     }
+
+    m_lruList.emplace_front();
+    auto& entry = m_lruList.front();
+    entry.key = text;
+    entry.w = w;
+    entry.h = h;
+    if (!entry.tex.loadFromSurface(gpu, ren, pixels, w, h, pitch)) {
+        m_lruList.pop_front();
+        m_maintenanceRequested = true;
+        SDL_UnlockSurface(rgba);
+        SDL_FreeSurface(rgba);
+        return nullptr;
+    }
+    m_cacheBytes += entry.tex.allocationSize();
 
     SDL_UnlockSurface(rgba);
     SDL_FreeSurface(rgba);
