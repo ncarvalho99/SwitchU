@@ -297,6 +297,7 @@ void WiiUMenuApp::createSettings() {
         app().renderer().reclaimReleasedTextureSlotsAfterIdle();
 #endif
         m_settingsNeedRefresh = true;
+        // Dead copy: WiiUMenuAppSettings.cpp holds the live handler.
         // Switching the catalogue only changes what tr() returns next time it is
         // asked. Anything that asked once and kept the answer stays in the old
         // language until it is built again, which is why a restart was needed:

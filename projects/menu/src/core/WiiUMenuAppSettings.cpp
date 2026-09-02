@@ -312,6 +312,25 @@ void WiiUMenuApp::createSettings() {
         m_fontSmall.clearCache();
         m_fontClock.clearCache();
         m_settingsNeedRefresh = true;
+        // Switching the catalogue only changes what tr() returns the next time
+        // it is asked. Whatever asked once and kept the answer stays in the old
+        // language until it is built again, which is why a restart was needed:
+        //  - A widget tile's header and its two lines are read from tr() in
+        //    makeIcon(), so the home model is composed again here.
+        //  - The SwitchU screen, the update tab and its changelog among it,
+        //    builds its strings when it is constructed and is then cached, so
+        //    dropping it means the next open builds it in the new language.
+        //    Only while it is off screen: the language lives in Settings, so it
+        //    always is, but freeing a live overlay would take its textures too.
+        // The action hints and the title pill are rebuilt every frame and were
+        // never part of this.
+        //
+        // The same fix went into WiiUMenuAppUpstreamSettings.cpp first, which is
+        // the copy of this handler inside an #if 0 block. It compiled, shipped
+        // in 2.3.0 and did nothing.
+        reflowHomeGrid();
+        if (m_themeShop && !m_themeShop->isActive())
+            m_themeShop.reset();
     });
     m_settings->onDefaultProfileChange([this](const std::string& uidHex) {
         m_config.defaultProfileEnabled = !uidHex.empty();
