@@ -1,3 +1,52 @@
+# SwitchU 2.3.2
+
+## English
+
+Icons in the single-row view fill in on their own, and folders are one button in
+both directions.
+
+### The single-row view
+
+- Icons no longer sit on their loading spinner until the selection reaches them.
+  Switching into the view rebuilds the row while the artwork already in memory
+  stays valid, so nothing needed fetching and nothing was fetched — but only the
+  focused tile was reconnected to the picture it already had. Every tile is
+  reconnected now.
+
+### Folders
+
+- **X** is the folder button both ways: on the home screen it files the focused
+  title into a folder, and inside an open folder it takes the focused title out.
+  Removing used to be **R**, which meant two buttons for one idea.
+- The **Add to folder** row is gone from the options behind **+** and from the
+  game dossier. Both halves of the job are the same press now, so the menu had
+  nothing left to offer.
+- **X** still closes a suspended title when one is selected, and the hint bar
+  says which of the two it is.
+
+## Português
+
+Os ícones da visualização de linha única aparecem sozinhos, e pastas viraram um
+botão só nos dois sentidos.
+
+### Visualização de linha única
+
+- Os ícones não ficam mais no símbolo de carregamento até a seleção chegar neles.
+  Entrar na visualização reconstrói a linha enquanto as artes já em memória
+  continuam válidas, então não havia nada a buscar e nada foi buscado — mas só o
+  ícone em foco era reconectado à imagem que já tinha. Agora todos são.
+
+### Pastas
+
+- **X** é o botão de pasta nos dois sentidos: na tela inicial guarda o título em
+  foco em uma pasta, e dentro de uma pasta aberta tira o título em foco dela.
+  Remover era **R**, o que dava dois botões para a mesma ideia.
+- A linha **Adicionar à pasta** saiu das opções do **+** e da ficha do jogo. As
+  duas metades do trabalho são o mesmo toque agora, então o menu não tinha mais
+  o que oferecer.
+- **X** continua fechando um título suspenso quando há um selecionado, e a barra
+  de dicas diz qual das duas coisas ele faz.
+
 # SwitchU 2.3.1
 
 ## English
