@@ -378,7 +378,16 @@ void IconStreamer::onPageChanged(int currentPage, int iconsPerPage,
     // 2. Re-attach already-loaded slots to the current widget order. This is
     //    needed after grid relayouts and swaps where the GlossyIcon objects
     //    may have moved while the GPU texture pool stayed valid.
-    for (int i = visibleStartApp; i < visibleEndApp; ++i) {
+    //
+    //    Every wanted index, not just the visible one. The dynamic line puts a
+    //    single icon on a logical page, so this ran for exactly one of them:
+    //    switching into the line rebuilds the grid, the pool and m_appToSlot
+    //    survive that untouched, so needsVisibleLoads() correctly reports
+    //    nothing to fetch -- and every icon except the focused one was left
+    //    holding the null texture its fresh widget was born with. That is the
+    //    spinner that clears only when the selection lands on it. Attaching a
+    //    texture the pool already holds costs a pointer assignment.
+    for (int i = 0; i < totalApps; ++i) {
         int slotIdx = m_appToSlot[i];
         if (slotIdx < 0)
             continue;

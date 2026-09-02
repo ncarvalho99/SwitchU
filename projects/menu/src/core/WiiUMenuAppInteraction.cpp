@@ -1043,10 +1043,33 @@ void WiiUMenuApp::wireGlobalActions() {
 #ifdef SWITCHU_MENU
     root.addAction(static_cast<uint64_t>(nxui::Button::X), [this]() {
         if (m_editMode) return;
-        if (m_launcher.suspendedTitleId() == 0) return;
         auto* cur = focusManager().current();
         if (!cur || cur->tag() != "glossy_icon") return;
         auto* icon = static_cast<GlossyIcon*>(cur);
+
+        // X files the focused title into a folder, mirroring the R that takes
+        // one out of an open folder. It is the only free press on the home
+        // screen: A launches, B is back, Y moves, R sorts, ZL and ZR page, Plus
+        // opens the options, Minus switches view, and L repeats the
+        // announcement. X itself is spoken for only while a title is suspended,
+        // where it closes it -- that case is checked first and keeps the button,
+        // and the hint bar already says which of the two it is.
+        //
+        // Not offered inside an open folder: the title is in one, and R there
+        // takes it out.
+        if (m_openFolderId == 0 &&
+            !(m_launcher.suspendedTitleId() != 0 &&
+              m_launcher.isAppSuspended(icon->titleId()))) {
+            const std::uint64_t titleId = icon->titleId();
+            // Folder and widget tiles share the id space and cannot be filed.
+            if (titleId == 0 || (titleId >> 56) == 0xF1ULL || (titleId >> 56) == 0xF2ULL)
+                return;
+            m_dialogReturnFocus = cur;
+            showFolderAssignment(titleId, icon->title());
+            return;
+        }
+
+        if (m_launcher.suspendedTitleId() == 0) return;
         if (!m_launcher.isAppSuspended(icon->titleId())) return;
 
         m_audio.playSfx(Sfx::ModalShow);

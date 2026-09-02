@@ -6403,6 +6403,9 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
                     : i18n.tr("hint.launch", "Launch"));
             if (m_launcher.isAppSuspended(icon->titleId()))
                 add(buttonGlyph(nxui::Button::X), i18n.tr("hint.close", "Close"));
+            else if (m_openFolderId == 0)
+                add(buttonGlyph(nxui::Button::X),
+                    i18n.tr("folder.add_game", "Add to folder"));
 #else
             add(buttonGlyph(nxui::Button::A), i18n.tr("hint.open", "Open"));
 #endif
