@@ -126,6 +126,8 @@ public:
     void drawRectOutline(const Rect& r, const Color& c, float thickness = 1.f);
     void drawRoundedRect(const Rect& r, const Color& c, float radius);
     void drawRoundedRectOutline(const Rect& r, const Color& c, float radius, float thickness = 1.f);
+    void drawFrostedInset(const Rect& r, const Color& tint, const Color& border,
+                          const Color& highlight, float radius, float opacity = 1.f);
     void drawCircle(const Vec2& center, float radius, const Color& c, int segments = 32);
     void drawTriangle(const Vec2& p1, const Vec2& p2, const Vec2& p3, const Color& c);
     void drawLine(const Vec2& from, const Vec2& to, const Color& c, float thickness = 1.f);
@@ -133,6 +135,8 @@ public:
     void drawTexture(const Texture* tex, const Rect& dest, const Color& tint = Color::white());
     void drawTextureSub(const Texture* tex, const Rect& src, const Rect& dest, const Color& tint = Color::white());
     void drawTextureRounded(const Texture* tex, const Rect& dest, float radius, const Color& tint = Color::white());
+    void drawTextureSubRounded(const Texture* tex, const Rect& src, const Rect& dest,
+                               float radius, const Color& tint = Color::white());
     void drawTextureRoundedSub(const Texture* tex, const Rect& src, const Rect& dest,
                                float radius, const Color& tint = Color::white());
     void drawText(const std::string& text, const Vec2& pos, Font* font, const Color& color, float scale = 1.f);
@@ -193,6 +197,7 @@ public:
     // troca de tema esgotava os 2048 e as texturas seguintes nasciam invalidas.
     void releaseTextureSlot(int slot);
     void updateTexture(int slot, const dk::ImageView& view);
+    void reclaimReleasedTextureSlotsAfterIdle();
 #endif
     void bindTexture(int slot);
     void resetTextureSlots();

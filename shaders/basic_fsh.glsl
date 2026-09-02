@@ -4,7 +4,6 @@
 
 layout (location = 0) in vec2 fragUV;
 layout (location = 1) in vec4 fragColor;
-
 // Rounded corners are cut here rather than approximated by a triangle fan. The
 // fan quantised every corner into eight straight segments, which is what made
 // icon and card edges look stepped, and widening it into an antialiased skirt

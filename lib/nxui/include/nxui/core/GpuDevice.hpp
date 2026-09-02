@@ -142,7 +142,6 @@ public:
     void*     vsUboCpuAddr(int frame) const { return m_dataPool.cpuAddr(m_vsUboOff[frame]); }
     DkGpuAddr fsUboGpuAddr(int frame) const { return m_dataPool.gpuAddr(m_fsUboOff[frame]); }
     void*     fsUboCpuAddr(int frame) const { return m_dataPool.cpuAddr(m_fsUboOff[frame]); }
-
     // Next free slot in this frame's fragment-uniform ring. Wraps rather than
     // overflowing; a frame busy enough to wrap simply reintroduces the old
     // aliasing for its tail instead of corrupting memory.
@@ -199,6 +198,11 @@ public:
     static void setImageBudget(uint64_t b) { s_imageBudget = b; }
 
     uint64_t imageMemoryUsed() const { return m_imageMemUsed; }
+    uint64_t imageMemoryBudget() const { return imageBudget(); }
+    uint64_t imageMemoryAvailable() const {
+        return m_imageMemUsed < imageBudget()
+            ? imageBudget() - m_imageMemUsed : 0;
+    }
 
     // expectedBytes is what the caller says this image should occupy; 0 means
     // the uncompressed w*h*4. It exists because the short-buffer check below is
@@ -260,6 +264,9 @@ public:
     void resetImagePool() {}
     static constexpr int NUM_OFFSCREEN = 7;
     bool offscreenReady() const { return false; }
+    uint64_t imageMemoryUsed() const { return 0; }
+    uint64_t imageMemoryBudget() const { return UINT64_MAX; }
+    uint64_t imageMemoryAvailable() const { return UINT64_MAX; }
 #endif
 
 private:
@@ -309,7 +316,6 @@ private:
     // Per-slot fences: signalled in endFrame, waited in beginFrame, so that
     // the CPU never overwrites command/vertex memory the GPU is still reading.
     dk::Fence  m_frameFences[NUM_FB];
-
     uint32_t m_vtxOff[NUM_FB] {};
     uint32_t m_idxOff[NUM_FB] {};
     uint32_t m_vsUboOff[NUM_FB] {};
@@ -322,7 +328,6 @@ private:
     static DebugSink s_debugSink;
     uint64_t m_imageMemUsed = 0;
     uint64_t m_poolMemUsed  = 0;
-
     static constexpr uint32_t kImageChunkSize = 2u * 1024u * 1024u;
     struct ImagePoolChunk {
         dk::UniqueMemBlock block;

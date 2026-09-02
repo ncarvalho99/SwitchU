@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <mutex>
 #include <string>
+#include <switch.h>
 #include <switchu/log_utils.hpp>
 
 namespace switchu {
@@ -32,6 +33,19 @@ public:
             self.m_sink.append(std::string("[") + timestamp + "] === " + tag + " log start ===");
             self.m_sink.flush();
         }
+
+    }
+
+    
+    static void logCommit(const char* fmt, ...) {
+        char buf[512];
+        va_list args;
+        va_start(args, fmt);
+        std::vsnprintf(buf, sizeof(buf), fmt, args);
+        va_end(args);
+        log("%s", buf);
+        flush();
+        fsdevCommitDevice("sdmc");
     }
 
     static void close() {

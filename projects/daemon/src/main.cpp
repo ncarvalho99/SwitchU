@@ -12,6 +12,8 @@
 #include "ecs.hpp"
 #include "update_apply.hpp"
 #include "menu_launcher.hpp"
+#include "library_applet_runner.hpp"
+#include "system_action_queue.hpp"
 #include <cstdio>
 #include <cstring>
 #include <atomic>
@@ -186,6 +188,11 @@ extern "C" void __appExit(void) {
 }
 
 static std::atomic<bool> g_running{true};
+static std::atomic<bool> g_powerSequenceStarted{false};
+static UEvent g_mainWakeEvent{};
+static UEvent g_controlCacheWakeEvent{};
+static Event g_generalChannelEvent{};
+static bool g_generalChannelEventReady = false;
 static std::atomic<bool> g_eventRefreshPending{false};
 static std::atomic<bool> g_eventGcMountFailure{false};
 static std::atomic<bool> g_batteryRefreshPending{true};
@@ -241,6 +248,7 @@ enum class ActionType : uint32_t {
     OpenAlbum,
     OpenMiiEditor,
     OpenControllers,
+    OpenControllerRemapping,
     OpenNetConnect,
     OpenUserPage,
     OpenUserCreator,
@@ -560,6 +568,139 @@ static smi::SystemStatus buildSystemStatus(
     return st;
 }
 
+struct ScopedService {
+    Service value{};
+
+    ScopedService() = default;
+    ScopedService(const ScopedService&) = delete;
+    ScopedService& operator=(const ScopedService&) = delete;
+
+    ~ScopedService() {
+        serviceClose(&value);
+    }
+};
+
+static Result openTimeAdminService(ScopedService& out) {
+    const Result rc = smGetService(&out.value, "time:a");
+    switchu::FileLog::log(
+        "[settings-time] daemon open time:a rc=0x%X", rc);
+    return rc;
+}
+
+static Result setLiveAutomaticCorrection(bool enabled) {
+    ScopedService admin;
+    Result rc = openTimeAdminService(admin);
+    if (R_SUCCEEDED(rc)) {
+        const u8 flag = enabled ? 1 : 0;
+        rc = serviceDispatchIn(&admin.value, 101, flag);
+    }
+
+    switchu::FileLog::log(
+        "[settings-time] daemon live automaticCorrection enabled=%d rc=0x%X",
+        enabled ? 1 : 0, rc);
+    return rc;
+}
+
+static Result setInternetTimeSync(bool enabled) {
+    const Result setsysRc =
+        setsysSetUserSystemClockAutomaticCorrectionEnabled(enabled);
+    const Result liveRc = R_SUCCEEDED(setsysRc)
+        ? setLiveAutomaticCorrection(enabled)
+        : setsysRc;
+
+    bool confirmed = !enabled;
+    const Result confirmRc =
+        setsysIsUserSystemClockAutomaticCorrectionEnabled(&confirmed);
+    Result result = 0;
+    if (R_FAILED(setsysRc)) {
+        result = setsysRc;
+    } else if (R_FAILED(liveRc)) {
+        result = liveRc;
+    } else if (R_FAILED(confirmRc)) {
+        result = confirmRc;
+    } else if (confirmed != enabled) {
+        result = MAKERESULT(Module_Libnx, 908);
+    }
+
+    switchu::FileLog::log(
+        "[settings-time] daemon internetTimeSync enabled=%d setsys=0x%X live=0x%X confirm=0x%X state=%d result=0x%X",
+        enabled ? 1 : 0, setsysRc, liveRc, confirmRc,
+        confirmed ? 1 : 0, result);
+    return result;
+}
+
+static Result setManualDateTime(const smi::ManualDateTimeArgs& args) {
+    TimeCalendarTime calendar{};
+    calendar.year = static_cast<u16>(args.year);
+    calendar.month = static_cast<u8>(args.month);
+    calendar.day = static_cast<u8>(args.day);
+    calendar.hour = static_cast<u8>(args.hour);
+    calendar.minute = static_cast<u8>(args.minute);
+    calendar.second = 0;
+
+    u64 timestamps[2]{};
+    s32 timestampCount = 0;
+    Result rc = timeToPosixTimeWithMyRule(&calendar, timestamps, 2, &timestampCount);
+    switchu::FileLog::log(
+        "[settings-time] daemon convert %04u-%02u-%02u %02u:%02u rc=0x%X count=%d posix=%llu",
+        args.year, args.month, args.day, args.hour, args.minute,
+        rc, timestampCount,
+        (unsigned long long)(timestampCount > 0 ? timestamps[0] : 0));
+    if (R_SUCCEEDED(rc) && timestampCount <= 0)
+        rc = MAKERESULT(Module_Libnx, 902);
+    if (R_FAILED(rc))
+        return rc;
+    const u64 targetTimestamp = timestamps[0];
+
+    auto isCloseToTarget = [&](u64 actual) -> bool {
+        const u64 delta = actual > targetTimestamp ? actual - targetTimestamp
+                                                   : targetTimestamp - actual;
+        return delta <= 120;
+    };
+
+    auto waitForUserClock = [&]() -> Result {
+        Result lastRc = 0;
+        u64 last = 0;
+        for (int attempt = 0; attempt < 20; ++attempt) {
+            lastRc = timeGetCurrentTime(TimeType_UserSystemClock, &last);
+            const bool close = R_SUCCEEDED(lastRc) && isCloseToTarget(last);
+            if (close)
+                return 0;
+            svcSleepThread(100'000'000ULL);
+        }
+        switchu::FileLog::log(
+            "[settings-time] daemon user clock verification failed rc=0x%X posix=%llu",
+            lastRc, (unsigned long long)last);
+        return R_FAILED(lastRc) ? lastRc : MAKERESULT(Module_Libnx, 906);
+    };
+
+    const Result enableRc = setLiveAutomaticCorrection(true);
+    Result networkRc = enableRc;
+    Result waitRc = enableRc;
+    if (R_SUCCEEDED(enableRc)) {
+        networkRc = timeSetCurrentTime(
+            TimeType_NetworkSystemClock, targetTimestamp);
+        switchu::FileLog::log(
+            "[settings-time] daemon temporary automaticCorrection network set rc=0x%X",
+            networkRc);
+        if (R_SUCCEEDED(networkRc))
+            waitRc = waitForUserClock();
+    }
+
+    const Result restoreRc = setLiveAutomaticCorrection(false);
+    switchu::FileLog::log(
+        "[settings-time] daemon temporary automaticCorrection enable=0x%X network=0x%X wait=0x%X restore=0x%X",
+        enableRc, networkRc, waitRc, restoreRc);
+
+    if (R_FAILED(enableRc))
+        return enableRc;
+    if (R_FAILED(networkRc))
+        return networkRc;
+    if (R_FAILED(waitRc))
+        return waitRc;
+    return restoreRc;
+}
+
 static void pushNotification(smi::MenuMessage msg,
                              uint64_t app_id = 0,
                              uint32_t payload = 0) {
@@ -661,7 +802,6 @@ static bool takeForegroundFromRunningApp(const char* source) {
 // running until it is killed, so without this the main loop carries on writing
 // — flushIfStale alone puts the log on the card every couple of seconds — while
 // the console is shutting down underneath it.
-static std::atomic<bool> g_powerSequenceStarted{false};
 static void stopControlCacheWorker();
 
 // Reboot and shutdown go through the Power State Manager rather than the
@@ -998,6 +1138,17 @@ static void handleAppletMessages() {
     }
 }
 
+static void pumpForegroundAppletMessages() {
+    handleGeneralChannel();
+    handleAppletMessages();
+}
+
+static bool consumeForegroundAppletHomeRequest() {
+    if (!g_pendingForegroundAppletHome)
+        return false;
+    g_pendingForegroundAppletHome = false;
+    return true;
+}
 
 static Result launchLibraryApplet(AppletId id, const char* name,
                                   const void* inData = nullptr, size_t inDataSize = 0,
@@ -1007,84 +1158,92 @@ static Result launchLibraryApplet(AppletId id, const char* name,
     Result fgRc = appletRequestToGetForeground();
     switchu::FileLog::log("[applet] %s RequestToGetForeground rc=0x%X", name, fgRc);
 
-    AppletHolder holder;
-    switchu::FileLog::log("[applet] %s create call", name);
-    Result rc = appletCreateLibraryApplet(&holder, id, LibAppletMode_AllForeground);
-    if (R_FAILED(rc)) {
-        switchu::FileLog::log("[applet] %s create FAIL: 0x%X", name, rc);
-        return rc;
-    }
-    switchu::FileLog::log("[applet] %s create ok", name);
-
-    if (libAppletVersion != 0) {
-        LibAppletArgs args;
-        libappletArgsCreate(&args, libAppletVersion);
-        libappletArgsSetPlayStartupSound(&args, true);
-        rc = libappletArgsPush(&args, &holder);
-        if (R_FAILED(rc)) {
-            switchu::FileLog::log("[applet] %s args FAIL: 0x%X", name, rc);
-            appletHolderClose(&holder);
-            return rc;
-        }
-        switchu::FileLog::log("[applet] %s args ok", name);
-    }
-
-    if (inData && inDataSize > 0) {
-        AppletStorage inStor;
-        rc = appletCreateStorage(&inStor, inDataSize);
-        if (R_FAILED(rc)) {
-            switchu::FileLog::log("[applet] %s in storage FAIL: 0x%X", name, rc);
-            appletHolderClose(&holder);
-            return rc;
-        }
-        rc = appletStorageWrite(&inStor, 0, inData, inDataSize);
-        if (R_FAILED(rc)) {
-            switchu::FileLog::log("[applet] %s in data write FAIL: 0x%X", name, rc);
-            appletStorageClose(&inStor);
-            appletHolderClose(&holder);
-            return rc;
-        }
-        rc = appletHolderPushInData(&holder, &inStor);
-        if (R_FAILED(rc)) {
-            switchu::FileLog::log("[applet] %s in data push FAIL: 0x%X", name, rc);
-            appletStorageClose(&inStor);
-            appletHolderClose(&holder);
-            return rc;
-        }
-        switchu::FileLog::log("[applet] %s in data ok", name);
-        appletStorageClose(&inStor);
-    }
-
-    switchu::FileLog::log("[applet] %s start call", name);
-    rc = appletHolderStart(&holder);
-    if (R_FAILED(rc)) {
-        switchu::FileLog::log("[applet] %s start FAIL: 0x%X", name, rc);
-        appletHolderClose(&holder);
-        return rc;
-    }
-    switchu::FileLog::log("[applet] %s start ok", name);
-
     g_foregroundAppletActive = true;
     g_pendingForegroundAppletHome = false;
-
-    while (appletHolderActive(&holder) && !appletHolderCheckFinished(&holder)) {
-        handleGeneralChannel();
-        handleAppletMessages();
-
-        if (g_pendingForegroundAppletHome) {
-            g_pendingForegroundAppletHome = false;
-            switchu::FileLog::log("[applet] %s exiting on HOME request", name);
-            appletHolderRequestExitOrTerminate(&holder, 5'000'000'000ULL);
-        }
-
-        svcSleepThread(10'000'000ULL);
-    }
-
+    daemon::LibraryAppletInput input{inData, inDataSize};
+    const daemon::LibraryAppletRequest request{
+        .id = id,
+        .name = name,
+        .version = libAppletVersion,
+        .pushCommonArgs = libAppletVersion != 0,
+        .playStartupSound = true,
+        .inputs = inData && inDataSize ? &input : nullptr,
+        .inputCount = inData && inDataSize ? 1U : 0U,
+    };
+    const Result rc = daemon::runLibraryApplet(
+        request, pumpForegroundAppletMessages,
+        consumeForegroundAppletHomeRequest);
     g_foregroundAppletActive = false;
-    appletHolderJoin(&holder);
-    appletHolderClose(&holder);
-    switchu::FileLog::log("[applet] %s closed", name);
+    return rc;
+}
+
+static u32 controllerAppletVersion() {
+    if (hosversionAtLeast(11, 0, 0)) return 0x8;
+    if (hosversionAtLeast(8, 0, 0)) return 0x7;
+    if (hosversionAtLeast(6, 0, 0)) return 0x5;
+    if (hosversionAtLeast(3, 0, 0)) return 0x4;
+    return 0x3;
+}
+
+static Result setupControllerPrivateArg(HidLaControllerSupportArgPrivate& privateArg,
+                                        HidLaControllerSupportMode mode,
+                                        size_t publicArgSize,
+                                        bool homeMenuStyle) {
+    privateArg.private_size = sizeof(privateArg);
+    privateArg.arg_size = publicArgSize;
+    privateArg.flag0 = homeMenuStyle ? 1 : 0;
+    privateArg.flag1 = 1;
+    privateArg.mode = mode;
+    if (hosversionAtLeast(3, 0, 0)) {
+        Result setupRc = hidGetSupportedNpadStyleSet(&privateArg.npad_style_set);
+        HidNpadJoyHoldType holdType{};
+        if (R_SUCCEEDED(setupRc))
+            setupRc = hidGetNpadJoyHoldType(&holdType);
+        privateArg.npad_joy_hold_type = holdType;
+        return setupRc;
+    } else {
+        privateArg.npad_style_set = 0;
+        privateArg.npad_joy_hold_type = HidNpadJoyHoldType_Horizontal;
+    }
     return 0;
+}
+
+static Result runControllerApplet(const char* name,
+                                  HidLaControllerSupportArgPrivate& privateArg,
+                                  const void* publicArg,
+                                  size_t publicArgSize) {
+    HidLaControllerSupportResultInfoInternal output{};
+    const daemon::LibraryAppletInput inputs[] = {
+        {&privateArg, sizeof(privateArg)},
+        {publicArg, publicArgSize},
+    };
+    daemon::LibraryAppletRequest request{
+        .id = AppletId_LibraryAppletController,
+        .name = name,
+        .version = controllerAppletVersion(),
+        .playStartupSound = true,
+        .inputs = inputs,
+        .inputCount = 2,
+        .output = &output,
+        .outputSize = sizeof(output),
+    };
+
+    appletRequestToGetForeground();
+    g_foregroundAppletActive = true;
+    g_pendingForegroundAppletHome = false;
+    Result rc = daemon::runLibraryApplet(
+        request, pumpForegroundAppletMessages,
+        consumeForegroundAppletHomeRequest);
+    g_foregroundAppletActive = false;
+    switchu::FileLog::log(
+        "[applet] %s output res=0x%X players=%d selected=%u runner=0x%X",
+        name, output.res, output.info.player_count, output.info.selected_id, rc);
+    if (R_SUCCEEDED(rc) && output.res == 1) {
+        switchu::FileLog::log("[applet] %s completed outcome=cancelled", name);
+    } else if (R_SUCCEEDED(rc) && output.res != 0) {
+         rc = MAKERESULT(Module_Libnx, LibnxError_LibAppletBadExit);
+    }
+    return rc;
 }
 
 static Result launchControllerPairing() {
@@ -1093,11 +1252,45 @@ static Result launchControllerPairing() {
     hidLaCreateControllerSupportArg(&arg);
     arg.hdr.player_count_max = 8;
     arg.hdr.enable_single_mode = false;
-    Result rc = hidLaShowControllerSupportForSystem(nullptr, &arg, true);
+
+    HidLaControllerSupportArgV3 legacyArg{};
+    const void* publicArg = &arg;
+    size_t publicArgSize = sizeof(arg);
+    if (hosversionBefore(8, 0, 0)) {
+        legacyArg.hdr = arg.hdr;
+        std::memcpy(legacyArg.identification_color, arg.identification_color,
+                    sizeof(legacyArg.identification_color));
+        legacyArg.enable_explain_text = arg.enable_explain_text;
+        std::memcpy(legacyArg.explain_text, arg.explain_text,
+                    sizeof(legacyArg.explain_text));
+        legacyArg.hdr.player_count_min = std::min<s8>(legacyArg.hdr.player_count_min, 4);
+        legacyArg.hdr.player_count_max = std::min<s8>(legacyArg.hdr.player_count_max, 4);
+        publicArg = &legacyArg;
+        publicArgSize = sizeof(legacyArg);
+    }
+
+    HidLaControllerSupportArgPrivate privateArg{};
+    Result rc = setupControllerPrivateArg(
+        privateArg, HidLaControllerSupportMode_ShowControllerSupport,
+        publicArgSize, true);
+    if (R_SUCCEEDED(rc))
+        rc = runControllerApplet("Controllers", privateArg, publicArg, publicArgSize);
     if (R_FAILED(rc))
         switchu::FileLog::log("[applet] Controller FAIL: 0x%X", rc);
     else
         switchu::FileLog::log("[applet] Controller pairing done");
+    return rc;
+}
+
+static Result launchControllerRemapping() {
+    if (hosversionBefore(11, 0, 0))
+        return MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
+    switchu::FileLog::log("[applet] launching controller remapping");
+    HidLaControllerKeyRemappingArg arg{};
+    hidLaCreateControllerKeyRemappingArg(&arg);
+    const Result rc = hidLaShowControllerKeyRemappingForSystem(
+        &arg, HidLaControllerSupportCaller_System);
+    switchu::FileLog::log("[applet] controller remapping rc=0x%X", rc);
     return rc;
 }
 
@@ -1419,6 +1612,16 @@ static void handleMenuCommand() {
         switchu::FileLog::log("[smi] queued Controller launch (actions=%zu)", g_actionQueue.size());
         break;
 
+    case smi::SystemMessage::LaunchControllerRemapping:
+        {
+            Action action{};
+            action.type = ActionType::OpenControllerRemapping;
+            g_actionQueue.push_back(action);
+        }
+        switchu::FileLog::log("[smi] queued controller remapping (actions=%zu)",
+                              g_actionQueue.size());
+        break;
+
     case smi::SystemMessage::EnterSleep:
         startSleepSequence("smi-sleep");
         break;
@@ -1434,6 +1637,22 @@ static void handleMenuCommand() {
     case smi::SystemMessage::RequestForeground:
         appletRequestToGetForeground();
         break;
+
+    case smi::SystemMessage::SetManualDateTime: {
+        const auto args = reader.pop<smi::ManualDateTimeArgs>();
+        const Result rc = setManualDateTime(args);
+        switchu::FileLog::log("[settings-time] manual date/time rc=0x%X", rc);
+        break;
+    }
+
+    case smi::SystemMessage::SetInternetTimeSync: {
+        const auto args = reader.pop<smi::InternetTimeSyncArgs>();
+        const Result rc = setInternetTimeSync(args.enabled != 0);
+        switchu::FileLog::log(
+            "[settings-time] Internet synchronization enabled=%d rc=0x%X",
+            args.enabled ? 1 : 0, rc);
+        break;
+    }
 
     case smi::SystemMessage::GetAppList: {
         break;
@@ -1612,6 +1831,18 @@ static bool handleAction(Action& action) {
             return true;
         }
 
+        case ActionType::OpenControllerRemapping: {
+            const Result rc = launchControllerRemapping();
+            if (R_FAILED(rc))
+                switchu::FileLog::log(
+                    "[action] controller remapping FAIL: 0x%X", rc);
+            daemon::menu_la::launch(
+                smi::MenuStartMode::MainMenu,
+                buildSystemStatus(smi::MenuTransitionReason::LibraryAppletReturn,
+                                  armGetSystemTick()));
+            return true;
+        }
+
         case ActionType::OpenNetConnect: {
             const u32 netType = 1;
             Result rc = launchLibraryApplet(AppletId_LibraryAppletNetConnect,
@@ -1667,7 +1898,66 @@ static bool consumeOneAction() {
             return true;
         }
     }
+
     return false;
+}
+
+static bool mainLoopNeedsFastTick() {
+    if (g_powerSequenceStarted.load())
+        return false;
+    return g_eventPollsRemaining > 0
+        || g_appCatalogRefreshPending.load()
+        || g_controlCacheRefreshPending.load()
+        || g_menuRelaunchCooldown > 0
+        || !g_actionQueue.empty();
+}
+
+static void waitForMainWork() {
+    Waiter waiters[3]{};
+    s32 waiterCount = 0;
+
+    if (Event* messageEvent = appletGetMessageEvent())
+        waiters[waiterCount++] = waiterForEvent(messageEvent);
+    if (g_generalChannelEventReady)
+        waiters[waiterCount++] = waiterForEvent(&g_generalChannelEvent);
+
+    waiters[waiterCount++] = waiterForUEvent(&g_mainWakeEvent);
+
+    if (waiterCount == 0) {
+        svcSleepThread(1'000'000'000ULL);
+        return;
+    }
+
+    s32 signalledIndex = -1;
+    const u64 timeout = mainLoopNeedsFastTick()
+        ? 10'000'000ULL
+        : 1'000'000'000ULL;
+    static Result s_lastWaitFailure = 0;
+    static uint32_t s_waitFailureRepeatCount = 0;
+    const Result rc = waitObjects(&signalledIndex, waiters, waiterCount, timeout);
+    if (R_FAILED(rc) && rc != KERNELRESULT(TimedOut)) {
+        if (rc == s_lastWaitFailure) {
+            ++s_waitFailureRepeatCount;
+        } else {
+            s_lastWaitFailure = rc;
+            s_waitFailureRepeatCount = 1;
+        }
+        if (s_waitFailureRepeatCount <= 3 || (s_waitFailureRepeatCount % 120) == 0) {
+            switchu::FileLog::log("[main] waitObjects FAIL: 0x%X count=%u waiters=%d",
+                                  rc,
+                                  (unsigned)s_waitFailureRepeatCount,
+                                  (int)waiterCount);
+        }
+        // Applet holder or applet-manager events can be rejected by waitObjects
+        // while foreground ownership is changing. The next main-loop tick polls
+        // all holders and channels again, so keep a conservative backoff instead
+        // of turning an invalid waiter into a hot loop.
+        svcSleepThread(100'000'000ULL);
+    } else {
+        s_lastWaitFailure = 0;
+        s_waitFailureRepeatCount = 0;
+    }
+    return;
 }
 
 static void routeFinishedApplication(const char* source) {
@@ -1895,6 +2185,7 @@ static void eventManagerThreadFunc(void* arg) {
 
             g_appCatalogRefreshPending.store(true);
             g_eventRefreshPending.store(true);
+            ueventSignal(&g_mainWakeEvent);
         } else if (evIdx == 1 && hasGcEvent) {
             eventClear(&gcMountFailEvent);
 
@@ -2058,6 +2349,13 @@ static void stopControlCacheWorker() {
 int main(int argc, char* argv[]) {
     const uint64_t daemonMainTick = armGetSystemTick();
     switchu::FileLog::log("[daemon] main() entry");
+
+    ueventCreate(&g_mainWakeEvent, true);
+    ueventCreate(&g_controlCacheWakeEvent, true);
+    Result generalEventRc = appletGetPopFromGeneralChannelEvent(&g_generalChannelEvent);
+    g_generalChannelEventReady = R_SUCCEEDED(generalEventRc);
+    if (R_FAILED(generalEventRc))
+        switchu::FileLog::log("[daemon] general channel event unavailable: 0x%X", generalEventRc);
 
     appletLoadAndApplyIdlePolicySettings();
 

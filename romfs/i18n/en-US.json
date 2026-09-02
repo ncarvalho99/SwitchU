@@ -25,7 +25,9 @@
       "of": "of",
       "left_sidebar": "Left sidebar",
       "right_sidebar": "Right sidebar",
-      "user_profiles": "User profiles"
+      "user_profiles": "User profiles",
+      "dynamic_line": "Center line",
+      "menu": "Context menu"
     },
     "roles": {
       "button": "button",
@@ -38,14 +40,17 @@
       "selector": "selector",
       "progress": "progress",
       "info": "information",
-      "section": "section"
+      "section": "section",
+      "action": "action"
     },
     "hints": {
       "open": "A to open.",
       "open_user_page": "A to open the user page.",
       "grid_empty": "Use the directional pad to move to another slot.",
       "game_launchable": "A to launch. X for options. Y to move. ZL or ZR to change page.",
-      "game_blocked": "A to show why this item is blocked."
+      "game_blocked": "A to show why this item is blocked.",
+      "recently_played_widget": "A to launch the recently played game. Plus for widget options. Y to move.",
+      "widget": "Plus for widget options. Y to move. Minus to change view."
     },
     "actions": {
       "edit_mode": "Directional pad to choose the new position. Y to place. B to cancel.",
@@ -54,7 +59,9 @@
       "game_launchable": "A to launch. X for options. Y to move. ZL or ZR to change page.",
       "settings": "Up and down to choose a category. A or right to enter. B to close.",
       "themes": "Up and down to navigate. A to choose. B to close.",
-      "dialog": "Left and right to change choice. A to confirm. B to cancel."
+      "dialog": "Left and right to change choice. A to confirm. B to cancel.",
+      "context_menu": "Up and down to choose. A to confirm. B to close.",
+      "edit_mode_folder": "Directional pad to choose the position. A to place. B to leave the folder while keeping the software selected."
     },
     "settings": {
       "tab_prefix": "Tab",
@@ -72,7 +79,8 @@
     },
     "position": {
       "row": "row",
-      "column": "column"
+      "column": "column",
+      "item": "item"
     },
     "move_mode": {
       "enter": "Moving game: ",
@@ -82,7 +90,11 @@
     "grid": {
       "empty_slot": "Empty slot"
     },
-    "user_profile": "User profile"
+    "user_profile": "User profile",
+    "layout": {
+      "dynamic_line": "Dynamic line mode",
+      "grid": "Grid mode"
+    }
   },
   "tutorial": {
     "accessibility": {
@@ -166,7 +178,8 @@
     "sort_custom": "My order",
     "sort_alpha": "A-Z",
     "sort_recent": "Recent",
-    "options": "Options"
+    "options": "Options",
+    "switch_layout": "Switch view"
   },
   "settings": {
     "tabs": {
@@ -175,6 +188,7 @@
       "audio": "Audio",
       "display": "Display",
       "internet": "Internet",
+      "steamgriddb": "SteamGridDB",
       "controllers": "Controllers",
       "bluetooth": "Bluetooth",
       "sleep": "Sleep",
@@ -215,7 +229,22 @@
       "auto_update": "Auto Update",
       "error_reporting": "Error Reporting",
       "add_user": "Add User",
-      "add_user_desc": "Create a new user account on this console."
+      "add_user_desc": "Create a new user account on this console.",
+      "day": "Day",
+      "disable_internet_time_first": "Disable Internet clock synchronization first.",
+      "hour": "Hour",
+      "internet_time": "Synchronize Clock via Internet",
+      "internet_time_desc": "Automatically correct the console clock using network time.",
+      "manual_time": "Set Date and Time",
+      "manual_time_button": "Change",
+      "manual_time_desc": "Available when Internet clock synchronization is disabled.",
+      "manual_time_footer": "A Confirm   ·   B Cancel",
+      "manual_time_popup_hint": "Left/right selects a field. Up/down changes its value.",
+      "manual_time_saved": "Date and time updated.",
+      "minute": "Minute",
+      "month": "Month",
+      "time_change_failed": "The date and time setting could not be changed.",
+      "year": "Year"
     },
     "accessibility": {
       "voice": "Voice Guidance",
@@ -274,7 +303,9 @@
       "reload_grid": "Reload games and shortcuts",
       "reload_grid_desc": "Reads the installed titles again and discards the cached names and icons. Use it after creating or deleting a shortcut.",
       "reload_grid_done": "Reading the installed titles again...",
-      "reload_grid_failed": "Could not ask for a reload."
+      "reload_grid_failed": "Could not ask for a reload.",
+      "ui_wireframe": "UI Wireframe",
+      "ui_wireframe_desc": "Show outlines of all Box widgets for layout debugging."
     },
     "internet": {
       "wifi_ssid": "WiFi Network",
@@ -290,7 +321,38 @@
       "dns": "DNS",
       "dns_auto": "Auto (DHCP)"
     },
+    "steamgriddb": {
+      "section": "Game artwork",
+      "enabled": "Display SteamGridDB artwork",
+      "enabled_desc": "Show heroes and logos behind the application menu.",
+      "api_key": "API key",
+      "api_key_set": "Configured (hidden)",
+      "api_key_missing": "Not configured",
+      "api_key_optional": "Optional. Heroes and icons work without it; logos need one.",
+      "scan": "Search artwork for missing applications",
+      "scan_desc": "Downloads a hero and logo only for applications that do not already have artwork.",
+      "already_running": "A scan is already running.",
+      "need_key": "Configure an API key first.",
+      "need_key_logo": "Logos need a SteamGridDB API key. Configure one in Settings.",
+      "progress": "Artwork scan",
+      "idle": "Ready to scan installed applications.",
+      "results": "Results",
+      "no_results": "No scan completed yet",
+      "keyboard_error": "The keyboard could not be opened.",
+      "key_cleared": "API key cleared.",
+      "key_saved": "API key saved.",
+      "start_failed": "The artwork scan could not be started.",
+      "started": "SteamGridDB scan started.",
+      "download_title": "Downloading artwork",
+      "download_start": "Searching SteamGridDB..."
+    },
     "controllers": {
+      "test": "Test Input Devices",
+      "test_desc": "Test joysticks, buttons, and the touch screen.",
+      "pairing": "Change Grip/Order",
+      "pairing_desc": "Pair controllers and change their player order.",
+      "remapping": "Change Button Mapping",
+      "remapping_desc": "Open the system controller button mapping tool.",
       "vibration": "Vibration",
       "usb_wired": "USB Wired Communication",
       "usb_wired_desc": "Use USB wired mode to reduce latency on compatible controllers.",
@@ -308,6 +370,8 @@
       "paired_devices": "Paired Devices",
       "no_paired_devices": "No paired devices",
       "discover_devices": "Discover Devices",
+      "search_inactive": "Device search",
+      "search_active": "Device search in progress",
       "start_search": "Search for devices...",
       "stop_search": "Stop searching",
       "connect": "Connect",
@@ -327,6 +391,9 @@
       "6h": "6 hours",
       "12h": "12 hours",
       "never": "Never",
+      "sleep_now_title": "Sleep Mode",
+      "shutdown_title": "Power Off",
+      "reboot_title": "Restart Console",
       "handheld": "Handheld Auto-Sleep",
       "handheld_desc": "Idle delay before automatic sleep in handheld mode.",
       "docked": "Docked Auto-Sleep",
@@ -392,6 +459,7 @@
       "uninstall_success": "Uninstalled successfully.",
       "uninstall_failed_title": "Uninstall Failed",
       "uninstall_failed": "Failed to uninstall the selected title.",
+      "uninstall_failed_files": "Some files could not be removed from the SD card.",
       "location_internal": "Internal",
       "location_sd": "microSD",
       "location_system": "System",
@@ -410,7 +478,7 @@
       "based_on": "Based on",
       "author": "Original author",
       "license": "License",
-      "license_value": "GPL-2.0",
+      "license_value": "GPL-3.0",
       "acknowledgements": "Acknowledgements",
       "acknowledgements_desc": "Thanks to xortroll for your help with your project uLaunch and for your support and advice during development.",
       "source_code": "Source code (fork)",
@@ -426,14 +494,45 @@
   "userselect": {
     "title": "Who's playing?",
     "switch_title": "Accounts",
-    "add_user": "Add user"
+    "add_user": "Add user",
+    "add_user_hint": "A to create a new user."
   },
   "game": {
+    "tile_size": "Tile size",
+    "tile_size_desc": "Changes the size of this game on the grid.",
+    "options": "Software Options",
+    "data_management": "Data Management",
+    "information": "Information",
     "move": "Move",
+    "move_title": "Move software",
+    "move_desc": "Move this software to another position on the HOME menu.",
     "move_prefix": "Move: ",
+    "version": "Version",
+    "version_unknown": "Unknown",
+    "publisher_unknown": "Unknown publisher",
+    "title_id": "Title ID",
+    "delete_software": "Delete Software",
+    "delete_software_desc": "Deletes the software from the console. Save data is not deleted.",
+    "delete_gamecard_unavailable": "Game card software cannot be deleted from the console.",
+    "delete_confirmation": "The software will be deleted. Save data will remain.",
+    "close_desc": "Close the running software. Unsaved progress may be lost.",
+    "uninstall": "Uninstall",
+    "uninstall_title": "Uninstall software",
+    "uninstall_prefix": "Permanently delete",
+    "uninstall_failed": "Uninstall failed",
+    "uninstall_progress_title": "Deleting software",
+    "uninstall_progress": "Please wait. Do not turn off the console.",
     "close_title": "Close game",
     "close_prefix": "Close",
-    "close_suffix": "?\nUnsaved progress will be lost."
+    "close_suffix": "?\nUnsaved progress will be lost.",
+    "steamgriddb": {
+      "hero": "Hero",
+      "hero_desc": "Open the hero gallery and choose the image to use.",
+      "logo": "Logo",
+      "logo_desc": "Open the logo gallery and choose the image to use.",
+      "icon": "Replacement icon",
+      "icon_desc": "Open the icon gallery and choose an override for this game."
+    }
   },
   "power": {
     "title": "Power",
@@ -441,6 +540,104 @@
     "sleep": "Sleep",
     "shutdown": "Shutdown",
     "reboot": "Reboot"
+  },
+  "folder": {
+    "create": "Create folder",
+    "create_hint": "A to create a folder.",
+    "open": "Open",
+    "open_title": "Open folder",
+    "open_hint": "A to open. Plus for folder options. Y to move.",
+    "options": "Folder options",
+    "rename": "Rename",
+    "rename_title": "Folder name",
+    "delete": "Delete folder",
+    "delete_desc": "Games inside will return to the HOME menu.",
+    "name_guide": "Enter a folder name",
+    "default_name": "Folder",
+    "rename_guide": "Rename folder",
+    "choose": "Choose a folder",
+    "add_game": "Add to folder",
+    "add_game_desc": "Choose a folder for this software.",
+    "remove_game": "Remove from folder",
+    "remove_game_desc": "Move this software back to the HOME menu.",
+    "no_folder_title": "No folder",
+    "no_folder": "Create a folder first.",
+    "error_title": "Folder error",
+    "save_error": "The folder change could not be saved.",
+    "keyboard_error": "The keyboard could not be opened.",
+    "place_on_home": "Choose an empty slot, then press A",
+    "place_hint": "A to place the software here. B to cancel.",
+    "added_confirmation": "Software added to folder: ",
+    "leave_while_moving": "Leave folder",
+    "appearance": "Appearance",
+    "management": "Management",
+    "color": "Folder color",
+    "color_desc": "Choose the color used by this folder.",
+    "color_blue": "Blue",
+    "color_green": "Green",
+    "color_yellow": "Yellow",
+    "color_orange": "Orange",
+    "color_red": "Red",
+    "color_pink": "Pink",
+    "color_purple": "Purple",
+    "color_gray": "Gray",
+    "size": "Folder size",
+    "size_desc": "Changes the size and number of icons shown inside this folder.",
+    "size_small": "Small",
+    "size_medium": "Medium",
+    "size_large": "Large",
+    "items": "items",
+    "move": "Move",
+    "page_added": "Page added"
+  },
+  "add": {
+    "title": "Add"
+  },
+  "widget": {
+    "title": "Widget",
+    "create": "Create new widget",
+    "clock": "Clock",
+    "recently_played": "Recently played",
+    "recent_playtime": "Recent playtime",
+    "random_screenshot": "Random screenshot",
+    "image_pin": "Image pin",
+    "batteries": "Batteries",
+    "choose_type": "Choose widget",
+    "choose_size": "Choose size",
+    "choose_image": "Choose image",
+    "resize": "Resize",
+    "delete": "Delete widget",
+    "no_space": "No space",
+    "no_recent_game": "No recent game",
+    "last_played": "Last played",
+    "played_recently": "Played recently",
+    "no_playtime": "No recent playtime",
+    "error_title": "Widget error",
+    "save_error": "The widget change could not be saved.",
+    "no_assets_title": "No widget images",
+    "no_assets_desc": "Add PNG, JPG, WebP or GIF files to sdmc:/config/SwitchU/widgets/assets/ or to the active theme's widgets folder."
+  },
+  "controller_test": {
+    "title": "Controller Test",
+    "opened": "Controller test. Tilt a stick briefly to select it. Hold B for one second or press HOME to close.",
+    "close_hint": "Hold B 1 s or press HOME to close",
+    "joysticks": "Joysticks",
+    "buttons": "Buttons",
+    "touchscreen": "Touch screen",
+    "touch_hint": "Touch or click and drag here",
+    "touch_fullscreen_opened": "Full-screen touch test. Press X to return. Hold B for one second or press HOME to close.",
+    "touch_fullscreen_hint": "Touch test · X: return · Hold B 1 s or HOME: close",
+    "tilt_to_select": "Tilt a stick briefly to select it",
+    "left_stick": "Left stick",
+    "right_stick": "Right stick",
+    "left_selected": "Left stick selected",
+    "right_selected": "Right stick selected",
+    "direction": "Direction",
+    "center": "Center",
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right"
   },
   "languages": {
     "ja-JP": "Japanese",
@@ -473,7 +670,19 @@
     "cancel": "Cancel",
     "delete": "Delete",
     "close": "Close",
-    "replace": "Replace"
+    "replace": "Replace",
+    "configure": "Configure",
+    "connect": "Connect",
+    "manage": "Manage",
+    "move": "Move",
+    "open": "Open",
+    "pair": "Pair",
+    "rename": "Rename",
+    "search": "Search",
+    "select": "Select",
+    "stop": "Stop",
+    "test": "Test",
+    "uninstall": "Uninstall"
   },
   "themeshop": {
     "update_status": "Status",
@@ -728,6 +937,18 @@
     "delete_software": "Delete software?",
     "delete_software_body": "This removes the software from the console. It cannot be undone here -- the software has to be downloaded or installed again.",
     "delete_software_done": "The software was deleted.",
-    "delete_software_failed": "The software could not be deleted."
+    "delete_software_failed": "The software could not be deleted.",
+    "delete_software_files": "These folders on the SD card will be removed too:",
+    "non_game_options_body_folder": "Homebrew and ports have no game details, artwork or mods to manage. They can be filed into a folder or removed."
+  },
+  "text_entry": {
+    "erase": "Erase",
+    "full": "Maximum length reached",
+    "hint": "A: type   X: erase   Y: shift   L/R: symbols   Plus: confirm   B: cancel",
+    "letters": "ABC",
+    "opened": "On-screen keyboard. Directional pad to choose a key, A to type, X to erase, Plus to confirm, B to cancel.",
+    "shift": "Shift",
+    "space": "Space",
+    "symbols": "?12#"
   }
 }

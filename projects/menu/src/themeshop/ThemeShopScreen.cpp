@@ -384,6 +384,16 @@ void ThemeShopScreen::applySearchFilter() {
 bool ThemeShopScreen::promptSearchQuery() {
     auto& i18n = nxui::I18n::instance();
 
+#ifdef SWITCHU_MENU
+    // Same constraint as WiiUMenuApp::runSystemKeyboard: this menu is a library
+    // applet and swkbdShow never returns here. Proven by menu.log on 2026-08-31,
+    // where the folder keyboard logged its "show" line and never its "returned"
+    // one while the console sat frozen. This path had not been exercised yet and
+    // would have hung the same way.
+    requestToast(i18n.tr("themeshop.search.unavailable",
+                         "Search keyboard is unavailable."), 2.5f);
+    return true;
+#else
     SwkbdConfig swkbd;
     Result rc = swkbdCreate(&swkbd, 0);
     if (R_FAILED(rc)) {
@@ -404,7 +414,22 @@ bool ThemeShopScreen::promptSearchQuery() {
     std::snprintf(buffer.data(), buffer.size(), "%s", m_searchQuery.c_str());
 
     appletUpdateCallerAppletCaptureImage();
+    // Committed, not buffered: a keyboard that never returns leaves no other
+    // trace of where the frame loop stopped. FileLog only exists in the menu
+    // build; the standalone NRO writes through DebugLog to stderr anyway.
+#ifdef SWITCHU_MENU
+    switchu::FileLog::logCommit("[keyboard] themeshop-search show");
+#else
+    DebugLog::log("[keyboard] themeshop-search show");
+#endif
     rc = swkbdShow(&swkbd, buffer.data(), buffer.size());
+#ifdef SWITCHU_MENU
+    switchu::FileLog::logCommit("[keyboard] themeshop-search returned rc=0x%08X",
+                                static_cast<unsigned>(rc));
+#else
+    DebugLog::log("[keyboard] themeshop-search returned rc=0x%08X",
+                  static_cast<unsigned>(rc));
+#endif
     swkbdClose(&swkbd);
 
     if (R_FAILED(rc))
@@ -415,6 +440,7 @@ bool ThemeShopScreen::promptSearchQuery() {
     applySearchFilter();
     ensureSelectionVisible();
     return true;
+#endif
 }
 
 bool ThemeShopScreen::pollCommunityCatalog() {

@@ -122,6 +122,7 @@ void SelectionCursor::onRender(nxui::Renderer& ren) {
 
     float wave = std::sin(m_time * m_waveSpeed) * 0.5f + 0.5f;
 
+    if (m_bloomEnabled) {
     constexpr int BLOOM_LAYERS = 5;
     constexpr float bloomExpand[] = {12.f, 9.f, 6.f, 4.f, 2.f};
     constexpr float bloomAlpha[]  = {0.03f, 0.05f, 0.08f, 0.12f, 0.16f};
@@ -132,7 +133,7 @@ void SelectionCursor::onRender(nxui::Renderer& ren) {
         nxui::Color gc = m_color.withAlpha(a);
         ren.drawRoundedRect(glowRect, gc, cr + expand + 2.f);
     }
-
+    }
     nxui::Color mainC = m_color.withAlpha(m_opacity);
     ren.drawRoundedRectOutline(r, mainC, cr, m_borderWidth);
 
@@ -140,4 +141,3 @@ void SelectionCursor::onRender(nxui::Renderer& ren) {
     nxui::Color innerC = nxui::Color(0.3f, 0.85f, 1.f, 0.25f * m_opacity * (0.7f + 0.3f * wave));
     ren.drawRoundedRectOutline(inner, innerC, cr - 2.f, 1.5f);
 }
-

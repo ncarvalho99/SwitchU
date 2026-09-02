@@ -76,10 +76,32 @@ id_ed25519
 *.sqlite
 *.sqlite3
 
-# Local tool state can contain permissions, session data, and credentials.
+# Local tool state can contain permissions, session data, and credentials, and
+# the working notes an agent keeps are evidence for the person running it rather
+# than anything a reader of this repository needs. None of it is published.
 /.claude/
 /.codex/
+/.cursor/
+/.windsurf/
+/.gemini/
+/.aider*
+/.continue/
+/.roo/
+/.kilocode/
+/.junie/
+/.github/copilot-instructions.md
+/.cursorrules
+/.windsurfrules
+/.clinerules
+/AGENTS.local.md
 /.agents/
+/.opencode/
 /.antigravity/
-/AGENTS.md
-/CLAUDE.md
+
+# Dynamic cross-chat checkpoints are local evidence, never repository policy.
+/prompt_handoff_*.md
+
+# The maintained documentation, its changelog and the working audits are kept
+# beside the checkout rather than published. AGENTS.md still routes through them
+# and they still have to be written; they are simply not part of what ships.
+/docs/

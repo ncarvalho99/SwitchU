@@ -263,6 +263,8 @@ void WiiUMenuApp::createSettings() {
                                             m_config.accessibilitySpeechRate);
     m_settings->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                   m_config.accessibilitySpeakPosition);
+    m_settings->setSteamGridDbState(m_config.steamGridDbEnabled,
+                                    !m_config.steamGridDbApiKey.empty());
 
     m_settings->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
     m_settings->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
@@ -415,6 +417,43 @@ void WiiUMenuApp::createSettings() {
         m_pendingNetConnect = true;
         m_settings->hide();
     });
+    m_settings->onSteamGridDbEnabledChange([this](bool enabled) {
+        m_config.steamGridDbEnabled = enabled;
+        if (m_steamGridDbBackdrop) {
+            m_steamGridDbBackdrop->setEnabled(enabled);
+            if (enabled) showFocusedSteamGridDbArtwork(true);
+        }
+    });
+    m_settings->onSteamGridDbApiKeyRequest([this]() {
+        editSteamGridDbApiKey();
+    });
+    m_settings->onSteamGridDbScrapeRequest([this]() {
+        startSteamGridDbScrape();
+    });
+    m_settings->onControllerPairing([this]() {
+        if (m_settings) m_settings->hide();
+        m_launcher.launchControllerPairing();
+    });
+    m_settings->onControllerRemapping([this]() {
+        if (m_settings) m_settings->hide();
+        m_launcher.launchControllerRemapping();
+    });
+    m_settings->onControllerTest([this]() {
+        if (!m_controllerTest) return;
+        // The controller test is created in onCreate; the settings overlay is
+        // created lazily the first time it is opened, so it is appended to the
+        // overlay layer after it and painted over it. Focus moved to a screen
+        // the player could not see: the settings panel stayed on screen and
+        // stopped responding, which on hardware read as a frozen console.
+        raiseOverlay(m_controllerTest);
+        m_navigator.navigate(switchu::navigation::Route::ControllerTest);
+        m_controllerTest->show();
+        focusManager().setFocus(m_controllerTest.get());
+        m_audio.playSfx(Sfx::ModalShow);
+    });
+    m_settings->onSoftwareDelete([this](uint64_t titleId, const std::string& title) {
+        startSoftwareDeletion(titleId, title, false);
+    });
     m_settings->onSleepRequest([this]() {
         if (m_settings) m_settings->hide();
         m_launcher.enterSleep();
@@ -457,7 +496,36 @@ void WiiUMenuApp::createSettings() {
         m_dialog->show(title, msg, std::move(dlgButtons));
         focusManager().setFocus(m_dialog.get());
     });
+    m_settings->onDateTimeEditorRequest(
+        [this](const TabbedOverlayScreen::DateTimeEditorValue& initial,
+               TabbedOverlayScreen::DateTimeCommitCb onCommit) {
+            if (!m_dialog) return;
+            m_dialogReturnFocus = m_settings.get();
+            OverlayDialog::DateTimeValue value;
+            value.year = initial.year;
+            value.month = initial.month;
+            value.day = initial.day;
+            value.hour = initial.hour;
+            value.minute = initial.minute;
+            m_dialog->showDateTimeEditor(
+                value,
+                [this, onCommit = std::move(onCommit)](
+                    const OverlayDialog::DateTimeValue& edited) mutable {
+                    TabbedOverlayScreen::DateTimeEditorValue committed;
+                    committed.year = edited.year;
+                    committed.month = edited.month;
+                    committed.day = edited.day;
+                    committed.hour = edited.hour;
+                    committed.minute = edited.minute;
+                    const bool saved = !onCommit || onCommit(committed);
+                    if (saved)
+                        m_clockService.invalidate();
+                    return saved;
+                });
+            focusManager().setFocus(m_dialog.get());
+        });
     m_settings->onClosed([this]() {
+        m_navigator.routeDidClose(switchu::navigation::Route::Settings);
         m_configSaveFuture = m_threadPool.submit([cfg = m_config]() {
             cfg.save();
         });
@@ -866,6 +934,10 @@ void WiiUMenuApp::createGameDetails() {
     m_gameDetails->onManageMods([this]() {
         if (!m_gameDetails) return;
         showGameMods(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onFolderAction([this]() {
+        if (!m_gameDetails) return;
+        showFolderAssignment(m_gameDetails->titleId(), m_gameDetails->title());
     });
     m_gameDetails->onDeleteSoftware([this]() {
         if (!m_gameDetails) return;
@@ -1541,6 +1613,18 @@ void WiiUMenuApp::applyTheme() {
         m_gameMods->setTheme(&m_theme);
     if (m_gameDetails)
         m_gameDetails->setTheme(&m_theme);
+    // The 1.2 overlays were left out of the recolor pass and kept the previous
+    // theme's colours until the menu process was recreated.
+    if (m_contextMenu)
+        m_contextMenu->setTheme(&m_theme);
+    if (m_gameOptions)
+        m_gameOptions->setTheme(&m_theme);
+    if (m_folderOptions)
+        m_folderOptions->setTheme(&m_theme);
+    if (m_controllerTest)
+        m_controllerTest->setTheme(&m_theme);
+    if (m_steamGridDbPicker)
+        m_steamGridDbPicker->setTheme(&m_theme);
 
     m_sidebar.applyTheme(m_theme);
     DebugLog::log("[theme-apply] widget recolor complete");

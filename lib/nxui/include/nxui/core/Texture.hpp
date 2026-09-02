@@ -125,6 +125,15 @@ public:
     int  width()  const { return m_width; }
     int  height() const { return m_height; }
     bool valid()  const { return m_valid; }
+    std::size_t allocationSize() const {
+#ifdef NXUI_BACKEND_DEKO3D
+        return (static_cast<std::size_t>(m_allocSize) + kGpuAlign - 1u) &
+               ~(static_cast<std::size_t>(kGpuAlign) - 1u);
+#else
+        return static_cast<std::size_t>(m_width > 0 ? m_width : 0) *
+               static_cast<std::size_t>(m_height > 0 ? m_height : 0) * 4u;
+#endif
+    }
 
     // What this actually occupies on the GPU. Not width*height*4: a compressed
     // texture is a fraction of that, and a caller budgeting by the arithmetic

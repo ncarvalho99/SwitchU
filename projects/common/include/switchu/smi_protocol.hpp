@@ -39,6 +39,7 @@ enum class SystemMessage : uint32_t {
     // The system's own account creation applet. Creating a user was the one
     // account operation the menu had no route to at all.
     LaunchUserCreator     = 15,
+    LaunchControllerRemapping = 16,
 
     EnterSleep            = 20,
     Shutdown              = 21,
@@ -48,6 +49,8 @@ enum class SystemMessage : uint32_t {
     GetAppList            = 30,
     GetSystemStatus       = 31,
     IsApplicationValid    = 32,
+    SetManualDateTime     = 33,
+    SetInternetTimeSync   = 34,
 
     MenuReady             = 40,
     MenuClosing           = 41,
@@ -128,6 +131,21 @@ struct UserArgs {
     uint8_t user_uid[16];
 };
 static_assert(sizeof(UserArgs) == 16);
+
+struct ManualDateTimeArgs {
+    uint32_t year;
+    uint32_t month;
+    uint32_t day;
+    uint32_t hour;
+    uint32_t minute;
+};
+static_assert(sizeof(ManualDateTimeArgs) == 20);
+
+struct InternetTimeSyncArgs {
+    uint8_t enabled;
+    uint8_t _pad[7];
+};
+static_assert(sizeof(InternetTimeSyncArgs) == 8);
 
 enum class MenuTransitionReason : uint32_t {
     Unknown             = 0,

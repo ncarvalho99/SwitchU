@@ -1,4 +1,5 @@
 #pragma once
+#include "core/AppLayoutMode.hpp"
 #include <cstdint>
 #include <limits>
 #include <utility>
@@ -15,6 +16,8 @@ struct AppConfig {
     float sfxVolume    = 0.25f;
     int   gridColumns  = 5;
     int   gridRows     = 3;
+    AppLayoutMode appLayoutMode = AppLayoutMode::Grid;
+    std::string actionHintStyle = "capsules";
     std::string uiLanguageOverride = "auto";
     std::string soundPreset = "wiiu";
     bool  defaultProfileEnabled = false;
@@ -29,6 +32,8 @@ struct AppConfig {
     bool  accessibilitySpeakContextEveryFocus = false;
     bool  accessibilitySpeakPosition = true;
     int   accessibilitySpeechRate = 190;
+    bool  steamGridDbEnabled = true;
+    std::string steamGridDbApiKey;
 
     // Softens the wallpaper and the shapes drifting over it.
     // This was zero on the argument that the blur costs half the wallpaper's

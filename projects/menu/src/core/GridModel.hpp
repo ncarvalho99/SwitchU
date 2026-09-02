@@ -4,22 +4,31 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include "WidgetStore.hpp"
 
-
-// Tells a retail Switch application apart from everything else that can end up
-// on the grid: homebrew, emulator ports installed as forwarders, and system
-// applets. Retail titles are 0x01-prefixed and sit above the range reserved for
-// built-in system titles; forwarders conventionally use the 0x05 prefix.
-// Only retail titles have a catalogue entry, an update, mods or cover art worth
-// showing, so this is what decides whether the dossier is offered at all.
 inline bool isNativeApplicationId(uint64_t titleId) {
     constexpr uint64_t kFirstApplication = 0x0100000000010000ULL;
     return (titleId >> 56) == 0x01ULL && titleId >= kFirstApplication;
 }
 
+
+enum class GridEntryKind : std::uint8_t {
+    Empty,
+    Application,
+    Folder,
+    Widget,
+    WidgetContinuation,
+};
+
+inline constexpr std::uint64_t kFolderTitleIdPrefix = 0xF100000000000000ULL;
+inline constexpr std::uint64_t folderTitleId(std::uint32_t folderId) {
+    return kFolderTitleIdPrefix | static_cast<std::uint64_t>(folderId);
+}
+
 struct AppEntry {
     std::string id;
     std::string title;
+    std::string englishTitle;
     uint64_t    titleId = 0;
     int         iconTexIndex = -1;
     nxui::Color       tint = nxui::Color::white();
@@ -28,6 +37,22 @@ struct AppEntry {
     bool        startupUserKnown = true;
     uint8_t     startupUserAccount = 1;
     uint8_t     startupUserAccountOption = 0;
+    GridEntryKind kind = GridEntryKind::Empty;
+    std::uint32_t folderId = 0;
+    int folderPreviewCount = 0;
+    int folderColorIndex = 0;
+    std::uint32_t widgetId = 0;
+    switchu::widgets::WidgetType widgetType = switchu::widgets::WidgetType::Clock;
+    int widgetColumns = 1;
+    int widgetRows = 1;
+    std::string widgetAssetRef;
+
+    bool isApplication() const { return kind == GridEntryKind::Application; }
+    bool isFolder() const { return kind == GridEntryKind::Folder; }
+    bool isWidget() const { return kind == GridEntryKind::Widget; }
+    const std::string& steamGridDbTitle() const {
+        return englishTitle.empty() ? title : englishTitle;
+    }
 
     bool isGameCard() const {
         return switchu::ns::viewHasFlag(viewFlags, switchu::ns::AppViewFlag_IsGameCard);

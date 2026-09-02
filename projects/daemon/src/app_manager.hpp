@@ -1,4 +1,5 @@
 #pragma once
+
 #include <switch.h>
 #include <switchu/control_cache.hpp>
 #include <switchu/file_log.hpp>

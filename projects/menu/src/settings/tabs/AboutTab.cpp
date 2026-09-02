@@ -6,7 +6,7 @@
 #endif
 
 #ifndef SWITCHU_UPSTREAM_VERSION
-#define SWITCHU_UPSTREAM_VERSION "1.1.0"
+#define SWITCHU_UPSTREAM_VERSION "1.2.0"
 #endif
 
 // This build is a fork, and the two extra rows exist for reasons beyond

@@ -8,6 +8,9 @@
 
 namespace themeshop::http {
 
+using ProgressCallback = std::function<void(std::uint64_t downloaded,
+                                            std::uint64_t total)>;
+
 bool initialize();
 void shutdown();
 bool isInitialized();
@@ -18,7 +21,8 @@ bool isInitialized();
 void cancelPendingRequests();
 
 std::vector<std::uint8_t> getBytes(const std::string& url,
-                                   const std::list<std::string>& headers = {});
+                                   const std::list<std::string>& headers = {},
+                                   const ProgressCallback& onProgress = {});
 
 // Grava a resposta direto em disco, sem passar pela memoria.
 //

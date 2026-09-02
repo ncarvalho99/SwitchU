@@ -8,6 +8,11 @@ namespace nxui {
 
 namespace {
 
+std::vector<FocusManager*>& registry() {
+    static auto* managers = new std::vector<FocusManager*>();
+    return *managers;
+}
+
 static bool isTouchInteractive(Widget* node) {
     return node && node->isVisible()
         && (node->isFocusable() || !node->actions().empty());
@@ -116,6 +121,20 @@ void FocusManager::changeFocusTo(Widget* target) {
 void FocusManager::setFocus(int index) { changeFocus(index); }
 
 void FocusManager::setFocus(Widget* target) { changeFocusTo(target); }
+
+FocusManager::FocusManager() {
+    registry().push_back(this);
+}
+
+FocusManager::~FocusManager() {
+    auto& r = registry();
+    r.erase(std::remove(r.begin(), r.end(), this), r.end());
+}
+
+void FocusManager::forgetWidget(Widget* w) {
+    for (FocusManager* fm : registry())
+        fm->invalidateWidget(w);
+}
 
 void FocusManager::invalidateWidget(Widget* w) {
     if (!w) return;
@@ -282,21 +301,26 @@ bool FocusManager::navigate(FocusDirection dir, Widget* root) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 uint64_t FocusManager::dispatchActions(const Input& input, uint64_t excludeMask) const {
+    struct PendingAction {
+        uint64_t button = 0;
+        std::function<void()> callback;
+    };
+    std::vector<PendingAction> pending;
     uint64_t consumed = 0;
-    Widget* w = current();
-    while (w) {
-        // Snapshot the action map before iterating — callbacks may call
-        // clearActions() / hide() which clears the map, invalidating iterators.
-        auto snapshot = w->actions();
-        for (auto& [btn, cb] : snapshot) {
+    // Snapshot the complete bubble chain before invoking anything. A callback
+    // may rebuild the grid and destroy the focused widget (moving an icon does
+    // exactly that), so even reading w->parent() after the callback is unsafe.
+    for (Widget* w = current(); w; w = w->parent()) {
+        for (const auto& [btn, cb] : w->actions()) {
             if (excludeMask & btn) continue;
             if (input.isDown(static_cast<Button>(btn))) {
-                if (cb) cb();
+                pending.push_back({btn, cb});
                 consumed |= btn;
             }
         }
-        w = w->parent();
     }
+    for (auto& action : pending)
+        if (action.callback) action.callback();
     return consumed;
 }
 

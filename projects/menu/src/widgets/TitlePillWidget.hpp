@@ -23,6 +23,7 @@ protected:
 
 private:
     nxui::Font*       m_font = nullptr;
+    std::string m_sourceText;
     std::string m_text;
     nxui::Color       m_textColor {1.f, 1.f, 1.f, 1.f};
     nxui::AnimatedFloat m_animX{0.f};

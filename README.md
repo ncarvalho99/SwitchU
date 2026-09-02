@@ -92,8 +92,11 @@ Pressing **+** on a game opens its panel:
   <summary><b>More screenshots</b></summary>
 
 ![](./screenshots/2.jpg)
+![](./screenshots/3.jpg)
 ![](./screenshots/4.jpg)
 ![](./screenshots/5.jpg)
+![](./screenshots/6.jpg)
+![](./screenshots/7.jpg)
 ![](./screenshots/8.jpg)
 ![](./screenshots/9.jpg)
 ![](./screenshots/10.jpg)
@@ -101,6 +104,22 @@ Pressing **+** on a game opens its panel:
 ![](./screenshots/12.jpg)
 ![](./screenshots/13.jpg)
 ![](./screenshots/14.jpg)
+![](./screenshots/15.jpg)
+![](./screenshots/16.jpg)
+![](./screenshots/17.jpg)
+![](./screenshots/18.jpg)
+![](./screenshots/19.jpg)
+![](./screenshots/20.jpg)
+![](./screenshots/21.jpg)
+![](./screenshots/22.jpg)
+![](./screenshots/23.jpg)
+![](./screenshots/24.jpg)
+![](./screenshots/25.jpg)
+![](./screenshots/26.jpg)
+![](./screenshots/27.jpg)
+![](./screenshots/28.jpg)
+![](./screenshots/29.jpg)
+![](./screenshots/30.jpg)
 
 </details>
 
@@ -171,11 +190,9 @@ keep a build local. Read hardware logs directly with:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\read-console-logs.ps1
 ```
 
-## Transition performance audit
+## Transition performance
 
-The [launch, HOME-return, IPC, threading, memory, and GPU teardown audit](./docs/transition-speed-audit.md)
-contains measured baselines, exact bottlenecks, implemented fixes, staged C++ patches, and the
-hardware profiling protocol. Summarize raw-tick hardware traces with
+Raw-tick hardware traces of launch and HOME-return can be summarized with
 [`tools/analyze-transition-traces.ps1`](./tools/analyze-transition-traces.ps1).
 
 ## Known issues

@@ -1,4 +1,6 @@
 #include "TabBuilders.hpp"
+#include "core/DebugLog.hpp"
+#include "smi_commands.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
 #include <algorithm>
@@ -55,6 +57,42 @@ std::vector<ProfileOption> listProfileOptions() {
         out.push_back(std::move(option));
     }
     return out;
+}
+
+bool currentDateTimeValue(TabbedOverlayScreen::DateTimeEditorValue& value) {
+    u64 timestamp = 0;
+    TimeCalendarTime calendar{};
+    TimeCalendarAdditionalInfo additional{};
+    if (R_FAILED(timeGetCurrentTime(TimeType_UserSystemClock, &timestamp)) ||
+        R_FAILED(timeToCalendarTimeWithMyRule(timestamp, &calendar, &additional)))
+        return false;
+    value.year = calendar.year;
+    value.month = calendar.month;
+    value.day = calendar.day;
+    value.hour = calendar.hour;
+    value.minute = calendar.minute;
+    return true;
+}
+
+bool setManualDateTime(
+    SettingsScreen& screen,
+    const TabbedOverlayScreen::DateTimeEditorValue& value) {
+    switchu::smi::ManualDateTimeArgs args{};
+    args.year = static_cast<uint32_t>(value.year);
+    args.month = static_cast<uint32_t>(value.month);
+    args.day = static_cast<uint32_t>(value.day);
+    args.hour = static_cast<uint32_t>(value.hour);
+    args.minute = static_cast<uint32_t>(value.minute);
+    const Result rc = switchu::menu::smi_cmd::setManualDateTime(args);
+    if (R_SUCCEEDED(rc)) {
+        screen.requestToast(nxui::I18n::instance().tr(
+            "settings.system.manual_time_saved", "Date and time updated."));
+        return true;
+    }
+    screen.requestToast(nxui::I18n::instance().tr(
+        "settings.system.time_change_failed",
+        "The date and time setting could not be changed."));
+    return false;
 }
 
 } // namespace
@@ -165,6 +203,63 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
+        bool automatic = true;
+        const Result stateResult =
+            setsysIsUserSystemClockAutomaticCorrectionEnabled(&automatic);
+        SettingItem it;
+        it.label = i18n.tr("settings.system.internet_time", "Synchronize Clock via Internet");
+        it.description = i18n.tr(
+            "settings.system.internet_time_desc",
+            "Automatically correct the console clock using network time.");
+        it.type = ItemType::Toggle;
+        it.boolVal = R_SUCCEEDED(stateResult) ? automatic : false;
+        it.anim01 = it.boolVal ? 1.f : 0.f;
+        it.onChange = [&screen](SettingItem& self) {
+            const Result rc = switchu::menu::smi_cmd::setInternetTimeSync(self.boolVal);
+            if (R_FAILED(rc)) {
+                self.boolVal = !self.boolVal;
+                screen.requestToast(nxui::I18n::instance().tr(
+                    "settings.system.time_change_failed",
+                    "The date and time setting could not be changed."));
+            }
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.system.manual_time", "Set Date and Time");
+        it.description = i18n.tr(
+            "settings.system.manual_time_desc",
+            "Available when Internet clock synchronization is disabled.");
+        it.type = ItemType::Action;
+        it.buttonLabel = i18n.tr("settings.system.manual_time_button", "Change");
+        it.onChange = [&screen](SettingItem&) {
+            bool automatic = true;
+            const Result stateRc =
+                setsysIsUserSystemClockAutomaticCorrectionEnabled(&automatic);
+            if (R_FAILED(stateRc) || automatic) {
+                screen.requestToast(nxui::I18n::instance().tr(
+                    "settings.system.disable_internet_time_first",
+                    "Disable Internet clock synchronization first."));
+                return;
+            }
+            TabbedOverlayScreen::DateTimeEditorValue initial;
+            if (!currentDateTimeValue(initial)) {
+                screen.requestToast(nxui::I18n::instance().tr(
+                    "settings.system.time_change_failed",
+                    "The date and time setting could not be changed."));
+                return;
+            }
+            screen.requestDateTimeEditor(
+                initial, [&screen](const auto& value) {
+                    return setManualDateTime(screen, value);
+                });
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
         SettingItem it;
         it.label = i18n.tr("settings.system.clock_12h", "12-Hour Clock");
         it.description = i18n.tr("settings.system.clock_12h_desc", "Show the home clock with AM and PM.");
@@ -214,6 +309,37 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
         it.onChange = [&screen](SettingItem&) {
             if (screen.m_addUserCb) screen.m_addUserCb();
         };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        auto profiles = listProfileOptions();
+        SettingItem it;
+        it.label = i18n.tr("settings.system.default_profile", "Default Profile");
+        it.description = i18n.tr("settings.system.default_profile_desc",
+                                 "Launch games with this profile when possible.");
+        it.type = ItemType::Selector;
+        it.options.push_back(i18n.tr("settings.system.default_profile_ask", "Ask each time"));
+        for (const auto& profile : profiles)
+            it.options.push_back(profile.name);
+
+        it.intVal = 0;
+        if (!screen.m_defaultProfileUid.empty()) {
+            for (int i = 0; i < (int)profiles.size(); ++i) {
+                if (profiles[(size_t)i].uidHex == screen.m_defaultProfileUid) {
+                    it.intVal = i + 1;
+                    break;
+                }
+            }
+        }
+
+        it.onChange = [&screen, profiles = std::move(profiles)](SettingItem& self) {
+            int idx = std::clamp(self.intVal, 0, (int)profiles.size());
+            screen.m_defaultProfileUid = idx > 0 ? profiles[(size_t)(idx - 1)].uidHex : std::string();
+            if (screen.m_defaultProfileCb)
+                screen.m_defaultProfileCb(screen.m_defaultProfileUid);
+        };
+
         t.items.push_back(std::move(it));
     }
 

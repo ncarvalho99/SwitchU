@@ -1,12 +1,16 @@
 #include "SidebarAnimation.hpp"
 #include "core/DebugLog.hpp"
+#include <nxui/third_party/stb/stb_image.h>
 #include <webp/demux.h>
 #include <fstream>
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 
 bool SidebarAnimation::load(nxui::GpuDevice& gpu, nxui::Renderer& ren,
-                            const std::string& webpPath) {
+                            const std::string& webpPath,
+                            int maximumSide,
+                            std::size_t maximumGpuBytes) {
     m_frames.clear();
     m_durationsMs.clear();
     m_frameIndex  = 0;
@@ -53,13 +57,13 @@ bool SidebarAnimation::load(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         return false;
     }
 
-    constexpr int kMaxUploadSide = 64;
+    const int uploadSideLimit = maximumSide > 0 ? maximumSide : 64;
     int uploadW = static_cast<int>(info.canvas_width);
     int uploadH = static_cast<int>(info.canvas_height);
-    bool needScale = (uploadW > kMaxUploadSide || uploadH > kMaxUploadSide);
+    bool needScale = (uploadW > uploadSideLimit || uploadH > uploadSideLimit);
     if (needScale) {
-        float scale = std::min(static_cast<float>(kMaxUploadSide) / uploadW,
-                               static_cast<float>(kMaxUploadSide) / uploadH);
+        float scale = std::min(static_cast<float>(uploadSideLimit) / uploadW,
+                               static_cast<float>(uploadSideLimit) / uploadH);
         uploadW = std::max(1, static_cast<int>(std::round(uploadW * scale)));
         uploadH = std::max(1, static_cast<int>(std::round(uploadH * scale)));
     }
@@ -68,21 +72,37 @@ bool SidebarAnimation::load(nxui::GpuDevice& gpu, nxui::Renderer& ren,
     if (needScale)
         scaledBuf.resize(static_cast<size_t>(uploadW) * uploadH * 4u);
 
-    constexpr size_t kMaxGpuBytes = 2u * 1024u * 1024u;
+    const size_t uploadBudget = maximumGpuBytes > 0
+        ? maximumGpuBytes : 2u * 1024u * 1024u;
     size_t bytesPerFrame = static_cast<size_t>(uploadW) * uploadH * 4u;
-    size_t maxFrames = std::max<size_t>(1u, kMaxGpuBytes / std::max<size_t>(1u, bytesPerFrame));
+    size_t maxFrames = std::max<size_t>(1u, uploadBudget /
+        std::max<size_t>(1u, bytesPerFrame));
     size_t reserve   = std::min<size_t>(maxFrames, std::max<size_t>(1u, info.frame_count));
     m_frames.reserve(reserve);
     m_durationsMs.reserve(reserve);
 
     int prevTs = 0;
+    std::size_t decodedIndex = 0;
+    std::size_t selectedFrames = 0;
     while (WebPAnimDecoderHasMoreFrames(dec)) {
         uint8_t* rgba = nullptr;
         int timestamp  = 0;
         if (!WebPAnimDecoderGetNext(dec, &rgba, &timestamp) || !rgba)
             break;
-        if (m_frames.size() >= reserve)
-            break;
+
+        int durationMs = timestamp - prevTs;
+        if (durationMs <= 0) durationMs = 1;
+        prevTs = timestamp;
+        const std::size_t selectedIndex = selectedFrames < reserve
+            ? selectedFrames * static_cast<std::size_t>(info.frame_count) / reserve
+            : static_cast<std::size_t>(info.frame_count);
+        const bool uploadFrame = decodedIndex == selectedIndex;
+        ++decodedIndex;
+        if (!uploadFrame) {
+            if (!m_durationsMs.empty())
+                m_durationsMs.back() += durationMs;
+            continue;
+        }
 
         const uint8_t* uploadPixels = rgba;
         if (needScale) {
@@ -101,17 +121,15 @@ bool SidebarAnimation::load(nxui::GpuDevice& gpu, nxui::Renderer& ren,
         }
 
         nxui::Texture tex;
-        if (tex.loadFromPixelsPooled(gpu, ren, uploadPixels, uploadW, uploadH)) {
-            int durationMs = timestamp - prevTs;
-            if (durationMs <= 0) durationMs = 1;
+        if (tex.loadFromPixels(gpu, ren, uploadPixels, uploadW, uploadH)) {
             m_frames.push_back(std::move(tex));
             m_durationsMs.push_back(durationMs);
+            ++selectedFrames;
         } else {
             DebugLog::log("[sidebar-anim] frame upload failed at %d",
                           static_cast<int>(m_frames.size()));
             break;
         }
-        prevTs = timestamp;
     }
 
     WebPAnimDecoderDelete(dec);
@@ -152,4 +170,25 @@ nxui::Texture* SidebarAnimation::currentFrame() {
 void SidebarAnimation::reset() {
     m_frameIndex = 0;
     m_elapsedMs  = 0.f;
+}
+
+void SidebarAnimation::clear() {
+    m_frames.clear();
+    m_frames.shrink_to_fit();
+    m_durationsMs.clear();
+    m_durationsMs.shrink_to_fit();
+    m_frameIndex = 0;
+    m_elapsedMs = 0.f;
+}
+
+bool SidebarAnimation::appendFrame(nxui::GpuDevice& gpu, nxui::Renderer& ren,
+                                   const std::uint8_t* rgba,
+                                   int width, int height, int durationMs) {
+    if (!rgba || width <= 0 || height <= 0) return false;
+    nxui::Texture texture;
+    if (!texture.loadFromPixels(gpu, ren, rgba, width, height))
+        return false;
+    m_frames.push_back(std::move(texture));
+    m_durationsMs.push_back(std::max(1, durationMs));
+    return true;
 }

@@ -22,6 +22,7 @@ public:
     void launchAlbum();
     void launchMiiEditor();
     void launchControllerPairing();
+    void launchControllerRemapping();
     void launchNetConnect();
     void launchUserPage(AccountUid uid);
     void launchUserCreator();
@@ -57,6 +58,7 @@ public:
     void checkRunningApplication();
 
     bool     isAppRunning()  const;
+    bool     appHasForeground() const;
     bool     isAppSuspended(uint64_t titleId) const;
     uint64_t suspendedTitleId() const;
 

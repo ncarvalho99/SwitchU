@@ -43,6 +43,26 @@ inline Result sendSimple(smi::SystemMessage msg) {
     return pushOutStorage(&hdr, sizeof(hdr));
 }
 
+inline Result setManualDateTime(const smi::ManualDateTimeArgs& value) {
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(value)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::SetManualDateTime);
+    std::memcpy(buf + sizeof(*hdr), &value, sizeof(value));
+    return pushOutStorage(buf, sizeof(buf));
+}
+
+inline Result setInternetTimeSync(bool enabled) {
+    smi::InternetTimeSyncArgs value{};
+    value.enabled = enabled ? 1 : 0;
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(value)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::SetInternetTimeSync);
+    std::memcpy(buf + sizeof(*hdr), &value, sizeof(value));
+    return pushOutStorage(buf, sizeof(buf));
+}
+
 inline Result prepareApplication(uint64_t titleId, AccountUid uid,
                                  smi::LaunchTransitionTrace& trace) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::PrepareAppArgs)]{};

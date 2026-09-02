@@ -32,13 +32,28 @@ public:
     }
 
     ~ThreadPool() {
+        shutdown();
+    }
+
+    // Stops accepting work, drains already accepted tasks, then joins every
+    // worker. Safe to call more than once. Owners should call this before
+    // destroying any object captured by a task.
+    void shutdown() {
         {
             std::lock_guard<std::mutex> lk(m_mutex);
+            if (m_stop && m_workers.empty())
+                return;
             m_stop = true;
         }
         m_cv.notify_all();
         for (auto& w : m_workers)
             if (w.joinable()) w.join();
+        m_workers.clear();
+    }
+
+    bool acceptingTasks() const {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        return !m_stop;
     }
 
     // Non-copyable, non-movable.
@@ -52,6 +67,11 @@ public:
 
         {
             std::lock_guard<std::mutex> lk(m_mutex);
+            if (m_stop) {
+                promise->set_exception(std::make_exception_ptr(
+                    std::runtime_error("ThreadPool is shutting down")));
+                return future;
+            }
             m_queue.push([t = std::move(task), p = std::move(promise)]() {
                 try {
                     t();
@@ -112,7 +132,7 @@ private:
 
     std::vector<std::thread>            m_workers;
     std::queue<std::function<void()>>   m_queue;
-    std::mutex                          m_mutex;
+    mutable std::mutex                  m_mutex;
     std::condition_variable             m_cv;
     std::condition_variable             m_idleCv;
     std::size_t                         m_activeTasks = 0;

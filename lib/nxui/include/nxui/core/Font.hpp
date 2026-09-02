@@ -30,6 +30,12 @@ public:
     // Clear all cached glyph textures (call before GPU descriptor reset)
     void clearCache();
 
+    bool maintenanceRequested() const { return m_maintenanceRequested; }
+    std::size_t cacheBytes() const { return m_cacheBytes; }
+    std::size_t cacheEntryCount() const { return m_lruList.size(); }
+    void trimCache(std::size_t maxEntries = 72,
+                   std::size_t maxBytes = 2u * 1024u * 1024u);
+
     int ptSize() const { return m_ptSize; }
     std::uint64_t revision() const { return m_revision; }
 
@@ -60,6 +66,8 @@ private:
 
     LruList m_lruList;
     LruMap  m_lruMap;
+    std::size_t m_cacheBytes = 0;
+    bool m_maintenanceRequested = false;
 };
 
 } // namespace nxui

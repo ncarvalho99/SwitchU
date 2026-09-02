@@ -5,7 +5,6 @@
 layout (location = 0) in vec2 inPos;
 layout (location = 1) in vec2 inUV;
 layout (location = 2) in vec4 inColor;
-
 // Rounded shapes used to describe themselves through the fragment uniform
 // block, which meant one draw call each: the home screen went from 92 draws to
 // 229 and lost 5-13 fps once selection rings and circles joined. Carried on the

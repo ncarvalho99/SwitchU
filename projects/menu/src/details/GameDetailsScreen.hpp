@@ -49,6 +49,10 @@ public:
     void onRestoreArtwork(ActionCb cb) { m_restoreArtworkCb = std::move(cb); }
     void onManageMods(ActionCb cb) { m_manageModsCb = std::move(cb); }
     void onDeleteSoftware(ActionCb cb) { m_deleteSoftwareCb = std::move(cb); }
+    void onFolderAction(ActionCb cb) { m_folderActionCb = std::move(cb); }
+    // Reads "Add to folder" or "Remove from folder" depending on where the
+    // title currently lives; the owner sets it before opening.
+    void setFolderActionLabel(std::string label) { m_folderActionLabel = std::move(label); }
 
 protected:
     void buildTabs() override;
@@ -117,6 +121,8 @@ private:
     FocusZone m_focusZone = FocusZone::Screenshots;
     bool m_imageExpanded = false;
     bool m_localOnly = false;
+    ActionCb m_folderActionCb;
+    std::string m_folderActionLabel;
     ActionCb m_openGalleryCb;
     ActionCb m_showArtworkCb;
     ActionCb m_restoreArtworkCb;

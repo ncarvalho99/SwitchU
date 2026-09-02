@@ -32,7 +32,8 @@
       "theme": "Tema",
       "storage": "Armazenamento",
       "about": "Sobre",
-      "accessibility": "Acessibilidade"
+      "accessibility": "Acessibilidade",
+      "steamgriddb": "SteamGridDB"
     },
     "system": {
       "firmware": "Versão do Firmware",
@@ -66,7 +67,22 @@
       "clock_12h": "Relógio 12h",
       "clock_12h_desc": "Mostra a hora no formato de 12 horas.",
       "add_user": "Adicionar Usuário",
-      "add_user_desc": "Cria uma nova conta de usuário neste console."
+      "add_user_desc": "Cria uma nova conta de usuário neste console.",
+      "day": "Dia",
+      "disable_internet_time_first": "Desative primeiro a sincronização do relógio pela Internet.",
+      "hour": "Hora",
+      "internet_time": "Sincronizar relógio pela Internet",
+      "internet_time_desc": "Corrige o relógio do console automaticamente usando a hora da rede.",
+      "manual_time": "Definir data e hora",
+      "manual_time_button": "Alterar",
+      "manual_time_desc": "Disponível quando a sincronização do relógio pela Internet está desativada.",
+      "manual_time_footer": "A Confirmar   ·   B Cancelar",
+      "manual_time_popup_hint": "Esquerda/direita escolhe um campo. Cima/baixo altera o valor.",
+      "manual_time_saved": "Data e hora atualizadas.",
+      "minute": "Minuto",
+      "month": "Mês",
+      "time_change_failed": "Não foi possível alterar a data e a hora.",
+      "year": "Ano"
     },
     "audio": {
       "speaker_auto_mute": "Mudo Automático dos Alto Falantes",
@@ -110,7 +126,9 @@
       "reload_grid": "Recarregar jogos e atalhos",
       "reload_grid_desc": "Relê os títulos instalados e descarta os nomes e ícones em cache. Use depois de criar ou apagar um atalho.",
       "reload_grid_done": "Relendo os títulos instalados...",
-      "reload_grid_failed": "Não foi possível pedir a recarga."
+      "reload_grid_failed": "Não foi possível pedir a recarga.",
+      "ui_wireframe": "Contornos da interface",
+      "ui_wireframe_desc": "Mostra o contorno de todos os widgets Box para depurar o layout."
     },
     "internet": {
       "wifi_ssid": "Rede WiFi",
@@ -130,7 +148,13 @@
       "vibration": "Vibração",
       "usb_wired": "Comunicação por Cabo USB",
       "usb_wired_desc": "Usa o modo com fio USB para reduzir a latência em controles compatíveis.",
-      "nfc": "NFC (amiibo)"
+      "nfc": "NFC (amiibo)",
+      "test": "Testar dispositivos de entrada",
+      "test_desc": "Teste os analógicos, os botões e a tela sensível ao toque.",
+      "pairing": "Alterar empunhadura/ordem",
+      "pairing_desc": "Pareie controles e altere a ordem dos jogadores.",
+      "remapping": "Alterar mapeamento de botões",
+      "remapping_desc": "Abre a ferramenta do sistema para remapear botões."
     },
     "bluetooth": {
       "bluetooth": "Bluetooth",
@@ -149,7 +173,9 @@
       "pair_connect": "Parear e Conectar",
       "device_actions": "Ações do Dispositivo",
       "connected": "Conectado",
-      "not_connected": "Não conectado"
+      "not_connected": "Não conectado",
+      "search_inactive": "Busca de dispositivos",
+      "search_active": "Busca de dispositivos em andamento"
     },
     "sleep": {
       "1min": "1 min",
@@ -181,7 +207,10 @@
       "reboot_confirm": "Reiniciar o console?",
       "shutdown": "Desligar",
       "shutdown_desc": "Desliga o console completamente.",
-      "shutdown_confirm": "Desligar o console?"
+      "shutdown_confirm": "Desligar o console?",
+      "sleep_now_title": "Modo de descanso",
+      "shutdown_title": "Desligar",
+      "reboot_title": "Reiniciar console"
     },
     "theme": {
       "preset": "Predefinição",
@@ -228,6 +257,7 @@
       "uninstall_success": "Desinstalado com sucesso.",
       "uninstall_failed_title": "Falha na desinstalação",
       "uninstall_failed": "Não foi possível desinstalar o título selecionado.",
+      "uninstall_failed_files": "Não foi possível remover alguns arquivos do cartão SD.",
       "location_internal": "Interno",
       "location_sd": "microSD",
       "location_system": "Sistema",
@@ -246,7 +276,7 @@
       "based_on": "Baseado em",
       "author": "Autor original",
       "license": "Licença",
-      "license_value": "GPL-2.0",
+      "license_value": "GPL-3.0",
       "acknowledgements": "Agradecimentos",
       "acknowledgements_desc": "Agradecimentos a xortroll pela ajuda com o projeto uLaunch e pelo apoio e conselhos durante o desenvolvimento.",
       "source_code": "Código-fonte (fork)",
@@ -272,19 +302,75 @@
       "repeat_context_desc": "Repete a área atual a cada mudança de foco.",
       "speak_position": "Ler posição",
       "speak_position_desc": "Lê linha, coluna e posição quando disponível."
+    },
+    "steamgriddb": {
+      "section": "Arte dos jogos",
+      "enabled": "Exibir arte do SteamGridDB",
+      "enabled_desc": "Mostra heroes e logos atrás do menu de aplicativos.",
+      "api_key": "Chave de API",
+      "api_key_set": "Configurada (oculta)",
+      "api_key_missing": "Não configurada",
+      "api_key_optional": "Opcional. Heroes e ícones funcionam sem ela; logos exigem uma.",
+      "scan": "Buscar arte para aplicativos sem imagem",
+      "scan_desc": "Baixa hero e logo apenas para aplicativos que ainda não têm arte.",
+      "already_running": "Já existe uma busca em andamento.",
+      "need_key": "Configure uma chave de API primeiro.",
+      "need_key_logo": "Logos exigem uma chave de API do SteamGridDB. Configure uma em Configurações.",
+      "progress": "Busca de arte",
+      "idle": "Pronto para buscar nos aplicativos instalados.",
+      "results": "Resultados",
+      "no_results": "Nenhuma busca concluída ainda",
+      "keyboard_error": "Não foi possível abrir o teclado.",
+      "key_cleared": "Chave de API removida.",
+      "key_saved": "Chave de API salva.",
+      "start_failed": "Não foi possível iniciar a busca de arte.",
+      "started": "Busca do SteamGridDB iniciada.",
+      "download_title": "Baixando arte",
+      "download_start": "Procurando no SteamGridDB..."
     }
   },
   "userselect": {
     "title": "Quem vai jogar?",
     "switch_title": "Contas",
-    "add_user": "Adicionar usuário"
+    "add_user": "Adicionar usuário",
+    "add_user_hint": "A para criar um novo usuário."
   },
   "game": {
     "move": "Mover",
     "move_prefix": "Mover: ",
     "close_title": "Fechar jogo",
     "close_prefix": "Fechar",
-    "close_suffix": "?\nO progresso não salvo será perdido."
+    "close_suffix": "?\nO progresso não salvo será perdido.",
+    "tile_size": "Tamanho do bloco",
+    "tile_size_desc": "Altera o tamanho deste jogo na grade.",
+    "options": "Opções do software",
+    "data_management": "Gerenciamento de dados",
+    "information": "Informações",
+    "move_title": "Mover software",
+    "move_desc": "Move este software para outra posição no menu HOME.",
+    "version": "Versão",
+    "version_unknown": "Desconhecida",
+    "publisher_unknown": "Distribuidora desconhecida",
+    "title_id": "ID do título",
+    "delete_software": "Excluir software",
+    "delete_software_desc": "Exclui o software do console. Os dados salvos não são excluídos.",
+    "delete_gamecard_unavailable": "Software de cartão de jogo não pode ser excluído do console.",
+    "delete_confirmation": "O software será excluído. Os dados salvos serão mantidos.",
+    "close_desc": "Fecha o software em execução. O progresso não salvo pode ser perdido.",
+    "uninstall": "Desinstalar",
+    "uninstall_title": "Desinstalar software",
+    "uninstall_prefix": "Excluir permanentemente",
+    "uninstall_failed": "Falha ao desinstalar",
+    "uninstall_progress_title": "Excluindo software",
+    "uninstall_progress": "Aguarde. Não desligue o console.",
+    "steamgriddb": {
+      "hero": "Hero",
+      "hero_desc": "Abre a galeria de heroes e escolhe a imagem a usar.",
+      "logo": "Logo",
+      "logo_desc": "Abre a galeria de logos e escolhe a imagem a usar.",
+      "icon": "Ícone substituto",
+      "icon_desc": "Abre a galeria de ícones e escolhe uma substituição para este jogo."
+    }
   },
   "power": {
     "title": "Energia",
@@ -324,7 +410,19 @@
     "cancel": "Cancelar",
     "delete": "Excluir",
     "close": "Fechar",
-    "replace": "Substituir"
+    "replace": "Substituir",
+    "configure": "Configurar",
+    "connect": "Conectar",
+    "manage": "Gerenciar",
+    "move": "Mover",
+    "open": "Abrir",
+    "pair": "Parear",
+    "rename": "Renomear",
+    "search": "Buscar",
+    "select": "Selecionar",
+    "stop": "Parar",
+    "test": "Testar",
+    "uninstall": "Desinstalar"
   },
   "themeshop": {
     "update_status": "Situação",
@@ -489,7 +587,8 @@
     "sort_custom": "Minha ordem",
     "sort_alpha": "A-Z",
     "sort_recent": "Recentes",
-    "options": "Opções"
+    "options": "Opções",
+    "switch_layout": "Trocar visualização"
   },
   "accessibility": {
     "speech": {
@@ -506,7 +605,9 @@
       "of": "de",
       "left_sidebar": "Barra lateral esquerda",
       "right_sidebar": "Barra lateral direita",
-      "user_profiles": "Perfis de usuário"
+      "user_profiles": "Perfis de usuário",
+      "dynamic_line": "Linha central",
+      "menu": "Menu de contexto"
     },
     "roles": {
       "button": "botão",
@@ -519,14 +620,17 @@
       "selector": "seletor",
       "progress": "progresso",
       "info": "informação",
-      "section": "seção"
+      "section": "seção",
+      "action": "ação"
     },
     "hints": {
       "open": "A para abrir.",
       "open_user_page": "A para abrir a página do usuário.",
       "grid_empty": "Use o direcional para ir para outro espaço.",
       "game_launchable": "A para iniciar. X para opções. Y para mover. ZL ou ZR para mudar de página.",
-      "game_blocked": "A para mostrar o motivo do bloqueio."
+      "game_blocked": "A para mostrar o motivo do bloqueio.",
+      "recently_played_widget": "A para iniciar o jogo recente. Mais para opções do widget. Y para mover.",
+      "widget": "Mais para opções do widget. Y para mover. Menos para trocar a visualização."
     },
     "actions": {
       "edit_mode": "Direcional para escolher a nova posição. Y para colocar. B para cancelar.",
@@ -535,7 +639,9 @@
       "game_launchable": "A para iniciar. X para opções. Y para mover. ZL ou ZR para mudar de página.",
       "settings": "Cima e baixo para escolher categoria. A ou direita para entrar. B para fechar.",
       "themes": "Cima e baixo para navegar. A para escolher. B para fechar.",
-      "dialog": "Esquerda e direita mudam a escolha. A confirma. B cancela."
+      "dialog": "Esquerda e direita mudam a escolha. A confirma. B cancela.",
+      "context_menu": "Cima e baixo para escolher. A para confirmar. B para fechar.",
+      "edit_mode_folder": "Direcional para escolher a posição. A para colocar. B para sair da pasta mantendo o software selecionado."
     },
     "settings": {
       "tab_prefix": "Aba",
@@ -553,7 +659,8 @@
     },
     "position": {
       "row": "linha",
-      "column": "coluna"
+      "column": "coluna",
+      "item": "item"
     },
     "move_mode": {
       "enter": "Movendo jogo: ",
@@ -563,7 +670,11 @@
     "grid": {
       "empty_slot": "Espaço vazio"
     },
-    "user_profile": "Perfil de usuário"
+    "user_profile": "Perfil de usuário",
+    "layout": {
+      "dynamic_line": "Modo de linha dinâmica",
+      "grid": "Modo de grade"
+    }
   },
   "tutorial": {
     "accessibility": {
@@ -728,6 +839,116 @@
     "delete_software": "Apagar o software?",
     "delete_software_body": "Isto remove o software do console. Não há como desfazer por aqui — o software terá de ser baixado ou instalado de novo.",
     "delete_software_done": "O software foi apagado.",
-    "delete_software_failed": "Não foi possível apagar o software."
+    "delete_software_failed": "Não foi possível apagar o software.",
+    "delete_software_files": "Estas pastas do cartão SD também serão removidas:",
+    "non_game_options_body_folder": "Homebrew e ports não têm detalhes de jogo, arte ou mods para gerenciar. Podem ser guardados em uma pasta ou removidos."
+  },
+  "folder": {
+    "create": "Criar pasta",
+    "create_hint": "A para criar uma pasta.",
+    "open": "Abrir",
+    "open_title": "Abrir pasta",
+    "open_hint": "A para abrir. Mais para opções da pasta. Y para mover.",
+    "options": "Opções da pasta",
+    "rename": "Renomear",
+    "rename_title": "Nome da pasta",
+    "delete": "Excluir pasta",
+    "delete_desc": "Os jogos dentro dela voltam para o menu HOME.",
+    "name_guide": "Digite um nome para a pasta",
+    "default_name": "Pasta",
+    "rename_guide": "Renomear pasta",
+    "choose": "Escolha uma pasta",
+    "add_game": "Adicionar à pasta",
+    "add_game_desc": "Escolha uma pasta para este software.",
+    "remove_game": "Remover da pasta",
+    "remove_game_desc": "Move este software de volta para o menu HOME.",
+    "no_folder_title": "Nenhuma pasta",
+    "no_folder": "Crie uma pasta primeiro.",
+    "error_title": "Erro de pasta",
+    "save_error": "Não foi possível salvar a alteração da pasta.",
+    "keyboard_error": "Não foi possível abrir o teclado.",
+    "place_on_home": "Escolha um espaço vazio e pressione A",
+    "place_hint": "A para colocar o software aqui. B para cancelar.",
+    "added_confirmation": "Software adicionado à pasta: ",
+    "leave_while_moving": "Sair da pasta",
+    "appearance": "Aparência",
+    "management": "Gerenciamento",
+    "color": "Cor da pasta",
+    "color_desc": "Escolha a cor usada por esta pasta.",
+    "color_blue": "Azul",
+    "color_green": "Verde",
+    "color_yellow": "Amarelo",
+    "color_orange": "Laranja",
+    "color_red": "Vermelho",
+    "color_pink": "Rosa",
+    "color_purple": "Roxo",
+    "color_gray": "Cinza",
+    "size": "Tamanho da pasta",
+    "size_desc": "Altera o tamanho e a quantidade de ícones mostrados dentro desta pasta.",
+    "size_small": "Pequeno",
+    "size_medium": "Médio",
+    "size_large": "Grande",
+    "items": "itens",
+    "move": "Mover",
+    "page_added": "Página adicionada"
+  },
+  "add": {
+    "title": "Adicionar"
+  },
+  "widget": {
+    "title": "Widget",
+    "create": "Criar novo widget",
+    "clock": "Relógio",
+    "recently_played": "Jogados recentemente",
+    "recent_playtime": "Tempo de jogo recente",
+    "random_screenshot": "Captura aleatória",
+    "image_pin": "Imagem fixada",
+    "batteries": "Baterias",
+    "choose_type": "Escolha o widget",
+    "choose_size": "Escolha o tamanho",
+    "choose_image": "Escolha a imagem",
+    "resize": "Redimensionar",
+    "delete": "Excluir widget",
+    "no_space": "Sem espaço",
+    "no_recent_game": "Nenhum jogo recente",
+    "last_played": "Jogado por último",
+    "played_recently": "Jogado recentemente",
+    "no_playtime": "Sem tempo de jogo recente",
+    "error_title": "Erro de widget",
+    "save_error": "Não foi possível salvar a alteração do widget.",
+    "no_assets_title": "Nenhuma imagem de widget",
+    "no_assets_desc": "Adicione arquivos PNG, JPG, WebP ou GIF em sdmc:/config/SwitchU/widgets/assets/ ou na pasta widgets do tema ativo."
+  },
+  "controller_test": {
+    "title": "Teste de controle",
+    "opened": "Teste de controle. Incline um analógico por um instante para selecioná-lo. Segure B por um segundo ou pressione HOME para fechar.",
+    "close_hint": "Segure B por 1 s ou pressione HOME para fechar",
+    "joysticks": "Analógicos",
+    "buttons": "Botões",
+    "touchscreen": "Tela sensível ao toque",
+    "touch_hint": "Toque ou clique e arraste aqui",
+    "touch_fullscreen_opened": "Teste de toque em tela cheia. Pressione X para voltar. Segure B por um segundo ou pressione HOME para fechar.",
+    "touch_fullscreen_hint": "Teste de toque · X: voltar · Segure B 1 s ou HOME: fechar",
+    "tilt_to_select": "Incline um analógico por um instante para selecioná-lo",
+    "left_stick": "Analógico esquerdo",
+    "right_stick": "Analógico direito",
+    "left_selected": "Analógico esquerdo selecionado",
+    "right_selected": "Analógico direito selecionado",
+    "direction": "Direção",
+    "center": "Centro",
+    "up": "Cima",
+    "down": "Baixo",
+    "left": "Esquerda",
+    "right": "Direita"
+  },
+  "text_entry": {
+    "erase": "Apagar",
+    "full": "Tamanho máximo atingido",
+    "hint": "A: digitar   X: apagar   Y: maiúscula   L/R: símbolos   Mais: confirmar   B: cancelar",
+    "letters": "ABC",
+    "opened": "Teclado na tela. Direcional para escolher uma tecla, A para digitar, X para apagar, Mais para confirmar, B para cancelar.",
+    "shift": "Maiúscula",
+    "space": "Espaço",
+    "symbols": "?12#"
   }
 }
