@@ -37,9 +37,30 @@
 - Games launch through a daemon that replaces qlaunch, so the menu is a real
   home menu: HOME returns to it, a suspended game resumes, and the console
   sleeps, restarts and shuts down from it.
-- Sorting by name, by recently played and by install order. The menu remembers
-  the page you were on, per title rather than per page number, so it lands in
-  the right place after the grid is rebuilt at a different width.
+- **A single-row view** on **−**: one large icon with its neighbours either
+  side, the game's hero art filling the screen behind it and its logo above the
+  row. It is a carousel — it wraps in both directions, skips empty slots, and
+  repeats while ZL, ZR or the d-pad is held.
+- Sorting on **R** by name, by recently played and by install order. The grid
+  remembers the page you were on per title rather than per page number, so it
+  lands in the right place after being rebuilt at a different width. The
+  single-row view keeps your own arrangement instead, so R does nothing there.
+
+### Folders
+
+- Group software into folders with a name, a colour and their own pages. Games
+  and homebrew mix freely.
+- The tile shows up to nine of the icons inside it, on clear glass, in a grid
+  that follows how many members there are.
+- **+** on a title files it into a folder. Inside an open folder, **R** takes
+  the focused title straight back out, and **↑** reaches the folder's name to
+  rename it.
+
+### Widgets
+
+- Tiles that are not software: a clock, console and Joy-Con battery, the last
+  game you played, recent playtime, a pinned image and a random screenshot.
+- 1x1 and 2x1 sizes, placed and moved like any other tile.
 
 ### Per-game panel
 
@@ -47,12 +68,24 @@ Pressing **+** on a game opens its panel:
 
 - **Details** — a dossier with the description, genre, developer, release date
   and reviews, fetched from a metadata service. Only for native applications;
-  homebrew and ports are offered removal instead of an empty dossier.
+  homebrew and ports get a smaller menu instead of an empty dossier.
 - **Gallery** — covers and backgrounds from SteamGridDB, picked on the console
   and stored per game, independent of the theme.
 - **Mods** — enables, disables and removes LayeredFS content under
   `atmosphere/contents/<titleId>`, one mod at a time rather than treating the
   whole folder as opaque.
+- **Delete software** — removes the title *and* what it left on the card:
+  `atmosphere/contents`, the older `atmosphere/titles`, the SX OS layout and the
+  launcher's own artwork caches. The folders are named before you confirm, and a
+  progress bar runs while they go. A port installed by hand is removed too,
+  which the system's own uninstall leaves behind.
+
+### Artwork
+
+- SteamGridDB heroes and logos behind the menu, scanned for the whole library or
+  chosen title by title.
+- **No API key needed.** Searches, heroes and grids go through this fork's own
+  service. A personal key is still accepted and additionally unlocks logos.
 
 ### Themes
 
@@ -64,6 +97,19 @@ Pressing **+** on a game opens its panel:
 - The catalogue says what each theme costs to download and what it occupies once
   unpacked, per theme and as a total, and marks the ones already installed.
 - L and R turn the page anywhere in the catalogue.
+- **Options** tunes the look directly: glass sharpness, background blur,
+  background animation speed, grid columns and rows, menu music and volumes.
+
+### Settings
+
+- **System** — SwitchU's own language, firmware and Atmosphère versions, EmuNAND
+  state, nickname, timezone and clock sync.
+- **Internet**, **Bluetooth** (real pairing and connection, not just a saved
+  flag), **Audio**, **Display**, **Storage**, **Sleep** and **Controllers**,
+  including a **controller test** for sticks, buttons and the touch screen.
+- An **on-screen keyboard** for every text field, with accented characters, a
+  symbols page and touch. The system keyboard cannot be used from a menu that
+  runs as a library applet, so SwitchU draws its own.
 
 ### Updating itself
 
@@ -82,7 +128,8 @@ Pressing **+** on a game opens its panel:
 - Voice guidance through eSpeak NG, reading the focused item, its role and its
   position, with a configurable speech rate.
 - Eight languages: English, Portuguese, Spanish, French, German, Italian, Dutch
-  and Russian.
+  and Russian. Changing SwitchU's language applies immediately, without a
+  restart, and is separate from the console's own setting.
 
 ## Screenshots
 

@@ -1,3 +1,70 @@
+# SwitchU 2.3.1
+
+## English
+
+A hotfix over 2.3.0. Taking a game out of a folder is one button now, changing
+SwitchU's language really does apply without a restart, and the README describes
+what the launcher has become.
+
+### Folders
+
+- **R takes the focused title out of the open folder**, with no menu and no
+  confirmation. It used to mean opening the options with **+**, choosing a row
+  and confirming, after which the options stayed on screen over software that
+  was no longer there.
+- The row that did it is gone from the options and from the game dossier. Both
+  now only offer **Add to folder**, which is the half that still needs a menu.
+- R was free on that screen: sorting is not available inside a folder, so the
+  button was advertised and did nothing. Its hint now says what it does.
+
+### Language
+
+- Changing **System > SwitchU Language** now updates the widget tiles and the
+  SwitchU screen immediately. 2.3.0 claimed this and did not do it: the fix went
+  into a copy of the handler that is compiled out, so the labels kept the old
+  language until something else happened to rebuild the home screen.
+
+### Repository
+
+- The README lists everything the launcher actually has, including folders,
+  widgets, the single-row view, the on-screen keyboard, artwork without an API
+  key and the delete that also removes what a title left on the SD card. It had
+  not been updated for several releases.
+- A MAC address was visible in one of the 2.3.0 screenshots. It has been removed
+  from the image and from this repository's history.
+
+## Português
+
+Uma correção sobre a 2.3.0. Tirar um jogo de uma pasta agora é um botão só,
+trocar o idioma do SwitchU realmente vale sem reiniciar, e o README descreve o
+que o launcher se tornou.
+
+### Pastas
+
+- **R tira o título em foco da pasta aberta**, sem menu e sem confirmação. Antes
+  era abrir as opções no **+**, escolher uma linha e confirmar, e as opções
+  continuavam na tela sobre um software que não estava mais ali.
+- A linha que fazia isso saiu das opções e da ficha do jogo. As duas agora só
+  oferecem **Adicionar à pasta**, que é a metade que ainda precisa de um menu.
+- O R estava livre naquela tela: ordenar não funciona dentro de uma pasta, então
+  o botão era anunciado e não fazia nada. A dica agora diz o que ele faz.
+
+### Idioma
+
+- Trocar **Sistema > Idioma do SwitchU** agora atualiza os widgets e a tela
+  SwitchU na hora. A 2.3.0 prometia isso e não fazia: a correção foi parar numa
+  cópia do handler que não é compilada, então os rótulos ficavam no idioma
+  antigo até algo reconstruir a tela inicial por outro motivo.
+
+### Repositório
+
+- O README lista tudo o que o launcher tem de fato, incluindo pastas, widgets, a
+  visualização de linha única, o teclado na tela, artes sem chave de API e a
+  exclusão que também remove o que um título deixou no cartão SD. Ele estava
+  desatualizado havia várias versões.
+- Um endereço MAC aparecia em uma das capturas da 2.3.0. Ele foi removido da
+  imagem e do histórico deste repositório.
+
 # SwitchU 2.3.0
 
 ## English
