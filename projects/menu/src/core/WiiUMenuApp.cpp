@@ -6414,7 +6414,10 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             // row rearranged itself around the cursor for no gain. Advertising
             // a button that now does nothing there would be worse than not
             // having it.
-            if (m_appLayoutMode != AppLayoutMode::DynamicLine)
+            if (m_openFolderId != 0)
+                add(buttonGlyph(nxui::Button::R),
+                    i18n.tr("folder.remove_game", "Remove from folder"));
+            else if (m_appLayoutMode != AppLayoutMode::DynamicLine)
                 add(buttonGlyph(nxui::Button::R), sortModeLabel());
 #ifdef SWITCHU_MENU
             // The options menu was reachable and unannounced: every other
