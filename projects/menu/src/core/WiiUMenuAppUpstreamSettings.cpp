@@ -2,6 +2,7 @@
 
 #include <switchu/title_footprint.hpp>
 #include "themeshop/ThemePackageInstaller.hpp"
+#include "themeshop/ThemeHttp.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 
@@ -626,6 +627,28 @@ void WiiUMenuApp::openSteamGridDbPicker(GameOptionsScreen::ArtworkKind kind,
         });
 }
 
+void WiiUMenuApp::openImagePinSteamGridDbPicker(int targetSlot, const nxui::Rect& anchor,
+                                                switchu::widgets::WidgetSize size,
+                                                const std::string& requestedQuery) {
+    if (m_steamGridDbBrowseFuture.valid() || m_steamGridDbApplyFuture.valid() || m_steamGridDb.running())
+        return;
+    if (requestedQuery.empty()) return;
+    m_imagePinTargetSlot = targetSlot;
+    m_imagePinSize = size;
+    m_imagePinAnchor = anchor;
+    const std::string query = requestedQuery;
+    const std::uint64_t pickerId = switchu::widgets::widgetTitleId(
+        static_cast<std::uint32_t>(targetSlot + 1));
+    m_steamGridDbPicker->showLoading(pickerId, query, query,
+                                     SteamGridDbManager::ArtworkKind::Hero);
+    focusManager().setFocus(m_steamGridDbPicker.get());
+    m_steamGridDbBrowseFuture = std::async(std::launch::async,
+        [apiKey = m_config.steamGridDbApiKey, pickerId, query]() {
+            return SteamGridDbManager::browse(apiKey, pickerId, query, query,
+                                              SteamGridDbManager::ArtworkKind::Hero);
+        });
+}
+
 void WiiUMenuApp::editSteamGridDbPickerQuery() {
     if (!m_steamGridDbPicker || !m_steamGridDbPicker->isActive()) return;
     auto& i18n = nxui::I18n::instance();
@@ -634,11 +657,54 @@ void WiiUMenuApp::editSteamGridDbPickerQuery() {
                      "SteamGridDB", m_steamGridDbPicker->query(), 128, false,
                      [this, kind](const std::string& typed) {
         if (typed.empty()) return;
+        if (m_imagePinTargetSlot >= 0) {
+            openImagePinSteamGridDbPicker(m_imagePinTargetSlot, m_imagePinAnchor,
+                                          m_imagePinSize, typed);
+            return;
+        }
         const auto mappedKind = kind == SteamGridDbManager::ArtworkKind::Logo
             ? GameOptionsScreen::ArtworkKind::Logo
             : kind == SteamGridDbManager::ArtworkKind::Icon
                 ? GameOptionsScreen::ArtworkKind::Icon : GameOptionsScreen::ArtworkKind::Hero;
         openSteamGridDbPicker(mappedKind, typed);
+    });
+}
+
+void WiiUMenuApp::applyImagePinSteamGridDbCandidate(
+    const SteamGridDbManager::BrowseResult&,
+    const SteamGridDbManager::Candidate& candidate) {
+    if (m_steamGridDbApplyFuture.valid() || candidate.url.empty()) return;
+    auto progress = std::make_shared<SteamGridDbApplyProgressShared>();
+    progress->message = "Downloading pin image...";
+    m_steamGridDbApplyProgress = progress;
+    m_steamGridDbApplyProgressUiRevision = 0;
+    if (m_progressDialog) {
+        m_progressDialog->setTheme(&m_theme);
+        m_progressDialog->show("Downloading image pin", progress->message, 0.f);
+        focusManager().setFocus(m_progressDialog.get());
+    }
+    m_imagePinApplyPending = true;
+    const int targetSlot = m_imagePinTargetSlot;
+    const auto size = m_imagePinSize;
+    m_steamGridDbApplyFuture = std::async(std::launch::async, [candidate, progress, targetSlot, size]() {
+        SteamGridDbManager::ApplyResult result;
+        result.titleId = static_cast<std::uint64_t>(targetSlot);
+        try {
+            std::error_code ec;
+            std::filesystem::create_directories(switchu::widgets::WidgetStore::kAssetRoot, ec);
+            const std::string filename = "steamgriddb_pin_" + std::to_string(candidate.id) + ".png";
+            const std::string fullPath = std::string(switchu::widgets::WidgetStore::kAssetRoot) + "/" + filename;
+            auto bytes = themeshop::http::getBytes(candidate.url);
+            if (bytes.empty()) throw std::runtime_error("Empty image data");
+            std::ofstream out(fullPath, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+            if (!out.good()) throw std::runtime_error("Could not save image file");
+            result.success = true;
+            result.message = filename;
+        } catch (const std::exception& ex) {
+            result.message = ex.what();
+        }
+        return result;
     });
 }
 
@@ -702,6 +768,22 @@ void WiiUMenuApp::syncSteamGridDb() {
         && m_steamGridDbApplyFuture.wait_for(std::chrono::seconds(0))
             == std::future_status::ready) {
         const auto result = m_steamGridDbApplyFuture.get();
+        if (m_imagePinTargetSlot >= 0) {
+            const int targetSlot = m_imagePinTargetSlot;
+            const auto size = m_imagePinSize;
+            m_imagePinTargetSlot = -1;
+            m_imagePinApplyPending = false;
+            if (m_progressDialog) m_progressDialog->hide();
+            if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
+                m_steamGridDbPicker->hide();
+            m_steamGridDbApplyProgress.reset();
+            m_steamGridDbApplyProgressUiRevision = 0;
+            if (result.success) {
+                createWidget(targetSlot, switchu::widgets::WidgetType::ImagePin,
+                             size, "widget:" + result.message);
+            }
+            return;
+        }
         if (result.success) {
             // Wide tiles and recent widgets can still be referenced by frames
             // already submitted to deko3d. Drain them before destroying their

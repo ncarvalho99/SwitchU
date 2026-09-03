@@ -82,6 +82,7 @@ public:
     const RecentActivity& recentActivity() const { return m_recent; }
     void recordLaunch(std::uint64_t titleId, std::string title,
                       std::int64_t launchedAt);
+    void clearRecentActivity() { m_recent = {}; }
     void updateRecentDuration(std::int64_t now);
     void setTotalSeconds(std::uint64_t seconds) { m_recent.totalSeconds = seconds; }
 

@@ -241,6 +241,8 @@ private:
 #endif
     void renameFolder(std::uint32_t folderId);
     void showFolderContextMenu(std::uint32_t folderId);
+    void showGamePortPlatformMenu(std::uint64_t titleId, const std::string& title);
+    void removeGamePort(std::uint64_t titleId);
     bool saveFoldersOrReport(const char* operation);
     // Text entry is asynchronous: the on-screen keyboard runs for as many frames
     // as the player needs, so callers hand over what to do with the result
@@ -253,10 +255,15 @@ private:
     void editSteamGridDbApiKey();
     void startSteamGridDbScrape();
     void openSteamGridDbPicker(GameOptionsScreen::ArtworkKind kind,
-                               const std::string& query = std::string());
+                                const std::string& query = std::string());
+    void openImagePinSteamGridDbPicker(int targetSlot, const nxui::Rect& anchor,
+                                       switchu::widgets::WidgetSize size,
+                                       const std::string& query = std::string());
     void editSteamGridDbPickerQuery();
     void applySteamGridDbCandidate(const SteamGridDbManager::BrowseResult& browse,
-                                   const SteamGridDbManager::Candidate& candidate);
+                                    const SteamGridDbManager::Candidate& candidate);
+    void applyImagePinSteamGridDbCandidate(const SteamGridDbManager::BrowseResult& browse,
+                                           const SteamGridDbManager::Candidate& candidate);
     void syncSteamGridDb();
     void showFocusedSteamGridDbArtwork(bool forceReload = false);
     void applyTheme();
@@ -458,6 +465,7 @@ private:
     nxui::Texture m_batteryConsoleTex;
     nxui::Texture m_batteryJoyconLeftTex;
     nxui::Texture m_batteryJoyconRightTex;
+    nxui::Texture m_batteryControllerTex;
     nxui::AnimatedFloat m_arrowCenterY;
     bool m_arrowCenterInit = false;
 
@@ -645,6 +653,10 @@ private:
     int m_backgroundImageRetryAttempts = 0;
     bool m_forceThemeResourceReload   = false;
     std::uint64_t m_gameOptionsTitleId = 0;
+    int m_imagePinTargetSlot = -1;
+    bool m_imagePinApplyPending = false;
+    switchu::widgets::WidgetSize m_imagePinSize;
+    nxui::Rect m_imagePinAnchor{0.f, 0.f, 0.f, 0.f};
     std::uint32_t m_folderOptionsId = 0;
     nxui::Widget* m_contextMenuReturnFocus = nullptr;
     nxui::Widget* m_dialogReturnFocus = nullptr;

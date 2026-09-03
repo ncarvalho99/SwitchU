@@ -849,7 +849,7 @@ void GlossyIcon::onContentRender(nxui::Renderer& ren) {
                     nxui::Texture* controllerIcon = controller.label == "L"
                         ? m_batteryJoyconLeftIcon
                         : (controller.label == "R"
-                            ? m_batteryJoyconRightIcon : nullptr);
+                            ? m_batteryJoyconRightIcon : m_batteryControllerIcon);
                     drawBatteryRing(ren, center, radius, controller.percent,
                         controller.charging, false, controllerIcon,
                         m_font, m_opacity);

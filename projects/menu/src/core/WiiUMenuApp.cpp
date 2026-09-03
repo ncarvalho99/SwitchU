@@ -1193,7 +1193,9 @@ void WiiUMenuApp::loadStaticTextures() {
     m_batteryJoyconLeftTex.loadFromFile(app().gpu(), app().renderer(),
                                         std::string(SD_ASSETS) + "/icons/widget_battery_joycon_left.png");
     m_batteryJoyconRightTex.loadFromFile(app().gpu(), app().renderer(),
-                                         std::string(SD_ASSETS) + "/icons/widget_battery_joycon_right.png");
+                                          std::string(SD_ASSETS) + "/icons/widget_battery_joycon_right.png");
+    m_batteryControllerTex.loadFromFile(app().gpu(), app().renderer(),
+                                         std::string(SD_ASSETS) + "/icons/widget_battery_controller.png");
 }
 
 void WiiUMenuApp::buildUserAvatarBar(bool loadImmediately) {
@@ -2598,6 +2600,12 @@ std::string WiiUMenuApp::widgetDurationLabel(std::uint64_t seconds) const {
 }
 
 void WiiUMenuApp::refreshRecentActivityDuration() {
+    const std::uint64_t titleId = m_widgetStore.recentActivity().titleId;
+    if (titleId != 0 && !isNativeApplicationId(titleId) && !m_config.isGamePort(titleId)) {
+        m_widgetStore.clearRecentActivity();
+        m_widgetStore.save();
+        return;
+    }
     m_widgetStore.updateRecentDuration(
         static_cast<std::int64_t>(std::time(nullptr)));
 #ifdef SWITCHU_MENU
@@ -3577,19 +3585,18 @@ void WiiUMenuApp::showWidgetAssetMenu(int targetSlot, const nxui::Rect& anchor,
                                       switchu::widgets::WidgetSize size) {
     auto assets = listWidgetAssets(false);
     auto& i18n = nxui::I18n::instance();
-    if (assets.empty()) {
-        nxui::Widget* returnFocus = m_contextMenuReturnFocus;
-        m_contextMenu->hide();
-        m_dialogReturnFocus = returnFocus;
-        m_dialog->show(i18n.tr("widget.no_assets_title", "No widget images"),
-            i18n.tr("widget.no_assets_desc",
-                "Add PNG, JPG, WebP or GIF files to sdmc:/config/SwitchU/widgets/assets/ or to the active theme's widgets folder."),
-            {{i18n.tr("button.ok", "OK"), {}, true}});
-        focusManager().setFocus(m_dialog.get());
-        return;
-    }
     std::vector<ContextMenu::Item> items;
-    items.reserve(assets.size());
+    items.reserve(assets.size() + 1);
+    items.push_back({"Search SteamGridDB...", [this, targetSlot, anchor, size]() {
+        requestTextEntry("Search SteamGridDB", "Image Pin", "", 128, false,
+                         [this, targetSlot, anchor, size](const std::string& query) {
+            if (!query.empty())
+                openImagePinSteamGridDbPicker(targetSlot, anchor, size, query);
+            else
+                showWidgetAssetMenu(targetSlot, anchor,
+                                    switchu::widgets::WidgetType::ImagePin, size);
+        });
+    }});
     for (auto& [label, reference] : assets) {
         items.push_back({label, [this, targetSlot, type, size, reference]() {
             createWidget(targetSlot, type, size, reference);
@@ -3911,6 +3918,13 @@ void WiiUMenuApp::closeFolder(bool preserveEditMode) {
 void WiiUMenuApp::commitLaunchRecency(std::uint64_t titleId, const std::string& title) {
     if (titleId == 0)
         return;
+    if (!isNativeApplicationId(titleId) && !m_config.isGamePort(titleId)) {
+        if (m_widgetStore.recentActivity().titleId == titleId) {
+            m_widgetStore.clearRecentActivity();
+            m_widgetStore.save();
+        }
+        return;
+    }
     m_widgetStore.recordLaunch(titleId, title,
                                static_cast<std::int64_t>(std::time(nullptr)));
     // WidgetStore::save() commits the SD card itself, which matters because the
@@ -4145,8 +4159,9 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
         icon->setNotLaunchable(true);
         icon->setFocusable(true);
         icon->setBatteryIconTextures(&m_batteryConsoleTex,
-                                     &m_batteryJoyconLeftTex,
-                                     &m_batteryJoyconRightTex);
+                                      &m_batteryJoyconLeftTex,
+                                      &m_batteryJoyconRightTex,
+                                      &m_batteryControllerTex);
         icon->setConsoleBattery(m_consoleBatteryPercent, m_consoleBatteryCharging);
         icon->setWidgetHeader(widgetTypeLabel(entry.widgetType));
 
@@ -4931,6 +4946,15 @@ void WiiUMenuApp::buildGrid() {
     m_steamGridDbPicker->setSmallFont(&m_fontSmall);
     m_steamGridDbPicker->setTheme(&m_theme);
     m_steamGridDbPicker->onClosed([this]() {
+        if (m_imagePinTargetSlot >= 0 && !m_imagePinApplyPending) {
+            const int targetSlot = m_imagePinTargetSlot;
+            const auto anchor = m_imagePinAnchor;
+            const auto size = m_imagePinSize;
+            m_imagePinTargetSlot = -1;
+            showWidgetAssetMenu(targetSlot, anchor,
+                                switchu::widgets::WidgetType::ImagePin, size);
+            return;
+        }
         if (m_gameOptions && m_gameOptions->isActive())
             focusManager().setFocus(m_gameOptions.get());
     });
@@ -4938,7 +4962,10 @@ void WiiUMenuApp::buildGrid() {
     m_steamGridDbPicker->onApply(
         [this](const SteamGridDbManager::BrowseResult& browse,
                const SteamGridDbManager::Candidate& candidate) {
-            applySteamGridDbCandidate(browse, candidate);
+            if (m_imagePinTargetSlot >= 0)
+                applyImagePinSteamGridDbCandidate(browse, candidate);
+            else
+                applySteamGridDbCandidate(browse, candidate);
         });
     m_overlayLayer->addChild(m_steamGridDbPicker);
     createFolderOptions();

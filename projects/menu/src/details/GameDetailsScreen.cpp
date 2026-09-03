@@ -55,9 +55,12 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
                                     std::vector<std::uint8_t> activeCover,
                                     nxui::Texture* liveCover,
                                     std::string displayVersion, std::string modSummary,
-                                    std::string playTime) {
+                                    std::string playTime, std::string metadataPlatform,
+                                    bool isGamePort) {
     m_titleId = titleId;
     m_title = std::move(title);
+    m_metadataPlatform = std::move(metadataPlatform);
+    m_isGamePort = isGamePort;
     m_displayVersion = std::move(displayVersion);
     m_modSummary = std::move(modSummary);
     m_playTime = std::move(playTime);
@@ -78,12 +81,9 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
     // facts, while the custom content owns every visible interaction.
     m_tabIndex = 0;
     m_focusArea = FocusArea::Content;
-    // The grid keeps non-retail titles out of this screen entirely, so this is
-    // a guard rather than the usual path: should one ever arrive, it must not
-    // spend a request that can only come back empty.
-    m_localOnly = !isNativeApplicationId(m_titleId);
+    m_localOnly = m_metadataPlatform.empty();
     if (m_pool && !m_localOnly)
-        m_client.load(*m_pool, m_title);
+        m_client.load(*m_pool, m_title, m_metadataPlatform);
 }
 
 void GameDetailsScreen::buildTabs() {
@@ -279,7 +279,7 @@ bool GameDetailsScreen::handleCustomPressA() {
     // does not have stays absent, and the service remembers that answer for a
     // day, so retrying it would spend a request to be told the same thing.
     if (!m_localOnly && m_snapshot.phase == GameMetadataClient::Phase::Failed) {
-        if (m_pool) m_client.load(*m_pool, m_title);
+        if (m_pool) m_client.load(*m_pool, m_title, m_metadataPlatform);
         if (m_activateSfxCb) m_activateSfxCb();
         return true;
     }
@@ -330,7 +330,8 @@ bool GameDetailsScreen::handleCustomNavDown() {
         ++m_summaryScrollLine;
         if (m_navSfxCb) m_navSfxCb();
     } else if (m_focusZone == FocusZone::Actions) {
-        m_selectedAction = std::min(4, m_selectedAction + 1);
+        const int maxAction = m_isGamePort ? 5 : 4;
+        m_selectedAction = std::min(maxAction, m_selectedAction + 1);
         if (m_navSfxCb) m_navSfxCb();
     }
     return true;
@@ -385,9 +386,16 @@ void GameDetailsScreen::activateAction() {
         case 1: if (m_showArtworkCb) m_showArtworkCb(); break;
         case 2: if (m_restoreArtworkCb) m_restoreArtworkCb(); break;
         case 3: if (m_manageModsCb) m_manageModsCb(); break;
-        // Filing into a folder is X on the home screen now, so the row is gone
-        // and delete moves up into its place.
-        case 4: if (m_deleteSoftwareCb) m_deleteSoftwareCb(); break;
+        case 4:
+            if (m_isGamePort) {
+                if (m_removeGamePortCb) m_removeGamePortCb();
+            } else {
+                if (m_deleteSoftwareCb) m_deleteSoftwareCb();
+            }
+            break;
+        case 5:
+            if (m_isGamePort && m_deleteSoftwareCb) m_deleteSoftwareCb();
+            break;
     }
 }
 
@@ -450,23 +458,28 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
                      {cover.x + 18.f, cover.y + cover.height * 0.48f}, m_smallFont, subtle, 0.68f);
     }
 
-    const std::string actions[] = {
+    std::vector<std::string> actions = {
         i18n.tr("dialog.icon_options_gallery", "Gallery"),
         i18n.tr("dialog.customize_active_art", "Active artwork"),
         i18n.tr("dialog.customize_restore_default", "Restore default"),
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
-        i18n.tr("dialog.icon_options_delete", "Delete software"),
     };
-    for (int i = 0; i < 5; ++i) {
+    if (m_isGamePort)
+        actions.push_back("Unmark port");
+    actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
+    for (int i = 0; i < (int)actions.size(); ++i) {
         const nxui::Rect action = {rail.x + 18.f, rail.y + 244.f + i * 36.f, rail.width - 36.f, 32.f};
-        const bool selected = m_focusZone == FocusZone::Actions && i == m_selectedAction;
-        ren.drawRoundedRect(action, m_theme->panelBase.withAlpha((selected ? 0.20f : 0.07f) * opacity), 11.f);
-        ren.drawRoundedRectOutline(action, (selected ? m_theme->cursorNormal : m_theme->panelBorder)
-                                  .withAlpha((selected ? 0.76f : 0.14f) * opacity), 11.f,
-                                  selected ? 2.f : 1.f);
-        ren.drawText(ellipsize(m_smallFont, actions[i], action.width - 26.f, 0.68f),
+        const bool selected = m_focusZone == FocusZone::Actions && m_selectedAction == i;
+        if (selected) {
+            ren.drawRoundedRect(action, m_theme->panelBase.withAlpha(0.20f * opacity), 11.f);
+            ren.drawRoundedRectOutline(action, m_theme->cursorNormal.withAlpha(0.76f * opacity), 11.f, 2.f);
+            m_focusCursor.moveTo(action, 10.f, 0.08f);
+        } else {
+            ren.drawRoundedRect(action, m_theme->panelBase.withAlpha(0.07f * opacity), 11.f);
+            ren.drawRoundedRectOutline(action, m_theme->panelBorder.withAlpha(0.14f * opacity), 11.f, 1.f);
+        }
+        ren.drawText(ellipsize(m_smallFont, actions[(size_t)i], action.width - 26.f, 0.68f),
                      {action.x + 13.f, action.y + 9.f}, m_smallFont, selected ? primary : secondary, 0.64f);
-        if (selected) m_focusCursor.moveTo(action, 10.f, 0.08f);
     }
     const float railX = rail.x + 22.f;
     const float railW = rail.width - 44.f;

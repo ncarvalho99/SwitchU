@@ -958,6 +958,10 @@ void WiiUMenuApp::createGameDetails() {
         if (!m_gameDetails) return;
         showFolderAssignment(m_gameDetails->titleId(), m_gameDetails->title());
     });
+    m_gameDetails->onRemoveGamePort([this]() {
+        if (!m_gameDetails) return;
+        removeGamePort(m_gameDetails->titleId());
+    });
     m_gameDetails->onDeleteSoftware([this]() {
         if (!m_gameDetails) return;
         m_dialogReturnFocus = m_gameDetails.get();

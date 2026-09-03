@@ -41,11 +41,11 @@ public:
 
     static constexpr const char* kServiceUrl = "https://switchu-api.nclabs.dev";
 
-    void load(nxui::ThreadPool& pool, std::string title);
+    void load(nxui::ThreadPool& pool, std::string title, std::string platform);
     Snapshot snapshot() const;
 
 private:
-    static Snapshot fetch(std::string title, std::uint64_t revision);
+    static Snapshot fetch(std::string title, std::string platform, std::uint64_t revision);
 
     mutable std::mutex m_mutex;
     Snapshot m_snapshot;

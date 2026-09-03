@@ -9,6 +9,19 @@
 
 namespace {
 
+bool isGamePortPlatform(const std::string& platform) {
+    static constexpr const char* kPlatforms[] = {
+        "nintendo-switch", "pc", "playstation-5", "playstation-4", "xbox-series-x",
+        "xbox-one", "xbox-360", "playstation-3", "playstation-2", "playstation",
+        "gamecube", "wii", "wii-u", "nintendo-64", "super-nintendo", "nes",
+        "game-boy-advance", "nintendo-ds", "nintendo-3ds", "psp", "playstation-vita",
+        "dreamcast", "sega-genesis",
+    };
+    for (const char* candidate : kPlatforms)
+        if (platform == candidate) return true;
+    return false;
+}
+
 template <typename T>
 void readJsonOpt(const nlohmann::json& j, const char* key, T& out) {
     auto it = j.find(key);
@@ -87,6 +100,15 @@ bool AppConfig::load() {
                                     v.get<std::uint64_t>());
         }
     }
+    gamePortPlatforms.clear();
+    if (auto it = j.find("gamePorts"); it != j.end() && it->is_object()) {
+        for (auto& [k, v] : it->items()) {
+            if (!v.is_string()) continue;
+            const std::string platform = v.get<std::string>();
+            if (!isGamePortPlatform(platform)) continue;
+            gamePortPlatforms.emplace_back(std::strtoull(k.c_str(), nullptr, 16), platform);
+        }
+    }
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
     if (sfxVolume   < 0.f) sfxVolume   = 0.f;
@@ -148,6 +170,15 @@ bool AppConfig::save() const {
             opened[key] = e.second;
         }
         j["lastOpened"] = std::move(opened);
+    }
+    {
+        nlohmann::json ports = nlohmann::json::object();
+        char key[17];
+        for (const auto& port : gamePortPlatforms) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)port.first);
+            ports[key] = port.second;
+        }
+        j["gamePorts"] = std::move(ports);
     }
 
     // Written beside the real file and swapped in, never over it. Truncating
