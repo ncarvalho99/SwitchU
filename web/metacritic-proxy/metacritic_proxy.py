@@ -212,6 +212,10 @@ def _normalise_title(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", value))
 
 
+def _catalogue_title(value: str) -> str:
+    return re.sub(r"\s*\(port\)\s*$", "", value, flags=re.IGNORECASE).strip()
+
+
 def _urlopen_with_retry(request: Request, *, timeout: int):
     """Retry a single upstream call once after a brief pause on a network-level
     failure (DNS blip, reset connection). IGDB, Twitch and Gemini occasionally
@@ -308,16 +312,18 @@ def _igdb_image(image_id: Any, size: str) -> str | None:
     return f"https://images.igdb.com/igdb/image/upload/t_{size}/{image_id}.jpg"
 
 
-def _igdb_game_matches_platform(game: dict[str, Any]) -> bool:
+def _igdb_game_matches_platform(game: dict[str, Any], platform: str) -> bool:
     platforms = game.get("platforms")
     return isinstance(platforms, list) and any(
-        isinstance(value, dict) and value.get("name") == "Nintendo Switch" for value in platforms
+        isinstance(value, dict) and value.get("id") == IGDB_PLATFORM_IDS[platform]
+        for value in platforms
     )
 
 
-def _igdb_best_game(games: list[dict[str, Any]], requested_title: str) -> dict[str, Any] | None:
+def _igdb_best_game(games: list[dict[str, Any]], requested_title: str,
+                    platform: str) -> dict[str, Any] | None:
     requested = _normalise_title(requested_title)
-    candidates = [game for game in games if _igdb_game_matches_platform(game)]
+    candidates = [game for game in games if _igdb_game_matches_platform(game, platform)]
     if not candidates:
         return None
 
@@ -726,12 +732,12 @@ def _translate_metadata_fields(summary: str | None, storyline: str | None,
 
 def _igdb_metadata(title: str, platform: str, language: str) -> dict[str, Any]:
     query = (
-        "fields id,name,summary,storyline,first_release_date,platforms.name,genres.name,themes.name,game_modes.name,"
+        "fields id,name,summary,storyline,first_release_date,platforms.id,platforms.name,genres.name,themes.name,game_modes.name,"
         "involved_companies.company.name,involved_companies.developer,involved_companies.publisher,"
         f"screenshots.image_id,cover.image_id; search \"{_igdb_query_literal(title)}\"; "
         f"where platforms = ({IGDB_PLATFORM_IDS[platform]}); limit 10;"
     )
-    game = _igdb_best_game(_igdb_query(query), title)
+    game = _igdb_best_game(_igdb_query(query), title, platform)
     if game is None:
         return {
             "found": False,
@@ -1125,6 +1131,7 @@ def scores(title: str, platform: str = "nintendo-switch") -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="title must contain 2 to 180 characters")
     if platform not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=422, detail="unsupported platform")
+    title = _catalogue_title(title)
 
     cache_key = f"{platform}:{_normalise_title(title)}"
     cached = _load_cached(cache_key)
@@ -1152,11 +1159,12 @@ def metadata(title: str, platform: str = "nintendo-switch", language: str = "en-
         raise HTTPException(status_code=422, detail="unsupported platform")
     if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?", language):
         raise HTTPException(status_code=422, detail="invalid language")
+    title = _catalogue_title(title)
 
     # Version the normalized contract so cached entries created before
     # storyline, themes and game modes existed are never served as complete
     # dossiers for another 30 days.
-    cache_key = f"igdb:v2:{platform}:{_language_code(language)}:{_normalise_title(title)}"
+    cache_key = f"igdb:v4:{platform}:{_language_code(language)}:{_normalise_title(title)}"
     cached = _load_cached(cache_key)
     if cached is not None and cached[1]:
         result, _ = cached
