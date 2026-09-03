@@ -33,8 +33,9 @@ public:
     }
     void openForGame(std::uint64_t titleId, std::string title,
                      std::vector<std::uint8_t> activeCover,
-                     nxui::Texture* liveCover, std::string displayVersion,
-                     std::string modSummary, std::string playTime);
+                      nxui::Texture* liveCover, std::string displayVersion,
+                      std::string modSummary, std::string playTime,
+                      std::string metadataPlatform, bool isGamePort);
     // Resume the dossier after a child full-screen flow (Gallery) closes.
     // It preserves downloaded metadata and the selected artwork instead of
     // requesting the online dossier again.
@@ -50,6 +51,7 @@ public:
     void onManageMods(ActionCb cb) { m_manageModsCb = std::move(cb); }
     void onDeleteSoftware(ActionCb cb) { m_deleteSoftwareCb = std::move(cb); }
     void onFolderAction(ActionCb cb) { m_folderActionCb = std::move(cb); }
+    void onRemoveGamePort(ActionCb cb) { m_removeGamePortCb = std::move(cb); }
     // Reads "Add to folder" or "Remove from folder" depending on where the
     // title currently lives; the owner sets it before opening.
     void setFolderActionLabel(std::string label) { m_folderActionLabel = std::move(label); }
@@ -107,6 +109,7 @@ private:
     std::uint64_t m_seenRevision = 0;
     std::uint64_t m_titleId = 0;
     std::string m_title;
+    std::string m_metadataPlatform;
     std::string m_displayVersion;
     std::string m_modSummary;
     std::string m_playTime;
@@ -121,7 +124,9 @@ private:
     FocusZone m_focusZone = FocusZone::Screenshots;
     bool m_imageExpanded = false;
     bool m_localOnly = false;
+    bool m_isGamePort = false;
     ActionCb m_folderActionCb;
+    ActionCb m_removeGamePortCb;
     std::string m_folderActionLabel;
     ActionCb m_openGalleryCb;
     ActionCb m_showArtworkCb;

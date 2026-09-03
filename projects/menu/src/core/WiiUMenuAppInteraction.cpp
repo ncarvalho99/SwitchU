@@ -1324,10 +1324,7 @@ void WiiUMenuApp::showIconOptions() {
     const std::uint64_t titleId = entry.titleId;
     const std::string title = entry.title;
 
-    // Homebrew, forwarders and emulator ports have no catalogue entry, no store
-    // version, no mods and no cover art to manage, so the dossier would be a
-    // screen of empty fields. They get the one action that does apply to them.
-    if (!isNativeApplicationId(titleId)) {
+    if (!isNativeApplicationId(titleId) && !m_config.isGamePort(titleId)) {
         m_dialogReturnFocus = cur;
         showNonGameOptions(titleId, title);
         return;
@@ -1335,6 +1332,72 @@ void WiiUMenuApp::showIconOptions() {
 
     m_gameDetailsReturnFocus = cur;
     showGameDetails(titleId, title, icon->texture());
+#endif
+}
+
+void WiiUMenuApp::showGamePortPlatformMenu(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_dialog) return;
+    const std::vector<std::pair<std::string, std::string>> platforms = {
+        {"PC", "pc"},
+        {"PlayStation", "playstation"},
+        {"PlayStation 2", "playstation-2"},
+        {"PlayStation 3", "playstation-3"},
+        {"PSP", "psp"},
+        {"PS Vita", "playstation-vita"},
+        {"Dreamcast", "dreamcast"},
+        {"Nintendo 64", "nintendo-64"},
+        {"GameCube", "gamecube"},
+        {"Wii", "wii"},
+        {"Nintendo DS", "nintendo-ds"},
+        {"Game Boy Advance", "game-boy-advance"},
+    };
+    std::vector<OverlayDialog::ButtonDef> buttons;
+    buttons.reserve(platforms.size() + 1);
+    for (const auto& [label, slug] : platforms) {
+        buttons.push_back({label, [this, titleId, title, pSlug = slug]() {
+            m_config.gamePortPlatforms.erase(
+                std::remove_if(m_config.gamePortPlatforms.begin(),
+                               m_config.gamePortPlatforms.end(),
+                               [titleId](const auto& entry) { return entry.first == titleId; }),
+                m_config.gamePortPlatforms.end());
+            m_config.gamePortPlatforms.emplace_back(titleId, pSlug);
+            m_config.save();
+            showGameDetails(titleId, title);
+        }, true});
+    }
+    buttons.push_back({nxui::I18n::instance().tr("button.cancel", "Cancel"), [this, titleId, title]() {
+        showNonGameOptions(titleId, title);
+    }, true});
+    raiseOverlay(m_dialog);
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialog->show("Original Platform", "Select original release console for metadata:",
+                   std::move(buttons), 0, [this, titleId, title]() {
+                       showNonGameOptions(titleId, title);
+                   });
+    focusManager().setFocus(m_dialog.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
+void WiiUMenuApp::removeGamePort(std::uint64_t titleId) {
+#ifdef SWITCHU_MENU
+    m_config.gamePortPlatforms.erase(
+        std::remove_if(m_config.gamePortPlatforms.begin(),
+                       m_config.gamePortPlatforms.end(),
+                       [titleId](const auto& entry) { return entry.first == titleId; }),
+        m_config.gamePortPlatforms.end());
+    m_config.save();
+    if (m_widgetStore.recentActivity().titleId == titleId) {
+        m_widgetStore.clearRecentActivity();
+        m_widgetStore.save();
+    }
+    if (m_gameDetails)
+        m_gameDetails->hide();
+#else
+    (void)titleId;
 #endif
 }
 
@@ -1358,6 +1421,9 @@ void WiiUMenuApp::showNonGameOptions(std::uint64_t titleId, const std::string& t
                 "manage."),
         {
             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+            {"Mark as game port", [this, titleId, title]() {
+                 showGamePortPlatformMenu(titleId, title);
+             }, false},
             {i18n.tr("button.delete", "Delete"), [this, titleId, title]() {
                  confirmDeleteSoftware(titleId, title);
              }, false},
@@ -1548,8 +1614,11 @@ void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& titl
     m_dialogReturnFocus = m_gameDetails.get();
     m_audio.playSfx(Sfx::ModalShow);
     m_gameDetails->openForGame(titleId, title, std::move(cover), liveCover,
-                               installedDisplayVersion(titleId), installedModSummary(titleId),
-                               installedPlayTime(titleId));
+                                installedDisplayVersion(titleId), installedModSummary(titleId),
+                                installedPlayTime(titleId),
+                                isNativeApplicationId(titleId) ? "nintendo-switch"
+                                                               : m_config.gamePortPlatform(titleId),
+                                m_config.isGamePort(titleId));
     focusManager().setFocus(m_gameDetails.get());
 #else
     (void)titleId;

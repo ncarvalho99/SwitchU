@@ -35,6 +35,14 @@ SOURCE_HOST = "www.metacritic.com"
 SOURCE_GAME_URL = f"https://{SOURCE_HOST}/game"
 IGDB_API = "https://api.igdb.com/v4/games"
 IGDB_TIME_TO_BEAT_API = "https://api.igdb.com/v4/game_time_to_beats"
+IGDB_PLATFORM_IDS = {
+    "nintendo-switch": 130, "pc": 6, "playstation-5": 167, "playstation-4": 48,
+    "xbox-series-x": 169, "xbox-one": 49, "xbox-360": 12, "playstation-3": 9,
+    "playstation-2": 8, "playstation": 7, "gamecube": 21, "wii": 5, "wii-u": 41,
+    "nintendo-64": 4, "super-nintendo": 19, "nes": 18, "game-boy-advance": 24,
+    "nintendo-ds": 20, "nintendo-3ds": 37, "psp": 38, "playstation-vita": 46,
+    "dreamcast": 23, "sega-genesis": 29,
+}
 TWITCH_TOKEN_API = "https://id.twitch.tv/oauth2/token"
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
 USER_AGENT = "SwitchU-Metadata/0.1 (+https://switchu-api.nclabs.dev)"
@@ -50,7 +58,31 @@ UNTRANSLATED_CACHE_SECONDS = 30 * 60
 UPSTREAM_MIN_INTERVAL_SECONDS = 2.0
 RATE_LIMIT_REQUESTS = 20
 RATE_LIMIT_WINDOW_SECONDS = 60
-SUPPORTED_PLATFORMS = {"nintendo-switch": "Nintendo Switch"}
+SUPPORTED_PLATFORMS = {
+    "nintendo-switch": "Nintendo Switch",
+    "pc": "PC",
+    "playstation-5": "PlayStation 5",
+    "playstation-4": "PlayStation 4",
+    "xbox-series-x": "Xbox Series X",
+    "xbox-one": "Xbox One",
+    "xbox-360": "Xbox 360",
+    "playstation-3": "PlayStation 3",
+    "playstation-2": "PlayStation 2",
+    "playstation": "PlayStation",
+    "gamecube": "GameCube",
+    "wii": "Wii",
+    "wii-u": "Wii U",
+    "nintendo-64": "Nintendo 64",
+    "super-nintendo": "Super Nintendo Entertainment System",
+    "nes": "NES",
+    "game-boy-advance": "Game Boy Advance",
+    "nintendo-ds": "Nintendo DS",
+    "nintendo-3ds": "Nintendo 3DS",
+    "psp": "PSP",
+    "playstation-vita": "PlayStation Vita",
+    "dreamcast": "Dreamcast",
+    "sega-genesis": "Genesis",
+}
 DB_PATH = Path(os.environ.get("SWITCHU_METADATA_DB", "/var/lib/switchu-metacritic/cache.sqlite3"))
 
 
@@ -696,7 +728,8 @@ def _igdb_metadata(title: str, platform: str, language: str) -> dict[str, Any]:
     query = (
         "fields id,name,summary,storyline,first_release_date,platforms.name,genres.name,themes.name,game_modes.name,"
         "involved_companies.company.name,involved_companies.developer,involved_companies.publisher,"
-        f"screenshots.image_id,cover.image_id; search \"{_igdb_query_literal(title)}\"; limit 10;"
+        f"screenshots.image_id,cover.image_id; search \"{_igdb_query_literal(title)}\"; "
+        f"where platforms = ({IGDB_PLATFORM_IDS[platform]}); limit 10;"
     )
     game = _igdb_best_game(_igdb_query(query), title)
     if game is None:

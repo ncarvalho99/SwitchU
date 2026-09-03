@@ -79,6 +79,17 @@ struct AppConfig {
     // same question and puts a game patched this morning above one played
     // every day for a year.
     std::vector<std::pair<std::uint64_t, std::uint64_t>> lastOpened;
+    std::vector<std::pair<std::uint64_t, std::string>> gamePortPlatforms;
+    bool isGamePort(std::uint64_t titleId) const {
+        for (const auto& port : gamePortPlatforms)
+            if (port.first == titleId) return true;
+        return false;
+    }
+    std::string gamePortPlatform(std::uint64_t titleId) const {
+        for (const auto& port : gamePortPlatforms)
+            if (port.first == titleId) return port.second;
+        return {};
+    }
     // A persisted sequence rather than a system/boot clock. The console can
     // start without a valid wall clock and armGetSystemTick resets on reboot;
     // neither can provide a reliable "most recently opened" order.

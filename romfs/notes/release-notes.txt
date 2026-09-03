@@ -1,57 +1,17 @@
 
-SwitchU Language
-- System > SwitchU Language is now the first row of the System settings, and changing it switches the launcher's language while you watch. Press A to pick one; the choice is remembered. All eight languages the launcher ships with are in the list.
-- Console Language, below it, now says it is read-only, which is what it always was. It reports what the Nintendo Switch itself is set to and is changed in the console's own System Settings, not here.
+The single-row view
+- Icons no longer sit on their loading spinner until the selection reaches them. Switching into the view rebuilds the row while the artwork already in memory stays valid, so nothing needed fetching and nothing was fetched — but only the focused tile was reconnected to the picture it already had. Every tile is reconnected now.
 
-Bluetooth audio
-- Bluetooth headphones now pair and connect from the launcher. The Bluetooth screen used to change only the saved setting, so it could show Bluetooth as on while the console's radio was off and a scan would find nothing. It now turns the real radio on, keeps checking for devices while the scan runs, and leaves the results on screen.
-- Airplane Mode now switches the Bluetooth radio off as well, instead of only recording that it should be off.
-
-Launching and returning
-- A launch that fails now brings you back to the launcher instead of leaving a blank screen. Resuming a game you left suspended recovers the same way.
-- Starting a game for the first time on a newly created account now creates that account's save data for it, instead of failing on an account that has never played the game.
-- Closing a game from the launcher no longer holds up everything else while it waits. The console asks the game to exit, keeps running, and only forces it after the full grace period has passed.
-- Pressing HOME while a game had its on-screen keyboard open no longer crashes the launcher on the way back.
-- The launch animation now runs for 340 milliseconds instead of 1.45 seconds, and the launcher does its save-data checks and bookkeeping while it plays rather than after. How long the console itself then takes to bring a game up is unchanged.
-
-Themes
-- Installing a still-image theme over an animated one now actually replaces the wallpaper. The new picture was being loaded without clearing the animation already in memory, so the old frames kept playing over it.
-
-Theme Shop
-- Opening the Theme Shop again no longer pauses. It used to rebuild the whole screen every time, re-reading and decoding every installed theme's screenshot in the frame the shop appeared.
-- Installed screenshots now load in the background. A card shows "Loading screenshot..." for a moment instead of the whole shop waiting on the picture.
-- Browsing and downloading themes no longer risks the shop stalling while artwork reaches the graphics card. Uploads are batched and the queue is emptied before anything waits on it.
-- Some of the opening is still the graphics work behind the frosted-glass panel, and that is not addressed here.
-
-Other changes
-- Settings and the Theme Shop are built the first time you open them instead of at boot, so a session that never opens them never pays for them.
-- Leaving the launcher for a game no longer waits on background work still finishing, which could catch the Gallery or the Theme Shop mid-task.
+Folders
+- X is the folder button both ways: on the home screen it files the focused title into a folder, and inside an open folder it takes the focused title out. Removing used to be R, which meant two buttons for one idea.
+- The Add to folder row is gone from the options behind + and from the game dossier. Both halves of the job are the same press now, so the menu had nothing left to offer.
+- X still closes a suspended title when one is selected, and the hint bar says which of the two it is.
 --pt-BR--
 
-Idioma do SwitchU
-- Sistema > Idioma do SwitchU agora é a primeira linha das configurações de Sistema, e trocá-lo muda o idioma do launcher na hora. Pressione A para escolher; a escolha fica salva. Os oito idiomas que o launcher traz estão na lista.
-- Idioma do Console, logo abaixo, agora diz que é somente leitura, que é o que sempre foi. Ele mostra como o Nintendo Switch está configurado e é alterado nas configurações do próprio console, não aqui.
+Visualização de linha única
+- Os ícones não ficam mais no símbolo de carregamento até a seleção chegar neles. Entrar na visualização reconstrói a linha enquanto as artes já em memória continuam válidas, então não havia nada a buscar e nada foi buscado — mas só o ícone em foco era reconectado à imagem que já tinha. Agora todos são.
 
-Áudio Bluetooth
-- Fones Bluetooth agora pareiam e conectam pelo launcher. A tela de Bluetooth alterava apenas a configuração salva, então podia mostrar o Bluetooth ligado enquanto o rádio do console estava desligado e a busca não encontrava nada. Agora ela liga o rádio de verdade, consulta os dispositivos enquanto a busca acontece e mantém os resultados na tela.
-- O Modo Avião agora desliga também o rádio Bluetooth, em vez de apenas registrar que ele deveria estar desligado.
-
-Iniciar e voltar
-- Um jogo que falha ao iniciar agora devolve você ao launcher, em vez de deixar a tela em branco. Retomar um jogo deixado suspenso se recupera do mesmo jeito.
-- Iniciar um jogo pela primeira vez em uma conta recém-criada agora cria o save daquela conta, em vez de falhar em uma conta que nunca jogou aquele título.
-- Fechar um jogo pelo launcher não trava mais o resto enquanto espera. O console pede para o jogo sair, continua funcionando e só força a saída depois que todo o prazo de tolerância passa.
-- Pressionar HOME com o teclado na tela de um jogo aberto não derruba mais o launcher na volta.
-- A animação de abertura agora dura 340 milissegundos em vez de 1,45 segundo, e o launcher faz as verificações de save e o registro interno enquanto ela roda, em vez de depois. O tempo que o console leva para colocar o jogo no ar não muda.
-
-Temas
-- Instalar um tema de imagem parada sobre um animado agora troca o papel de parede de verdade. A imagem nova era carregada sem limpar a animação que já estava na memória, então os quadros antigos continuavam rodando por cima.
-
-Loja de Temas
-- Abrir a Loja de Temas de novo não trava mais. Ela reconstruía a tela inteira a cada abertura, relendo e decodificando a captura de cada tema instalado no quadro em que a loja aparecia.
-- As capturas dos temas instalados agora carregam em segundo plano. O cartão mostra "Carregando captura..." por um instante, em vez de a loja inteira esperar pela imagem.
-- Navegar e baixar temas não corre mais o risco de travar a loja enquanto as imagens chegam à placa de vídeo. Os envios são agrupados e a fila é esvaziada antes de qualquer espera.
-- Parte da abertura ainda é o trabalho gráfico por trás do painel de vidro fosco, e isso não está resolvido aqui.
-
-Outras mudanças
-- Configurações e Loja de Temas passam a ser montadas na primeira vez que você as abre, em vez de na inicialização, então uma sessão que nunca as abre não paga por elas.
-- Sair do launcher para um jogo não espera mais por trabalho em segundo plano ainda em andamento, que podia pegar a Galeria ou a Loja de Temas no meio de uma tarefa.
+Pastas
+- X é o botão de pasta nos dois sentidos: na tela inicial guarda o título em foco em uma pasta, e dentro de uma pasta aberta tira o título em foco dela. Remover era R, o que dava dois botões para a mesma ideia.
+- A linha Adicionar à pasta saiu das opções do + e da ficha do jogo. As duas metades do trabalho são o mesmo toque agora, então o menu não tinha mais o que oferecer.
+- X continua fechando um título suspenso quando há um selecionado, e a barra de dicas diz qual das duas coisas ele faz.

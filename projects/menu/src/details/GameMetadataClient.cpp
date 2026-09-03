@@ -63,16 +63,16 @@ float readNumber(const nlohmann::json& json, const char* key, float fallback = 0
 
 } // namespace
 
-void GameMetadataClient::load(nxui::ThreadPool& pool, std::string title) {
+void GameMetadataClient::load(nxui::ThreadPool& pool, std::string title, std::string platform) {
     std::lock_guard<std::mutex> lock(m_mutex);
     const std::uint64_t revision = ++m_revision;
     m_snapshot = {};
     m_snapshot.phase = Phase::Loading;
     m_snapshot.revision = revision;
-    m_future = pool.submit([this, title = std::move(title), revision]() {
+    m_future = pool.submit([this, title = std::move(title), platform = std::move(platform), revision]() {
         Snapshot next;
         try {
-            next = fetch(title, revision);
+            next = fetch(title, platform, revision);
         } catch (const std::exception& ex) {
             next.phase = Phase::Failed;
             next.error = ex.what();
@@ -93,9 +93,11 @@ GameMetadataClient::Snapshot GameMetadataClient::snapshot() const {
     return m_snapshot;
 }
 
-GameMetadataClient::Snapshot GameMetadataClient::fetch(std::string title, std::uint64_t revision) {
+GameMetadataClient::Snapshot GameMetadataClient::fetch(std::string title, std::string platform,
+                                                       std::uint64_t revision) {
     const std::string query = "?title=" + encodeUrlComponent(title)
-        + "&platform=nintendo-switch&language="
+        + "&platform=" + encodeUrlComponent(platform)
+        + "&language="
         + encodeUrlComponent(nxui::I18n::instance().activeLanguageTag());
     const nlohmann::json metadata = nlohmann::json::parse(
         themeshop::http::getText(std::string(kServiceUrl) + "/v1/metadata" + query));

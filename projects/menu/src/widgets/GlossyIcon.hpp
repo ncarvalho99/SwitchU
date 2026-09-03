@@ -93,11 +93,13 @@ public:
         m_consoleBatteryCharging = charging;
     }
     void setBatteryIconTextures(nxui::Texture* console,
-                                nxui::Texture* joyconLeft,
-                                nxui::Texture* joyconRight) {
+                                 nxui::Texture* joyconLeft,
+                                 nxui::Texture* joyconRight,
+                                 nxui::Texture* controller) {
         m_batteryConsoleIcon = console;
         m_batteryJoyconLeftIcon = joyconLeft;
         m_batteryJoyconRightIcon = joyconRight;
+        m_batteryControllerIcon = controller;
     }
     void setWideGameTextures(nxui::Texture* hero, nxui::Texture* logo) {
         m_wideGameHero = hero;
@@ -146,6 +148,7 @@ private:
     nxui::Texture* m_batteryConsoleIcon = nullptr;
     nxui::Texture* m_batteryJoyconLeftIcon = nullptr;
     nxui::Texture* m_batteryJoyconRightIcon = nullptr;
+    nxui::Texture* m_batteryControllerIcon = nullptr;
 
     nxui::AnimatedFloat m_animScale;
     nxui::AnimatedFloat m_appearOpacity;
