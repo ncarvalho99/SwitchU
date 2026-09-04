@@ -4968,6 +4968,31 @@ void WiiUMenuApp::buildGrid() {
                 applySteamGridDbCandidate(browse, candidate);
         });
     m_overlayLayer->addChild(m_steamGridDbPicker);
+    m_platformPicker = std::make_shared<PlatformPickerScreen>(
+        app().gpu(), app().renderer(), m_threadPool);
+    m_platformPicker->setFont(&m_fontNormal);
+    m_platformPicker->setSmallFont(&m_fontSmall);
+    m_platformPicker->setTheme(&m_theme);
+    m_platformPicker->onClosed([this]() {
+        if (m_platformPickerTitleId != 0 && m_dialog && m_dialog->isActive())
+            focusManager().setFocus(m_dialog.get());
+    });
+    m_platformPicker->onSelected([this](const std::string& slug) {
+        const std::uint64_t titleId = m_platformPickerTitleId;
+        const std::string title = m_platformPickerTitle;
+        m_platformPickerTitleId = 0;
+        m_platformPickerTitle.clear();
+        if (m_dialog && m_dialog->isActive()) m_dialog->hide();
+        m_config.gamePortPlatforms.erase(
+            std::remove_if(m_config.gamePortPlatforms.begin(), m_config.gamePortPlatforms.end(),
+                           [titleId](const auto& entry) { return entry.first == titleId; }),
+            m_config.gamePortPlatforms.end());
+        m_config.gamePortPlatforms.emplace_back(titleId, slug);
+        m_config.save();
+        m_platformPicker->hide();
+        showGameDetails(titleId, title);
+    });
+    m_overlayLayer->addChild(m_platformPicker);
     createFolderOptions();
     createControllerTest();
     createTextEntry();
@@ -6116,7 +6141,8 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 
     bool dialogActiveNow = (m_dialog && m_dialog->isActive());
-    if (!debugTouchBlocked && !lockScreenUp && dialogActiveNow)
+    const bool platformPickerActive = m_platformPicker && m_platformPicker->isActive();
+    if (!debugTouchBlocked && !lockScreenUp && dialogActiveNow && !platformPickerActive)
         m_dialog->handleTouch(app().input());
 
     if (!debugTouchBlocked && !lockScreenUp && m_themeShop && m_themeShop->isActive())
@@ -6151,11 +6177,15 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_settings->handleTouch(app().input());
 
     if (!debugTouchBlocked && m_gameOptions && m_gameOptions->isActive()
-        && !(m_steamGridDbPicker && m_steamGridDbPicker->isActive()))
+        && !(m_steamGridDbPicker && m_steamGridDbPicker->isActive())
+        && !(m_platformPicker && m_platformPicker->isActive()))
         m_gameOptions->handleTouch(app().input());
 
     if (!debugTouchBlocked && m_steamGridDbPicker && m_steamGridDbPicker->isActive())
         m_steamGridDbPicker->handleTouch(app().input());
+
+    if (!debugTouchBlocked && !lockScreenUp && m_platformPicker && m_platformPicker->isActive())
+        m_platformPicker->handleTouch(app().input());
 
     if (!debugTouchBlocked && m_folderOptions && m_folderOptions->isActive())
         m_folderOptions->handleTouch(app().input());
@@ -6336,8 +6366,17 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
-        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
         add(buttonGlyph(nxui::Button::X), i18n.tr("hint.search", "Search"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
+        return hints;
+    }
+
+    if (m_platformPicker && m_platformPicker->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
         return hints;
     }
 

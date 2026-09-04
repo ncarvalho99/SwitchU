@@ -30,6 +30,7 @@
 #include "settings/SettingsScreen.hpp"
 #include "settings/GameOptionsScreen.hpp"
 #include "settings/SteamGridDbPickerScreen.hpp"
+#include "settings/PlatformPickerScreen.hpp"
 #include "settings/FolderOptionsScreen.hpp"
 #include "settings/ControllerTestScreen.hpp"
 #include "settings/TextEntryScreen.hpp"
@@ -455,6 +456,9 @@ private:
     std::shared_ptr<GameModsScreen>    m_gameMods;
     std::shared_ptr<GameOptionsScreen> m_gameOptions;
     std::shared_ptr<SteamGridDbPickerScreen> m_steamGridDbPicker;
+    std::shared_ptr<PlatformPickerScreen> m_platformPicker;
+    std::uint64_t m_platformPickerTitleId = 0;
+    std::string m_platformPickerTitle;
     std::shared_ptr<FolderOptionsScreen> m_folderOptions;
     std::shared_ptr<ControllerTestScreen> m_controllerTest;
     std::shared_ptr<TextEntryScreen>      m_textEntry;

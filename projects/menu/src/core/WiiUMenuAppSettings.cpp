@@ -1648,6 +1648,8 @@ void WiiUMenuApp::applyTheme() {
         m_controllerTest->setTheme(&m_theme);
     if (m_steamGridDbPicker)
         m_steamGridDbPicker->setTheme(&m_theme);
+    if (m_platformPicker)
+        m_platformPicker->setTheme(&m_theme);
 
     m_sidebar.applyTheme(m_theme);
     DebugLog::log("[theme-apply] widget recolor complete");

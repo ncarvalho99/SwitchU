@@ -149,7 +149,7 @@ void drawBatteryRing(nxui::Renderer& ren, const nxui::Vec2& center,
                      float radius, int percent, bool charging,
                      bool console, nxui::Texture* deviceIcon,
                      nxui::Font* font, float opacity) {
-    constexpr int segments = 96;
+    constexpr int segments = 192;
     constexpr float tau = 6.28318530718f;
     constexpr float startAngle = -1.57079632679f;
     const float thickness = std::max(4.f, radius * 0.13f);
