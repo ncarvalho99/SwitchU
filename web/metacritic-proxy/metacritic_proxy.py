@@ -502,13 +502,13 @@ def _clean_gemini_json(text: str) -> str:
     return cleaned
 
 
-DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
 DEFAULT_GEMINI_FALLBACKS = (
-    "gemini-3.5-flash-lite,"
     "gemini-3.6-flash,"
-    "gemini-3.6-flash-lite,"
-    "gemini-3.7-flash,"
     "gemini-3.7-flash-lite,"
+    "gemini-3.6-flash-lite,"
+    "gemini-3.5-flash,"
+    "gemini-3.5-flash-lite,"
     "gemini-3.1-flash,"
     "gemini-3.1-flash-lite,"
     "gemini-3.0-flash,"
@@ -545,14 +545,32 @@ def _gemini_model_chain() -> list[str]:
     return chain
 
 
-def _gemini_text(prompt: str, api_key: str, models: list[str],
-                 validator: Callable[[str], bool] | None = None) -> str:
-    """Ask models in the fallback chain sequentially until one yields a valid translation.
+_gemini_key_index = 0
+_gemini_key_lock = threading.Lock()
 
-    If a model hits rate limits (HTTP 429), quota exhaustion, transient errors,
-    or returns empty/malformed text, the loop advances to the next Gemini >= 3.0 model.
+
+def _gemini_api_keys() -> list[str]:
+    raw_keys = os.environ.get("GEMINI_API_KEYS", "") or os.environ.get("GEMINI_API_KEY", "")
+    keys = [k.strip() for k in re.split(r"[,\s]+", raw_keys) if k.strip()]
+    return keys
+
+
+def _gemini_text(prompt: str, api_keys: str | list[str], models: list[str],
+                 validator: Callable[[str], bool] | None = None) -> str:
+    """Ask models and API keys sequentially until one yields a valid translation.
+
+    Rotates through configured keys on 429/quota or transient errors to maximize
+    free-tier throughput.
     """
-    global _last_translation_ok
+    global _last_translation_ok, _gemini_key_index
+    keys = [api_keys] if isinstance(api_keys, str) else [k for k in api_keys if k]
+    if not keys:
+        raise RuntimeError("No Gemini API key configured")
+
+    with _gemini_key_lock:
+        start_idx = _gemini_key_index % len(keys)
+    ordered_keys = keys[start_idx:] + keys[:start_idx]
+
     payload = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096},
@@ -562,54 +580,57 @@ def _gemini_text(prompt: str, api_key: str, models: list[str],
     for model in models:
         if not _is_gemini_v3_or_higher(model):
             continue
-        request = Request(
-            f"{GEMINI_API}/{model}:generateContent",
-            data=payload,
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key,
-                     "User-Agent": USER_AGENT},
-            method="POST",
-        )
-        try:
-            with _urlopen_with_retry(request, timeout=20) as response:
-                response_json = json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            last_error = RuntimeError(f"Gemini HTTP {exc.code} for {model}")
-            continue
-        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
-            last_error = RuntimeError(f"Gemini translation temporarily unavailable for {model}: {exc}")
-            continue
-
-        candidates = response_json.get("candidates") if isinstance(response_json, dict) else None
-        content = candidates[0].get("content") if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict) else None
-        parts = content.get("parts") if isinstance(content, dict) else None
-        raw_text = "".join(item.get("text", "") for item in parts if isinstance(item, dict)).strip() if isinstance(parts, list) else ""
-        translated = _clean_gemini_json(raw_text)
-        if not translated:
-            last_error = RuntimeError(f"Gemini model {model} returned empty or blocked content")
-            continue
-
-        if validator is not None:
+        for key_offset, key in enumerate(ordered_keys):
+            request = Request(
+                f"{GEMINI_API}/{model}:generateContent",
+                data=payload,
+                headers={"Content-Type": "application/json", "x-goog-api-key": key,
+                         "User-Agent": USER_AGENT},
+                method="POST",
+            )
             try:
-                if not validator(translated):
-                    last_error = RuntimeError(f"Gemini model {model} payload failed validation")
-                    continue
-            except Exception as val_exc:
-                last_error = RuntimeError(f"Gemini model {model} validation error: {val_exc}")
+                with _urlopen_with_retry(request, timeout=20) as response:
+                    response_json = json.loads(response.read().decode("utf-8"))
+            except HTTPError as exc:
+                last_error = RuntimeError(f"Gemini HTTP {exc.code} for {model}")
+                continue
+            except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+                last_error = RuntimeError(f"Gemini translation temporarily unavailable for {model}: {exc}")
                 continue
 
-        _last_translation_ok = True
-        return translated
+            candidates = response_json.get("candidates") if isinstance(response_json, dict) else None
+            content = candidates[0].get("content") if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict) else None
+            parts = content.get("parts") if isinstance(content, dict) else None
+            raw_text = "".join(item.get("text", "") for item in parts if isinstance(item, dict)).strip() if isinstance(parts, list) else ""
+            translated = _clean_gemini_json(raw_text)
+            if not translated:
+                last_error = RuntimeError(f"Gemini model {model} returned empty or blocked content")
+                continue
+
+            if validator is not None:
+                try:
+                    if not validator(translated):
+                        last_error = RuntimeError(f"Gemini model {model} payload failed validation")
+                        continue
+                except Exception as val_exc:
+                    last_error = RuntimeError(f"Gemini model {model} validation error: {val_exc}")
+                    continue
+
+            with _gemini_key_lock:
+                _gemini_key_index = (start_idx + key_offset) % len(keys)
+            _last_translation_ok = True
+            return translated
 
     _last_translation_ok = False
     raise last_error or RuntimeError("No Gemini model accepted the request")
 
 
-def _translation_credentials(language: str) -> tuple[str, str, list[str]] | None:
+def _translation_credentials(language: str) -> tuple[str, list[str], list[str]] | None:
     target = _translation_target(language)
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not target or not api_key:
+    keys = _gemini_api_keys()
+    if not target or not keys:
         return None
-    return target, api_key, _gemini_model_chain()
+    return target, keys, _gemini_model_chain()
 
 
 def _translate_catalogue_texts(summary: str | None,
@@ -835,6 +856,12 @@ def _slug_candidates(title: str) -> list[str]:
         # does not. Never introduce arbitrary URLs beyond these.
         if words[:1] in (["the"], ["a"], ["an"]) and len(words) > 2:
             candidates.append("-".join(words[1:]))
+        # The reverse also happens: Metacritic's canonical slug carries a
+        # leading "the" that the catalogue title omits (e.g. "Simpsons Hit &
+        # Run" -> "the-simpsons-hit-and-run"). Reported for The Simpsons: Hit
+        # & Run, which returned no scores at all despite the page existing.
+        elif words[:1] != ["the"]:
+            candidates.append("the-" + "-".join(words))
     return list(dict.fromkeys(candidate for candidate in candidates if 2 <= len(candidate) <= 180))
 
 
@@ -1033,7 +1060,7 @@ def _gemini_reachable() -> bool:
     A cheap probe would burn one of the few free-tier calls per minute, so this
     reports configuration plus the outcome of the most recent real attempt.
     """
-    if not os.environ.get("GEMINI_API_KEY"):
+    if not _gemini_api_keys():
         return False
     return _last_translation_ok
 
@@ -1119,7 +1146,7 @@ def health() -> dict[str, object]:
         "source": "metacritic.com",
         "cacheTtlDays": CACHE_TTL_SECONDS // (24 * 60 * 60),
         "igdbConfigured": bool(os.environ.get("IGDB_CLIENT_ID") and os.environ.get("IGDB_CLIENT_SECRET")),
-        "geminiConfigured": bool(os.environ.get("GEMINI_API_KEY")),
+        "geminiConfigured": bool(_gemini_api_keys()),
         "translationCacheTtlDays": CACHE_TTL_SECONDS // (24 * 60 * 60),
     }
 
