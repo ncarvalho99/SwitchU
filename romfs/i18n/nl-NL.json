@@ -5,34 +5,197 @@
     "unlocked": "Ontgrendeld."
   },
   "common": {
-    "auto": "Auto",
+    "auto": "Automatisch",
     "na": "N/B",
     "active": "Actief",
     "disabled": "Uit"
+  },
+  "accessibility": {
+    "speech": {
+      "enabled": "Spraak ingeschakeld.",
+      "disabled": "Spraak uitgeschakeld. Spraakhulp gestopt."
+    },
+    "context": {
+      "dialog": "Dialoog",
+      "profile_selection": "Profielkeuze",
+      "settings": "Instellingen",
+      "themes": "Thema’s",
+      "main_menu": "Hoofdmenu",
+      "page": "pagina",
+      "of": "van",
+      "left_sidebar": "Linkerzijbalk",
+      "right_sidebar": "Rechterzijbalk",
+      "user_profiles": "Gebruikersprofielen",
+      "dynamic_line": "Middellijn",
+      "menu": "Contextmenu"
+    },
+    "roles": {
+      "button": "knop",
+      "game": "spel",
+      "game_card": "gamecard",
+      "slot": "vak",
+      "profile": "profiel",
+      "toggle": "schakelaar",
+      "slider": "schuifregelaar",
+      "selector": "keuze",
+      "progress": "voortgang",
+      "info": "informatie",
+      "section": "sectie",
+      "action": "actie"
+    },
+    "hints": {
+      "open": "A om te openen.",
+      "open_user_page": "A om de gebruikerspagina te openen.",
+      "grid_empty": "Gebruik de richtingsknoppen om naar een ander vak te gaan.",
+      "game_launchable": "A om te starten. X voor opties. Y om te verplaatsen. ZL of ZR voor andere pagina.",
+      "game_blocked": "A toont waarom dit is geblokkeerd.",
+      "recently_played_widget": "A om het laatst gespeelde spel te starten. Plus voor widgetopties. Y om te verplaatsen.",
+      "widget": "Plus voor widgetopties. Y om te verplaatsen. Min om weergave te wijzigen."
+    },
+    "actions": {
+      "edit_mode": "Richtingsknoppen kiezen de nieuwe positie. Y om te plaatsen. B annuleert.",
+      "empty_slot": "Richtingsknoppen om te navigeren. ZL of ZR voor andere pagina.",
+      "game_blocked": "A toont de reden. Y om te verplaatsen. ZL of ZR voor andere pagina.",
+      "game_launchable": "A om te starten. X voor opties. Y om te verplaatsen. ZL of ZR voor andere pagina.",
+      "settings": "Omhoog en omlaag kiezen een categorie. A of rechts opent. B sluit.",
+      "themes": "Omhoog en omlaag om te navigeren. A kiest. B sluit.",
+      "dialog": "Links en rechts wijzigen de keuze. A bevestigt. B annuleert.",
+      "context_menu": "Omhoog en omlaag om te kiezen. A om te bevestigen. B om te sluiten.",
+      "edit_mode_folder": "Richtingstoetsen om de positie te kiezen. A om te plaatsen. B om de map te verlaten met de software geselecteerd."
+    },
+    "settings": {
+      "tab_prefix": "Tab",
+      "tab_actions": "A of rechts opent. Omhoog en omlaag wisselen tab. B sluit.",
+      "list_prefix": "Lijst",
+      "list_actions": "Omhoog en omlaag om te kiezen. A bevestigt. B sluit de lijst.",
+      "toggle_actions": "A om te wijzigen. Links terug naar tabs.",
+      "slider_actions": "Links of rechts om aan te passen. B terug naar tabs.",
+      "selector_actions": "A of rechts opent de lijst. B terug naar tabs.",
+      "action_actions": "A voert de actie uit. B terug naar tabs."
+    },
+    "value": {
+      "label": "Waarde",
+      "percent": "procent"
+    },
+    "position": {
+      "row": "rij",
+      "column": "kolom",
+      "item": "item"
+    },
+    "move_mode": {
+      "enter": "Spel verplaatsen: ",
+      "placed": "Spel verplaatst: ",
+      "cancelled": "Verplaatsen geannuleerd: "
+    },
+    "grid": {
+      "empty_slot": "Leeg vak"
+    },
+    "user_profile": "Gebruikersprofiel",
+    "layout": {
+      "dynamic_line": "Dynamische lijnmodus",
+      "grid": "Rastermodus"
+    }
+  },
+  "tutorial": {
+    "accessibility": {
+      "title": "Spraak",
+      "body": "Spraak is beschikbaar in dit menu. Het kan het geselecteerde item en beschikbare acties voorlezen.",
+      "objective": "Druk op X om spraak voor later aan te zetten. Druk op A om zonder spraak door te gaan.",
+      "enabled_announcement": "Spraak ingeschakeld voor later. Druk op A om door te gaan.",
+      "already_enabled_announcement": "Spraak is al ingeschakeld voor later.",
+      "disabled_announcement": "Spraak uitgeschakeld. Animalese-geluiden zijn actief.",
+      "text_actions": "A om door te gaan. B om over te slaan."
+    },
+    "accessibility_settings": {
+      "title": "Toegankelijkheid",
+      "body": "Toegankelijkheidsopties staan in Instellingen, daarna Toegankelijkheid. Je kunt snelheid, hints, locatie en positie aanpassen."
+    },
+    "welcome": {
+      "title": "Welkom bij SwitchU",
+      "body": "Deze korte tutorial laat de basisbediening zien."
+    },
+    "navigation": {
+      "title": "Navigatie",
+      "body": "Gebruik de richtingsknoppen of linkerstick om de focus te verplaatsen.",
+      "objective": "Verplaats de focus naar een ander item."
+    },
+    "confirm": {
+      "title": "Klaar",
+      "body": "Je kunt beginnen.",
+      "objective": "Druk op A om deze stap te bevestigen."
+    },
+    "themes": {
+      "title": "Thema’s",
+      "body": "Thema’s veranderen kleuren, beelden en geluiden. Open Thema’s via de zijbalk om stijlen te installeren of toe te passen."
+    },
+    "cursor": {
+      "title": "Focus",
+      "body": "De lichtgevende rand toont welk item geselecteerd is."
+    },
+    "support": {
+      "title": "Hulp",
+      "body": "Linksonder zie je de nuttige knoppen voor het huidige scherm."
+    },
+    "hints": {
+      "disable_voice": "Spraak uit",
+      "enable_voice": "Spraak aan",
+      "voice_enabled": "Spraak aan",
+      "reveal": "Tonen",
+      "continue": "Verder",
+      "test": "Testen",
+      "skip_step": "Stap overslaan",
+      "skip_all": "Alles overslaan",
+      "skip_all_banner": "Druk op  +  om de installatie over te slaan"
+    }
   },
   "sidebar": {
     "album": "Album",
     "mii_editor": "Mii-editor",
     "settings": "Instellingen",
     "controllers": "Controllers",
+    "theme_shop": "SwitchU",
     "sleep": "Slaapstand",
-    "music": "Muziek",
-    "theme_shop": "SwitchU"
+    "music": "Muziek"
+  },
+  "hint": {
+    "navigate": "Navigeren",
+    "select": "Selecteren",
+    "confirm": "Bevestigen",
+    "cancel": "Annuleren",
+    "back": "Terug",
+    "close": "Sluiten",
+    "open": "Openen",
+    "launch": "Starten",
+    "resume": "Hervatten",
+    "move": "Verplaatsen",
+    "place": "Plaatsen",
+    "prev_page": "Vorige pagina",
+    "next_page": "Volgende pagina",
+    "profile": "Profiel",
+    "search": "Zoeken",
+    "repeat": "Herhalen",
+    "voice": "Stem",
+    "sort_custom": "Mijn volgorde",
+    "sort_alpha": "A-Z",
+    "sort_recent": "Recent",
+    "options": "Opties",
+    "switch_layout": "Weergave wisselen"
   },
   "settings": {
     "tabs": {
       "system": "Systeem",
+      "accessibility": "Toegankelijkheid",
       "audio": "Audio",
       "display": "Beeld",
       "internet": "Internet",
+      "steamgriddb": "SteamGridDB",
       "controllers": "Controllers",
       "bluetooth": "Bluetooth",
       "sleep": "Slaapstand",
       "music": "Muziek",
       "theme": "Thema",
       "storage": "Opslag",
-      "about": "Over",
-      "accessibility": "Toegankelijkheid"
+      "about": "Over"
     },
     "system": {
       "firmware": "Firmwareversie",
@@ -43,11 +206,16 @@
       "console_nickname": "Consolenaam",
       "serial_number": "Serienummer",
       "timezone": "Tijdzone",
+      "clock_12h": "12-uursklok",
+      "clock_12h_desc": "Toon de tijd in 12-uursformaat.",
       "usb30": "USB 3.0",
       "usb30_desc": "Activeer USB 3.0 voor snellere overdracht.",
       "battery_lot": "Batterijpartij",
       "ui_language": "SwitchU-taal",
       "ui_language_desc": "Druk op A om de taal te kiezen die SwitchU gebruikt.",
+      "default_profile": "Standaardprofiel",
+      "default_profile_desc": "Start games waar mogelijk met dit profiel.",
+      "default_profile_ask": "Elke keer vragen",
       "console_language": "Taal van de console",
       "console_language_desc": "Alleen-lezen. Wijzig dit in de systeeminstellingen van de Nintendo Switch.",
       "region": "Regio",
@@ -55,18 +223,43 @@
       "region_usa": "VS",
       "region_europe": "Europa",
       "region_australia": "Australië",
-      "region_hong_kong": "Hong Kong",
+      "region_hong_kong": "Hongkong",
       "region_taiwan": "Taiwan",
       "region_south_korea": "Zuid-Korea",
       "auto_update": "Automatische update",
       "error_reporting": "Foutmelding",
-      "default_profile": "Standaardprofiel",
-      "default_profile_desc": "Start games waar mogelijk met dit profiel.",
-      "default_profile_ask": "Elke keer vragen",
-      "clock_12h": "12-uursklok",
-      "clock_12h_desc": "Toon de tijd in 12-uursformaat.",
       "add_user": "Gebruiker toevoegen",
-      "add_user_desc": "Maakt een nieuw gebruikersaccount op deze console."
+      "add_user_desc": "Maakt een nieuw gebruikersaccount op deze console.",
+      "day": "Dag",
+      "disable_internet_time_first": "Schakel eerst internetsynchronisatie van de klok uit.",
+      "hour": "Uur",
+      "internet_time": "Klok via internet synchroniseren",
+      "internet_time_desc": "Corrigeert de klok van de console automatisch via netwerktijd.",
+      "manual_time": "Datum en tijd instellen",
+      "manual_time_button": "Wijzigen",
+      "manual_time_desc": "Beschikbaar wanneer internetsynchronisatie van de klok is uitgeschakeld.",
+      "manual_time_footer": "A Bevestigen   ·   B Annuleren",
+      "manual_time_popup_hint": "Links/rechts selecteert een veld. Omhoog/omlaag wijzigt de waarde.",
+      "manual_time_saved": "Datum en tijd bijgewerkt.",
+      "minute": "Minuut",
+      "month": "Maand",
+      "time_change_failed": "De datum- en tijdinstelling kon niet worden gewijzigd.",
+      "year": "Jaar"
+    },
+    "accessibility": {
+      "voice": "Spraak",
+      "voice_desc": "Leest het geselecteerde item en beschikbare acties voor.",
+      "voice_language": "Taal van stem",
+      "voice_language_desc": "Volgt de systeem- of interfacetaal.",
+      "speech_rate": "Spreeksnelheid",
+      "speech_rate_desc": "Past de spreeksnelheid aan.",
+      "words_per_minute": "wpm",
+      "speak_hints": "Actiehints voorlezen",
+      "speak_hints_desc": "Leest beschikbare acties na het geselecteerde item.",
+      "repeat_context": "Locatie steeds herhalen",
+      "repeat_context_desc": "Herhaalt het huidige gebied bij elke focusbeweging.",
+      "speak_position": "Positie voorlezen",
+      "speak_position_desc": "Leest rij, kolom en positie voor wanneer beschikbaar."
     },
     "audio": {
       "speaker_auto_mute": "Automatisch dempen speakers",
@@ -110,7 +303,9 @@
       "reload_grid": "Games en snelkoppelingen herladen",
       "reload_grid_desc": "Leest de geïnstalleerde titels opnieuw en gooit namen en pictogrammen in de cache weg. Gebruik dit na het maken of verwijderen van een snelkoppeling.",
       "reload_grid_done": "Geïnstalleerde titels worden opnieuw gelezen...",
-      "reload_grid_failed": "Kon geen herlading aanvragen."
+      "reload_grid_failed": "Kon geen herlading aanvragen.",
+      "ui_wireframe": "UI-draadframe",
+      "ui_wireframe_desc": "Toon omlijningen van alle Box-widgets voor lay-outdebugging."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",
@@ -124,9 +319,40 @@
       "auto_app_download_desc": "Downloadt automatisch updates voor geïnstalleerde games.",
       "mac_address": "MAC-adres",
       "dns": "DNS",
-      "dns_auto": "Auto (DHCP)"
+      "dns_auto": "Automatisch (DHCP)"
+    },
+    "steamgriddb": {
+      "section": "Spelartwork",
+      "enabled": "SteamGridDB-artwork weergeven",
+      "enabled_desc": "Toon hero's en logo's achter het applicatiemenu.",
+      "api_key": "API-sleutel",
+      "api_key_set": "Ingesteld (verborgen)",
+      "api_key_missing": "Niet ingesteld",
+      "api_key_optional": "Optioneel. Hero's en pictogrammen werken zonder; logo's vereisen er een.",
+      "scan": "Artwork zoeken voor ontbrekende applicaties",
+      "scan_desc": "Downloadt alleen een hero en logo voor applicaties die nog geen artwork hebben.",
+      "already_running": "Er wordt al gescand.",
+      "need_key": "Stel eerst een API-sleutel in.",
+      "need_key_logo": "Logo's vereisen een SteamGridDB API-sleutel. Stel er een in bij Instellingen.",
+      "progress": "Artworkscan",
+      "idle": "Klaar om geïnstalleerde applicaties te scannen.",
+      "results": "Resultaten",
+      "no_results": "Nog geen scan uitgevoerd",
+      "keyboard_error": "Het toetsenbord kon niet worden geopend.",
+      "key_cleared": "API-sleutel gewist.",
+      "key_saved": "API-sleutel opgeslagen.",
+      "start_failed": "De artworkscan kon niet worden gestart.",
+      "started": "SteamGridDB-scan gestart.",
+      "download_title": "Artwork downloaden",
+      "download_start": "SteamGridDB doorzoeken..."
     },
     "controllers": {
+      "test": "Invoerapparaten testen",
+      "test_desc": "Test joysticks, knoppen en het touchscreen.",
+      "pairing": "Grip/volgorde wijzigen",
+      "pairing_desc": "Koppel controllers en wijzig hun spelervolgorde.",
+      "remapping": "Knoptoewijzing wijzigen",
+      "remapping_desc": "Open het systeemhulpprogramma voor controllerknoptoewijzing.",
       "vibration": "Trilling",
       "usb_wired": "USB-bedrade communicatie",
       "usb_wired_desc": "Gebruik USB-bedrade modus om latentie te verminderen bij compatibele controllers.",
@@ -139,17 +365,19 @@
       "connected_device": "Verbonden apparaat",
       "no_device_connected": "Geen apparaat verbonden",
       "disconnect": "Verbinding verbreken",
+      "connected": "Verbonden",
+      "not_connected": "Niet verbonden",
       "paired_devices": "Gekoppelde apparaten",
       "no_paired_devices": "Geen gekoppelde apparaten",
       "discover_devices": "Apparaten zoeken",
+      "search_inactive": "Apparaten zoeken",
+      "search_active": "Apparaten zoeken bezig",
       "start_search": "Zoeken naar apparaten...",
       "stop_search": "Zoeken stoppen",
       "connect": "Verbinden",
       "unpair": "Ontkoppelen",
       "pair_connect": "Koppelen & verbinden",
-      "device_actions": "Apparaatacties",
-      "connected": "Verbonden",
-      "not_connected": "Niet verbonden"
+      "device_actions": "Apparaatacties"
     },
     "sleep": {
       "1min": "1 min",
@@ -163,6 +391,9 @@
       "6h": "6 uur",
       "12h": "12 uur",
       "never": "Nooit",
+      "sleep_now_title": "Slaapstand",
+      "shutdown_title": "Uitschakelen",
+      "reboot_title": "Console herstarten",
       "handheld": "Automatische slaapstand handheld",
       "handheld_desc": "Tijd tot automatische slaapstand in handheld-modus.",
       "docked": "Automatische slaapstand dock",
@@ -228,6 +459,7 @@
       "uninstall_success": "Succesvol verwijderd.",
       "uninstall_failed_title": "Verwijderen mislukt",
       "uninstall_failed": "Het geselecteerde titel kon niet worden verwijderd.",
+      "uninstall_failed_files": "Sommige bestanden konden niet van de SD-kaart worden verwijderd.",
       "location_internal": "Intern",
       "location_sd": "microSD",
       "location_system": "Systeem",
@@ -257,34 +489,50 @@
       "fork_maintainer": "Fork onderhouden door",
       "upstream_source": "Broncode (origineel)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
-    },
-    "accessibility": {
-      "voice": "Spraak",
-      "voice_desc": "Leest het geselecteerde item en beschikbare acties voor.",
-      "voice_language": "Taal van stem",
-      "voice_language_desc": "Volgt de systeem- of interfacetaal.",
-      "speech_rate": "Spreeksnelheid",
-      "speech_rate_desc": "Past de spreeksnelheid aan.",
-      "words_per_minute": "wpm",
-      "speak_hints": "Actiehints voorlezen",
-      "speak_hints_desc": "Leest beschikbare acties na het geselecteerde item.",
-      "repeat_context": "Locatie steeds herhalen",
-      "repeat_context_desc": "Herhaalt het huidige gebied bij elke focusbeweging.",
-      "speak_position": "Positie voorlezen",
-      "speak_position_desc": "Leest rij, kolom en positie voor wanneer beschikbaar."
     }
   },
   "userselect": {
     "title": "Wie speelt er?",
     "switch_title": "Accounts",
-    "add_user": "Gebruiker toevoegen"
+    "add_user": "Gebruiker toevoegen",
+    "add_user_hint": "A om een nieuwe gebruiker te maken."
   },
   "game": {
+    "tile_size": "Tegelgrootte",
+    "tile_size_desc": "Wijzigt de grootte van dit spel op het raster.",
+    "options": "Software-opties",
+    "data_management": "Gegevensbeheer",
+    "information": "Informatie",
     "move": "Verplaatsen",
+    "move_title": "Software verplaatsen",
+    "move_desc": "Verplaats deze software naar een andere positie op het HOME-menu.",
     "move_prefix": "Verplaatsen: ",
+    "version": "Versie",
+    "version_unknown": "Onbekend",
+    "publisher_unknown": "Onbekende uitgever",
+    "title_id": "Titel-ID",
+    "delete_software": "Software verwijderen",
+    "delete_software_desc": "Verwijdert de software van de console. Opslaggegevens worden niet verwijderd.",
+    "delete_gamecard_unavailable": "Software op een gamecard kan niet van de console worden verwijderd.",
+    "delete_confirmation": "De software wordt verwijderd. Opslaggegevens blijven behouden.",
+    "close_desc": "Sluit de actieve software. Niet-opgeslagen voortgang kan verloren gaan.",
+    "uninstall": "Verwijderen",
+    "uninstall_title": "Software verwijderen",
+    "uninstall_prefix": "Definitief verwijderen",
+    "uninstall_failed": "Verwijderen mislukt",
+    "uninstall_progress_title": "Software wordt verwijderd",
+    "uninstall_progress": "Even geduld. Zet de console niet uit.",
     "close_title": "Spel sluiten",
     "close_prefix": "Sluiten",
-    "close_suffix": "?\nNiet-opgeslagen voortgang gaat verloren."
+    "close_suffix": "?\nNiet-opgeslagen voortgang gaat verloren.",
+    "steamgriddb": {
+      "hero": "Hero",
+      "hero_desc": "Open de hero-galerij en kies de te gebruiken afbeelding.",
+      "logo": "Logo",
+      "logo_desc": "Open de logogalerij en kies de te gebruiken afbeelding.",
+      "icon": "Vervangend pictogram",
+      "icon_desc": "Open de pictogramgalerij en kies een vervanging voor dit spel."
+    }
   },
   "power": {
     "title": "Energie",
@@ -292,6 +540,104 @@
     "sleep": "Slaapstand",
     "shutdown": "Uitschakelen",
     "reboot": "Opnieuw opstarten"
+  },
+  "folder": {
+    "create": "Map maken",
+    "create_hint": "A om een map te maken.",
+    "open": "Openen",
+    "open_title": "Map openen",
+    "open_hint": "A om te openen. Plus voor mapopties. Y om te verplaatsen.",
+    "options": "Mapopties",
+    "rename": "Naam wijzigen",
+    "rename_title": "Mapnaam",
+    "delete": "Map verwijderen",
+    "delete_desc": "Spellen erin keren terug naar het HOME-menu.",
+    "name_guide": "Voer een mapnaam in",
+    "default_name": "Map",
+    "rename_guide": "Mapnaam wijzigen",
+    "choose": "Kies een map",
+    "add_game": "Aan map toevoegen",
+    "add_game_desc": "Kies een map voor deze software.",
+    "remove_game": "Uit map verwijderen",
+    "remove_game_desc": "Verplaats deze software terug naar het HOME-menu.",
+    "no_folder_title": "Geen map",
+    "no_folder": "Maak eerst een map.",
+    "error_title": "Mapfout",
+    "save_error": "De mapwijziging kon niet worden opgeslagen.",
+    "keyboard_error": "Het toetsenbord kon niet worden geopend.",
+    "place_on_home": "Kies een lege plek en druk op A",
+    "place_hint": "A om de software hier te plaatsen. B om te annuleren.",
+    "added_confirmation": "Software toegevoegd aan map: ",
+    "leave_while_moving": "Map verlaten",
+    "appearance": "Weergave",
+    "management": "Beheer",
+    "color": "Mapkleur",
+    "color_desc": "Kies de kleur van deze map.",
+    "color_blue": "Blauw",
+    "color_green": "Groen",
+    "color_yellow": "Geel",
+    "color_orange": "Oranje",
+    "color_red": "Rood",
+    "color_pink": "Roze",
+    "color_purple": "Paars",
+    "color_gray": "Grijs",
+    "size": "Mapgrootte",
+    "size_desc": "Wijzigt de grootte en het aantal pictogrammen in deze map.",
+    "size_small": "Klein",
+    "size_medium": "Gemiddeld",
+    "size_large": "Groot",
+    "items": "items",
+    "move": "Verplaatsen",
+    "page_added": "Pagina toegevoegd"
+  },
+  "add": {
+    "title": "Toevoegen"
+  },
+  "widget": {
+    "title": "Widget",
+    "create": "Nieuwe widget maken",
+    "clock": "Klok",
+    "recently_played": "Onlangs gespeeld",
+    "recent_playtime": "Recente speeltijd",
+    "random_screenshot": "Willekeurige screenshot",
+    "image_pin": "Afbeeldingspin",
+    "batteries": "Batterijen",
+    "choose_type": "Kies widget",
+    "choose_size": "Kies grootte",
+    "choose_image": "Kies afbeelding",
+    "resize": "Formaat wijzigen",
+    "delete": "Widget verwijderen",
+    "no_space": "Geen ruimte",
+    "no_recent_game": "Geen recent spel",
+    "last_played": "Laatst gespeeld",
+    "played_recently": "Onlangs gespeeld",
+    "no_playtime": "Geen recente speeltijd",
+    "error_title": "Widgetfout",
+    "save_error": "De widgetwijziging kon niet worden opgeslagen.",
+    "no_assets_title": "Geen widgetafbeeldingen",
+    "no_assets_desc": "Voeg PNG-, JPG-, WebP- of GIF-bestanden toe aan sdmc:/config/SwitchU/widgets/assets/ of aan de widgetmap van het actieve thema."
+  },
+  "controller_test": {
+    "title": "Controllertest",
+    "opened": "Controllertest. Kantel een stick kort om deze te selecteren. Houd B 1 seconde ingedrukt of druk op HOME om te sluiten.",
+    "close_hint": "Houd B 1 s ingedrukt of druk op HOME om te sluiten",
+    "joysticks": "Joysticks",
+    "buttons": "Knoppen",
+    "touchscreen": "Touchscreen",
+    "touch_hint": "Raak hier aan of klik en sleep",
+    "touch_fullscreen_opened": "Touchtest op volledig scherm. Druk op X om terug te gaan. Houd B 1 seconde ingedrukt of druk op HOME om te sluiten.",
+    "touch_fullscreen_hint": "Touchtest · X: terug · Houd B 1 s ingedrukt of HOME: sluiten",
+    "tilt_to_select": "Kantel een stick kort om deze te selecteren",
+    "left_stick": "Linkerstick",
+    "right_stick": "Rechterstick",
+    "left_selected": "Linkerstick geselecteerd",
+    "right_selected": "Rechterstick geselecteerd",
+    "direction": "Richting",
+    "center": "Midden",
+    "up": "Omhoog",
+    "down": "Omlaag",
+    "left": "Links",
+    "right": "Rechts"
   },
   "languages": {
     "ja-JP": "Japans",
@@ -324,7 +670,19 @@
     "cancel": "Annuleren",
     "delete": "Verwijderen",
     "close": "Sluiten",
-    "replace": "Vervangen"
+    "replace": "Vervangen",
+    "configure": "Instellen",
+    "connect": "Verbinden",
+    "manage": "Beheren",
+    "move": "Verplaatsen",
+    "open": "Openen",
+    "pair": "Koppelen",
+    "rename": "Naam wijzigen",
+    "search": "Zoeken",
+    "select": "Selecteren",
+    "stop": "Stoppen",
+    "test": "Testen",
+    "uninstall": "Verwijderen"
   },
   "themeshop": {
     "update_status": "Status",
@@ -348,7 +706,24 @@
       "community": "Statische thema’s",
       "animated": "Geanimeerde thema’s",
       "options": "Opties",
-      "update": "Update"
+      "update": "Bijwerken"
+    },
+    "accessibility": {
+      "fullscreen_preview": "Volledig scherm",
+      "fullscreen_actions": "B sluit de preview.",
+      "preview_area": "Voorbeeld",
+      "actions_area": "Acties",
+      "detail": "Detail",
+      "author": "Auteur",
+      "detail_actions": "Links en rechts wisselen bediening. A bevestigt. B terug.",
+      "search_refresh": "Zoeken en vernieuwen",
+      "search_bar": "Zoeken",
+      "header_actions": "Links en rechts om te kiezen. A bevestigt. Omlaag naar het raster.",
+      "search_actions": "A om te zoeken. Omlaag naar het raster.",
+      "pagination": "Pagina’s",
+      "pagination_actions": "Links en rechts wisselen knop. A wisselt pagina. Omhoog naar het raster.",
+      "no_theme": "Geen thema",
+      "grid_actions": "Richtingsknoppen om te navigeren. A opent details. B terug naar tabs."
     },
     "search": {
       "button": "Zoeken",
@@ -442,23 +817,6 @@
       "prev": "Vorige",
       "next": "Volgende"
     },
-    "accessibility": {
-      "fullscreen_preview": "Volledig scherm",
-      "fullscreen_actions": "B sluit de preview.",
-      "preview_area": "Preview",
-      "actions_area": "Acties",
-      "detail": "Detail",
-      "author": "Auteur",
-      "detail_actions": "Links en rechts wisselen bediening. A bevestigt. B terug.",
-      "search_refresh": "Zoeken en vernieuwen",
-      "search_bar": "Zoeken",
-      "header_actions": "Links en rechts om te kiezen. A bevestigt. Omlaag naar het raster.",
-      "search_actions": "A om te zoeken. Omlaag naar het raster.",
-      "pagination": "Pagina’s",
-      "pagination_actions": "Links en rechts wisselen knop. A wisselt pagina. Omhoog naar het raster.",
-      "no_theme": "Geen thema",
-      "grid_actions": "Richtingsknoppen om te navigeren. A opent details. B terug naar tabs."
-    },
     "page": {
       "next": "Volgende",
       "prev": "Vorige"
@@ -468,160 +826,11 @@
       "subtitle": "Bewegende achtergronden, met geluid als het thema dat meebrengt."
     }
   },
-  "hint": {
-    "navigate": "Navigeren",
-    "select": "Selecteren",
-    "confirm": "Bevestigen",
-    "cancel": "Annuleren",
-    "back": "Terug",
-    "close": "Sluiten",
-    "open": "Openen",
-    "launch": "Starten",
-    "resume": "Hervatten",
-    "move": "Verplaatsen",
-    "place": "Plaatsen",
-    "prev_page": "Vorige pagina",
-    "next_page": "Volgende pagina",
-    "profile": "Profiel",
-    "search": "Zoeken",
-    "repeat": "Herhalen",
-    "voice": "Stem",
-    "sort_custom": "Mijn volgorde",
-    "sort_alpha": "A-Z",
-    "sort_recent": "Recent",
-    "options": "Opties"
-  },
-  "accessibility": {
-    "speech": {
-      "enabled": "Spraak ingeschakeld.",
-      "disabled": "Spraak uitgeschakeld. Spraakhulp gestopt."
-    },
-    "context": {
-      "dialog": "Dialoog",
-      "profile_selection": "Profielkeuze",
-      "settings": "Instellingen",
-      "themes": "Thema’s",
-      "main_menu": "Hoofdmenu",
-      "page": "pagina",
-      "of": "van",
-      "left_sidebar": "Linkerzijbalk",
-      "right_sidebar": "Rechterzijbalk",
-      "user_profiles": "Gebruikersprofielen"
-    },
-    "roles": {
-      "button": "knop",
-      "game": "spel",
-      "game_card": "gamecard",
-      "slot": "vak",
-      "profile": "profiel",
-      "toggle": "schakelaar",
-      "slider": "schuifregelaar",
-      "selector": "keuze",
-      "progress": "voortgang",
-      "info": "informatie",
-      "section": "sectie"
-    },
-    "hints": {
-      "open": "A om te openen.",
-      "open_user_page": "A om de gebruikerspagina te openen.",
-      "grid_empty": "Gebruik de richtingsknoppen om naar een ander vak te gaan.",
-      "game_launchable": "A om te starten. X voor opties. Y om te verplaatsen. ZL of ZR voor andere pagina.",
-      "game_blocked": "A toont waarom dit is geblokkeerd."
-    },
-    "actions": {
-      "edit_mode": "Richtingsknoppen kiezen de nieuwe positie. Y om te plaatsen. B annuleert.",
-      "empty_slot": "Richtingsknoppen om te navigeren. ZL of ZR voor andere pagina.",
-      "game_blocked": "A toont de reden. Y om te verplaatsen. ZL of ZR voor andere pagina.",
-      "game_launchable": "A om te starten. X voor opties. Y om te verplaatsen. ZL of ZR voor andere pagina.",
-      "settings": "Omhoog en omlaag kiezen een categorie. A of rechts opent. B sluit.",
-      "themes": "Omhoog en omlaag om te navigeren. A kiest. B sluit.",
-      "dialog": "Links en rechts wijzigen de keuze. A bevestigt. B annuleert."
-    },
-    "settings": {
-      "tab_prefix": "Tab",
-      "tab_actions": "A of rechts opent. Omhoog en omlaag wisselen tab. B sluit.",
-      "list_prefix": "Lijst",
-      "list_actions": "Omhoog en omlaag om te kiezen. A bevestigt. B sluit de lijst.",
-      "toggle_actions": "A om te wijzigen. Links terug naar tabs.",
-      "slider_actions": "Links of rechts om aan te passen. B terug naar tabs.",
-      "selector_actions": "A of rechts opent de lijst. B terug naar tabs.",
-      "action_actions": "A voert de actie uit. B terug naar tabs."
-    },
-    "value": {
-      "label": "Waarde",
-      "percent": "procent"
-    },
-    "position": {
-      "row": "rij",
-      "column": "kolom"
-    },
-    "move_mode": {
-      "enter": "Spel verplaatsen: ",
-      "placed": "Spel verplaatst: ",
-      "cancelled": "Verplaatsen geannuleerd: "
-    },
-    "grid": {
-      "empty_slot": "Leeg vak"
-    },
-    "user_profile": "Gebruikersprofiel"
-  },
-  "tutorial": {
-    "accessibility": {
-      "title": "Spraak",
-      "body": "Spraak is beschikbaar in dit menu. Het kan het geselecteerde item en beschikbare acties voorlezen.",
-      "objective": "Druk op X om spraak voor later aan te zetten. Druk op A om zonder spraak door te gaan.",
-      "enabled_announcement": "Spraak ingeschakeld voor later. Druk op A om door te gaan.",
-      "already_enabled_announcement": "Spraak is al ingeschakeld voor later.",
-      "disabled_announcement": "Spraak uitgeschakeld. Animalese-geluiden zijn actief.",
-      "text_actions": "A om door te gaan. B om over te slaan."
-    },
-    "accessibility_settings": {
-      "title": "Toegankelijkheid",
-      "body": "Toegankelijkheidsopties staan in Instellingen, daarna Toegankelijkheid. Je kunt snelheid, hints, locatie en positie aanpassen."
-    },
-    "welcome": {
-      "title": "Welkom bij SwitchU",
-      "body": "Deze korte tutorial laat de basisbediening zien."
-    },
-    "navigation": {
-      "title": "Navigatie",
-      "body": "Gebruik de richtingsknoppen of linkerstick om de focus te verplaatsen.",
-      "objective": "Verplaats de focus naar een ander item."
-    },
-    "cursor": {
-      "title": "Focus",
-      "body": "De lichtgevende rand toont welk item geselecteerd is."
-    },
-    "themes": {
-      "title": "Thema’s",
-      "body": "Thema’s veranderen kleuren, beelden en geluiden. Open Thema’s via de zijbalk om stijlen te installeren of toe te passen."
-    },
-    "support": {
-      "title": "Hulp",
-      "body": "Linksonder zie je de nuttige knoppen voor het huidige scherm."
-    },
-    "confirm": {
-      "title": "Klaar",
-      "body": "Je kunt beginnen.",
-      "objective": "Druk op A om deze stap te bevestigen."
-    },
-    "hints": {
-      "enable_voice": "Spraak aan",
-      "disable_voice": "Spraak uit",
-      "voice_enabled": "Spraak aan",
-      "continue": "Verder",
-      "reveal": "Tonen",
-      "skip_step": "Stap overslaan",
-      "skip_all": "Alles overslaan",
-      "test": "Test",
-      "skip_all_banner": "Druk op  +  om de installatie over te slaan"
-    }
-  },
   "dialog": {
-    "icon_options_body": "Choose what to do with this software.",
-    "icon_options_info": "Software information",
+    "icon_options_body": "Kies wat je met deze software wilt doen.",
+    "icon_options_info": "Software-informatie",
     "icon_options_gallery": "Galerij",
-    "icon_options_delete": "Delete software",
+    "icon_options_delete": "Software verwijderen",
     "icon_options_customize": "Aanpassen",
     "customize_title": "Aanpassen",
     "customize_body": "Kies hoe deze software in het menu verschijnt.",
@@ -723,11 +932,23 @@
     "gallery_restore_background_body": "De aangepaste achtergrond wordt verwijderd en de thema-achtergrond keert terug.",
     "gallery_restored_cover": "Standaardcover hersteld.",
     "gallery_restored_background": "Standaardachtergrond hersteld.",
-    "software_information": "Software information",
-    "software_title_id": "Title ID",
-    "delete_software": "Delete software?",
-    "delete_software_body": "This removes the software from the console. It cannot be undone here -- the software has to be downloaded or installed again.",
-    "delete_software_done": "The software was deleted.",
-    "delete_software_failed": "The software could not be deleted."
+    "software_information": "Software-informatie",
+    "software_title_id": "Titel-ID",
+    "delete_software": "Software verwijderen?",
+    "delete_software_body": "Dit verwijdert de software van de console. Dit kan hier niet ongedaan worden gemaakt -- de software moet opnieuw worden gedownload of geïnstalleerd.",
+    "delete_software_done": "De software is verwijderd.",
+    "delete_software_failed": "De software kon niet worden verwijderd.",
+    "delete_software_files": "Deze mappen op de SD-kaart worden ook verwijderd:",
+    "non_game_options_body_folder": "Homebrew en ports hebben geen spelgegevens, artwork of mods om te beheren. Ze kunnen in een map worden opgeslagen of verwijderd."
+  },
+  "text_entry": {
+    "erase": "Wissen",
+    "full": "Maximale lengte bereikt",
+    "hint": "A: typen   X: wissen   Y: shift   L/R: symbolen   Plus: bevestigen   B: annuleren",
+    "letters": "ABC",
+    "opened": "Toetsenbord op scherm. Richtingstoetsen om een toets te kiezen, A om te typen, X om te wissen, Plus om te bevestigen, B om te annuleren.",
+    "shift": "Shift",
+    "space": "Spatie",
+    "symbols": "?12#"
   }
 }

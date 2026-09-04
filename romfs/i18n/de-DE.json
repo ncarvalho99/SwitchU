@@ -5,34 +5,197 @@
     "unlocked": "Entsperrt."
   },
   "common": {
-    "auto": "Auto",
-    "na": "N/A",
+    "auto": "Automatisch",
+    "na": "k. A.",
     "active": "Aktiv",
     "disabled": "Deaktiviert"
+  },
+  "accessibility": {
+    "speech": {
+      "enabled": "Sprachausgabe aktiviert.",
+      "disabled": "Sprachausgabe deaktiviert. Sprachhilfe beendet."
+    },
+    "context": {
+      "dialog": "Dialog",
+      "profile_selection": "Profilauswahl",
+      "settings": "Einstellungen",
+      "themes": "Themes",
+      "main_menu": "Hauptmenü",
+      "page": "Seite",
+      "of": "von",
+      "left_sidebar": "Linke Seitenleiste",
+      "right_sidebar": "Rechte Seitenleiste",
+      "user_profiles": "Benutzerprofile",
+      "dynamic_line": "Mittellinie",
+      "menu": "Kontextmenü"
+    },
+    "roles": {
+      "button": "Taste",
+      "game": "Spiel",
+      "game_card": "Spielkarte",
+      "slot": "Feld",
+      "profile": "Profil",
+      "toggle": "Schalter",
+      "slider": "Regler",
+      "selector": "Auswahl",
+      "progress": "Fortschritt",
+      "info": "Info",
+      "section": "Abschnitt",
+      "action": "Aktion"
+    },
+    "hints": {
+      "open": "A zum Öffnen.",
+      "open_user_page": "A zum Öffnen der Benutzerseite.",
+      "grid_empty": "Mit dem Steuerkreuz zu einem anderen Feld wechseln.",
+      "game_launchable": "A zum Starten. X für Optionen. Y zum Verschieben. ZL oder ZR zum Seitenwechsel.",
+      "game_blocked": "A zeigt den Grund der Sperre.",
+      "recently_played_widget": "A zum Starten des zuletzt gespielten Spiels. Plus für Widget-Optionen. Y zum Verschieben.",
+      "widget": "Plus für Widget-Optionen. Y zum Verschieben. Minus zum Ändern der Ansicht."
+    },
+    "actions": {
+      "edit_mode": "Steuerkreuz wählt die neue Position. Y zum Platzieren. B zum Abbrechen.",
+      "empty_slot": "Steuerkreuz zum Navigieren. ZL oder ZR zum Seitenwechsel.",
+      "game_blocked": "A zeigt den Grund. Y zum Verschieben. ZL oder ZR zum Seitenwechsel.",
+      "game_launchable": "A zum Starten. X für Optionen. Y zum Verschieben. ZL oder ZR zum Seitenwechsel.",
+      "settings": "Hoch und runter wählen eine Kategorie. A oder rechts zum Öffnen. B zum Schließen.",
+      "themes": "Hoch und runter zum Navigieren. A zum Auswählen. B zum Schließen.",
+      "dialog": "Links und rechts ändern die Auswahl. A bestätigt. B bricht ab.",
+      "context_menu": "Hoch und runter zum Auswählen. A zum Bestätigen. B zum Schließen.",
+      "edit_mode_folder": "Steuerkreuz zum Wählen der Position. A zum Platzieren. B zum Verlassen des Ordners, die Software bleibt ausgewählt."
+    },
+    "settings": {
+      "tab_prefix": "Tab",
+      "tab_actions": "A oder rechts zum Öffnen. Hoch und runter wechseln den Tab. B schließt.",
+      "list_prefix": "Liste",
+      "list_actions": "Hoch und runter zum Auswählen. A bestätigt. B schließt die Liste.",
+      "toggle_actions": "A zum Umschalten. Links zurück zu den Tabs.",
+      "slider_actions": "Links oder rechts zum Anpassen. B zurück zu den Tabs.",
+      "selector_actions": "A oder rechts öffnet die Liste. B zurück zu den Tabs.",
+      "action_actions": "A führt die Aktion aus. B zurück zu den Tabs."
+    },
+    "value": {
+      "label": "Wert",
+      "percent": "Prozent"
+    },
+    "position": {
+      "row": "Zeile",
+      "column": "Spalte",
+      "item": "Element"
+    },
+    "move_mode": {
+      "enter": "Spiel verschieben: ",
+      "placed": "Spiel verschoben: ",
+      "cancelled": "Verschieben abgebrochen: "
+    },
+    "grid": {
+      "empty_slot": "Leeres Feld"
+    },
+    "user_profile": "Benutzerprofil",
+    "layout": {
+      "dynamic_line": "Dynamischer Linienmodus",
+      "grid": "Rastermodus"
+    }
+  },
+  "tutorial": {
+    "accessibility": {
+      "title": "Sprachausgabe",
+      "body": "Sprachausgabe ist in diesem Menü verfügbar. Sie kann das ausgewählte Element und verfügbare Aktionen vorlesen.",
+      "objective": "Drücke X, um Sprachausgabe für später zu aktivieren. Drücke A, um ohne sie fortzufahren.",
+      "enabled_announcement": "Sprachausgabe für später aktiviert. Drücke A zum Fortfahren.",
+      "already_enabled_announcement": "Sprachausgabe ist bereits für später aktiviert.",
+      "disabled_announcement": "Sprachausgabe deaktiviert. Animalese-Töne sind aktiv.",
+      "text_actions": "A zum Fortfahren. B zum Überspringen."
+    },
+    "accessibility_settings": {
+      "title": "Bedienhilfen",
+      "body": "Optionen für Bedienhilfen findest du unter Einstellungen, dann Bedienhilfen. Dort kannst du Tempo, Hinweise, Ortsansagen und Positionsdetails anpassen."
+    },
+    "welcome": {
+      "title": "Willkommen bei SwitchU",
+      "body": "Dieses kurze Tutorial zeigt dir die wichtigsten Steuerungen."
+    },
+    "navigation": {
+      "title": "Navigation",
+      "body": "Benutze das Steuerkreuz oder den linken Stick, um den Fokus zu bewegen.",
+      "objective": "Bewege den Fokus zu einem anderen Element."
+    },
+    "confirm": {
+      "title": "Fertig",
+      "body": "Du bist startklar.",
+      "objective": "Drücke A, um diesen Schritt zu bestätigen."
+    },
+    "themes": {
+      "title": "Themes",
+      "body": "Themes ändern Farben, Bilder und Sounds. Öffne Themes über die Seitenleiste, um Styles zu installieren oder anzuwenden."
+    },
+    "cursor": {
+      "title": "Fokus",
+      "body": "Der Leuchtrahmen zeigt, welches Element ausgewählt ist."
+    },
+    "support": {
+      "title": "Hilfe",
+      "body": "Unten links siehst du die wichtigsten Tasten für den aktuellen Bildschirm."
+    },
+    "hints": {
+      "disable_voice": "Stimme aus",
+      "enable_voice": "Stimme ein",
+      "voice_enabled": "Stimme ein",
+      "reveal": "Anzeigen",
+      "continue": "Weiter",
+      "test": "Testen",
+      "skip_step": "Schritt überspringen",
+      "skip_all": "Alles überspringen",
+      "skip_all_banner": "Drücke  +  um die Einrichtung zu überspringen"
+    }
   },
   "sidebar": {
     "album": "Album",
     "mii_editor": "Mii-Editor",
     "settings": "Einstellungen",
     "controllers": "Controller",
+    "theme_shop": "SwitchU",
     "sleep": "Standby-Modus",
-    "music": "Musik",
-    "theme_shop": "SwitchU"
+    "music": "Musik"
+  },
+  "hint": {
+    "navigate": "Navigieren",
+    "select": "Auswählen",
+    "confirm": "Bestätigen",
+    "cancel": "Abbrechen",
+    "back": "Zurück",
+    "close": "Schließen",
+    "open": "Öffnen",
+    "launch": "Starten",
+    "resume": "Fortsetzen",
+    "move": "Bewegen",
+    "place": "Platzieren",
+    "prev_page": "Vorherige Seite",
+    "next_page": "Nächste Seite",
+    "profile": "Profil",
+    "search": "Suchen",
+    "repeat": "Wiederholen",
+    "voice": "Sprache",
+    "sort_custom": "Meine Reihenfolge",
+    "sort_alpha": "A-Z",
+    "sort_recent": "Zuletzt",
+    "options": "Optionen",
+    "switch_layout": "Ansicht wechseln"
   },
   "settings": {
     "tabs": {
       "system": "System",
+      "accessibility": "Bedienhilfen",
       "audio": "Audio",
-      "display": "Display",
+      "display": "Bildschirm",
       "internet": "Internet",
+      "steamgriddb": "SteamGridDB",
       "controllers": "Controller",
       "bluetooth": "Bluetooth",
       "sleep": "Standby-Modus",
       "music": "Musik",
       "theme": "Design",
       "storage": "Speicher",
-      "about": "Info",
-      "accessibility": "Bedienhilfen"
+      "about": "Info"
     },
     "system": {
       "firmware": "Firmware-Version",
@@ -43,11 +206,16 @@
       "console_nickname": "Konsolen-Spitzname",
       "serial_number": "Seriennummer",
       "timezone": "Zeitzone",
+      "clock_12h": "12-Stunden-Uhr",
+      "clock_12h_desc": "Zeit im 12-Stunden-Format anzeigen.",
       "usb30": "USB 3.0",
       "usb30_desc": "USB 3.0 für schnellere Übertragungsraten aktivieren.",
       "battery_lot": "Akku-Charge",
       "ui_language": "SwitchU-Sprache",
       "ui_language_desc": "Drücke A, um die von SwitchU verwendete Sprache auszuwählen.",
+      "default_profile": "Standardprofil",
+      "default_profile_desc": "Startet Spiele nach Möglichkeit mit diesem Profil.",
+      "default_profile_ask": "Jedes Mal fragen",
       "console_language": "Konsolensprache",
       "console_language_desc": "Schreibgeschützt. Ändere dies in den Systemeinstellungen der Nintendo Switch.",
       "region": "Region",
@@ -60,13 +228,38 @@
       "region_south_korea": "Südkorea",
       "auto_update": "Automatisches Update",
       "error_reporting": "Fehlerinformationen senden",
-      "default_profile": "Standardprofil",
-      "default_profile_desc": "Startet Spiele nach Möglichkeit mit diesem Profil.",
-      "default_profile_ask": "Jedes Mal fragen",
-      "clock_12h": "12-Stunden-Uhr",
-      "clock_12h_desc": "Zeit im 12-Stunden-Format anzeigen.",
       "add_user": "Benutzer hinzufügen",
-      "add_user_desc": "Erstellt ein neues Benutzerkonto auf dieser Konsole."
+      "add_user_desc": "Erstellt ein neues Benutzerkonto auf dieser Konsole.",
+      "day": "Tag",
+      "disable_internet_time_first": "Deaktiviere zuerst die Internet-Zeitsynchronisierung.",
+      "hour": "Stunde",
+      "internet_time": "Uhr über Internet synchronisieren",
+      "internet_time_desc": "Korrigiert die Konsolenuhr automatisch anhand der Netzwerkzeit.",
+      "manual_time": "Datum und Uhrzeit einstellen",
+      "manual_time_button": "Ändern",
+      "manual_time_desc": "Verfügbar, wenn die Internet-Zeitsynchronisierung deaktiviert ist.",
+      "manual_time_footer": "A Bestätigen   ·   B Abbrechen",
+      "manual_time_popup_hint": "Links/rechts wählt ein Feld aus. Hoch/runter ändert den Wert.",
+      "manual_time_saved": "Datum und Uhrzeit aktualisiert.",
+      "minute": "Minute",
+      "month": "Monat",
+      "time_change_failed": "Die Datums- und Uhrzeiteinstellung konnte nicht geändert werden.",
+      "year": "Jahr"
+    },
+    "accessibility": {
+      "voice": "Sprachausgabe",
+      "voice_desc": "Liest ausgewählte Elemente und verfügbare Aktionen vor.",
+      "voice_language": "Sprache der Stimme",
+      "voice_language_desc": "Folgt der System- oder Oberflächensprache.",
+      "speech_rate": "Sprechtempo",
+      "speech_rate_desc": "Legt fest, wie schnell gesprochen wird.",
+      "words_per_minute": "W/min",
+      "speak_hints": "Aktionshinweise vorlesen",
+      "speak_hints_desc": "Liest verfügbare Aktionen nach dem ausgewählten Element vor.",
+      "repeat_context": "Ort immer wiederholen",
+      "repeat_context_desc": "Wiederholt den aktuellen Bereich bei jeder Fokusbewegung.",
+      "speak_position": "Position vorlesen",
+      "speak_position_desc": "Liest Zeile, Spalte und Position vor, wenn verfügbar."
     },
     "audio": {
       "speaker_auto_mute": "Konsolenlautsprecher stummschalten",
@@ -110,7 +303,9 @@
       "reload_grid": "Spiele und Verknüpfungen neu laden",
       "reload_grid_desc": "Liest die installierten Titel erneut und verwirft zwischengespeicherte Namen und Symbole. Nach dem Anlegen oder Löschen einer Verknüpfung verwenden.",
       "reload_grid_done": "Installierte Titel werden erneut gelesen...",
-      "reload_grid_failed": "Neuladen konnte nicht angefordert werden."
+      "reload_grid_failed": "Neuladen konnte nicht angefordert werden.",
+      "ui_wireframe": "UI-Drahtgitter",
+      "ui_wireframe_desc": "Zeigt Umrisse aller Box-Widgets zur Layout-Fehlersuche an."
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",
@@ -124,13 +319,44 @@
       "auto_app_download_desc": "Updates für installierte Spiele automatisch herunterladen.",
       "mac_address": "MAC-Adresse",
       "dns": "DNS",
-      "dns_auto": "Auto (DHCP)"
+      "dns_auto": "Automatisch (DHCP)"
+    },
+    "steamgriddb": {
+      "section": "Spiel-Artwork",
+      "enabled": "SteamGridDB-Artwork anzeigen",
+      "enabled_desc": "Zeigt Heroes und Logos hinter dem Anwendungsmenü an.",
+      "api_key": "API-Schlüssel",
+      "api_key_set": "Konfiguriert (verborgen)",
+      "api_key_missing": "Nicht konfiguriert",
+      "api_key_optional": "Optional. Heroes und Symbole funktionieren ohne, Logos benötigen einen.",
+      "scan": "Artwork für fehlende Anwendungen suchen",
+      "scan_desc": "Lädt einen Hero und ein Logo nur für Anwendungen herunter, die noch kein Artwork haben.",
+      "already_running": "Ein Scan läuft bereits.",
+      "need_key": "Konfiguriere zuerst einen API-Schlüssel.",
+      "need_key_logo": "Logos benötigen einen SteamGridDB-API-Schlüssel. Richte einen in den Einstellungen ein.",
+      "progress": "Artwork-Scan",
+      "idle": "Bereit zum Scannen installierter Anwendungen.",
+      "results": "Ergebnisse",
+      "no_results": "Noch kein Scan durchgeführt",
+      "keyboard_error": "Die Tastatur konnte nicht geöffnet werden.",
+      "key_cleared": "API-Schlüssel entfernt.",
+      "key_saved": "API-Schlüssel gespeichert.",
+      "start_failed": "Der Artwork-Scan konnte nicht gestartet werden.",
+      "started": "SteamGridDB-Scan gestartet.",
+      "download_title": "Artwork wird heruntergeladen",
+      "download_start": "SteamGridDB wird durchsucht..."
     },
     "controllers": {
+      "test": "Eingabegeräte testen",
+      "test_desc": "Testet Analog-Sticks, Tasten und den Touchscreen.",
+      "pairing": "Griff/Reihenfolge ändern",
+      "pairing_desc": "Controller koppeln und ihre Spielerreihenfolge ändern.",
+      "remapping": "Tastenbelegung ändern",
+      "remapping_desc": "Öffnet das Systemwerkzeug für die Controller-Tastenbelegung.",
       "vibration": "Vibration",
       "usb_wired": "Kabelgebundene Verbindung für Pro Controller",
       "usb_wired_desc": "Kabelgebundenen Modus nutzen, um die Latenz bei kompatiblen Controllern zu verringern.",
-      "nfc": "NFC (amiibo)"
+      "nfc": "NFC (Amiibo)"
     },
     "bluetooth": {
       "bluetooth": "Bluetooth",
@@ -139,17 +365,19 @@
       "connected_device": "Verbundenes Gerät",
       "no_device_connected": "Kein Gerät verbunden",
       "disconnect": "Verbindung trennen",
+      "connected": "Verbunden",
+      "not_connected": "Nicht verbunden",
       "paired_devices": "Gekoppelte Geräte",
       "no_paired_devices": "Keine gekoppelten Geräte",
       "discover_devices": "Geräte suchen",
+      "search_inactive": "Gerätesuche",
+      "search_active": "Gerätesuche läuft",
       "start_search": "Suche nach Geräten...",
       "stop_search": "Suche abbrechen",
       "connect": "Verbinden",
       "unpair": "Entkoppeln",
       "pair_connect": "Koppeln & Verbinden",
-      "device_actions": "Geräteaktionen",
-      "connected": "Verbunden",
-      "not_connected": "Nicht verbunden"
+      "device_actions": "Geräteaktionen"
     },
     "sleep": {
       "1min": "1 Min.",
@@ -163,6 +391,9 @@
       "6h": "6 Stunden",
       "12h": "12 Stunden",
       "never": "Nie",
+      "sleep_now_title": "Ruhemodus",
+      "shutdown_title": "Ausschalten",
+      "reboot_title": "Konsole neu starten",
       "handheld": "Auto-Standby im Handheld-Modus",
       "handheld_desc": "Zeitraum bis zum automatischen Standby-Modus.",
       "docked": "Auto-Standby im TV-Modus",
@@ -228,6 +459,7 @@
       "uninstall_success": "Erfolgreich deinstalliert.",
       "uninstall_failed_title": "Deinstallation fehlgeschlagen",
       "uninstall_failed": "Der ausgewählte Titel konnte nicht deinstalliert werden.",
+      "uninstall_failed_files": "Einige Dateien konnten nicht von der SD-Karte entfernt werden.",
       "location_internal": "Intern",
       "location_sd": "microSD",
       "location_system": "System",
@@ -257,34 +489,50 @@
       "fork_maintainer": "Fork gepflegt von",
       "upstream_source": "Quellcode (Original)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
-    },
-    "accessibility": {
-      "voice": "Sprachausgabe",
-      "voice_desc": "Liest ausgewählte Elemente und verfügbare Aktionen vor.",
-      "voice_language": "Sprache der Stimme",
-      "voice_language_desc": "Folgt der System- oder Oberflächensprache.",
-      "speech_rate": "Sprechtempo",
-      "speech_rate_desc": "Legt fest, wie schnell gesprochen wird.",
-      "words_per_minute": "W/min",
-      "speak_hints": "Aktionshinweise vorlesen",
-      "speak_hints_desc": "Liest verfügbare Aktionen nach dem ausgewählten Element vor.",
-      "repeat_context": "Ort immer wiederholen",
-      "repeat_context_desc": "Wiederholt den aktuellen Bereich bei jeder Fokusbewegung.",
-      "speak_position": "Position vorlesen",
-      "speak_position_desc": "Liest Zeile, Spalte und Position vor, wenn verfügbar."
     }
   },
   "userselect": {
     "title": "Wer spielt?",
     "switch_title": "Konten",
-    "add_user": "Benutzer hinzufügen"
+    "add_user": "Benutzer hinzufügen",
+    "add_user_hint": "A zum Erstellen eines neuen Benutzers."
   },
   "game": {
+    "tile_size": "Kachelgröße",
+    "tile_size_desc": "Ändert die Größe dieses Spiels im Raster.",
+    "options": "Softwareoptionen",
+    "data_management": "Datenverwaltung",
+    "information": "Informationen",
     "move": "Verschieben",
+    "move_title": "Software verschieben",
+    "move_desc": "Verschiebt diese Software an eine andere Position im HOME-Menü.",
     "move_prefix": "Verschieben: ",
+    "version": "Version",
+    "version_unknown": "Unbekannt",
+    "publisher_unknown": "Unbekannter Publisher",
+    "title_id": "Titel-ID",
+    "delete_software": "Software löschen",
+    "delete_software_desc": "Löscht die Software von der Konsole. Speicherdaten werden nicht gelöscht.",
+    "delete_gamecard_unavailable": "Software auf Spielkarten kann nicht von der Konsole gelöscht werden.",
+    "delete_confirmation": "Die Software wird gelöscht. Speicherdaten bleiben erhalten.",
+    "close_desc": "Beendet die laufende Software. Nicht gespeicherter Fortschritt kann verloren gehen.",
+    "uninstall": "Deinstallieren",
+    "uninstall_title": "Software deinstallieren",
+    "uninstall_prefix": "Endgültig löschen",
+    "uninstall_failed": "Deinstallation fehlgeschlagen",
+    "uninstall_progress_title": "Software wird gelöscht",
+    "uninstall_progress": "Bitte warten. Konsole nicht ausschalten.",
     "close_title": "Spiel schließen",
     "close_prefix": "Schließen",
-    "close_suffix": "?\nNicht gespeicherter Fortschritt geht verloren."
+    "close_suffix": "?\nNicht gespeicherter Fortschritt geht verloren.",
+    "steamgriddb": {
+      "hero": "Hero",
+      "hero_desc": "Öffne die Hero-Galerie und wähle das zu verwendende Bild.",
+      "logo": "Logo",
+      "logo_desc": "Öffne die Logo-Galerie und wähle das zu verwendende Bild.",
+      "icon": "Ersatzsymbol",
+      "icon_desc": "Öffne die Symbolgalerie und wähle eine Überschreibung für dieses Spiel."
+    }
   },
   "power": {
     "title": "Energie",
@@ -292,6 +540,104 @@
     "sleep": "Standby",
     "shutdown": "Ausschalten",
     "reboot": "Neustarten"
+  },
+  "folder": {
+    "create": "Ordner erstellen",
+    "create_hint": "A zum Erstellen eines Ordners.",
+    "open": "Öffnen",
+    "open_title": "Ordner öffnen",
+    "open_hint": "A zum Öffnen. Plus für Ordneroptionen. Y zum Verschieben.",
+    "options": "Ordneroptionen",
+    "rename": "Umbenennen",
+    "rename_title": "Ordnername",
+    "delete": "Ordner löschen",
+    "delete_desc": "Enthaltene Spiele kehren zum HOME-Menü zurück.",
+    "name_guide": "Ordnernamen eingeben",
+    "default_name": "Ordner",
+    "rename_guide": "Ordner umbenennen",
+    "choose": "Ordner wählen",
+    "add_game": "Zu Ordner hinzufügen",
+    "add_game_desc": "Wähle einen Ordner für diese Software.",
+    "remove_game": "Aus Ordner entfernen",
+    "remove_game_desc": "Diese Software zurück ins HOME-Menü verschieben.",
+    "no_folder_title": "Kein Ordner",
+    "no_folder": "Erstelle zuerst einen Ordner.",
+    "error_title": "Ordnerfehler",
+    "save_error": "Die Ordneränderung konnte nicht gespeichert werden.",
+    "keyboard_error": "Die Tastatur konnte nicht geöffnet werden.",
+    "place_on_home": "Wähle einen leeren Platz und drücke A",
+    "place_hint": "A zum Platzieren der Software hier. B zum Abbrechen.",
+    "added_confirmation": "Software zu Ordner hinzugefügt: ",
+    "leave_while_moving": "Ordner verlassen",
+    "appearance": "Erscheinungsbild",
+    "management": "Verwaltung",
+    "color": "Ordnerfarbe",
+    "color_desc": "Wähle die Farbe dieses Ordners.",
+    "color_blue": "Blau",
+    "color_green": "Grün",
+    "color_yellow": "Gelb",
+    "color_orange": "Orange",
+    "color_red": "Rot",
+    "color_pink": "Pink",
+    "color_purple": "Lila",
+    "color_gray": "Grau",
+    "size": "Ordnergröße",
+    "size_desc": "Ändert die Größe und Anzahl der Symbole in diesem Ordner.",
+    "size_small": "Klein",
+    "size_medium": "Mittel",
+    "size_large": "Groß",
+    "items": "Elemente",
+    "move": "Verschieben",
+    "page_added": "Seite hinzugefügt"
+  },
+  "add": {
+    "title": "Hinzufügen"
+  },
+  "widget": {
+    "title": "Widget",
+    "create": "Neues Widget erstellen",
+    "clock": "Uhr",
+    "recently_played": "Kürzlich gespielt",
+    "recent_playtime": "Kürzliche Spielzeit",
+    "random_screenshot": "Zufälliger Screenshot",
+    "image_pin": "Bild-Pin",
+    "batteries": "Akkus",
+    "choose_type": "Widget wählen",
+    "choose_size": "Größe wählen",
+    "choose_image": "Bild wählen",
+    "resize": "Größe ändern",
+    "delete": "Widget löschen",
+    "no_space": "Kein Platz",
+    "no_recent_game": "Kein kürzliches Spiel",
+    "last_played": "Zuletzt gespielt",
+    "played_recently": "Kürzlich gespielt",
+    "no_playtime": "Keine kürzliche Spielzeit",
+    "error_title": "Widget-Fehler",
+    "save_error": "Die Widget-Änderung konnte nicht gespeichert werden.",
+    "no_assets_title": "Keine Widget-Bilder",
+    "no_assets_desc": "Füge PNG-, JPG-, WebP- oder GIF-Dateien zu sdmc:/config/SwitchU/widgets/assets/ oder zum Widgets-Ordner des aktiven Themes hinzu."
+  },
+  "controller_test": {
+    "title": "Controller-Test",
+    "opened": "Controller-Test. Stick kurz kippen zum Auswählen. B eine Sekunde halten oder HOME drücken zum Schließen.",
+    "close_hint": "B 1 s halten oder HOME drücken zum Schließen",
+    "joysticks": "Analog-Sticks",
+    "buttons": "Tasten",
+    "touchscreen": "Touchscreen",
+    "touch_hint": "Hier berühren oder klicken und ziehen",
+    "touch_fullscreen_opened": "Vollbild-Touch-Test. X drücken zum Zurückkehren. B eine Sekunde halten oder HOME drücken zum Schließen.",
+    "touch_fullscreen_hint": "Touch-Test · X: zurück · B 1 s halten oder HOME: schließen",
+    "tilt_to_select": "Stick kurz kippen zum Auswählen",
+    "left_stick": "Linker Stick",
+    "right_stick": "Rechter Stick",
+    "left_selected": "Linker Stick ausgewählt",
+    "right_selected": "Rechter Stick ausgewählt",
+    "direction": "Richtung",
+    "center": "Mitte",
+    "up": "Oben",
+    "down": "Unten",
+    "left": "Links",
+    "right": "Rechts"
   },
   "languages": {
     "ja-JP": "Japanisch",
@@ -324,7 +670,19 @@
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "close": "Schließen",
-    "replace": "Ersetzen"
+    "replace": "Ersetzen",
+    "configure": "Einstellen",
+    "connect": "Verbinden",
+    "manage": "Verwalten",
+    "move": "Verschieben",
+    "open": "Öffnen",
+    "pair": "Koppeln",
+    "rename": "Umbenennen",
+    "search": "Suchen",
+    "select": "Auswählen",
+    "stop": "Stopp",
+    "test": "Testen",
+    "uninstall": "Deinstallieren"
   },
   "themeshop": {
     "update_status": "Status",
@@ -349,6 +707,23 @@
       "animated": "Animierte Themes",
       "options": "Optionen",
       "update": "Update"
+    },
+    "accessibility": {
+      "fullscreen_preview": "Vollbildvorschau",
+      "fullscreen_actions": "B schließt die Vorschau.",
+      "preview_area": "Vorschau",
+      "actions_area": "Aktionen",
+      "detail": "Details",
+      "author": "Autor",
+      "detail_actions": "Links und rechts wechseln die Steuerung. A bestätigt. B zurück.",
+      "search_refresh": "Suchen und aktualisieren",
+      "search_bar": "Suche",
+      "header_actions": "Links und rechts zum Auswählen. A bestätigt. Runter zum Raster.",
+      "search_actions": "A zum Suchen. Runter zum Raster.",
+      "pagination": "Seiten",
+      "pagination_actions": "Links und rechts wechseln die Taste. A wechselt die Seite. Hoch zum Raster.",
+      "no_theme": "Kein Theme",
+      "grid_actions": "Steuerkreuz zum Navigieren. A öffnet Details. B zurück zu den Tabs."
     },
     "search": {
       "button": "Suchen",
@@ -442,23 +817,6 @@
       "prev": "Zurück",
       "next": "Weiter"
     },
-    "accessibility": {
-      "fullscreen_preview": "Vollbildvorschau",
-      "fullscreen_actions": "B schließt die Vorschau.",
-      "preview_area": "Vorschau",
-      "actions_area": "Aktionen",
-      "detail": "Details",
-      "author": "Autor",
-      "detail_actions": "Links und rechts wechseln die Steuerung. A bestätigt. B zurück.",
-      "search_refresh": "Suchen und aktualisieren",
-      "search_bar": "Suche",
-      "header_actions": "Links und rechts zum Auswählen. A bestätigt. Runter zum Raster.",
-      "search_actions": "A zum Suchen. Runter zum Raster.",
-      "pagination": "Seiten",
-      "pagination_actions": "Links und rechts wechseln die Taste. A wechselt die Seite. Hoch zum Raster.",
-      "no_theme": "Kein Theme",
-      "grid_actions": "Steuerkreuz zum Navigieren. A öffnet Details. B zurück zu den Tabs."
-    },
     "page": {
       "next": "Weiter",
       "prev": "Zurück"
@@ -468,160 +826,11 @@
       "subtitle": "Bewegte Hintergründe, mit Ton wenn das Theme welchen mitbringt."
     }
   },
-  "hint": {
-    "navigate": "Navigieren",
-    "select": "Auswählen",
-    "confirm": "Bestätigen",
-    "cancel": "Abbrechen",
-    "back": "Zurück",
-    "close": "Schließen",
-    "open": "Öffnen",
-    "launch": "Starten",
-    "resume": "Fortsetzen",
-    "move": "Bewegen",
-    "place": "Platzieren",
-    "prev_page": "Vorherige Seite",
-    "next_page": "Nächste Seite",
-    "profile": "Profil",
-    "search": "Suchen",
-    "repeat": "Wiederholen",
-    "voice": "Sprache",
-    "sort_custom": "Meine Reihenfolge",
-    "sort_alpha": "A-Z",
-    "sort_recent": "Zuletzt",
-    "options": "Optionen"
-  },
-  "accessibility": {
-    "speech": {
-      "enabled": "Sprachausgabe aktiviert.",
-      "disabled": "Sprachausgabe deaktiviert. Sprachhilfe beendet."
-    },
-    "context": {
-      "dialog": "Dialog",
-      "profile_selection": "Profilauswahl",
-      "settings": "Einstellungen",
-      "themes": "Themes",
-      "main_menu": "Hauptmenü",
-      "page": "Seite",
-      "of": "von",
-      "left_sidebar": "Linke Seitenleiste",
-      "right_sidebar": "Rechte Seitenleiste",
-      "user_profiles": "Benutzerprofile"
-    },
-    "roles": {
-      "button": "Taste",
-      "game": "Spiel",
-      "game_card": "Spielkarte",
-      "slot": "Feld",
-      "profile": "Profil",
-      "toggle": "Schalter",
-      "slider": "Regler",
-      "selector": "Auswahl",
-      "progress": "Fortschritt",
-      "info": "Info",
-      "section": "Abschnitt"
-    },
-    "hints": {
-      "open": "A zum Öffnen.",
-      "open_user_page": "A zum Öffnen der Benutzerseite.",
-      "grid_empty": "Mit dem Steuerkreuz zu einem anderen Feld wechseln.",
-      "game_launchable": "A zum Starten. X für Optionen. Y zum Verschieben. ZL oder ZR zum Seitenwechsel.",
-      "game_blocked": "A zeigt den Grund der Sperre."
-    },
-    "actions": {
-      "edit_mode": "Steuerkreuz wählt die neue Position. Y zum Platzieren. B zum Abbrechen.",
-      "empty_slot": "Steuerkreuz zum Navigieren. ZL oder ZR zum Seitenwechsel.",
-      "game_blocked": "A zeigt den Grund. Y zum Verschieben. ZL oder ZR zum Seitenwechsel.",
-      "game_launchable": "A zum Starten. X für Optionen. Y zum Verschieben. ZL oder ZR zum Seitenwechsel.",
-      "settings": "Hoch und runter wählen eine Kategorie. A oder rechts zum Öffnen. B zum Schließen.",
-      "themes": "Hoch und runter zum Navigieren. A zum Auswählen. B zum Schließen.",
-      "dialog": "Links und rechts ändern die Auswahl. A bestätigt. B bricht ab."
-    },
-    "settings": {
-      "tab_prefix": "Tab",
-      "tab_actions": "A oder rechts zum Öffnen. Hoch und runter wechseln den Tab. B schließt.",
-      "list_prefix": "Liste",
-      "list_actions": "Hoch und runter zum Auswählen. A bestätigt. B schließt die Liste.",
-      "toggle_actions": "A zum Umschalten. Links zurück zu den Tabs.",
-      "slider_actions": "Links oder rechts zum Anpassen. B zurück zu den Tabs.",
-      "selector_actions": "A oder rechts öffnet die Liste. B zurück zu den Tabs.",
-      "action_actions": "A führt die Aktion aus. B zurück zu den Tabs."
-    },
-    "value": {
-      "label": "Wert",
-      "percent": "Prozent"
-    },
-    "position": {
-      "row": "Zeile",
-      "column": "Spalte"
-    },
-    "move_mode": {
-      "enter": "Spiel verschieben: ",
-      "placed": "Spiel verschoben: ",
-      "cancelled": "Verschieben abgebrochen: "
-    },
-    "grid": {
-      "empty_slot": "Leeres Feld"
-    },
-    "user_profile": "Benutzerprofil"
-  },
-  "tutorial": {
-    "accessibility": {
-      "title": "Sprachausgabe",
-      "body": "Sprachausgabe ist in diesem Menü verfügbar. Sie kann das ausgewählte Element und verfügbare Aktionen vorlesen.",
-      "objective": "Drücke X, um Sprachausgabe für später zu aktivieren. Drücke A, um ohne sie fortzufahren.",
-      "enabled_announcement": "Sprachausgabe für später aktiviert. Drücke A zum Fortfahren.",
-      "already_enabled_announcement": "Sprachausgabe ist bereits für später aktiviert.",
-      "disabled_announcement": "Sprachausgabe deaktiviert. Animalese-Töne sind aktiv.",
-      "text_actions": "A zum Fortfahren. B zum Überspringen."
-    },
-    "accessibility_settings": {
-      "title": "Bedienhilfen",
-      "body": "Optionen für Bedienhilfen findest du unter Einstellungen, dann Bedienhilfen. Dort kannst du Tempo, Hinweise, Ortsansagen und Positionsdetails anpassen."
-    },
-    "welcome": {
-      "title": "Willkommen bei SwitchU",
-      "body": "Dieses kurze Tutorial zeigt dir die wichtigsten Steuerungen."
-    },
-    "navigation": {
-      "title": "Navigation",
-      "body": "Benutze das Steuerkreuz oder den linken Stick, um den Fokus zu bewegen.",
-      "objective": "Bewege den Fokus zu einem anderen Element."
-    },
-    "cursor": {
-      "title": "Fokus",
-      "body": "Der Leuchtrahmen zeigt, welches Element ausgewählt ist."
-    },
-    "themes": {
-      "title": "Themes",
-      "body": "Themes ändern Farben, Bilder und Sounds. Öffne Themes über die Seitenleiste, um Styles zu installieren oder anzuwenden."
-    },
-    "support": {
-      "title": "Hilfe",
-      "body": "Unten links siehst du die wichtigsten Tasten für den aktuellen Bildschirm."
-    },
-    "confirm": {
-      "title": "Fertig",
-      "body": "Du bist startklar.",
-      "objective": "Drücke A, um diesen Schritt zu bestätigen."
-    },
-    "hints": {
-      "enable_voice": "Stimme ein",
-      "disable_voice": "Stimme aus",
-      "voice_enabled": "Stimme ein",
-      "continue": "Weiter",
-      "reveal": "Anzeigen",
-      "skip_step": "Schritt überspringen",
-      "skip_all": "Alles überspringen",
-      "test": "Test",
-      "skip_all_banner": "Drücke  +  um die Einrichtung zu überspringen"
-    }
-  },
   "dialog": {
-    "icon_options_body": "Choose what to do with this software.",
-    "icon_options_info": "Software information",
+    "icon_options_body": "Wähle, was mit dieser Software geschehen soll.",
+    "icon_options_info": "Softwareinformationen",
     "icon_options_gallery": "Galerie",
-    "icon_options_delete": "Delete software",
+    "icon_options_delete": "Software löschen",
     "icon_options_customize": "Anpassen",
     "customize_title": "Anpassen",
     "customize_body": "Wähle, wie diese Software im Menü angezeigt wird.",
@@ -723,11 +932,23 @@
     "gallery_restore_background_body": "Der benutzerdefinierte Hintergrund wird entfernt und der Themenhintergrund erscheint wieder.",
     "gallery_restored_cover": "Standard-Cover wiederhergestellt.",
     "gallery_restored_background": "Standardhintergrund wiederhergestellt.",
-    "software_information": "Software information",
-    "software_title_id": "Title ID",
-    "delete_software": "Delete software?",
-    "delete_software_body": "This removes the software from the console. It cannot be undone here -- the software has to be downloaded or installed again.",
-    "delete_software_done": "The software was deleted.",
-    "delete_software_failed": "The software could not be deleted."
+    "software_information": "Softwareinformationen",
+    "software_title_id": "Titel-ID",
+    "delete_software": "Software löschen?",
+    "delete_software_body": "Dies entfernt die Software von der Konsole. Dies kann hier nicht rückgängig gemacht werden -- die Software muss erneut heruntergeladen oder installiert werden.",
+    "delete_software_done": "Die Software wurde gelöscht.",
+    "delete_software_failed": "Die Software konnte nicht gelöscht werden.",
+    "delete_software_files": "Diese Ordner auf der SD-Karte werden ebenfalls entfernt:",
+    "non_game_options_body_folder": "Homebrew und Ports haben keine Spieldetails, Artworks oder Mods zum Verwalten. Sie können in einen Ordner abgelegt oder entfernt werden."
+  },
+  "text_entry": {
+    "erase": "Löschen",
+    "full": "Maximale Länge erreicht",
+    "hint": "A: Eingeben   X: Löschen   Y: Umschalten   L/R: Symbole   Plus: Bestätigen   B: Abbrechen",
+    "letters": "ABC",
+    "opened": "Bildschirmtastatur. Steuerkreuz zum Wählen einer Taste, A zum Eingeben, X zum Löschen, Plus zum Bestätigen, B zum Abbrechen.",
+    "shift": "Umschalten",
+    "space": "Leerzeichen",
+    "symbols": "?12#"
   }
 }
