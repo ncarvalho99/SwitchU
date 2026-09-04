@@ -27,6 +27,23 @@ std::string join(const std::vector<std::string>& values, const char* separator =
     return result;
 }
 
+std::string metadataPlatformLabel(const std::string& slug) {
+    if (slug == "nintendo-switch") return "Nintendo Switch";
+    if (slug == "pc") return "PC";
+    if (slug == "playstation") return "PlayStation";
+    if (slug == "playstation-2") return "PlayStation 2";
+    if (slug == "playstation-3") return "PlayStation 3";
+    if (slug == "psp") return "PSP";
+    if (slug == "playstation-vita") return "PS Vita";
+    if (slug == "dreamcast") return "Dreamcast";
+    if (slug == "nintendo-64") return "Nintendo 64";
+    if (slug == "gamecube") return "GameCube";
+    if (slug == "wii") return "Wii";
+    if (slug == "nintendo-ds") return "Nintendo DS";
+    if (slug == "game-boy-advance") return "Game Boy Advance";
+    return slug;
+}
+
 std::string hours(float value) {
     if (value <= 0.f) return "—";
     std::ostringstream stream;
@@ -193,7 +210,8 @@ void GameDetailsScreen::clampScreenshotSelection() {
 }
 
 nxui::Rect GameDetailsScreen::heroRect(const nxui::Rect& content) const {
-    return {content.x + 18.f, content.y + 75.f, content.width - 36.f, 190.f};
+    return {content.x + 18.f, content.y + (m_metadataPlatform.empty() ? 75.f : 96.f),
+            content.width - 36.f, m_metadataPlatform.empty() ? 190.f : 169.f};
 }
 
 nxui::Rect GameDetailsScreen::thumbnailRect(const nxui::Rect& content, int index, int total) const {
@@ -504,7 +522,13 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
             + (publisherNames.empty() ? "â€”" : publisherNames)
         : i18n.tr("dialog.details_local", "Local software details");
     ren.drawText(ellipsize(m_smallFont, source, scoreX - main.x - 28.f, 0.76f),
-                 {main.x + 20.f, main.y + 51.f}, m_smallFont, secondary, 0.76f);
+                  {main.x + 20.f, main.y + 51.f}, m_smallFont, secondary, 0.76f);
+    if (!m_metadataPlatform.empty())
+        ren.drawText(ellipsize(m_smallFont, "Metadata platform: "
+                               + metadataPlatformLabel(m_metadataPlatform),
+                               scoreX - main.x - 28.f, 0.68f),
+                     {main.x + 20.f, main.y + 75.f}, m_smallFont, subtle, 0.68f);
+
 
     auto scoreChip = [&](float x, const std::string& label, const std::string& value, bool enabled) {
         const nxui::Rect chip = {x, main.y + 17.f, 112.f, 50.f};

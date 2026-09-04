@@ -625,6 +625,7 @@ bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (m_folderHeader && m_folderHeader.get() == w) return w->isFocusable();
     if (m_textEntry && m_textEntry.get() == w) return w->isFocusable();
     if (m_steamGridDbPicker && m_steamGridDbPicker.get() == w) return w->isFocusable();
+    if (m_platformPicker && m_platformPicker.get() == w) return w->isFocusable();
     if (m_gameGallery && m_gameGallery.get() == w) return w->isFocusable();
     if (m_gameMods && m_gameMods.get() == w) return w->isFocusable();
     if (m_gameDetails && m_gameDetails.get() == w) return w->isFocusable();
@@ -754,6 +755,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         m_gameDetails->hide();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
         m_steamGridDbPicker->hide();
+    if (m_platformPicker && m_platformPicker->isActive())
+        m_platformPicker->hide();
     if (m_gameOptions && m_gameOptions->isActive())
         m_gameOptions->hide();
     if (m_folderOptions && m_folderOptions->isActive())
@@ -775,6 +778,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_folderCaptureRequested) return nullptr;
     if (m_progressDialog && m_progressDialog->isActive()) return m_progressDialog.get();
     if (m_contextMenu && m_contextMenu->isActive()) return m_contextMenu.get();
+    if (m_platformPicker && m_platformPicker->isActive()) return m_platformPicker.get();
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) return m_steamGridDbPicker.get();
     if (m_textEntry && m_textEntry->isActive()) return m_textEntry.get();
@@ -952,6 +956,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+            (m_platformPicker && m_platformPicker->isActive()) ||
             (m_gameOptions && m_gameOptions->isActive()) ||
             (m_folderOptions && m_folderOptions->isActive()) ||
             (m_controllerTest && m_controllerTest->isActive()) ||
@@ -1337,45 +1342,13 @@ void WiiUMenuApp::showIconOptions() {
 
 void WiiUMenuApp::showGamePortPlatformMenu(std::uint64_t titleId, const std::string& title) {
 #ifdef SWITCHU_MENU
-    if (!m_dialog) return;
-    const std::vector<std::pair<std::string, std::string>> platforms = {
-        {"PC", "pc"},
-        {"PlayStation", "playstation"},
-        {"PlayStation 2", "playstation-2"},
-        {"PlayStation 3", "playstation-3"},
-        {"PSP", "psp"},
-        {"PS Vita", "playstation-vita"},
-        {"Dreamcast", "dreamcast"},
-        {"Nintendo 64", "nintendo-64"},
-        {"GameCube", "gamecube"},
-        {"Wii", "wii"},
-        {"Nintendo DS", "nintendo-ds"},
-        {"Game Boy Advance", "game-boy-advance"},
-    };
-    std::vector<OverlayDialog::ButtonDef> buttons;
-    buttons.reserve(platforms.size() + 1);
-    for (const auto& [label, slug] : platforms) {
-        buttons.push_back({label, [this, titleId, title, pSlug = slug]() {
-            m_config.gamePortPlatforms.erase(
-                std::remove_if(m_config.gamePortPlatforms.begin(),
-                               m_config.gamePortPlatforms.end(),
-                               [titleId](const auto& entry) { return entry.first == titleId; }),
-                m_config.gamePortPlatforms.end());
-            m_config.gamePortPlatforms.emplace_back(titleId, pSlug);
-            m_config.save();
-            showGameDetails(titleId, title);
-        }, true});
-    }
-    buttons.push_back({nxui::I18n::instance().tr("button.cancel", "Cancel"), [this, titleId, title]() {
-        showNonGameOptions(titleId, title);
-    }, true});
-    raiseOverlay(m_dialog);
+    if (!m_platformPicker) return;
+    m_platformPickerTitleId = titleId;
+    m_platformPickerTitle = title;
+    raiseOverlay(m_platformPicker);
     m_audio.playSfx(Sfx::ModalShow);
-    m_dialog->show("Original Platform", "Select original release console for metadata:",
-                   std::move(buttons), 0, [this, titleId, title]() {
-                       showNonGameOptions(titleId, title);
-                   });
-    focusManager().setFocus(m_dialog.get());
+    m_platformPicker->showForTitle(title);
+    focusManager().setFocus(m_platformPicker.get());
 #else
     (void)titleId;
     (void)title;
