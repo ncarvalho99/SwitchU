@@ -471,21 +471,6 @@ def _localize_cached_metadata(result: dict[str, Any], language: str) -> dict[str
     return localized
 
 
-def _is_gemini_v3_or_higher(model_name: str) -> bool:
-    """Strict check: model must be Gemini version 3.0 or higher.
-
-    Never permits anything lower than version 3.0.
-    """
-    if not isinstance(model_name, str):
-        return False
-    name = model_name.strip()
-    match = re.fullmatch(r"gemini-(\d+)(?:\.(\d+))?(?:-[A-Za-z0-9._-]+)?", name, re.IGNORECASE)
-    if not match:
-        return False
-    major = int(match.group(1))
-    return major >= 3
-
-
 def _clean_gemini_json(text: str) -> str:
     cleaned = text.strip()
     if cleaned.startswith("```"):
@@ -502,25 +487,35 @@ def _clean_gemini_json(text: str) -> str:
     return cleaned
 
 
-DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_GEMINI_FALLBACKS = (
-    "gemini-3.6-flash,"
-    "gemini-3.7-flash-lite,"
-    "gemini-3.6-flash-lite,"
-    "gemini-3.5-flash,"
-    "gemini-3.5-flash-lite,"
-    "gemini-3.1-flash,"
-    "gemini-3.1-flash-lite,"
-    "gemini-3.0-flash,"
-    "gemini-3.0-flash-lite"
+    "gemini-3-flash-preview,"
+    "gemini-2.5-flash,"
+    "gemini-2.5-flash-lite"
 )
+
+# Google AI Studio's free tier only ever grants quota to these four models
+# (verified against aistudio.google.com, 2026-09-04). Every Gemini 3.x model
+# above flash-lite, and every 3.0 model, is paid-tier only there and would
+# never accept a free-tier key -- keeping them in the fallback chain just
+# spent time on requests guaranteed to 403/429. Trimmed the chain down to
+# what the free tier actually serves.
+ALLOWED_GEMINI_MODELS = frozenset({
+    "gemini-3.1-flash-lite",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+})
 
 
 def _gemini_model_chain() -> list[str]:
     """Primary model first, then the fallbacks, de-duplicated.
 
     Each entry carries its own daily allowance. The order here is the order
-    the budget is spent in. Only models >= Gemini 3.0 are permitted.
+    the budget is spent in. Only models in ALLOWED_GEMINI_MODELS (the ones
+    Google AI Studio actually grants free-tier quota for) are permitted;
+    anything else -- including newer/larger Gemini releases -- would need a
+    paid key and is silently dropped from the chain.
     """
     primary_env = os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
     fallback_env = os.environ.get("GEMINI_FALLBACK_MODELS", DEFAULT_GEMINI_FALLBACKS)
@@ -532,14 +527,14 @@ def _gemini_model_chain() -> list[str]:
             continue
         if not re.fullmatch(r"[A-Za-z0-9._-]{3,100}", name):
             continue
-        if not _is_gemini_v3_or_higher(name):
+        if name not in ALLOWED_GEMINI_MODELS:
             continue
         if name not in chain:
             chain.append(name)
 
     if not chain:
         for name in (DEFAULT_GEMINI_MODEL + "," + DEFAULT_GEMINI_FALLBACKS).split(","):
-            if name not in chain and _is_gemini_v3_or_higher(name):
+            if name not in chain and name in ALLOWED_GEMINI_MODELS:
                 chain.append(name)
 
     return chain
@@ -578,7 +573,7 @@ def _gemini_text(prompt: str, api_keys: str | list[str], models: list[str],
     last_error: Exception | None = None
 
     for model in models:
-        if not _is_gemini_v3_or_higher(model):
+        if model not in ALLOWED_GEMINI_MODELS:
             continue
         for key_offset, key in enumerate(ordered_keys):
             request = Request(
