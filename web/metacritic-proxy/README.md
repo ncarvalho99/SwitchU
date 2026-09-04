@@ -71,8 +71,12 @@ completo. O arquivo
 
 ## Tradução por idioma
 
-`/etc/switchu-metadata/gemini.env` contém `GEMINI_API_KEY` e, opcionalmente,
-`GEMINI_MODEL=gemini-3.5-flash`, também como `root:root`/`0600`. A rota aceita
+`/etc/switchu-metadata/gemini.env` contém `GEMINI_API_KEYS` (ou `GEMINI_API_KEY`)
+e, opcionalmente, `GEMINI_MODEL=gemini-3.1-flash-lite`, também como
+`root:root`/`0600`. O modelo padrão e a cadeia de fallback
+(`gemini-3-flash-preview`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`) ficam
+restritos aos quatro modelos que o Google AI Studio realmente concede no nível
+gratuito; qualquer outro nome é ignorado. A rota aceita
 `language=pt-BR`, `es-ES`, `fr-FR`, `de-DE`, `it-IT`, `nl-NL` e `ru-RU` usam
 Gemini para localizar sinopse, história, gêneros, temas e modos de jogo. O
 resultado é cacheado por jogo e idioma; `en-US` mantém o texto original. Em uma
