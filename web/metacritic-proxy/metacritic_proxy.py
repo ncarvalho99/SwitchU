@@ -57,6 +57,7 @@ NEGATIVE_CACHE_SECONDS = 24 * 60 * 60
 UNTRANSLATED_CACHE_SECONDS = 30 * 60
 UPSTREAM_MIN_INTERVAL_SECONDS = 2.0
 RATE_LIMIT_REQUESTS = 20
+RATE_LIMIT_AVAILABILITY_REQUESTS = 120
 RATE_LIMIT_WINDOW_SECONDS = 60
 SUPPORTED_PLATFORMS = {
     "nintendo-switch": "Nintendo Switch",
@@ -105,6 +106,8 @@ _igdb_token_lock = threading.Lock()
 _igdb_access_token = ""
 _igdb_access_token_expires_at = 0.0
 _rate_windows: dict[str, deque[float]] = defaultdict(deque)
+_rate_windows_availability: dict[str, deque[float]] = defaultdict(deque)
+_rate_windows_availability: dict[str, deque[float]] = defaultdict(deque)
 # Outcome of the most recent real translation attempt. The admin panel reports
 # this instead of probing Gemini, which would consume the scarce free-tier quota.
 _last_translation_ok = True
@@ -134,13 +137,14 @@ def _client_identity(request: FastApiRequest) -> str:
     return forwarded or (request.client.host if request.client else "unknown")
 
 
-def _allow_request(identity: str) -> bool:
+def _allow_request(identity: str, is_availability: bool = False) -> bool:
     now = time.monotonic()
+    limit = RATE_LIMIT_AVAILABILITY_REQUESTS if is_availability else RATE_LIMIT_REQUESTS
     with _rate_lock:
-        window = _rate_windows[identity]
+        window = _rate_windows_availability[identity] if is_availability else _rate_windows[identity]
         while window and now - window[0] >= RATE_LIMIT_WINDOW_SECONDS:
             window.popleft()
-        if len(window) >= RATE_LIMIT_REQUESTS:
+        if len(window) >= limit:
             return False
         window.append(now)
         return True
@@ -1138,8 +1142,10 @@ async def restrict_to_tunnel(request: FastApiRequest, call_next: Any) -> Any:
     # 20-per-minute console budget would lock the operator out of the tool used
     # to fix things.
     exempt = request.url.path == "/health" or request.url.path.startswith("/admin")
-    if not exempt and not _allow_request(_client_identity(request)):
-        return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+    if not exempt:
+        is_avail = request.url.path == "/v1/availability"
+        if not _allow_request(_client_identity(request), is_availability=is_avail):
+            return JSONResponse(status_code=429, content={"detail": "Too many requests"})
     return await call_next(request)
 
 

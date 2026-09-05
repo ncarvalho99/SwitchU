@@ -14,6 +14,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class PlatformPickerScreen final : public nxui::GlassWidget {
@@ -63,6 +64,7 @@ private:
     std::array<std::future<void>, 12> m_availabilityFutures;
     std::array<std::shared_ptr<std::atomic<Availability>>, 12> m_availabilityResults;
     std::vector<std::future<void>> m_retiredAvailabilityFutures;
+    std::unordered_map<std::string, std::array<Availability, 12>> m_availabilityCache;
     std::string m_title;
     std::string m_assetBase;
     std::function<void(const std::string&)> m_selectedCb;

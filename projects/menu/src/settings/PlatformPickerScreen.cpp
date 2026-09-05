@@ -69,7 +69,7 @@ PlatformPickerScreen::PlatformPickerScreen(nxui::GpuDevice& gpu, nxui::Renderer&
 }
 
 void PlatformPickerScreen::showForTitle(std::string title) {
-    ++m_generation;
+    const std::uint64_t currentGen = ++m_generation;
     for (auto& future : m_availabilityFutures)
         if (future.valid()) m_retiredAvailabilityFutures.push_back(std::move(future));
     m_title = std::move(title);
@@ -80,27 +80,44 @@ void PlatformPickerScreen::showForTitle(std::string title) {
     m_cachedPreBlurRadius = -1.f;
     m_cachedBlurIterations = -1;
     setVisible(true);
+
+    const auto cacheIt = m_availabilityCache.find(m_title);
+    const bool hasCache = cacheIt != m_availabilityCache.end();
+
     for (std::size_t i = 0; i < m_platforms.size(); ++i) {
         auto& platform = m_platforms[i];
-        platform.availability = Availability::Checking;
-        m_availabilityResults[i] = std::make_shared<std::atomic<Availability>>(Availability::Checking);
         if (!platform.icon.empty()) {
             const std::string base = m_assetBase.empty() ? "romfs:" : m_assetBase;
             platform.texture.loadFromFile(m_gpu, m_renderer,
                                           base + "/icons/consoles/" + platform.icon, 256);
         }
+
+        if (hasCache && cacheIt->second[i] != Availability::Checking) {
+            platform.availability = cacheIt->second[i];
+            m_availabilityResults[i] = std::make_shared<std::atomic<Availability>>(cacheIt->second[i]);
+            continue;
+        }
+
+        platform.availability = Availability::Checking;
+        m_availabilityResults[i] = std::make_shared<std::atomic<Availability>>(Availability::Checking);
         const std::string queryTitle = m_title;
         const std::string slug = platform.slug;
         const auto result = m_availabilityResults[i];
-        m_availabilityFutures[i] = m_threadPool.submit([queryTitle, slug, result]() {
+        m_availabilityFutures[i] = m_threadPool.submit([this, currentGen, queryTitle, slug, result]() {
+            if (!m_active || m_generation != currentGen) return;
             try {
                 const std::string url = std::string(GameMetadataClient::kServiceUrl)
                     + "/v1/availability?title=" + encodeUrlComponent(queryTitle)
                     + "&platform=" + encodeUrlComponent(slug);
-                result->store(nlohmann::json::parse(themeshop::http::getText(url)).value("found", false)
-                    ? Availability::Available : Availability::Unavailable);
+                if (!m_active || m_generation != currentGen) return;
+                const std::string jsonText = themeshop::http::getText(url);
+                if (!m_active || m_generation != currentGen) return;
+                const bool found = nlohmann::json::parse(jsonText).value("found", false);
+                result->store(found ? Availability::Available : Availability::Unavailable);
             } catch (...) {
-                result->store(Availability::Unavailable);
+                if (m_active && m_generation == currentGen) {
+                    result->store(Availability::Unavailable);
+                }
             }
         });
     }
@@ -109,6 +126,7 @@ void PlatformPickerScreen::showForTitle(std::string title) {
 void PlatformPickerScreen::hide() {
     if (!m_active) return;
     m_active = false;
+    ++m_generation;
     setVisible(false);
     if (m_closedCb) m_closedCb();
 }
@@ -252,7 +270,13 @@ void PlatformPickerScreen::onContentUpdate(float dt) {
         auto& future = m_availabilityFutures[i];
         if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             future.get();
-            m_platforms[i].availability = m_availabilityResults[i]->load();
+            if (m_active) {
+                const Availability avail = m_availabilityResults[i]->load();
+                m_platforms[i].availability = avail;
+                if (avail != Availability::Checking) {
+                    m_availabilityCache[m_title][i] = avail;
+                }
+            }
         }
     }
 }
