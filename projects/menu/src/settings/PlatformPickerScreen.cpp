@@ -1,6 +1,7 @@
 #include "PlatformPickerScreen.hpp"
 
 #include "details/GameMetadataClient.hpp"
+#include "SettingsGlassTuning.hpp"
 #include "themeshop/ThemeHttp.hpp"
 
 #include <nlohmann/json.hpp>
@@ -74,14 +75,19 @@ void PlatformPickerScreen::showForTitle(std::string title) {
     m_selected = 0;
     m_spinner = 0.f;
     m_active = true;
+    m_backdropCacheValid = false;
+    m_cachedPreBlurRadius = -1.f;
+    m_cachedBlurIterations = -1;
     setVisible(true);
     for (std::size_t i = 0; i < m_platforms.size(); ++i) {
         auto& platform = m_platforms[i];
         platform.availability = Availability::Checking;
         m_availabilityResults[i] = std::make_shared<std::atomic<Availability>>(Availability::Checking);
-        if (!platform.icon.empty())
+        if (!platform.icon.empty()) {
+            const std::string base = m_assetBase.empty() ? "romfs:" : m_assetBase;
             platform.texture.loadFromFile(m_gpu, m_renderer,
-                                          "romfs:/icons/consoles/" + platform.icon, 256);
+                                          base + "/icons/consoles/" + platform.icon, 256);
+        }
         const std::string queryTitle = m_title;
         const std::string slug = platform.slug;
         const auto result = m_availabilityResults[i];
@@ -125,10 +131,62 @@ nxui::Rect PlatformPickerScreen::containRect(const nxui::Texture& texture, const
 
 void PlatformPickerScreen::onContentRender(nxui::Renderer& renderer) {
     if (!m_active || !m_theme) return;
-    renderer.drawRect(rect(), nxui::Color(0.f, 0.f, 0.f, 0.62f));
+
+    // Same real liquid-glass backdrop capture/blur used by the settings and
+    // game-details dossiers, instead of a flat frosted rect: a plain dark
+    // panel made dark console logos (PS1, GameCube, N64...) disappear against
+    // it, so this samples and blurs the actual scene behind the picker.
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    const bool needsBackdropRefresh = !m_backdropCacheValid
+        || std::abs(m_cachedPreBlurRadius - tuning.preBlurRadius) > 0.001f
+        || m_cachedBlurIterations != tuning.blurIterations;
+    if (needsBackdropRefresh) {
+        renderer.captureToOffscreenSharp();
+        if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
+            renderer.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
+        }
+        renderer.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, nxui::GpuDevice::OFF_SETTINGS);
+        m_backdropCacheValid = true;
+        m_cachedPreBlurRadius = tuning.preBlurRadius;
+        m_cachedBlurIterations = tuning.blurIterations;
+    }
+
+    renderer.drawRect(rect(), nxui::Color(0.f, 0.f, 0.f, 0.42f));
+
     const nxui::Rect panel{70.f, 38.f, 1140.f, 644.f};
-    renderer.drawRoundedRect(panel, m_theme->panelBase.withAlpha(0.98f), 28.f);
-    renderer.drawRoundedRectOutline(panel, m_theme->panelBorder.withAlpha(0.45f), 28.f, 1.5f);
+
+    nxui::LiquidGlassSettings savedGlass = renderer.liquidGlassSettings();
+    auto& glass = renderer.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    const nxui::Color glassTint = m_theme->panelBase.withAlpha(
+        m_theme->mode == nxui::ThemeMode::Dark
+            ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+            : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f));
+    const nxui::Rect glassRect = panel.shrunk(std::max(0.0f, tuning.inset));
+    const float glassRadius = std::max(12.0f, 28.f - std::max(0.0f, tuning.inset) * 0.5f);
+
+    renderer.drawLiquidGlass(nxui::GpuDevice::OFF_SETTINGS, glassRect, glassRadius, glassTint, 1.f,
+                             std::clamp(tuning.shade, 0.0f, 1.0f));
+
+    const nxui::Color panelBorder = m_theme->panelBorder.withAlpha(
+        m_theme->mode == nxui::ThemeMode::Dark ? 0.32f : 0.40f);
+    const nxui::Color panelHighlight = m_theme->panelHighlight.withAlpha(0.12f);
+    renderer.drawRoundedRectOutline(glassRect,
+                                    panelBorder.withAlpha(std::clamp(panelBorder.a * 0.90f, 0.14f, 0.34f)),
+                                    glassRadius, 1.2f);
+    renderer.drawRoundedRectOutline(glassRect.shrunk(1.5f),
+                                    panelHighlight.withAlpha(std::clamp(panelHighlight.a * 0.90f, 0.04f, 0.10f)),
+                                    std::max(0.0f, glassRadius - 1.5f), 1.0f);
+    renderer.liquidGlassSettings() = savedGlass;
+
     if (m_font)
         renderer.drawText("Original Platform", {108.f, 68.f}, m_font, m_theme->textPrimary, 1.f);
     if (m_smallFont) {
@@ -150,29 +208,28 @@ void PlatformPickerScreen::onContentRender(nxui::Renderer& renderer) {
             : platform.availability == Availability::Unavailable
                 ? nxui::Color(1.f, 0.30f, 0.28f, 1.f)
                 : m_theme->cursorNormal.withAlpha(0.75f + 0.20f * std::sin(m_spinner * 5.f));
-        renderer.drawRoundedRect(card, m_theme->panelBorder.withAlpha(0.22f), 16.f);
-        renderer.drawRoundedRect({card.x, card.y, 7.f, card.height}, status, 16.f);
+        renderer.drawRoundedRect(card, m_theme->panelBase.withAlpha(m_theme->mode == nxui::ThemeMode::Dark ? 0.14f : 0.20f), 16.f);
+        renderer.drawRoundedRectOutline(card, m_theme->panelBorder.withAlpha(0.26f), 16.f, 1.f);
+        // Availability status pill inside card
+        renderer.drawCircle({card.x + 22.f, card.y + 67.f}, 4.5f, status, 16);
         if (m_smallFont) {
             renderer.drawText(platform.label, {card.x + 22.f, card.y + 27.f}, m_smallFont,
                               m_theme->textPrimary, 0.78f);
             renderer.drawText(platform.availability == Availability::Checking ? "Checking..."
                               : platform.availability == Availability::Available ? "Metadata available"
                               : "Metadata unavailable",
-                              {card.x + 22.f, card.y + 61.f}, m_smallFont, status, 0.62f);
+                              {card.x + 34.f, card.y + 61.f}, m_smallFont, status, 0.62f);
         }
         const nxui::Rect logoArea{card.right() - 130.f, card.y + 14.f, 104.f, card.height - 28.f};
         if (platform.texture.valid())
             renderer.drawTexture(&platform.texture, containRect(platform.texture, logoArea),
                                  nxui::Color::white());
-        else if (m_font)
+        else if (platform.slug == "pc" && m_font)
             renderer.drawText("PC", {logoArea.x + 30.f, logoArea.y + 25.f}, m_font,
                               m_theme->textPrimary, 0.82f);
         if (i == m_selected)
             renderer.drawRoundedRectOutline(card.expanded(4.f), m_theme->cursorNormal, 19.f, 4.f);
     }
-    if (m_smallFont)
-        renderer.drawText("A Select   B Back", {108.f, 666.f}, m_smallFont,
-                          m_theme->textSecondary, 0.72f);
 }
 
 void PlatformPickerScreen::onContentUpdate(float dt) {
