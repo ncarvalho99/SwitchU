@@ -1,3 +1,56 @@
+# SwitchU 2.4.0
+
+## English
+
+A new platform picker identifies game ports accurately, fetches only the metadata
+that matters, and makes the information easier to read in every supported
+language.
+
+### Game ports and platform metadata
+
+- Choose the original platform for a game port from a dedicated visual picker.
+  SwitchU uses that choice to find the right metadata and cover artwork rather
+  than treating every port as a Nintendo Switch release.
+- Platform availability is checked with a fast cached request, so reopening the
+  picker never lets an older network response replace current results.
+- The platform-picker dossier now uses the same liquid-glass blur as the rest of
+  the menu, improving contrast for dark platform artwork.
+- Added a PC platform icon and corrected matching for platform metadata slugs.
+
+### Language and service reliability
+
+- Translated platform-picker and game-port controls across all bundled locales.
+- Completed remaining Portuguese interface translations.
+- Limited the metadata proxy's Gemini integration to the four confirmed
+  free-tier models.
+
+## Português
+
+Um novo seletor de plataforma identifica corretamente os ports de jogos, busca
+apenas os metadados relevantes e deixa as informações mais fáceis de ler em
+todos os idiomas suportados.
+
+### Ports de jogos e metadados de plataforma
+
+- Escolha a plataforma original de um port de jogo em um seletor visual próprio.
+  O SwitchU usa essa escolha para encontrar os metadados e a capa corretos, sem
+  tratar todos os ports como lançamentos de Nintendo Switch.
+- A disponibilidade da plataforma é verificada com uma consulta rápida em cache,
+  então reabrir o seletor nunca deixa uma resposta de rede antiga substituir os
+  resultados atuais.
+- A ficha do seletor de plataforma agora usa o mesmo desfoque de vidro líquido
+  do restante do menu, melhorando o contraste de artes de plataformas escuras.
+- Adicionado um ícone de plataforma PC e corrigida a correspondência dos slugs
+  de metadados de plataforma.
+
+### Idioma e confiabilidade do serviço
+
+- Traduzidos os controles do seletor de plataforma e dos ports de jogos em todos
+  os idiomas incluídos.
+- Concluídas as traduções restantes da interface em português.
+- A integração Gemini do proxy de metadados foi limitada aos quatro modelos
+  confirmados do plano gratuito.
+
 # SwitchU 2.3.2
 
 ## English

@@ -149,7 +149,6 @@ void drawBatteryRing(nxui::Renderer& ren, const nxui::Vec2& center,
                      float radius, int percent, bool charging,
                      bool console, nxui::Texture* deviceIcon,
                      nxui::Font* font, float opacity) {
-    constexpr int segments = 192;
     constexpr float tau = 6.28318530718f;
     constexpr float startAngle = -1.57079632679f;
     const float thickness = std::max(4.f, radius * 0.13f);
@@ -157,35 +156,37 @@ void drawBatteryRing(nxui::Renderer& ren, const nxui::Vec2& center,
     const nxui::Color activeColor = percent <= 20
         ? nxui::Color(1.f, 0.25f, 0.22f, opacity)
         : nxui::Color(0.25f, 0.92f, 0.48f, opacity);
-    for (int i = 0; i < segments; ++i) {
-        const float a0 = startAngle + tau * static_cast<float>(i) / segments;
-        const float a1 = startAngle + tau * static_cast<float>(i + 1) / segments;
-        ren.drawLine({center.x + std::cos(a0) * radius,
-                      center.y + std::sin(a0) * radius},
-                     {center.x + std::cos(a1) * radius,
-                      center.y + std::sin(a1) * radius},
-                     nxui::Color::white().withAlpha(0.13f * opacity), thickness);
-    }
-    if (progress > 0.f) {
+
+    ren.drawRoundedRectOutline(
+        {center.x - radius, center.y - radius, radius * 2.f, radius * 2.f},
+        nxui::Color::white().withAlpha(0.13f * opacity), radius, thickness);
+
+    if (progress >= 0.985f) {
+        ren.drawRoundedRectOutline(
+            {center.x - radius, center.y - radius, radius * 2.f, radius * 2.f},
+            activeColor, radius, thickness);
+    } else if (progress > 0.f) {
+        constexpr int segments = 192;
         const int activeSegments = std::max(1,
             static_cast<int>(std::ceil(progress * segments)));
+        const float capR = thickness * 0.5f;
         for (int i = 0; i < activeSegments; ++i) {
             const float t0 = std::min(progress, static_cast<float>(i) / segments);
             const float t1 = std::min(progress, static_cast<float>(i + 1) / segments);
             const float a0 = startAngle + tau * t0;
             const float a1 = startAngle + tau * t1;
-            ren.drawLine({center.x + std::cos(a0) * radius,
-                          center.y + std::sin(a0) * radius},
-                         {center.x + std::cos(a1) * radius,
-                          center.y + std::sin(a1) * radius},
-                         activeColor, thickness);
+            const nxui::Vec2 p0{center.x + std::cos(a0) * radius,
+                                center.y + std::sin(a0) * radius};
+            const nxui::Vec2 p1{center.x + std::cos(a1) * radius,
+                                center.y + std::sin(a1) * radius};
+            ren.drawLine(p0, p1, activeColor, thickness);
+            ren.drawCircle(p0, capR, activeColor, 16);
         }
         const float endAngle = startAngle + tau * progress;
-        ren.drawCircle({center.x, center.y - radius}, thickness * 0.5f,
-                       activeColor, 20);
+        ren.drawCircle({center.x, center.y - radius}, capR, activeColor, 16);
         ren.drawCircle({center.x + std::cos(endAngle) * radius,
                         center.y + std::sin(endAngle) * radius},
-                       thickness * 0.5f, activeColor, 20);
+                       capR, activeColor, 16);
     }
 
     const nxui::Color glyph = nxui::Color::white().withAlpha(0.88f * opacity);

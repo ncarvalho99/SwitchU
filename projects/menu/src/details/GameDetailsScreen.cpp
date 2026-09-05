@@ -65,7 +65,7 @@ nxui::Rect coverTextureSource(const nxui::Texture& texture, const nxui::Rect& de
 } // namespace
 
 GameDetailsScreen::GameDetailsScreen()
-    : TabbedOverlayScreen(ScreenMode::ThemeShop) {
+    : TabbedOverlayScreen(ScreenMode::GameOptions) {
 }
 
 void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,

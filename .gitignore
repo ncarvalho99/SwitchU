@@ -97,6 +97,43 @@ id_ed25519
 /.agents/
 /.opencode/
 /.antigravity/
+/.github/skills/
+
+# GitHub Spec Kit (.specify/) and the ~30 generated Spec Master per-project
+# agent adapters it and spec-master/lib/adapters_gen.py write, one directory
+# per supported agent (Claude/Copilot/Codex/Qwen keep their bespoke, already
+# ignored .claude/.github/.codex/.qwen paths above instead). Machine-local
+# tool state, not published.
+/.specify/
+# Spec Master's own run state (discovery, normalized context, feature
+# registry, workflow state) and the ad hoc per-fix context files fed into it.
+# Machine-local evidence for the person running it, not repository policy.
+/.spec-master/
+/context-*.md
+/.alquimia/
+/.augment/
+/.bob/
+/.codebuddy/
+/.commandcode/
+/.devin/
+/.factory/
+/.firebender/
+/.forge/
+/.goose/
+/.grok/
+/.kilo/
+/.kimi-code/
+/.kiro/
+/.lingma/
+/.omp/
+/.pi/
+/.qoder/
+/.rovodev/
+/.shai/
+/.tabnine/
+/.trae/
+/.vibe/
+/.zcode/
 
 # Dynamic cross-chat checkpoints are local evidence, never repository policy.
 /prompt_handoff_*.md
