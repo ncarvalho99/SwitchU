@@ -105,6 +105,7 @@ id_ed25519
 # ignored .claude/.github/.codex/.qwen paths above instead). Machine-local
 # tool state, not published.
 /.specify/
+/specs/
 # Spec Master's own run state (discovery, normalized context, feature
 # registry, workflow state) and the ad hoc per-fix context files fed into it.
 # Machine-local evidence for the person running it, not repository policy.
