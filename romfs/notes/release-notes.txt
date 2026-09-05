@@ -1,17 +1,23 @@
 
-The single-row view
-- Icons no longer sit on their loading spinner until the selection reaches them. Switching into the view rebuilds the row while the artwork already in memory stays valid, so nothing needed fetching and nothing was fetched — but only the focused tile was reconnected to the picture it already had. Every tile is reconnected now.
+Game ports and platform metadata
+- Choose the original platform for a game port from a dedicated visual picker. SwitchU uses that choice to find the right metadata and cover artwork rather than treating every port as a Nintendo Switch release.
+- Platform availability is checked with a fast cached request, so reopening the picker never lets an older network response replace current results.
+- The platform-picker dossier now uses the same liquid-glass blur as the rest of the menu, improving contrast for dark platform artwork.
+- Added a PC platform icon and corrected matching for platform metadata slugs.
 
-Folders
-- X is the folder button both ways: on the home screen it files the focused title into a folder, and inside an open folder it takes the focused title out. Removing used to be R, which meant two buttons for one idea.
-- The Add to folder row is gone from the options behind + and from the game dossier. Both halves of the job are the same press now, so the menu had nothing left to offer.
-- X still closes a suspended title when one is selected, and the hint bar says which of the two it is.
+Language and service reliability
+- Translated platform-picker and game-port controls across all bundled locales.
+- Completed remaining Portuguese interface translations.
+- Limited the metadata proxy's Gemini integration to the four confirmed free-tier models.
 --pt-BR--
 
-Visualização de linha única
-- Os ícones não ficam mais no símbolo de carregamento até a seleção chegar neles. Entrar na visualização reconstrói a linha enquanto as artes já em memória continuam válidas, então não havia nada a buscar e nada foi buscado — mas só o ícone em foco era reconectado à imagem que já tinha. Agora todos são.
+Ports de jogos e metadados de plataforma
+- Escolha a plataforma original de um port de jogo em um seletor visual próprio. O SwitchU usa essa escolha para encontrar os metadados e a capa corretos, sem tratar todos os ports como lançamentos de Nintendo Switch.
+- A disponibilidade da plataforma é verificada com uma consulta rápida em cache, então reabrir o seletor nunca deixa uma resposta de rede antiga substituir os resultados atuais.
+- A ficha do seletor de plataforma agora usa o mesmo desfoque de vidro líquido do restante do menu, melhorando o contraste de artes de plataformas escuras.
+- Adicionado um ícone de plataforma PC e corrigida a correspondência dos slugs de metadados de plataforma.
 
-Pastas
-- X é o botão de pasta nos dois sentidos: na tela inicial guarda o título em foco em uma pasta, e dentro de uma pasta aberta tira o título em foco dela. Remover era R, o que dava dois botões para a mesma ideia.
-- A linha Adicionar à pasta saiu das opções do + e da ficha do jogo. As duas metades do trabalho são o mesmo toque agora, então o menu não tinha mais o que oferecer.
-- X continua fechando um título suspenso quando há um selecionado, e a barra de dicas diz qual das duas coisas ele faz.
+Idioma e confiabilidade do serviço
+- Traduzidos os controles do seletor de plataforma e dos ports de jogos em todos os idiomas incluídos.
+- Concluídas as traduções restantes da interface em português.
+- A integração Gemini do proxy de metadados foi limitada aos quatro modelos confirmados do plano gratuito.

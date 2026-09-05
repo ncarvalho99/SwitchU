@@ -4972,6 +4972,7 @@ void WiiUMenuApp::buildGrid() {
         app().gpu(), app().renderer(), m_threadPool);
     m_platformPicker->setFont(&m_fontNormal);
     m_platformPicker->setSmallFont(&m_fontSmall);
+    m_platformPicker->setAssetBase(SD_ASSETS);
     m_platformPicker->setTheme(&m_theme);
     m_platformPicker->onClosed([this]() {
         if (m_platformPickerTitleId != 0 && m_dialog && m_dialog->isActive())
