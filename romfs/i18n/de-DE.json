@@ -867,6 +867,8 @@
     "details_offline": "Online-Details sind nicht verfügbar. Drücke A, um es erneut zu versuchen.",
     "details_no_online": "Für diesen Titel gibt es keinen Eintrag im Online-Katalog.",
     "non_game_options_body": "Homebrew und Ports haben keine Spieldetails, Grafiken oder Mods zu verwalten. Löschen ist hier die einzige verfügbare Aktion.",
+    "mark_as_game_port": "Als Spiel-Port markieren",
+    "unmark_port": "Port-Markierung entfernen",
     "update_title": "Update verfügbar",
     "update_body": "Eine neue Version von SwitchU ist verfügbar.",
     "update_installed": "Installiert",
@@ -940,6 +942,13 @@
     "delete_software_failed": "Die Software konnte nicht gelöscht werden.",
     "delete_software_files": "Diese Ordner auf der SD-Karte werden ebenfalls entfernt:",
     "non_game_options_body_folder": "Homebrew und Ports haben keine Spieldetails, Artworks oder Mods zum Verwalten. Sie können in einen Ordner abgelegt oder entfernt werden."
+  },
+  "platform_picker": {
+    "title": "Ursprüngliche Plattform",
+    "subtitle": "Verfügbarkeit der Metadaten wird geprüft",
+    "checking": "Wird geprüft...",
+    "available": "Metadaten verfügbar",
+    "unavailable": "Metadaten nicht verfügbar"
   },
   "text_entry": {
     "erase": "Löschen",

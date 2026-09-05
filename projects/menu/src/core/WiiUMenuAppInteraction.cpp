@@ -1394,7 +1394,7 @@ void WiiUMenuApp::showNonGameOptions(std::uint64_t titleId, const std::string& t
                 "manage."),
         {
             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
-            {"Mark as game port", [this, titleId, title]() {
+            {i18n.tr("dialog.mark_as_game_port", "Mark as game port"), [this, titleId, title]() {
                  showGamePortPlatformMenu(titleId, title);
              }, false},
             {i18n.tr("button.delete", "Delete"), [this, titleId, title]() {

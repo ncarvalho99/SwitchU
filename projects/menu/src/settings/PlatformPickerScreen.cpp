@@ -5,6 +5,7 @@
 #include "themeshop/ThemeHttp.hpp"
 
 #include <nlohmann/json.hpp>
+#include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
 
 #include <algorithm>
@@ -38,7 +39,7 @@ PlatformPickerScreen::PlatformPickerScreen(nxui::GpuDevice& gpu, nxui::Renderer&
                                            nxui::ThreadPool& threadPool)
     : m_gpu(gpu), m_renderer(renderer), m_threadPool(threadPool),
       m_platforms{{
-          {"PC", "pc", ""},
+          {"PC", "pc", "pc.png"},
           {"PlayStation", "playstation", "psx.png"},
           {"PlayStation 2", "playstation-2", "ps2.png"},
           {"PlayStation 3", "playstation-3", "ps3.png"},
@@ -94,7 +95,7 @@ void PlatformPickerScreen::showForTitle(std::string title) {
         m_availabilityFutures[i] = m_threadPool.submit([queryTitle, slug, result]() {
             try {
                 const std::string url = std::string(GameMetadataClient::kServiceUrl)
-                    + "/v1/metadata?title=" + encodeUrlComponent(queryTitle)
+                    + "/v1/availability?title=" + encodeUrlComponent(queryTitle)
                     + "&platform=" + encodeUrlComponent(slug);
                 result->store(nlohmann::json::parse(themeshop::http::getText(url)).value("found", false)
                     ? Availability::Available : Availability::Unavailable);
@@ -187,12 +188,14 @@ void PlatformPickerScreen::onContentRender(nxui::Renderer& renderer) {
                                     std::max(0.0f, glassRadius - 1.5f), 1.0f);
     renderer.liquidGlassSettings() = savedGlass;
 
+    auto& i18n = nxui::I18n::instance();
     if (m_font)
-        renderer.drawText("Original Platform", {108.f, 68.f}, m_font, m_theme->textPrimary, 1.f);
+        renderer.drawText(i18n.tr("platform_picker.title", "Original Platform"), {108.f, 68.f},
+                          m_font, m_theme->textPrimary, 1.f);
     if (m_smallFont) {
         renderer.drawText(m_title, {108.f, 110.f}, m_smallFont, m_theme->textSecondary, 0.78f);
-        renderer.drawText("Checking metadata availability", {108.f, 139.f}, m_smallFont,
-                          m_theme->textSecondary, 0.72f);
+        renderer.drawText(i18n.tr("platform_picker.subtitle", "Checking metadata availability"),
+                          {108.f, 139.f}, m_smallFont, m_theme->textSecondary, 0.72f);
     }
     constexpr float cardW = 320.f;
     constexpr float cardH = 105.f;
@@ -213,11 +216,13 @@ void PlatformPickerScreen::onContentRender(nxui::Renderer& renderer) {
         // Availability status pill inside card
         renderer.drawCircle({card.x + 22.f, card.y + 67.f}, 4.5f, status, 16);
         if (m_smallFont) {
-            renderer.drawText(platform.label, {card.x + 22.f, card.y + 27.f}, m_smallFont,
-                              m_theme->textPrimary, 0.78f);
-            renderer.drawText(platform.availability == Availability::Checking ? "Checking..."
-                              : platform.availability == Availability::Available ? "Metadata available"
-                              : "Metadata unavailable",
+            renderer.drawText(i18n.tr("platform_picker.name." + platform.slug, platform.label),
+                              {card.x + 22.f, card.y + 27.f}, m_smallFont, m_theme->textPrimary, 0.78f);
+            renderer.drawText(platform.availability == Availability::Checking
+                              ? i18n.tr("platform_picker.checking", "Checking...")
+                              : platform.availability == Availability::Available
+                              ? i18n.tr("platform_picker.available", "Metadata available")
+                              : i18n.tr("platform_picker.unavailable", "Metadata unavailable"),
                               {card.x + 34.f, card.y + 61.f}, m_smallFont, status, 0.62f);
         }
         const nxui::Rect logoArea{card.right() - 130.f, card.y + 14.f, 104.f, card.height - 28.f};

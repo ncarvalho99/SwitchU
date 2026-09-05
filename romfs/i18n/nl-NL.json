@@ -867,6 +867,8 @@
     "details_offline": "Online details zijn niet beschikbaar. Druk op A om het opnieuw te proberen.",
     "details_no_online": "Deze titel heeft geen vermelding in de online catalogus.",
     "non_game_options_body": "Homebrew en ports hebben geen spelgegevens, illustraties of mods om te beheren. Verwijderen is hier de enige beschikbare actie.",
+    "mark_as_game_port": "Markeren als game-port",
+    "unmark_port": "Port-markering verwijderen",
     "update_title": "Update beschikbaar",
     "update_body": "Er is een nieuwe versie van SwitchU beschikbaar.",
     "update_installed": "Geïnstalleerd",
@@ -940,6 +942,13 @@
     "delete_software_failed": "De software kon niet worden verwijderd.",
     "delete_software_files": "Deze mappen op de SD-kaart worden ook verwijderd:",
     "non_game_options_body_folder": "Homebrew en ports hebben geen spelgegevens, artwork of mods om te beheren. Ze kunnen in een map worden opgeslagen of verwijderd."
+  },
+  "platform_picker": {
+    "title": "Oorspronkelijk platform",
+    "subtitle": "Beschikbaarheid van metadata controleren",
+    "checking": "Controleren...",
+    "available": "Metadata beschikbaar",
+    "unavailable": "Metadata niet beschikbaar"
   },
   "text_entry": {
     "erase": "Wissen",
