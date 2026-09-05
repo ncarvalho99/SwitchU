@@ -746,6 +746,32 @@ def _translate_metadata_fields(summary: str | None, storyline: str | None,
             label_values("gameModes", game_modes), language.strip().replace("_", "-"))
 
 
+def _igdb_availability(title: str, platform: str) -> dict[str, Any]:
+    """Cheap existence check: does this title exist on IGDB for this platform.
+
+    The platform picker calls this once per platform card (up to 12 requests)
+    every time its dossier opens, just to light a green/red dot -- it never
+    needed the summary, storyline, screenshots, translated genres/themes or
+    time-to-beat that /v1/metadata fetches and (before translation) sends
+    through Gemini. Reusing that endpoint made every picker open fire up to
+    12 full dossier fetches, which is what made it slow and prone to timing
+    out on a re-open. This asks IGDB for id/name/platforms only.
+    """
+    query = (
+        "fields id,name,platforms.id; "
+        f"search \"{_igdb_query_literal(title)}\"; "
+        f"where platforms = ({IGDB_PLATFORM_IDS[platform]}); limit 10;"
+    )
+    game = _igdb_best_game(_igdb_query(query), title, platform)
+    return {
+        "found": game is not None,
+        "title": title,
+        "platform": SUPPORTED_PLATFORMS[platform],
+        "source": "IGDB",
+        "fetchedAt": _utc_now(),
+    }
+
+
 def _igdb_metadata(title: str, platform: str, language: str) -> dict[str, Any]:
     query = (
         "fields id,name,summary,storyline,first_release_date,platforms.id,platforms.name,genres.name,themes.name,game_modes.name,"
@@ -1170,6 +1196,43 @@ def scores(title: str, platform: str = "nintendo-switch") -> dict[str, Any]:
             result, _ = cached
             return {**result, "cached": True, "stale": True}
         raise HTTPException(status_code=502, detail="Metacritic is temporarily unavailable") from exc
+
+
+@app.get("/v1/availability")
+def availability(title: str, platform: str = "nintendo-switch") -> dict[str, Any]:
+    """Fast, cached existence check used by the platform picker.
+
+    Same 30-day cache store as /v1/metadata (score_cache), under its own
+    key prefix so it never collides with or invalidates the full dossier
+    cache, and shared across every console that asks about the same
+    title/platform pair -- the first user to open the picker for a given
+    homebrew/port pays the IGDB round trip, everyone else for the next
+    30 days reads the cached row.
+    """
+    title = " ".join(title.split())
+    if not 2 <= len(title) <= 180:
+        raise HTTPException(status_code=422, detail="title must contain 2 to 180 characters")
+    if platform not in SUPPORTED_PLATFORMS:
+        raise HTTPException(status_code=422, detail="unsupported platform")
+    title = _catalogue_title(title)
+
+    cache_key = f"avail:v1:{platform}:{_normalise_title(title)}"
+    cached = _load_cached(cache_key)
+    if cached is not None and cached[1]:
+        result, _ = cached
+        return {**result, "cached": True, "stale": False}
+
+    try:
+        result = _igdb_availability(title, platform)
+        _save_cached(cache_key, result, bool(result["found"]))
+        return {**result, "cached": False, "stale": False}
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        if cached is not None:
+            result, _ = cached
+            return {**result, "cached": True, "stale": True}
+        raise HTTPException(status_code=502, detail="IGDB is temporarily unavailable") from exc
 
 
 @app.get("/v1/metadata")

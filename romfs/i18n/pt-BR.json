@@ -867,6 +867,8 @@
     "details_offline": "Os detalhes online não estão disponíveis. Pressione A para tentar novamente.",
     "details_no_online": "Este título não tem ficha no catálogo online.",
     "non_game_options_body": "Homebrews e ports não têm detalhes de jogo, artes ou mods para gerenciar. Remover é a única ação disponível aqui.",
+    "mark_as_game_port": "Marcar como port de jogo",
+    "unmark_port": "Desmarcar port",
     "update_title": "Atualização disponível",
     "update_body": "Uma nova versão do SwitchU está disponível.",
     "update_installed": "Instalada",
@@ -940,6 +942,13 @@
     "delete_software_failed": "Não foi possível apagar o software.",
     "delete_software_files": "Estas pastas do cartão SD também serão removidas:",
     "non_game_options_body_folder": "Homebrew e ports não têm detalhes de jogo, arte ou mods para gerenciar. Podem ser guardados em uma pasta ou removidos."
+  },
+  "platform_picker": {
+    "title": "Plataforma original",
+    "subtitle": "Verificando disponibilidade de metadados",
+    "checking": "Verificando...",
+    "available": "Metadados disponíveis",
+    "unavailable": "Metadados indisponíveis"
   },
   "text_entry": {
     "erase": "Apagar",

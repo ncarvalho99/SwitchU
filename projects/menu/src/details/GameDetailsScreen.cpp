@@ -483,7 +483,7 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
     };
     if (m_isGamePort)
-        actions.push_back("Unmark port");
+        actions.push_back(i18n.tr("dialog.unmark_port", "Unmark port"));
     actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
     for (int i = 0; i < (int)actions.size(); ++i) {
         const nxui::Rect action = {rail.x + 18.f, rail.y + 244.f + i * 36.f, rail.width - 36.f, 32.f};
