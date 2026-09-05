@@ -25,6 +25,7 @@ public:
 
     void setFont(nxui::Font* font) { m_font = font; }
     void setSmallFont(nxui::Font* font) { m_smallFont = font; }
+    void setAssetBase(std::string assetBase) { m_assetBase = std::move(assetBase); }
     void setTheme(const nxui::Theme* theme) { m_theme = theme; }
     void showForTitle(std::string title);
     void hide();
@@ -63,10 +64,14 @@ private:
     std::array<std::shared_ptr<std::atomic<Availability>>, 12> m_availabilityResults;
     std::vector<std::future<void>> m_retiredAvailabilityFutures;
     std::string m_title;
+    std::string m_assetBase;
     std::function<void(const std::string&)> m_selectedCb;
     std::function<void()> m_closedCb;
     std::uint64_t m_generation = 0;
     int m_selected = 0;
     bool m_active = false;
     float m_spinner = 0.f;
+    bool m_backdropCacheValid = false;
+    float m_cachedPreBlurRadius = -1.f;
+    int m_cachedBlurIterations = -1;
 };
