@@ -23,13 +23,17 @@ For every task:
 
 1. Read this file.
 2. Read `docs/README.md`.
-3. Read `docs/chapters/03_changelog.md` and exactly one topical chapter routed
-   by the index.
+3. Read `docs/chapters/00_changelog.md` (the changelog index: title, date, and
+   a link per entry) and exactly one topical chapter routed by the index.
 
 After the index, a task may load at most two documentation chapters: the
-current changelog and one topical chapter. Do not bulk-read the repository or
-the documentation archive. Split a task that genuinely needs more chapters
-into separately claimed, documented units before continuing.
+changelog index and one topical chapter. Do not bulk-read the repository, the
+per-entry changelog files under `docs/chapters/changelogs/`, or the
+documentation archive. When debugging a regression, open the linked files for
+the last 10 rows of `00_changelog.md` to check whether a recent change caused
+it, before assuming the cause lies elsewhere. Split a task that genuinely
+needs more chapters into separately claimed, documented units before
+continuing.
 
 ## Claim, check, work, log, release
 
@@ -52,14 +56,23 @@ into separately claimed, documented units before continuing.
   infrastructure unless the user placed that work in scope.
 - Preserve useful documentation and verified facts. Mark uncertainty and
   distinguish current evidence from assumptions.
-- Every changed artifact requires a new immutable entry in
-  `docs/chapters/03_changelog.md`. Insert new entries immediately below its
-  rules; correct old entries with a new entry, never by rewriting history.
+- Every changed artifact requires a new immutable entry, one file per entry,
+  under `docs/chapters/changelogs/`. Name each file
+  `CHANGELOG_<n>#[<Title>].md` where `<n>` is the next sequential number
+  (highest existing `<n>` + 1) and `<Title>` matches the entry's title
+  exactly. The file body uses the same five-point format as before
+  (`### YYYY-MM-DD  Title  `agent-name`` heading plus What/Why/Files/
+  Impact/Docs). Then add one row to the top of the table in
+  `docs/chapters/00_changelog.md` (`| <n> | YYYY-MM-DD | [Title](changelogs/<filename>) |`)
+  so the index always lists newest first. Never edit an existing changelog
+  file; correct old entries with a new numbered entry instead.
 - Update `01_architecture.md` when decisions, data flow, dependencies,
   constraints, or non-goals change. Update `02_project_structure.md` when
   entry points, ownership, folder boundaries, or placement rules change.
-- Keep every file in `docs/chapters/` below 200 lines. Rotate older changelog
-  entries intact into `04_changelog_archive.md` only when needed.
+- Keep every file in `docs/chapters/` below 200 lines. `00_changelog.md` is
+  an index table, not an entry log, so it never needs rotation as long as
+  each row stays one line; individual files under `changelogs/` are never
+  rotated or merged since each already holds exactly one entry.
 - Documentation records decisions, intent, and evidence boundaries. Do not
   duplicate syntax already obvious from source or invent supported platforms,
   compatibility, architecture, or test results.

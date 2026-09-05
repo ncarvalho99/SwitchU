@@ -23,7 +23,7 @@ $required = @(
     "docs/README.md",
     "docs/chapters/01_architecture.md",
     "docs/chapters/02_project_structure.md",
-    "docs/chapters/03_changelog.md",
+    "docs/chapters/00_changelog.md",
     ".agents/skills/switchu-protocol/SKILL.md",
     ".claude/skills/switchu-protocol/SKILL.md"
 )
@@ -32,6 +32,13 @@ foreach ($relative in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $relative) -PathType Leaf)) {
         Add-Failure "Missing required file: $relative"
     }
+}
+
+$changelogsDir = Join-Path $repoRoot "docs/chapters/changelogs"
+if (-not (Test-Path -LiteralPath $changelogsDir -PathType Container)) {
+    Add-Failure "Missing required directory: docs/chapters/changelogs"
+} elseif (@(Get-ChildItem -LiteralPath $changelogsDir -Filter "CHANGELOG_*.md" -File).Count -eq 0) {
+    Add-Failure "docs/chapters/changelogs contains no CHANGELOG_*.md entries"
 }
 
 $expectedWrappers = @{
