@@ -1,4 +1,6 @@
 #include "ControllerTestScreen.hpp"
+#include "SettingsGlassTuning.hpp"
+#include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <algorithm>
@@ -11,9 +13,15 @@ constexpr float kStickSelectDelay = 0.45f;
 constexpr float kDeadzone = 0.12f;
 
 void drawPanel(nxui::Renderer& ren, const nxui::Theme& theme, const nxui::Rect& rect, float alpha) {
-    ren.drawRoundedRect(rect, theme.panelBase.withAlpha(0.93f * alpha), 22.f);
-    ren.drawRoundedRectOutline(rect, theme.panelBorder.withAlpha(0.32f * alpha), 22.f, 1.2f);
-    ren.drawRoundedRectOutline(rect.shrunk(1.5f), theme.panelHighlight.withAlpha(0.08f * alpha), 20.5f, 1.f);
+    // Was a near-opaque flat fill (0.93 alpha), which read as solid dark cards
+    // once the outer dossier panel switched to the real blurred backdrop: the
+    // outer glass let the wallpaper through and these inner cards did not, so
+    // they looked broken/disconnected from it. Matching the lighter fill used
+    // by the other dossiers' inner cards (GameDetailsScreen's action rail)
+    // lets the same backdrop read through here too.
+    ren.drawRoundedRect(rect, theme.panelBase.withAlpha(0.14f * alpha), 22.f);
+    ren.drawRoundedRectOutline(rect, theme.panelBorder.withAlpha(0.28f * alpha), 22.f, 1.2f);
+    ren.drawRoundedRectOutline(rect.shrunk(1.5f), theme.panelHighlight.withAlpha(0.10f * alpha), 20.5f, 1.f);
 }
 }
 
@@ -39,6 +47,7 @@ void ControllerTestScreen::show() {
     m_bHoldTime = 0.f;
     m_touchTrace.clear();
     m_touchFullscreenAnim.setImmediate(0.f);
+    m_backdropCacheValid = false;
     m_alpha.setImmediate(0.f);
     m_alpha.set(1.f, 0.22f, nxui::Easing::outCubic);
     m_scale.setImmediate(0.92f);
@@ -339,8 +348,54 @@ void ControllerTestScreen::render(nxui::Renderer& ren) {
     const float scale = m_scale.value();
     nxui::Rect p = panelRect(scale);
     ren.drawRect({0.f, 0.f, 1280.f, 720.f}, nxui::Color::black().withAlpha(0.12f * alpha));
-    ren.drawFrostedInset(p, m_theme->panelBase.withAlpha(m_theme->mode == nxui::ThemeMode::Dark ? 0.95f : 0.96f),
-                        m_theme->panelBorder.withAlpha(0.32f), m_theme->panelHighlight.withAlpha(0.10f), 26.f, alpha);
+
+    // Same real liquid-glass backdrop capture/blur used by the settings,
+    // game-details and platform-picker dossiers, in place of the flat
+    // frosted panel this used to draw: a solid colour panel here hid the
+    // controls page behind it instead of reading as part of the same UI.
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    const bool needsBackdropRefresh = !m_backdropCacheValid
+        || std::abs(m_cachedPreBlurRadius - tuning.preBlurRadius) > 0.001f
+        || m_cachedBlurIterations != tuning.blurIterations;
+    if (needsBackdropRefresh) {
+        ren.captureToOffscreenSharp();
+        if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
+            ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
+        }
+        ren.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, nxui::GpuDevice::OFF_SETTINGS);
+        m_backdropCacheValid = true;
+        m_cachedPreBlurRadius = tuning.preBlurRadius;
+        m_cachedBlurIterations = tuning.blurIterations;
+    }
+
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    const nxui::Color glassTint = m_theme->panelBase.withAlpha(
+        (m_theme->mode == nxui::ThemeMode::Dark
+             ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+             : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f)) * alpha);
+    const nxui::Rect glassRect = p.shrunk(std::max(0.0f, tuning.inset));
+    const float glassRadius = std::max(12.0f, 26.f - std::max(0.0f, tuning.inset) * 0.5f);
+    ren.drawLiquidGlass(nxui::GpuDevice::OFF_SETTINGS, glassRect, glassRadius, glassTint, alpha,
+                        std::clamp(tuning.shade, 0.0f, 1.0f));
+
+    const nxui::Color panelBorder = m_theme->panelBorder.withAlpha(
+        (m_theme->mode == nxui::ThemeMode::Dark ? 0.32f : 0.40f) * alpha);
+    const nxui::Color panelHighlight = m_theme->panelHighlight.withAlpha(0.10f * alpha);
+    ren.drawRoundedRectOutline(glassRect, panelBorder, glassRadius, 1.2f);
+    ren.drawRoundedRectOutline(glassRect.shrunk(1.5f), panelHighlight,
+                               std::max(0.0f, glassRadius - 1.5f), 1.f);
+    ren.liquidGlassSettings() = savedGlass;
+
     ren.drawText(nxui::I18n::instance().tr("controller_test.title", "Controller Test"),
                  {p.x + 30.f, p.y + 24.f}, m_font, m_theme->textPrimary.withAlpha(alpha), 1.f);
     const std::string closeHint = nxui::I18n::instance().tr(

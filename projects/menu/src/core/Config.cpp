@@ -109,6 +109,15 @@ bool AppConfig::load() {
             gamePortPlatforms.emplace_back(std::strtoull(k.c_str(), nullptr, 16), platform);
         }
     }
+    gamePortSearchTitles.clear();
+    if (auto it = j.find("gamePortSearchTitles"); it != j.end() && it->is_object()) {
+        for (auto& [k, v] : it->items()) {
+            if (!v.is_string()) continue;
+            const std::string title = v.get<std::string>();
+            if (title.empty()) continue;
+            gamePortSearchTitles.emplace_back(std::strtoull(k.c_str(), nullptr, 16), title);
+        }
+    }
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
     if (sfxVolume   < 0.f) sfxVolume   = 0.f;
@@ -179,6 +188,15 @@ bool AppConfig::save() const {
             ports[key] = port.second;
         }
         j["gamePorts"] = std::move(ports);
+    }
+    {
+        nlohmann::json searchTitles = nlohmann::json::object();
+        char key[17];
+        for (const auto& entry : gamePortSearchTitles) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)entry.first);
+            searchTitles[key] = entry.second;
+        }
+        j["gamePortSearchTitles"] = std::move(searchTitles);
     }
 
     // Written beside the real file and swapped in, never over it. Truncating

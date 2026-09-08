@@ -1,5 +1,7 @@
 #include "TextEntryScreen.hpp"
 
+#include "core/DebugLog.hpp"
+
 #include <nxui/core/I18n.hpp>
 #include <nxui/core/Renderer.hpp>
 
@@ -133,6 +135,8 @@ const std::vector<std::vector<TextEntryScreen::Key>>& TextEntryScreen::rows() co
 }
 
 void TextEntryScreen::show(const Request& request) {
+    DebugLog::log("[textentry] TextEntryScreen::show title=%s already-active=%d",
+                  request.title.c_str(), m_active);
     if (m_active)
         return;
     m_request = request;
@@ -162,6 +166,8 @@ void TextEntryScreen::show(const Request& request) {
 }
 
 void TextEntryScreen::hide(bool accepted) {
+    DebugLog::log("[textentry] TextEntryScreen::hide accepted=%d active=%d animatingOut=%d",
+                  accepted, m_active, m_animatingOut);
     if (!m_active || m_animatingOut)
         return;
     m_accepted = accepted;
@@ -423,11 +429,14 @@ void TextEntryScreen::onUpdate(float dt) {
         const std::string value = m_text;
         auto accept = m_acceptCb;
         auto cancel = m_cancelCb;
+        DebugLog::log("[textentry] onUpdate close transition accepted=%d value=%s hasAcceptCb=%d hasCancelCb=%d",
+                      accepted, value.c_str(), (bool)accept, (bool)cancel);
         if (accepted) {
             if (accept) accept(value);
         } else if (cancel) {
             cancel();
         }
+        DebugLog::log("[textentry] onUpdate close transition callback returned");
     }
 }
 

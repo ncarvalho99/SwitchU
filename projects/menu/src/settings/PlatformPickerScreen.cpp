@@ -1,5 +1,6 @@
 #include "PlatformPickerScreen.hpp"
 
+#include "core/DebugLog.hpp"
 #include "details/GameMetadataClient.hpp"
 #include "SettingsGlassTuning.hpp"
 #include "themeshop/ThemeHttp.hpp"
@@ -69,13 +70,14 @@ PlatformPickerScreen::PlatformPickerScreen(nxui::GpuDevice& gpu, nxui::Renderer&
 }
 
 void PlatformPickerScreen::showForTitle(std::string title) {
-    const std::uint64_t currentGen = ++m_generation;
+    const std::uint64_t currentGen =
+        m_generation.fetch_add(1, std::memory_order_acq_rel) + 1;
     for (auto& future : m_availabilityFutures)
         if (future.valid()) m_retiredAvailabilityFutures.push_back(std::move(future));
     m_title = std::move(title);
     m_selected = 0;
     m_spinner = 0.f;
-    m_active = true;
+    m_active.store(true, std::memory_order_release);
     m_backdropCacheValid = false;
     m_cachedPreBlurRadius = -1.f;
     m_cachedBlurIterations = -1;
@@ -104,18 +106,22 @@ void PlatformPickerScreen::showForTitle(std::string title) {
         const std::string slug = platform.slug;
         const auto result = m_availabilityResults[i];
         m_availabilityFutures[i] = m_threadPool.submit([this, currentGen, queryTitle, slug, result]() {
-            if (!m_active || m_generation != currentGen) return;
+            if (!m_active.load(std::memory_order_acquire) ||
+                m_generation.load(std::memory_order_acquire) != currentGen) return;
             try {
                 const std::string url = std::string(GameMetadataClient::kServiceUrl)
                     + "/v1/availability?title=" + encodeUrlComponent(queryTitle)
                     + "&platform=" + encodeUrlComponent(slug);
-                if (!m_active || m_generation != currentGen) return;
+                if (!m_active.load(std::memory_order_acquire) ||
+                m_generation.load(std::memory_order_acquire) != currentGen) return;
                 const std::string jsonText = themeshop::http::getText(url);
-                if (!m_active || m_generation != currentGen) return;
+                if (!m_active.load(std::memory_order_acquire) ||
+                m_generation.load(std::memory_order_acquire) != currentGen) return;
                 const bool found = nlohmann::json::parse(jsonText).value("found", false);
                 result->store(found ? Availability::Available : Availability::Unavailable);
             } catch (...) {
-                if (m_active && m_generation == currentGen) {
+                if (m_active.load(std::memory_order_acquire) &&
+                    m_generation.load(std::memory_order_acquire) == currentGen) {
                     result->store(Availability::Unavailable);
                 }
             }
@@ -124,11 +130,18 @@ void PlatformPickerScreen::showForTitle(std::string title) {
 }
 
 void PlatformPickerScreen::hide() {
-    if (!m_active) return;
-    m_active = false;
-    ++m_generation;
+    DebugLog::log("[platformpicker] hide() active=%d", m_active.load(std::memory_order_acquire));
+    if (!m_active.load(std::memory_order_acquire)) return;
+    m_active.store(false, std::memory_order_release);
+    m_generation.fetch_add(1, std::memory_order_acq_rel);
     setVisible(false);
-    if (m_closedCb) m_closedCb();
+    if (m_closedCb) {
+        DebugLog::log("[platformpicker] hide() calling m_closedCb");
+        m_closedCb();
+        DebugLog::log("[platformpicker] hide() m_closedCb returned");
+    } else {
+        DebugLog::log("[platformpicker] hide() no m_closedCb set");
+    }
 }
 
 void PlatformPickerScreen::wait() {
@@ -149,7 +162,7 @@ nxui::Rect PlatformPickerScreen::containRect(const nxui::Texture& texture, const
 }
 
 void PlatformPickerScreen::onContentRender(nxui::Renderer& renderer) {
-    if (!m_active || !m_theme) return;
+    if (!m_active.load(std::memory_order_acquire) || !m_theme) return;
 
     // Same real liquid-glass backdrop capture/blur used by the settings and
     // game-details dossiers, instead of a flat frosted rect: a plain dark
@@ -256,7 +269,7 @@ void PlatformPickerScreen::onContentRender(nxui::Renderer& renderer) {
 }
 
 void PlatformPickerScreen::onContentUpdate(float dt) {
-    if (!m_active) return;
+    if (!m_active.load(std::memory_order_acquire)) return;
     m_spinner += dt;
     for (auto& future : m_retiredAvailabilityFutures) {
         if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
@@ -270,7 +283,7 @@ void PlatformPickerScreen::onContentUpdate(float dt) {
         auto& future = m_availabilityFutures[i];
         if (future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             future.get();
-            if (m_active) {
+            if (m_active.load(std::memory_order_acquire)) {
                 const Availability avail = m_availabilityResults[i]->load();
                 m_platforms[i].availability = avail;
                 if (avail != Availability::Checking) {
@@ -287,12 +300,20 @@ void PlatformPickerScreen::moveSelection(int dx, int dy) {
 }
 
 void PlatformPickerScreen::selectCurrent() {
-    if (!m_active) return;
-    if (m_selectedCb) m_selectedCb(m_platforms[(std::size_t)m_selected].slug);
+    if (!m_active.load(std::memory_order_acquire)) return;
+    const auto& platform = m_platforms[(std::size_t)m_selected];
+    // Checking still counts as selectable: the lookup for this card may not
+    // have finished yet, and blocking it here would turn a slow network into
+    // a stuck picker. Only a confirmed Unavailable is refused.
+    if (platform.availability == Availability::Unavailable) {
+        if (m_rejectedCb) m_rejectedCb();
+        return;
+    }
+    if (m_selectedCb) m_selectedCb(platform.slug);
 }
 
 void PlatformPickerScreen::handleTouch(nxui::Input& input) {
-    if (!m_active || !input.touchUp()) return;
+    if (!m_active.load(std::memory_order_acquire) || !input.touchUp()) return;
     for (int i = 0; i < kCount; ++i) {
         if (!m_cardRects[(std::size_t)i].contains(input.touchX(), input.touchY())) continue;
         m_selected = i;
