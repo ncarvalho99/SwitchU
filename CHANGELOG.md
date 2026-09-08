@@ -1,3 +1,61 @@
+# SwitchU 2.4.1
+
+## English
+
+Custom search titles for game ports, modal focus and navigation fixes, bounded dossier layout, carousel rendering optimizations, and teardown stability.
+
+### Game ports and search titles
+
+- Edit and save custom search titles for game ports directly from the Software Information dossier, allowing accurate IGDB metadata matching for community ports with differing executable names.
+- Custom game-port search titles are now saved in user configuration and preserved across restarts.
+- Restructured the Software Information left rail so metadata facts dynamically fit within the glass panel when port action buttons are displayed.
+- Normalized Android-port packaging suffixes in the metadata proxy before IGDB queries and cache key generation.
+
+### Navigation and focus restoration
+
+- Prioritize the active text-entry keyboard over parent modals, restoring d-pad navigation when entering search titles.
+- Closing text entry or canceling the platform picker reliably restores controller focus to the parent dialog or details screen.
+
+### Performance and stability
+
+- Optimized carousel (`DynamicLine`) rendering in `IconGrid` by eliminating redundant linear scans and recycling scratch buffers.
+- Hardened NS service teardown during NetConnect library applet handoffs.
+- Synchronized platform picker availability tasks with generation tracking to prevent async race conditions.
+- Added translations for newly introduced game port actions across all 8 supported languages.
+
+<details>
+<summary>Preview / Screenshots</summary>
+
+![](./screenshots/31.jpg)
+![](./screenshots/32.jpg)
+![](./screenshots/33.jpg)
+![](./screenshots/34.jpg)
+
+</details>
+
+## Português
+
+Títulos de busca personalizados para ports de jogos, correções de foco e navegação em modais, layout contido na ficha de detalhes, otimizações no carrossel e maior estabilidade de encerramento.
+
+### Ports de jogos e títulos de busca
+
+- Edite e salve títulos de busca personalizados para ports diretamente da ficha de informações do software, permitindo correspondência precisa de metadados no IGDB para ports com nomes de executáveis diferentes.
+- Os títulos de busca personalizados para ports são salvos nas configurações do usuário e mantidos entre reinicializações.
+- Reestruturado o painel lateral da ficha de detalhes para que os fatos de metadados caibam dinamicamente dentro do painel de vidro quando os botões de ação de port estiverem visíveis.
+- Normalizados os sufixos de ports Android no proxy de metadados antes de consultar o IGDB e salvar no cache.
+
+### Navegação e restauração de foco
+
+- O teclado virtual agora tem prioridade de foco sobre os diálogos pais, restaurando a navegação por direcional ao digitar títulos de busca.
+- Fechar o teclado de texto ou cancelar o seletor de plataforma restaura o foco do controle para o diálogo pai ou tela de detalhes.
+
+### Desempenho e estabilidade
+
+- Otimizada a renderização do carrossel (`DynamicLine`) no `IconGrid`, eliminando buscas lineares redundantes e reutilizando buffers de desenho.
+- Reforçado o encerramento do serviço NS durante a transição para o applet de conexão de rede (NetConnect).
+- Tarefas de disponibilidade no seletor de plataforma sincronizadas com controle de geração para evitar condições de corrida.
+- Adicionadas traduções para as novas ações de ports de jogos em todos os 8 idiomas suportados.
+
 # SwitchU 2.4.0
 
 ## English

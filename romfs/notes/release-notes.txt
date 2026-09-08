@@ -1,23 +1,33 @@
 
-Game ports and platform metadata
-- Choose the original platform for a game port from a dedicated visual picker. SwitchU uses that choice to find the right metadata and cover artwork rather than treating every port as a Nintendo Switch release.
-- Platform availability is checked with a fast cached request, so reopening the picker never lets an older network response replace current results.
-- The platform-picker dossier now uses the same liquid-glass blur as the rest of the menu, improving contrast for dark platform artwork.
-- Added a PC platform icon and corrected matching for platform metadata slugs.
+Game ports and search titles
+- Edit and save custom search titles for game ports directly from the Software Information dossier, allowing accurate IGDB metadata matching for community ports with differing executable names.
+- Custom game-port search titles are now saved in user configuration and preserved across restarts.
+- Restructured the Software Information left rail so metadata facts dynamically fit within the glass panel when port action buttons are displayed.
+- Normalized Android-port packaging suffixes in the metadata proxy before IGDB queries and cache key generation.
 
-Language and service reliability
-- Translated platform-picker and game-port controls across all bundled locales.
-- Completed remaining Portuguese interface translations.
-- Limited the metadata proxy's Gemini integration to the four confirmed free-tier models.
+Navigation and focus restoration
+- Prioritize the active text-entry keyboard over parent modals, restoring d-pad navigation when entering search titles.
+- Closing text entry or canceling the platform picker reliably restores controller focus to the parent dialog or details screen.
+
+Performance and stability
+- Optimized carousel (DynamicLine) rendering in IconGrid by eliminating redundant linear scans and recycling scratch buffers.
+- Hardened NS service teardown during NetConnect library applet handoffs.
+- Synchronized platform picker availability tasks with generation tracking to prevent async race conditions.
+- Added translations for newly introduced game port actions across all 8 supported languages.
 --pt-BR--
 
-Ports de jogos e metadados de plataforma
-- Escolha a plataforma original de um port de jogo em um seletor visual próprio. O SwitchU usa essa escolha para encontrar os metadados e a capa corretos, sem tratar todos os ports como lançamentos de Nintendo Switch.
-- A disponibilidade da plataforma é verificada com uma consulta rápida em cache, então reabrir o seletor nunca deixa uma resposta de rede antiga substituir os resultados atuais.
-- A ficha do seletor de plataforma agora usa o mesmo desfoque de vidro líquido do restante do menu, melhorando o contraste de artes de plataformas escuras.
-- Adicionado um ícone de plataforma PC e corrigida a correspondência dos slugs de metadados de plataforma.
+Ports de jogos e títulos de busca
+- Edite e salve títulos de busca personalizados para ports diretamente da ficha de informações do software, permitindo correspondência precisa de metadados no IGDB para ports com nomes de executáveis diferentes.
+- Os títulos de busca personalizados para ports são salvos nas configurações do usuário e mantidos entre reinicializações.
+- Reestruturado o painel lateral da ficha de detalhes para que os fatos de metadados caibam dinamicamente dentro do painel de vidro quando os botões de ação de port estiverem visíveis.
+- Normalizados os sufixos de ports Android no proxy de metadados antes de consultar o IGDB e salvar no cache.
 
-Idioma e confiabilidade do serviço
-- Traduzidos os controles do seletor de plataforma e dos ports de jogos em todos os idiomas incluídos.
-- Concluídas as traduções restantes da interface em português.
-- A integração Gemini do proxy de metadados foi limitada aos quatro modelos confirmados do plano gratuito.
+Navegação e restauração de foco
+- O teclado virtual agora tem prioridade de foco sobre os diálogos pais, restaurando a navegação por direcional ao digitar títulos de busca.
+- Fechar o teclado de texto ou cancelar o seletor de plataforma restaura o foco do controle para o diálogo pai ou tela de detalhes.
+
+Desempenho e estabilidade
+- Otimizada a renderização do carrossel (DynamicLine) no IconGrid, eliminando buscas lineares redundantes e reutilizando buffers de desenho.
+- Reforçado o encerramento do serviço NS durante a transição para o applet de conexão de rede (NetConnect).
+- Tarefas de disponibilidade no seletor de plataforma sincronizadas com controle de geração para evitar condições de corrida.
+- Adicionadas traduções para as novas ações de ports de jogos em todos os 8 idiomas suportados.

@@ -80,6 +80,12 @@ struct AppConfig {
     // every day for a year.
     std::vector<std::pair<std::uint64_t, std::uint64_t>> lastOpened;
     std::vector<std::pair<std::uint64_t, std::string>> gamePortPlatforms;
+    // The NACP/catalogue title a community port ships with is often noisy
+    // (mod-author credit, ROM-hack branding, "Switch Port" suffixes) and the
+    // online catalogue can't match it even after normalisation. This lets a
+    // player replace only the string sent to the metadata lookup, without
+    // touching what the icon displays on the grid.
+    std::vector<std::pair<std::uint64_t, std::string>> gamePortSearchTitles;
     bool isGamePort(std::uint64_t titleId) const {
         for (const auto& port : gamePortPlatforms)
             if (port.first == titleId) return true;
@@ -89,6 +95,19 @@ struct AppConfig {
         for (const auto& port : gamePortPlatforms)
             if (port.first == titleId) return port.second;
         return {};
+    }
+    // Falls back to the catalogue title itself: a title never re-searched
+    // still has to reach GameMetadataClient with something.
+    std::string gamePortSearchTitle(std::uint64_t titleId, const std::string& fallback) const {
+        for (const auto& entry : gamePortSearchTitles)
+            if (entry.first == titleId) return entry.second;
+        return fallback;
+    }
+    void setGamePortSearchTitle(std::uint64_t titleId, const std::string& title) {
+        for (auto& entry : gamePortSearchTitles) {
+            if (entry.first == titleId) { entry.second = title; return; }
+        }
+        gamePortSearchTitles.emplace_back(titleId, title);
     }
     // A persisted sequence rather than a system/boot clock. The console can
     // start without a valid wall clock and armGetSystemTick resets on reboot;

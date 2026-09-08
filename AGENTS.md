@@ -91,6 +91,63 @@ continuing.
 - Before committing, run `git diff --check`, inspect the complete diff and
   staged diff, verify the staged file list, and inspect final status.
 
+## Multi-agent review and delegation
+
+The primary agent owns the task, claimed scope, implementation, validation,
+changelog entry, local commit, and lock lifecycle. Delegating work never
+transfers or weakens that responsibility.
+
+Use `hermes_review` only when at least one of these applies:
+
+- the implementation changes multiple important files or components;
+- public APIs, authentication, persistence, concurrency, security, or critical
+  data flow are affected;
+- the task is a significant architectural change or refactor;
+- a bug has an unclear root cause or meaningful regression risk;
+- independent review would materially improve confidence;
+- the user explicitly requests an independent review.
+
+Do not use `hermes_review` for routine low-risk work such as typos, formatting,
+simple styling, trivial configuration changes, obvious one-line fixes, or
+small isolated functions unless explicitly requested.
+
+A Hermes review is read-only by default. The reviewer must:
+
+- obey this `AGENTS.md` and its required low-context read order;
+- inspect the current repository state and relevant `git diff`;
+- stay inside the primary task's claimed scope;
+- inspect only the documentation and source necessary for the review;
+- focus on confirmed bugs, regressions, architecture violations, security
+  issues, edge cases, and missing or invalid validation;
+- run targeted validation only when permitted by this policy and safe for the
+  current working tree;
+- distinguish confirmed findings from hypotheses;
+- return concise, actionable findings to the primary agent.
+
+A Hermes reviewer must not:
+
+- edit product code or documentation;
+- create, modify, acquire, or release task locks;
+- stage or commit files;
+- alter changelog entries;
+- expand task scope;
+- reset, clean, stash, fetch, pull, push, tag, publish, or otherwise modify
+  repository or remote state;
+- modify external services, infrastructure, devices, or deployment state.
+
+When delegating, give Hermes a focused review objective and let it inspect the
+workspace directly. Do not reproduce the entire parent conversation or large
+source files in the delegation prompt when the same evidence is available in
+the workspace.
+
+Hermes findings are advisory. The primary agent must verify every finding
+against repository evidence before acting on it. Confirmed fixes remain the
+primary agent's responsibility and must follow the existing claim, scope,
+documentation, validation, commit, and lock rules.
+
+If Hermes identifies a valid issue outside the currently claimed scope, report
+it as follow-up work instead of expanding scope automatically.
+
 ## Git and change safety
 
 - Preserve unrelated dirty-tree work. Never reset, clean, stash, overwrite, or

@@ -52,6 +52,13 @@ bool isAbsoluteThemePath(const std::string& path) {
     return (!path.empty() && path.front() == '/') || (path.find(":/") != std::string::npos);
 }
 
+std::string trimWhitespace(const std::string& value) {
+    const auto begin = value.find_first_not_of(" \t\r\n");
+    if (begin == std::string::npos) return {};
+    const auto end = value.find_last_not_of(" \t\r\n");
+    return value.substr(begin, end - begin + 1);
+}
+
 std::string trimSlashes(std::string path) {
     while (!path.empty() && path.front() == '/')
         path.erase(path.begin());
@@ -961,6 +968,28 @@ void WiiUMenuApp::createGameDetails() {
     m_gameDetails->onRemoveGamePort([this]() {
         if (!m_gameDetails) return;
         removeGamePort(m_gameDetails->titleId());
+    });
+    m_gameDetails->onMarkAsGamePort([this]() {
+        if (!m_gameDetails) return;
+        m_dialogReturnFocus = m_gameDetails.get();
+        showGamePortPlatformMenu(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onEditSearchTitle([this]() {
+        if (!m_gameDetails) return;
+        const std::uint64_t titleId = m_gameDetails->titleId();
+        auto& i18n = nxui::I18n::instance();
+        requestTextEntry(
+            i18n.tr("dialog.edit_search_title", "Edit search title"),
+            i18n.tr("dialog.edit_search_title_guide", "Search title"),
+            m_gameDetails->searchTitle(), 128, false,
+            [this, titleId](const std::string& value) {
+                const std::string trimmed = trimWhitespace(value);
+                if (trimmed.empty()) return;
+                m_config.setGamePortSearchTitle(titleId, trimmed);
+                m_config.save();
+                if (m_gameDetails && m_gameDetails->titleId() == titleId)
+                    m_gameDetails->updateSearchTitle(trimmed);
+            });
     });
     m_gameDetails->onDeleteSoftware([this]() {
         if (!m_gameDetails) return;

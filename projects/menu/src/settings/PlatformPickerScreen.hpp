@@ -31,10 +31,15 @@ public:
     void showForTitle(std::string title);
     void hide();
     void wait();
-    bool isActive() const { return m_active; }
+    bool isActive() const { return m_active.load(std::memory_order_acquire); }
     void handleTouch(nxui::Input& input);
     void onSelected(std::function<void(const std::string&)> cb) { m_selectedCb = std::move(cb); }
     void onClosed(std::function<void()> cb) { m_closedCb = std::move(cb); }
+    // Fired instead of onSelected when A/touch lands on a card whose metadata
+    // availability came back Unavailable: there is nothing an online lookup
+    // could return for that platform, so committing to it just leaves the
+    // dossier permanently empty.
+    void onRejected(std::function<void()> cb) { m_rejectedCb = std::move(cb); }
 
 protected:
     void onContentUpdate(float dt) override;
@@ -69,9 +74,10 @@ private:
     std::string m_assetBase;
     std::function<void(const std::string&)> m_selectedCb;
     std::function<void()> m_closedCb;
-    std::uint64_t m_generation = 0;
+    std::function<void()> m_rejectedCb;
+    std::atomic_uint64_t m_generation = 0;
     int m_selected = 0;
-    bool m_active = false;
+    std::atomic_bool m_active = false;
     float m_spinner = 0.f;
     bool m_backdropCacheValid = false;
     float m_cachedPreBlurRadius = -1.f;

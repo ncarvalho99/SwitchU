@@ -67,7 +67,7 @@ def main() -> int:
         stripped = raw.strip()
         if stripped.startswith("# SwitchU"):
             continue
-        if stripped == "---" or not stripped:
+        if stripped == "---" or not stripped or stripped.startswith("<") or stripped.startswith("!["):
             flush()
             continue
         if stripped.startswith("## ") or stripped.startswith("### "):

@@ -61,6 +61,12 @@ private:
     float m_candidateTime = 0.f;
     float m_stickX = 0.f;
     float m_stickY = 0.f;
+    // Same real liquid-glass backdrop capture/blur the settings, game-details
+    // and platform-picker dossiers use, in place of the flat frosted panel
+    // this used to draw over a plain dark rect.
+    bool m_backdropCacheValid = false;
+    float m_cachedPreBlurRadius = -1.f;
+    int m_cachedBlurIterations = -1;
     bool m_recordingTouch = false;
     bool m_touchFullscreen = false;
     float m_bHoldTime = 0.f;
