@@ -6,6 +6,7 @@
 // sd_commit is outside the guard: saveApplicationSizeCache() is compiled in
 // both variants even though only the menu one populates it.
 #include <switchu/sd_commit.hpp>
+#include <switchu/title_footprint.hpp>
 #ifdef SWITCHU_MENU
 #include <switchu/control_cache.hpp>
 #endif
@@ -514,6 +515,7 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
                     if (R_SUCCEEDED(rc))
                         rc = nsDeleteApplicationCompletely(app.titleId);
                     if (R_SUCCEEDED(rc)) {
+                        switchu::titles::removeSdFootprint(app.titleId);
                         screen.requestToast(i18n.tr("settings.storage.uninstall_success", "Uninstalled successfully."), 2.8f);
                         screen.rebuildCurrentTab();
                     } else {

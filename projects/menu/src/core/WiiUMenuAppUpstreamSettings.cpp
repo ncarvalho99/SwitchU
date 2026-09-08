@@ -5,6 +5,7 @@
 #include "themeshop/ThemeHttp.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
+#include "NsService.hpp"
 
 #include <nxui/core/I18n.hpp>
 
@@ -2062,7 +2063,12 @@ void WiiUMenuApp::startSoftwareDeletion(uint64_t titleId, const std::string& tit
         // walk only reads directory entries, and it is what turns a long silent
         // wait into a bar that moves.
         m_softwareDeleteTotal.store(switchu::titles::countSdFootprint(titleId));
-        m_softwareDeleteResult = nsDeleteApplicationCompletely(titleId);
+        const Result nsRc = switchu::menu::ensureNsService("software-delete");
+        if (R_SUCCEEDED(nsRc)) {
+            m_softwareDeleteResult = nsDeleteApplicationCompletely(titleId);
+        } else {
+            m_softwareDeleteResult = nsRc;
+        }
         // ns owns only what it installed. Anything copied onto the card by hand
         // has to be removed here or it stays, which is how a deleted port kept
         // its whole romfs.
