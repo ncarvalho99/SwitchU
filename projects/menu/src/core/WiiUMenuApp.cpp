@@ -2372,6 +2372,7 @@ void WiiUMenuApp::requestTextEntry(const std::string& title, const std::string& 
     // dialogs and the controller test carry.
     raiseOverlay(m_textEntry);
     nxui::Widget* returnFocus = focusManager().current();
+    DebugLog::log("[textentry] requestTextEntry title=%s returnFocus=%p", title.c_str(), (void*)returnFocus);
     auto restoreFocus = [this, returnFocus]() {
         nxui::Widget* target = isCurrentFocusableWidget(returnFocus)
             ? returnFocus : nullptr;
@@ -2388,11 +2389,17 @@ void WiiUMenuApp::requestTextEntry(const std::string& title, const std::string& 
         // — the keyboard-sized selection left behind on close. Snap it instead.
         if (m_cursor && target)
             m_cursor->moveTo(target->focusRect().expanded(4.f), 0.f);
+        DebugLog::log("[textentry] restoreFocus target=%p returnFocus=%p m_dialog=%p fellBackToGrid=%d",
+                      (void*)target, (void*)returnFocus, (void*)m_dialog.get(),
+                      (target && target != returnFocus) ? 1 : 0);
     };
     m_textEntry->onAccept([this, onAccept, restoreFocus](const std::string& value) {
+        DebugLog::log("[textentry] onAccept fired value=%s", value.c_str());
         restoreFocus();
         if (onAccept) onAccept(value);
+        DebugLog::log("[textentry] onAccept callback returned");
     });
+
     m_textEntry->onCancel(restoreFocus);
 
     TextEntryScreen::Request request;
@@ -2404,8 +2411,9 @@ void WiiUMenuApp::requestTextEntry(const std::string& title, const std::string& 
     m_audio.playSfx(Sfx::ModalShow);
     m_textEntry->show(request);
     focusManager().setFocus(m_textEntry.get());
+    DebugLog::log("[textentry] show() called, focus set to m_textEntry=%p isActive=%d",
+                  (void*)m_textEntry.get(), m_textEntry->isActive());
 }
-
 // A folder is still worth having when the keyboard cannot be reached, so one is
 // created under the first free default name instead of the action doing nothing.
 std::string WiiUMenuApp::defaultFolderName() const {
@@ -4975,8 +4983,30 @@ void WiiUMenuApp::buildGrid() {
     m_platformPicker->setAssetBase(SD_ASSETS);
     m_platformPicker->setTheme(&m_theme);
     m_platformPicker->onClosed([this]() {
-        if (m_platformPickerTitleId != 0 && m_dialog && m_dialog->isActive())
-            focusManager().setFocus(m_dialog.get());
+        DebugLog::log("[platformpicker] onClosed fired m_platformPickerTitleId=%016llX dialogActive=%d gameDetailsActive=%d",
+                      (unsigned long long)m_platformPickerTitleId,
+                      (m_dialog && m_dialog->isActive()) ? 1 : 0,
+                      (m_gameDetails && m_gameDetails->isActive()) ? 1 : 0);
+        // onSelected clears m_platformPickerTitleId before hide(), so a nonzero
+        // id identifies only the cancel path. Restore the top active parent,
+        // never rootBox: whole-screen focus leaves the d-pad with no actionable
+        // selection until a touch event happens to repair it.
+        if (m_platformPickerTitleId != 0) {
+            nxui::Widget* target = nullptr;
+            if (m_dialog && m_dialog->isActive())
+                target = m_dialog.get();
+            else if (m_gameDetails && m_gameDetails->isActive())
+                target = m_gameDetails.get();
+            if (target) {
+                m_suppressNextNavigateSfx = true;
+                focusManager().setFocus(target);
+            }
+            m_platformPickerTitleId = 0;
+            m_platformPickerTitle.clear();
+        }
+    });
+    m_platformPicker->onRejected([this]() {
+        m_audio.playSfx(Sfx::ToggleOff);
     });
     m_platformPicker->onSelected([this](const std::string& slug) {
         const std::uint64_t titleId = m_platformPickerTitleId;
