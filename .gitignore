@@ -143,3 +143,8 @@ id_ed25519
 # beside the checkout rather than published. AGENTS.md still routes through them
 # and they still have to be written; they are simply not part of what ships.
 /docs/
+
+# Agent protocols and local assistant instructions
+/AGENTS.md
+/CLAUDE.md
+/cloud.md
