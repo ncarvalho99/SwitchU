@@ -31,7 +31,7 @@ public:
         m_gpu = gpu;
         m_renderer = renderer;
     }
-    void openForGame(std::uint64_t titleId, std::string title,
+    void openForGame(std::uint64_t titleId, std::string title, std::string searchTitle,
                      std::vector<std::uint8_t> activeCover,
                       nxui::Texture* liveCover, std::string displayVersion,
                       std::string modSummary, std::string playTime,
@@ -40,9 +40,16 @@ public:
     // It preserves downloaded metadata and the selected artwork instead of
     // requesting the online dossier again.
     void resumeFromChild();
+    // Applies a corrected online-lookup string (from the "Edit search title"
+    // action) and re-fetches metadata with it. Leaves the displayed title
+    // and everything else untouched -- only the string sent to the catalogue
+    // changes.
+    void updateSearchTitle(std::string searchTitle);
     bool isImageExpanded() const { return m_imageExpanded; }
     std::uint64_t titleId() const { return m_titleId; }
     const std::string& title() const { return m_title; }
+    const std::string& searchTitle() const { return m_searchTitle; }
+    bool isGamePort() const { return m_isGamePort; }
 
     using ActionCb = std::function<void()>;
     void onOpenGallery(ActionCb cb) { m_openGalleryCb = std::move(cb); }
@@ -52,6 +59,15 @@ public:
     void onDeleteSoftware(ActionCb cb) { m_deleteSoftwareCb = std::move(cb); }
     void onFolderAction(ActionCb cb) { m_folderActionCb = std::move(cb); }
     void onRemoveGamePort(ActionCb cb) { m_removeGamePortCb = std::move(cb); }
+    // Offered for every title, native-id-range or not: a community port
+    // packaged with a real-looking title id would otherwise never be
+    // reachable through "Mark as game port" and would stay stuck querying
+    // the catalogue as "nintendo-switch".
+    void onMarkAsGamePort(ActionCb cb) { m_markAsGamePortCb = std::move(cb); }
+    // Offered only once a title is already marked as a port: lets the player
+    // correct the string sent to the online catalogue without re-picking a
+    // platform.
+    void onEditSearchTitle(ActionCb cb) { m_editSearchTitleCb = std::move(cb); }
     // Reads "Add to folder" or "Remove from folder" depending on where the
     // title currently lives; the owner sets it before opening.
     void setFolderActionLabel(std::string label) { m_folderActionLabel = std::move(label); }
@@ -77,6 +93,10 @@ protected:
 private:
     enum class ImagePhase { Idle, Loading, Downloaded, Ready, Failed };
     enum class FocusZone { Screenshots, Summary, Actions };
+    // Gallery/Active artwork/Restore default/Manage mods stay fixed at 0-3.
+    // What follows depends on port state, so draw, activate and nav-clamp all
+    // read the same list instead of three separately hand-kept index maps.
+    std::vector<std::string> actionLabels() const;
     struct ImageState {
         std::mutex mutex;
         ImagePhase phase = ImagePhase::Idle;
@@ -109,6 +129,7 @@ private:
     std::uint64_t m_seenRevision = 0;
     std::uint64_t m_titleId = 0;
     std::string m_title;
+    std::string m_searchTitle;
     std::string m_metadataPlatform;
     std::string m_displayVersion;
     std::string m_modSummary;
@@ -127,6 +148,8 @@ private:
     bool m_isGamePort = false;
     ActionCb m_folderActionCb;
     ActionCb m_removeGamePortCb;
+    ActionCb m_markAsGamePortCb;
+    ActionCb m_editSearchTitleCb;
     std::string m_folderActionLabel;
     ActionCb m_openGalleryCb;
     ActionCb m_showArtworkCb;

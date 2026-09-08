@@ -69,6 +69,7 @@ GameDetailsScreen::GameDetailsScreen()
 }
 
 void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
+                                    std::string searchTitle,
                                     std::vector<std::uint8_t> activeCover,
                                     nxui::Texture* liveCover,
                                     std::string displayVersion, std::string modSummary,
@@ -76,6 +77,7 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
                                     bool isGamePort) {
     m_titleId = titleId;
     m_title = std::move(title);
+    m_searchTitle = searchTitle.empty() ? m_title : std::move(searchTitle);
     m_metadataPlatform = std::move(metadataPlatform);
     m_isGamePort = isGamePort;
     m_displayVersion = std::move(displayVersion);
@@ -100,7 +102,7 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
     m_focusArea = FocusArea::Content;
     m_localOnly = m_metadataPlatform.empty();
     if (m_pool && !m_localOnly)
-        m_client.load(*m_pool, m_title, m_metadataPlatform);
+        m_client.load(*m_pool, m_searchTitle, m_metadataPlatform);
 }
 
 void GameDetailsScreen::buildTabs() {
@@ -114,6 +116,15 @@ void GameDetailsScreen::resumeFromChild() {
     m_focusArea = FocusArea::Content;
     m_focusZone = FocusZone::Actions;
     m_selectedAction = 0;
+}
+
+void GameDetailsScreen::updateSearchTitle(std::string searchTitle) {
+    m_searchTitle = searchTitle.empty() ? m_title : std::move(searchTitle);
+    m_snapshot = {};
+    m_seenRevision = 0;
+    m_localOnly = m_metadataPlatform.empty();
+    if (m_pool && !m_localOnly)
+        m_client.load(*m_pool, m_searchTitle, m_metadataPlatform);
 }
 
 void GameDetailsScreen::clearImages() {
@@ -297,7 +308,7 @@ bool GameDetailsScreen::handleCustomPressA() {
     // does not have stays absent, and the service remembers that answer for a
     // day, so retrying it would spend a request to be told the same thing.
     if (!m_localOnly && m_snapshot.phase == GameMetadataClient::Phase::Failed) {
-        if (m_pool) m_client.load(*m_pool, m_title, m_metadataPlatform);
+        if (m_pool) m_client.load(*m_pool, m_searchTitle, m_metadataPlatform);
         if (m_activateSfxCb) m_activateSfxCb();
         return true;
     }
@@ -348,7 +359,7 @@ bool GameDetailsScreen::handleCustomNavDown() {
         ++m_summaryScrollLine;
         if (m_navSfxCb) m_navSfxCb();
     } else if (m_focusZone == FocusZone::Actions) {
-        const int maxAction = m_isGamePort ? 5 : 4;
+        const int maxAction = m_isGamePort ? 6 : 5;
         m_selectedAction = std::min(maxAction, m_selectedAction + 1);
         if (m_navSfxCb) m_navSfxCb();
     }
@@ -398,7 +409,32 @@ bool GameDetailsScreen::handleCustomNavRight() {
     return true;
 }
 
+std::vector<std::string> GameDetailsScreen::actionLabels() const {
+    auto& i18n = nxui::I18n::instance();
+    std::vector<std::string> actions = {
+        i18n.tr("dialog.icon_options_gallery", "Gallery"),
+        i18n.tr("dialog.customize_active_art", "Active artwork"),
+        i18n.tr("dialog.customize_restore_default", "Restore default"),
+        i18n.tr("dialog.details_manage_mods", "Manage mods"),
+    };
+    if (m_isGamePort) {
+        actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
+        actions.push_back(i18n.tr("dialog.unmark_port", "Unmark port"));
+    } else {
+        // Native-id-range titles used to be assumed to always be a genuine
+        // Switch release and never offered this: a community port with a
+        // native-looking title id (the GTA V case) had no way to leave the
+        // "nintendo-switch" lookup that never matches it.
+        actions.push_back(i18n.tr("dialog.mark_as_game_port", "Mark as game port"));
+    }
+    actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
+    return actions;
+}
+
 void GameDetailsScreen::activateAction() {
+    const auto actions = actionLabels();
+    if (m_selectedAction < 0 || (std::size_t)m_selectedAction >= actions.size())
+        return;
     switch (m_selectedAction) {
         case 0: if (m_openGalleryCb) m_openGalleryCb(); break;
         case 1: if (m_showArtworkCb) m_showArtworkCb(); break;
@@ -406,12 +442,19 @@ void GameDetailsScreen::activateAction() {
         case 3: if (m_manageModsCb) m_manageModsCb(); break;
         case 4:
             if (m_isGamePort) {
+                if (m_editSearchTitleCb) m_editSearchTitleCb();
+            } else {
+                if (m_markAsGamePortCb) m_markAsGamePortCb();
+            }
+            break;
+        case 5:
+            if (m_isGamePort) {
                 if (m_removeGamePortCb) m_removeGamePortCb();
             } else {
                 if (m_deleteSoftwareCb) m_deleteSoftwareCb();
             }
             break;
-        case 5:
+        case 6:
             if (m_isGamePort && m_deleteSoftwareCb) m_deleteSoftwareCb();
             break;
     }
@@ -476,17 +519,11 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
                      {cover.x + 18.f, cover.y + cover.height * 0.48f}, m_smallFont, subtle, 0.68f);
     }
 
-    std::vector<std::string> actions = {
-        i18n.tr("dialog.icon_options_gallery", "Gallery"),
-        i18n.tr("dialog.customize_active_art", "Active artwork"),
-        i18n.tr("dialog.customize_restore_default", "Restore default"),
-        i18n.tr("dialog.details_manage_mods", "Manage mods"),
-    };
-    if (m_isGamePort)
-        actions.push_back(i18n.tr("dialog.unmark_port", "Unmark port"));
-    actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
+    const std::vector<std::string> actions = actionLabels();
+    constexpr float kActionsTop = 244.f;
+    constexpr float kActionRowH = 36.f;
     for (int i = 0; i < (int)actions.size(); ++i) {
-        const nxui::Rect action = {rail.x + 18.f, rail.y + 244.f + i * 36.f, rail.width - 36.f, 32.f};
+        const nxui::Rect action = {rail.x + 18.f, rail.y + kActionsTop + i * kActionRowH, rail.width - 36.f, 32.f};
         const bool selected = m_focusZone == FocusZone::Actions && m_selectedAction == i;
         if (selected) {
             ren.drawRoundedRect(action, m_theme->panelBase.withAlpha(0.20f * opacity), 11.f);
@@ -506,9 +543,21 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
         ren.drawText(ellipsize(m_smallFont, value.empty() ? "—" : value, railW, 0.66f),
                      {railX, y + 17.f}, m_smallFont, secondary, 0.66f);
     };
-    railFact(rail.bottom() - 142.f, i18n.tr("dialog.details_version", "Version"), m_displayVersion);
-    railFact(rail.bottom() - 96.f, i18n.tr("dialog.details_mods", "Mods"), m_modSummary);
-    railFact(rail.bottom() - 50.f, i18n.tr("dialog.details_playtime", "Play time"), m_playTime);
+    // Keep the facts in the rail's remaining space. Game ports add two actions,
+    // so the three fixed fact rows no longer fit below the list; selecting the
+    // highest-priority facts that fit prevents both overlap and panel overflow.
+    const float actionsBottom = rail.y + kActionsTop + actions.size() * kActionRowH;
+    constexpr float kFactGap = 18.f;
+    constexpr float kFactRowH = 46.f;
+    const float factsAvailable = rail.bottom() - actionsBottom - kFactGap;
+    const int factCount = std::clamp((int)std::floor(factsAvailable / kFactRowH), 0, 3);
+    const float factsTop = actionsBottom + kFactGap;
+    if (factCount >= 1)
+        railFact(factsTop, i18n.tr("dialog.details_version", "Version"), m_displayVersion);
+    if (factCount >= 2)
+        railFact(factsTop + kFactRowH, i18n.tr("dialog.details_mods", "Mods"), m_modSummary);
+    if (factCount >= 3)
+        railFact(factsTop + 2.f * kFactRowH, i18n.tr("dialog.details_playtime", "Play time"), m_playTime);
 
     const nxui::Rect main = {panel.x + 292.f, panel.y + 10.f, panel.width - 312.f, panel.height - 20.f};
     const std::string title = m_snapshot.title.empty() ? m_title : m_snapshot.title;
