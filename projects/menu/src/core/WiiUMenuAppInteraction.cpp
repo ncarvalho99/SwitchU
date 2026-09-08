@@ -614,6 +614,13 @@ void WiiUMenuApp::raiseOverlay(const std::shared_ptr<nxui::Widget>& overlay) {
 
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
+    // m_dialog stayed focused-but-unchecked here: the homebrew "Mark as game
+    // port" button has closeOnPress=false, so the dialog is still the current
+    // focus when its handler opens the text-entry confirm step. Cancelling
+    // that keyboard called restoreFocus(), which never recognised m_dialog as
+    // a valid target, fell through to a random grid icon, and left the dialog
+    // open with no focus owner -- the source of the platform-picker freeze.
+    if (m_dialog && m_dialog.get() == w) return w->isFocusable();
     if (m_contextMenu && m_contextMenu.get() == w) return w->isFocusable();
     if (m_gameOptions && m_gameOptions.get() == w) return w->isFocusable();
     if (m_folderOptions && m_folderOptions.get() == w) return w->isFocusable();
@@ -778,10 +785,14 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_folderCaptureRequested) return nullptr;
     if (m_progressDialog && m_progressDialog->isActive()) return m_progressDialog.get();
     if (m_contextMenu && m_contextMenu->isActive()) return m_contextMenu.get();
+    // The search-title keyboard can be opened from the still-visible "Mark as
+    // game port" dialog. It must take precedence over that parent, otherwise
+    // focusRoot hands d-pad dispatch back to the dialog despite the keyboard
+    // being visibly on top and explicitly focused by requestTextEntry().
+    if (m_textEntry && m_textEntry->isActive()) return m_textEntry.get();
     if (m_platformPicker && m_platformPicker->isActive()) return m_platformPicker.get();
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) return m_steamGridDbPicker.get();
-    if (m_textEntry && m_textEntry->isActive()) return m_textEntry.get();
     if (m_controllerTest && m_controllerTest->isActive()) return m_controllerTest.get();
     if (m_folderOptions && m_folderOptions->isActive()) return m_folderOptions.get();
     if (m_gameOptions && m_gameOptions->isActive()) return m_gameOptions.get();
@@ -1343,12 +1354,38 @@ void WiiUMenuApp::showIconOptions() {
 void WiiUMenuApp::showGamePortPlatformMenu(std::uint64_t titleId, const std::string& title) {
 #ifdef SWITCHU_MENU
     if (!m_platformPicker) return;
-    m_platformPickerTitleId = titleId;
-    m_platformPickerTitle = title;
-    raiseOverlay(m_platformPicker);
-    m_audio.playSfx(Sfx::ModalShow);
-    m_platformPicker->showForTitle(title);
-    focusManager().setFocus(m_platformPicker.get());
+    // The NACP/catalogue title reaching here can be whatever the port author
+    // baked into the ROM (author credit, "Render96", resolution tags...) and
+    // there was never a way to see or correct it before it was sent to the
+    // online catalogue. Confirming it here, prefilled from any earlier
+    // correction, is the one general fix that covers every community's
+    // packaging convention without hardcoding any of them.
+    auto& i18n = nxui::I18n::instance();
+    const std::string initial = m_config.gamePortSearchTitle(titleId, title);
+    DebugLog::log("[gameport] showGamePortPlatformMenu enter titleId=%016llX title=%s initial=%s",
+                  (unsigned long long)titleId, title.c_str(), initial.c_str());
+    requestTextEntry(
+        i18n.tr("dialog.confirm_search_title", "Confirm search title"),
+        i18n.tr("dialog.confirm_search_title_guide", "What this game is called elsewhere"),
+        initial, 128, false,
+        [this, titleId, title](const std::string& value) {
+            DebugLog::log("[gameport] confirm-search-title accept fired titleId=%016llX value=%s",
+                          (unsigned long long)titleId, value.c_str());
+            const std::string searchTitle = value.empty() ? title : value;
+            if (searchTitle != title)
+                m_config.setGamePortSearchTitle(titleId, searchTitle);
+            if (!m_platformPicker) {
+                DebugLog::log("[gameport] confirm-search-title accept aborted: m_platformPicker null");
+                return;
+            }
+            m_platformPickerTitleId = titleId;
+            m_platformPickerTitle = title;
+            raiseOverlay(m_platformPicker);
+            m_audio.playSfx(Sfx::ModalShow);
+            m_platformPicker->showForTitle(searchTitle);
+            focusManager().setFocus(m_platformPicker.get());
+            DebugLog::log("[gameport] platformPicker shown and focused searchTitle=%s", searchTitle.c_str());
+        });
 #else
     (void)titleId;
     (void)title;
@@ -1586,11 +1623,18 @@ void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& titl
         m_gameDetailsReturnFocus = m_dialogReturnFocus;
     m_dialogReturnFocus = m_gameDetails.get();
     m_audio.playSfx(Sfx::ModalShow);
-    m_gameDetails->openForGame(titleId, title, std::move(cover), liveCover,
+    // A title marked as a port always searches under the platform it was
+    // marked with, even when its title id happens to sit in the native
+    // range: that range is only ever a packaging detail for a community
+    // port, and letting it win here is what sent titles like a legacy PC
+    // GTA V build to the "nintendo-switch" lookup, where it can never match.
+    const std::string metadataPlatform = m_config.isGamePort(titleId)
+        ? m_config.gamePortPlatform(titleId)
+        : (isNativeApplicationId(titleId) ? "nintendo-switch" : std::string());
+    const std::string searchTitle = m_config.gamePortSearchTitle(titleId, title);
+    m_gameDetails->openForGame(titleId, title, searchTitle, std::move(cover), liveCover,
                                 installedDisplayVersion(titleId), installedModSummary(titleId),
-                                installedPlayTime(titleId),
-                                isNativeApplicationId(titleId) ? "nintendo-switch"
-                                                               : m_config.gamePortPlatform(titleId),
+                                installedPlayTime(titleId), metadataPlatform,
                                 m_config.isGamePort(titleId));
     focusManager().setFocus(m_gameDetails.get());
 #else

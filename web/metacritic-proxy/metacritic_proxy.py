@@ -217,7 +217,17 @@ def _normalise_title(value: str) -> str:
 
 
 def _catalogue_title(value: str) -> str:
-    return re.sub(r"\s*\(port\)\s*$", "", value, flags=re.IGNORECASE).strip()
+    """Remove launcher packaging annotations before IGDB matching and caching.
+
+    Community ports commonly append a suffix such as ``(Android port)`` to the
+    NACP title. That text is not part of the game name, so including it in the
+    IGDB search and cache key turns otherwise exact matches (for example GTA:
+    San Andreas) into permanent negative-cache entries.
+    """
+    return re.sub(
+        r"\s*\((?:android\s+)?port\)\s*$", "", value,
+        flags=re.IGNORECASE,
+    ).strip()
 
 
 def _urlopen_with_retry(request: Request, *, timeout: int):
