@@ -109,5 +109,3 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
 
     return t;
 }
-
-} // namespace themeshop::tabs
