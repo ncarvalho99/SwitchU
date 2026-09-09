@@ -398,7 +398,7 @@ public:
         m_track->setGap(0.f);
         m_track->setPadding(0.f);
         m_track->setCornerRadius(6.f);
-        m_track->setBorderWidth(0.f);
+        m_track->setBorderWidth(1.f);
 
         m_fill = std::make_shared<nxui::GlassBox>();
         m_fill->setCornerRadius(4.f);
@@ -450,7 +450,9 @@ protected:
         };
 
         if (rowTheme) {
-            m_track->setBaseColor(nxui::Color(0.3f, 0.3f, 0.35f, 0.5f * opacity()));
+            m_track->setBaseColor(rowTheme->panelBase.withAlpha(0.18f * opacity()));
+            m_track->setBorderColor(rowTheme->panelBorder.withAlpha(0.26f * opacity()));
+            m_track->setHighlightColor(rowTheme->panelHighlight.withAlpha(0.12f * opacity()));
             m_fill->setBaseColor(rowTheme->cursorNormal.withAlpha(0.9f * opacity()));
             m_knob->setBaseColor(nxui::Color(1.f, 1.f, 1.f, opacity()));
             m_pct->setTextColor(rowTheme->textPrimary);
@@ -500,7 +502,7 @@ public:
         m_track->setGap(0.f);
         m_track->setPadding(0.f);
         m_track->setCornerRadius(6.f);
-        m_track->setBorderWidth(0.f);
+        m_track->setBorderWidth(1.f);
 
         m_fill = std::make_shared<nxui::GlassBox>();
         m_fill->setCornerRadius(4.f);
@@ -560,7 +562,9 @@ protected:
         };
 
         if (rowTheme) {
-            m_track->setBaseColor(nxui::Color(0.3f, 0.3f, 0.35f, 0.5f * opacity()));
+            m_track->setBaseColor(rowTheme->panelBase.withAlpha(0.18f * opacity()));
+            m_track->setBorderColor(rowTheme->panelBorder.withAlpha(0.26f * opacity()));
+            m_track->setHighlightColor(rowTheme->panelHighlight.withAlpha(0.12f * opacity()));
             m_fill->setBaseColor(rowTheme->cursorNormal.withAlpha(0.9f * opacity()));
             m_pct->setTextColor(rowTheme->textPrimary);
         }

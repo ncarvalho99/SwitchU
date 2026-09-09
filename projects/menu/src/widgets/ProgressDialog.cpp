@@ -112,7 +112,12 @@ void ProgressDialog::render(nxui::Renderer& ren) {
     }
 
     nxui::Rect track = {panel.x + pad, panel.y + 148.f, panel.width - pad * 2.f, 18.f};
-    ren.drawRoundedRect(track, m_theme->panelBorder.withAlpha(0.22f * alpha), 9.f);
+    nxui::Color trackBg = m_theme->panelBase.withAlpha(0.18f * alpha);
+    nxui::Color trackBorder = m_theme->panelBorder.withAlpha(0.26f * alpha);
+    nxui::Color trackHighlight = m_theme->panelHighlight.withAlpha(0.12f * alpha);
+    ren.drawRoundedRect(track, trackBg, 9.f);
+    ren.drawRoundedRectOutline(track, trackBorder, 9.f, 1.f);
+    ren.drawRoundedRectOutline(track.shrunk(1.f), trackHighlight, 8.f, 1.f);
 
     if (m_progress01 >= 0.f) {
         float p = std::clamp(m_progressAnim.value(), 0.f, 1.f);
