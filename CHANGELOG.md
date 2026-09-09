@@ -1,3 +1,57 @@
+# SwitchU 2.4.2
+
+## English
+
+Dedicated self-uninstall tab, full filesystem purge, GPU liquid glass styling for progress dialogs and sliders, docked wake responsiveness fixes, and tutorial localization corrections.
+
+### Self-uninstall and recovery
+
+- Added a dedicated bottom-anchored Uninstall tab to the SwitchU overlay with localized guidance across all 8 supported languages.
+- Implemented a complete and clean SD card purge on self-uninstall: removing the sysmodule (`0100000000001000`), executables, downloaded themes, and configurations before rebooting into stock Nintendo qlaunch.
+- Updated confirmation and information dialogues in all languages with explicit notices that the console reboots twice to finalize the removal.
+
+### Visual design and materials
+
+- Upgraded the system `ProgressDialog` to use the GPU liquid glass rendering pipeline with real-time backdrop capture, blur, and refraction, matching the dossier interface styling.
+- Restyled slider and progress bar tracks across settings and dialogs to have a glassy translucent background with fine outlines so only the active progress percentage displays colored accent.
+
+### Tutorial and localization
+
+- Corrected hardcoded tutorial title strings so the tutorial header properly localizes in all languages (e.g. "Tutorial do SwitchU" in Portuguese) instead of displaying the French fallback.
+
+### Performance and stability
+
+- Removed redundant sleep requests when unlocking the screen, fixing delayed wake responsiveness while docked.
+- Ensured proper NS service initialization during home screen software deletion routines.
+
+---
+
+## Português
+
+Aba dedicada de desinstalação, limpeza completa de arquivos, visual de vidro líquido (liquid glass) para caixas de progresso e controles deslizantes, correção na resposta ao despertar no dock e correções de localização do tutorial.
+
+### Desinstalação e recuperação
+
+- Adicionada uma aba dedicada de Desinstalação fixada na base do menu SwitchU, com instruções localizadas em todos os 8 idiomas suportados.
+- Implementada a limpeza completa e segura do cartão SD ao desinstalar: removendo a sysmodule (`0100000000001000`), executáveis, temas baixados e configurações antes de reiniciar no qlaunch original da Nintendo.
+- Atualizados os diálogos informativos e de confirmação com aviso explícito de que o console reiniciará duas vezes para concluir a remoção.
+
+### Design visual e materiais
+
+- Atualizada a janela de progresso (`ProgressDialog`) para utilizar a pipeline de vidro líquido na GPU com captura de fundo em tempo real, desfoque e refração, alinhando-se ao visual das fichas de detalhes (dossiê).
+- Redesenhadas as trilhas de barras de progresso e controles deslizantes para apresentar fundo translúcido e bordas finas de vidro, destacando a cor de destaque apenas na porcentagem preenchida.
+
+### Tutorial e localização
+
+- Corrigido o título da página do tutorial para que seja traduzido corretamente em todos os idiomas (ex: "Tutorial do SwitchU" em português) em vez de exibir o texto em francês.
+
+### Desempenho e estabilidade
+
+- Removida a solicitação redundante de suspensão ao destravar a tela, corrigindo o atraso ao despertar com o console no dock.
+- Garantida a inicialização correta do serviço NS durante a rotina de exclusão de softwares na tela inicial.
+
+---
+
 # SwitchU 2.4.1
 
 ## English
