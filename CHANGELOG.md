@@ -1,4 +1,6 @@
-# SwitchU 2.4.3
+# SwitchU 2.4.3 (Hotfix)
+
+Hotfix release addressing manual date and time modification failures and adding standalone public SNTP network time synchronization.
 
 ## English
 

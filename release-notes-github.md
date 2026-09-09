@@ -1,8 +1,8 @@
-# SwitchU 2.4.3
+# SwitchU 2.4.3 (Hotfix)
+
+Hotfix release addressing manual date and time modification failures and adding standalone public SNTP network time synchronization.
 
 ## English
-
-Fix for manual date and time modification, non-blocking public SNTP pool time synchronization, and multi-thread toast safety.
 
 ### Date and time management
 
@@ -17,7 +17,7 @@ Fix for manual date and time modification, non-blocking public SNTP pool time sy
 
 ## Português
 
-Correção na alteração manual de data e hora, sincronização de horário via pools SNTP públicos e segurança de threads para notificações toast.
+Atualização de correção (hotfix) para alteração manual de data e hora e adição de sincronização de horário via pools SNTP públicos.
 
 ### Gerenciamento de data e hora
 
