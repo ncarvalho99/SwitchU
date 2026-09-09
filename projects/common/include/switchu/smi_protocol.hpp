@@ -45,6 +45,9 @@ enum class SystemMessage : uint32_t {
     Shutdown              = 21,
     Reboot                = 22,
     RequestForeground     = 23,
+    // The menu has durably staged a request to disable its qlaunch override.
+    // The daemon reboots now and applies that request before launching a menu.
+    RequestSelfUninstall  = 24,
 
     GetAppList            = 30,
     GetSystemStatus       = 31,

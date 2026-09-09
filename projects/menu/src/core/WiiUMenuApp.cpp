@@ -54,11 +54,6 @@ std::optional<std::uint64_t> queryApplicationPlaytimeSeconds(std::uint64_t title
 static constexpr const char* kLayoutPath = "sdmc:/config/SwitchU/layout.json";
 static constexpr int kMinHomePages = 8;
 static constexpr const char* kBuiltInSoundPreset = "wiiu";
-// Combined with nxui::Application's 100 ms non-render sleep, this leaves the
-// locked menu responsive within roughly 350 ms while cutting CPU wakeups to
-// under three per second and eliminating GPU presentation work.
-static constexpr std::uint64_t kLockScreenLowPowerSleepNs = 250'000'000ULL;
-
 // How often the console's own sleep plan is re-read. It changes only when
 // somebody edits it in Settings, so once every few seconds is plenty and keeps
 // a system-settings IPC call out of the frame loop.
@@ -6348,9 +6343,10 @@ void WiiUMenuApp::onUpdate(float dt) {
         if (app().renderEnabled())
             DebugLog::log("[lock] low power: presentation stopped");
         app().setRenderEnabled(false);
-        // Input and system messages are still serviced after this short wait;
-        // HOME and the three-press gesture remain usable while GPU work stops.
-        svcSleepThread(kLockScreenLowPowerSleepNs);
+        // Application::run() yields for 100 ms while presentation is disabled.
+        // Do not add a second sleep here: the old 250 ms wait compounded with
+        // that yield, reduced locked input polling to about 3 Hz, and dropped
+        // short unlock presses after wake or undock.
     }
 }
 

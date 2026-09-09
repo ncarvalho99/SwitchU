@@ -43,6 +43,10 @@ inline Result sendSimple(smi::SystemMessage msg) {
     return pushOutStorage(&hdr, sizeof(hdr));
 }
 
+inline Result requestSelfUninstall() {
+    return sendSimple(smi::SystemMessage::RequestSelfUninstall);
+}
+
 inline Result setManualDateTime(const smi::ManualDateTimeArgs& value) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(value)]{};
     auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);

@@ -81,10 +81,7 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
             if (screen.m_updateRestartCb) screen.m_updateRestartCb();
         };
         t.items.push_back(std::move(it));
-        return t;
-    }
-
-    {
+    } else {
         SettingItem it;
         it.label = i18n.tr("settings.about.check_updates", "Check for updates");
         it.description = i18n.tr("settings.about.check_updates_desc",
@@ -106,6 +103,21 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
         it.type = ItemType::Action;
         it.onChange = [&screen](SettingItem&) {
             if (!screen.m_updateBusy && screen.m_updateInstallCb) screen.m_updateInstallCb();
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    // Keep removal visually separated at the bottom of the Update tab. It is
+    // intentionally available even when an update is waiting, because the app
+    // resolves a confirmed removal before it considers staged update payloads.
+    {
+        SettingItem it;
+        it.label = i18n.tr("themeshop.uninstall", "Uninstall SwitchU");
+        it.description = i18n.tr("themeshop.uninstall_desc",
+                                 "Return to the Nintendo HOME Menu after a restart.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_selfUninstallCb) screen.m_selfUninstallCb();
         };
         t.items.push_back(std::move(it));
     }
