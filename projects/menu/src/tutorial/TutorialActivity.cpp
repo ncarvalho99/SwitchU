@@ -255,8 +255,10 @@ void TutorialActivity::buildUi() {
 
     m_progressTrack = std::make_shared<nxui::GlassPanel>();
     configureFlatPanel(m_progressTrack, m_theme, 8.f, 0.72f);
-    m_progressTrack->setBaseColor(m_theme.textSecondary.withAlpha(0.16f));
-    m_progressTrack->setBackingColor(m_theme.textSecondary.withAlpha(0.12f));
+    m_progressTrack->setBaseColor(m_theme.panelBase.withAlpha(0.18f));
+    m_progressTrack->setBackingColor(m_theme.panelBase.withAlpha(0.12f));
+    m_progressTrack->setBorderColor(m_theme.panelBorder.withAlpha(0.26f));
+    m_progressTrack->setHighlightColor(m_theme.panelHighlight.withAlpha(0.12f));
     m_progressTrack->setRect({76.f, 190.f, 520.f, 6.f});
     rootBox().addChild(m_progressTrack);
 
@@ -805,7 +807,8 @@ void TutorialActivity::onRender(nxui::Renderer& ren) {
     const Step& step = m_steps[(size_t)m_stepIndex];
     const std::string visible = step.body.substr(0, std::min(m_visibleChars, step.body.size()));
 
-    ren.drawText("Tutoriel SwitchU", {76.f, 50.f}, &m_fontBody,
+    const std::string appTitle = nxui::I18n::instance().tr("tutorial.header", "SwitchU Tutorial");
+    ren.drawText(appTitle, {76.f, 50.f}, &m_fontBody,
                  m_theme.textSecondary.withAlpha(0.82f), 0.92f);
     ren.drawText(step.title, {76.f, 128.f}, &m_fontTitle,
                  m_theme.textPrimary, 1.f);

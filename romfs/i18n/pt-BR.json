@@ -97,6 +97,7 @@
     }
   },
   "tutorial": {
+    "header": "Tutorial do SwitchU",
     "accessibility": {
       "title": "Leitura por voz",
       "body": "A leitura por voz está disponível neste menu. Ela pode ler o item selecionado e as ações disponíveis.",
@@ -696,7 +697,7 @@
     "update_unknown": "Ainda não verificado",
     "uninstall": "Desinstalar SwitchU",
     "uninstall_desc": "Exclui permanentemente o SwitchU e retorna ao Nintendo HOME Menu.",
-    "uninstall_information": "Isso remove permanentemente o SwitchU do seu console e reinicia no Nintendo HOME Menu original.\n\nTodos os dados do SwitchU no cartão SD serão completamente apagados, incluindo:\n• Todas as configurações e registros de log\n• Todos os temas estáticos e animados baixados\n• Todas as artes de jogos e ícones em cache\n• Os executáveis do SwitchU e o SwitchU Manager\n\nPara usar o SwitchU novamente no futuro, será necessária uma nova instalação manual.",
+    "uninstall_information": "Isso remove permanentemente o SwitchU do seu console e reinicia no Nintendo HOME Menu original.\n\nTodos os dados do SwitchU no cartão SD serão completamente apagados, incluindo:\n• Todas as configurações e registros de log\n• Todos os temas estáticos e animados baixados\n• Todas as artes de jogos e ícones em cache\n• Os executáveis do SwitchU e o SwitchU Manager\n\nAtenção: O console irá reiniciar duas vezes para concluir a remoção completa e carregar o HOME Menu original.\n\nPara usar o SwitchU novamente no futuro, será necessária uma nova instalação manual.",
     "uninstall_continue": "Continuar",
     "uninstall_confirm_title": "Excluir permanentemente o SwitchU?",
     "uninstall_confirm": "Esta ação não pode ser desfeita. Todos os arquivos, temas, artes e configurações do SwitchU serão apagados permanentemente do cartão SD.",
