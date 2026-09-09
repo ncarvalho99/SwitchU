@@ -1,14 +1,15 @@
 #include "NtpClient.hpp"
 #include "smi_commands.hpp"
 #include <switchu/file_log.hpp>
+#include <switch.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <cstring>
-#include <thread>
 #include <mutex>
+#include <atomic>
 #include <vector>
 #include <string>
 
@@ -114,6 +115,35 @@ uint64_t queryServer(const std::string& host, int timeoutSec) {
     return posixTime;
 }
 
+// Background worker thread state using native Horizon libnx Thread
+alignas(0x1000) static u8 s_ntpStack[0x8000];
+static Thread s_ntpThread;
+static std::atomic<bool> s_ntpRunning{false};
+static bool s_ntpThreadCreated = false;
+static NtpClient::SyncCallback s_ntpCallback;
+static std::mutex s_ntpSyncMutex;
+
+static void ntpWorkerThreadFunc(void* arg) {
+    (void)arg;
+    uint64_t timestamp = NtpClient::queryNetworkTime(2);
+    bool ok = false;
+    if (timestamp > 0) {
+        Result rc = switchu::menu::smi_cmd::setPosixTime(timestamp, true);
+        ok = R_SUCCEEDED(rc);
+        switchu::FileLog::log("[ntp] apply sync result: 0x%X (ok=%d)", rc, ok ? 1 : 0);
+    }
+
+    NtpClient::SyncCallback cb;
+    {
+        std::lock_guard<std::mutex> lock(s_ntpSyncMutex);
+        cb = std::move(s_ntpCallback);
+    }
+    if (cb) {
+        cb(ok, timestamp);
+    }
+    s_ntpRunning.store(false);
+}
+
 } // namespace
 
 const std::vector<std::string>& NtpClient::serverList() {
@@ -135,18 +165,55 @@ uint64_t NtpClient::queryNetworkTime(int timeoutSeconds) {
 }
 
 void NtpClient::syncAsync(SyncCallback callback) {
-    std::thread([cb = std::move(callback)]() {
-        uint64_t timestamp = queryNetworkTime(2);
-        bool ok = false;
-        if (timestamp > 0) {
-            Result rc = switchu::menu::smi_cmd::setPosixTime(timestamp, true);
-            ok = R_SUCCEEDED(rc);
-            switchu::FileLog::log("[ntp] apply sync result: 0x%X (ok=%d)", rc, ok ? 1 : 0);
+    std::lock_guard<std::mutex> lock(s_ntpSyncMutex);
+
+    if (s_ntpRunning.load()) {
+        switchu::FileLog::log("[ntp] sync already running, skipping request");
+        return;
+    }
+
+    if (s_ntpThreadCreated) {
+        threadWaitForExit(&s_ntpThread);
+        threadClose(&s_ntpThread);
+        s_ntpThreadCreated = false;
+    }
+
+    s_ntpCallback = std::move(callback);
+    s_ntpRunning.store(true);
+
+    Result rc = threadCreate(&s_ntpThread, ntpWorkerThreadFunc, nullptr,
+                             s_ntpStack, sizeof(s_ntpStack), 0x2C, 2);
+    if (R_FAILED(rc)) {
+        switchu::FileLog::log("[ntp] threadCreate failed: 0x%X", rc);
+        s_ntpRunning.store(false);
+        if (s_ntpCallback) {
+            auto cb = std::move(s_ntpCallback);
+            cb(false, 0);
         }
-        if (cb) {
-            cb(ok, timestamp);
+        return;
+    }
+
+    s_ntpThreadCreated = true;
+    rc = threadStart(&s_ntpThread);
+    if (R_FAILED(rc)) {
+        switchu::FileLog::log("[ntp] threadStart failed: 0x%X", rc);
+        s_ntpRunning.store(false);
+        threadClose(&s_ntpThread);
+        s_ntpThreadCreated = false;
+        if (s_ntpCallback) {
+            auto cb = std::move(s_ntpCallback);
+            cb(false, 0);
         }
-    }).detach();
+    }
+}
+
+void NtpClient::cleanup() {
+    std::lock_guard<std::mutex> lock(s_ntpSyncMutex);
+    if (s_ntpThreadCreated) {
+        threadWaitForExit(&s_ntpThread);
+        threadClose(&s_ntpThread);
+        s_ntpThreadCreated = false;
+    }
 }
 
 } // namespace switchu::services
