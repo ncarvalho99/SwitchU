@@ -630,6 +630,57 @@ static Result setInternetTimeSync(bool enabled) {
     return result;
 }
 
+static Result setClockByService(const char* srvName, u32 getClockCmd, u64 timestamp) {
+    ScopedService srv;
+    Result rc = smGetService(&srv.value, srvName);
+    if (R_FAILED(rc)) {
+        switchu::FileLog::log("[settings-time] smGetService(%s) failed: 0x%X", srvName, rc);
+        return rc;
+    }
+    ScopedService clock;
+    rc = serviceDispatch(&srv.value, getClockCmd,
+        .out_num_objects = 1,
+        .out_objects = &clock.value,
+    );
+    if (R_FAILED(rc)) {
+        switchu::FileLog::log("[settings-time] %s cmd %u failed: 0x%X", srvName, getClockCmd, rc);
+        return rc;
+    }
+    rc = serviceDispatchIn(&clock.value, 1, timestamp);
+    switchu::FileLog::log("[settings-time] %s cmd %u SetCurrentTime(%llu) rc=0x%X",
+        srvName, getClockCmd, (unsigned long long)timestamp, rc);
+    return rc;
+}
+
+static Result applySystemTime(u64 targetTimestamp, bool isInternetSync) {
+    // 1. Set NetworkSystemClock using time:s cmd 1 (GetStandardNetworkSystemClock)
+    const Result netRc = setClockByService("time:s", 1, targetTimestamp);
+
+    // 2. Set LocalSystemClock using time:a cmd 4 (GetStandardLocalSystemClock)
+    const Result localRc = setClockByService("time:a", 4, targetTimestamp);
+
+    // 3. Set UserSystemClock using time:a cmd 0 (GetStandardUserSystemClock)
+    const Result userRc = setClockByService("time:a", 0, targetTimestamp);
+
+    // 4. Update persistent automatic correction setting in setsys and live in time:a
+    const Result setsysRc = setsysSetUserSystemClockAutomaticCorrectionEnabled(isInternetSync);
+    const Result liveRc = setLiveAutomaticCorrection(isInternetSync);
+
+    u64 actual = 0;
+    Result readRc = timeGetCurrentTime(TimeType_UserSystemClock, &actual);
+
+    switchu::FileLog::log(
+        "[settings-time] applySystemTime posix=%llu internet=%d net=0x%X local=0x%X user=0x%X setsys=0x%X live=0x%X actual=%llu readRc=0x%X",
+        (unsigned long long)targetTimestamp, isInternetSync ? 1 : 0,
+        netRc, localRc, userRc, setsysRc, liveRc,
+        (unsigned long long)actual, readRc);
+
+    if (R_FAILED(localRc) && R_FAILED(userRc) && R_FAILED(netRc)) {
+        return localRc != 0 ? localRc : (userRc != 0 ? userRc : netRc);
+    }
+    return 0;
+}
+
 static Result setManualDateTime(const smi::ManualDateTimeArgs& args) {
     TimeCalendarTime calendar{};
     calendar.year = static_cast<u16>(args.year);
@@ -651,55 +702,8 @@ static Result setManualDateTime(const smi::ManualDateTimeArgs& args) {
         rc = MAKERESULT(Module_Libnx, 902);
     if (R_FAILED(rc))
         return rc;
-    const u64 targetTimestamp = timestamps[0];
 
-    auto isCloseToTarget = [&](u64 actual) -> bool {
-        const u64 delta = actual > targetTimestamp ? actual - targetTimestamp
-                                                   : targetTimestamp - actual;
-        return delta <= 120;
-    };
-
-    auto waitForUserClock = [&]() -> Result {
-        Result lastRc = 0;
-        u64 last = 0;
-        for (int attempt = 0; attempt < 20; ++attempt) {
-            lastRc = timeGetCurrentTime(TimeType_UserSystemClock, &last);
-            const bool close = R_SUCCEEDED(lastRc) && isCloseToTarget(last);
-            if (close)
-                return 0;
-            svcSleepThread(100'000'000ULL);
-        }
-        switchu::FileLog::log(
-            "[settings-time] daemon user clock verification failed rc=0x%X posix=%llu",
-            lastRc, (unsigned long long)last);
-        return R_FAILED(lastRc) ? lastRc : MAKERESULT(Module_Libnx, 906);
-    };
-
-    const Result enableRc = setLiveAutomaticCorrection(true);
-    Result networkRc = enableRc;
-    Result waitRc = enableRc;
-    if (R_SUCCEEDED(enableRc)) {
-        networkRc = timeSetCurrentTime(
-            TimeType_NetworkSystemClock, targetTimestamp);
-        switchu::FileLog::log(
-            "[settings-time] daemon temporary automaticCorrection network set rc=0x%X",
-            networkRc);
-        if (R_SUCCEEDED(networkRc))
-            waitRc = waitForUserClock();
-    }
-
-    const Result restoreRc = setLiveAutomaticCorrection(false);
-    switchu::FileLog::log(
-        "[settings-time] daemon temporary automaticCorrection enable=0x%X network=0x%X wait=0x%X restore=0x%X",
-        enableRc, networkRc, waitRc, restoreRc);
-
-    if (R_FAILED(enableRc))
-        return enableRc;
-    if (R_FAILED(networkRc))
-        return networkRc;
-    if (R_FAILED(waitRc))
-        return waitRc;
-    return restoreRc;
+    return applySystemTime(timestamps[0], /*isInternetSync=*/false);
 }
 
 static void pushNotification(smi::MenuMessage msg,
@@ -1665,6 +1669,15 @@ static void handleMenuCommand() {
         switchu::FileLog::log(
             "[settings-time] Internet synchronization enabled=%d rc=0x%X",
             args.enabled ? 1 : 0, rc);
+        break;
+    }
+
+    case smi::SystemMessage::SetPosixTime: {
+        const auto args = reader.pop<smi::SetPosixTimeArgs>();
+        const Result rc = applySystemTime(args.timestamp, args.is_internet_sync != 0);
+        switchu::FileLog::log(
+            "[settings-time] SetPosixTime posix=%llu internet=%d rc=0x%X",
+            (unsigned long long)args.timestamp, args.is_internet_sync ? 1 : 0, rc);
         break;
     }
 

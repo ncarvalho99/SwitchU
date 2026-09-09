@@ -54,6 +54,7 @@ enum class SystemMessage : uint32_t {
     IsApplicationValid    = 32,
     SetManualDateTime     = 33,
     SetInternetTimeSync   = 34,
+    SetPosixTime          = 35,
 
     MenuReady             = 40,
     MenuClosing           = 41,
@@ -149,6 +150,13 @@ struct InternetTimeSyncArgs {
     uint8_t _pad[7];
 };
 static_assert(sizeof(InternetTimeSyncArgs) == 8);
+
+struct SetPosixTimeArgs {
+    uint64_t timestamp;
+    uint8_t  is_internet_sync;
+    uint8_t  _pad[7];
+};
+static_assert(sizeof(SetPosixTimeArgs) == 16);
 
 enum class MenuTransitionReason : uint32_t {
     Unknown             = 0,

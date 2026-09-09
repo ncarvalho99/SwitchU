@@ -1,6 +1,7 @@
 #include "TabBuilders.hpp"
 #include "core/DebugLog.hpp"
 #include "smi_commands.hpp"
+#include "services/NtpClient.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
 #include <algorithm>
@@ -221,7 +222,51 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
                 screen.requestToast(nxui::I18n::instance().tr(
                     "settings.system.time_change_failed",
                     "The date and time setting could not be changed."));
+                return;
             }
+            if (self.boolVal) {
+                screen.requestToast(nxui::I18n::instance().tr(
+                    "settings.system.ntp_syncing",
+                    "Synchronizing clock via Internet..."));
+                switchu::services::NtpClient::syncAsync([&screen](bool ok, uint64_t) {
+                    if (ok) {
+                        screen.requestToast(nxui::I18n::instance().tr(
+                            "settings.system.ntp_sync_success",
+                            "Clock synchronized via Internet."));
+                    } else {
+                        screen.requestToast(nxui::I18n::instance().tr(
+                            "settings.system.ntp_sync_failed",
+                            "Could not synchronize clock. Check connection."));
+                    }
+                });
+            }
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.system.ntp_sync_now", "Synchronize Clock Now");
+        it.description = i18n.tr(
+            "settings.system.ntp_sync_now_desc",
+            "Synchronize with pool.ntp.org immediately.");
+        it.type = ItemType::Action;
+        it.buttonLabel = i18n.tr("settings.system.ntp_sync_button", "Sync");
+        it.onChange = [&screen](SettingItem&) {
+            screen.requestToast(nxui::I18n::instance().tr(
+                "settings.system.ntp_syncing",
+                "Synchronizing clock via Internet..."));
+            switchu::services::NtpClient::syncAsync([&screen](bool ok, uint64_t) {
+                if (ok) {
+                    screen.requestToast(nxui::I18n::instance().tr(
+                        "settings.system.ntp_sync_success",
+                        "Clock synchronized via Internet."));
+                } else {
+                    screen.requestToast(nxui::I18n::instance().tr(
+                        "settings.system.ntp_sync_failed",
+                        "Could not synchronize clock. Check connection."));
+                }
+            });
         };
         t.items.push_back(std::move(it));
     }

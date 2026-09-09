@@ -1,0 +1,26 @@
+#pragma once
+
+#include <switch.h>
+#include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
+
+namespace switchu::services {
+
+class NtpClient {
+public:
+    using SyncCallback = std::function<void(bool success, uint64_t timestamp)>;
+
+    // Queries configured NTP servers (0.pool.ntp.org, 1.pool.ntp.org, 2.pool.ntp.org,
+    // 3.pool.ntp.org, pool.ntp.org, time.google.com, time.cloudflare.com) and returns POSIX timestamp (or 0 on failure).
+    static uint64_t queryNetworkTime(int timeoutSeconds = 2);
+
+    // Asynchronously queries NTP servers on a worker thread, updates daemon clock if successful,
+    // and invokes callback.
+    static void syncAsync(SyncCallback callback = nullptr);
+
+    static const std::vector<std::string>& serverList();
+};
+
+} // namespace switchu::services

@@ -244,6 +244,12 @@
       "manual_time_saved": "Date and time updated.",
       "minute": "Minute",
       "month": "Month",
+      "ntp_sync_button": "Sync",
+      "ntp_sync_failed": "Could not synchronize clock. Check connection.",
+      "ntp_sync_now": "Synchronize Clock Now",
+      "ntp_sync_now_desc": "Synchronize with pool.ntp.org immediately.",
+      "ntp_sync_success": "Clock synchronized via Internet.",
+      "ntp_syncing": "Synchronizing clock via Internet...",
       "time_change_failed": "The date and time setting could not be changed.",
       "year": "Year"
     },

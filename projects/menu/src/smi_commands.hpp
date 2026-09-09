@@ -67,6 +67,18 @@ inline Result setInternetTimeSync(bool enabled) {
     return pushOutStorage(buf, sizeof(buf));
 }
 
+inline Result setPosixTime(uint64_t timestamp, bool isInternetSync) {
+    smi::SetPosixTimeArgs value{};
+    value.timestamp = timestamp;
+    value.is_internet_sync = isInternetSync ? 1 : 0;
+    uint8_t buf[sizeof(smi::CommandHeader) + sizeof(value)]{};
+    auto* hdr = reinterpret_cast<smi::CommandHeader*>(buf);
+    hdr->magic = smi::kCommandMagic;
+    hdr->message = static_cast<uint32_t>(smi::SystemMessage::SetPosixTime);
+    std::memcpy(buf + sizeof(*hdr), &value, sizeof(value));
+    return pushOutStorage(buf, sizeof(buf));
+}
+
 inline Result prepareApplication(uint64_t titleId, AccountUid uid,
                                  smi::LaunchTransitionTrace& trace) {
     uint8_t buf[sizeof(smi::CommandHeader) + sizeof(smi::PrepareAppArgs)]{};
