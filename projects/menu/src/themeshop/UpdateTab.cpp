@@ -107,20 +107,7 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
         t.items.push_back(std::move(it));
     }
 
-    // Keep removal visually separated at the bottom of the Update tab. It is
-    // intentionally available even when an update is waiting, because the app
-    // resolves a confirmed removal before it considers staged update payloads.
-    {
-        SettingItem it;
-        it.label = i18n.tr("themeshop.uninstall", "Uninstall SwitchU");
-        it.description = i18n.tr("themeshop.uninstall_desc",
-                                 "Permanently delete SwitchU and return to the Nintendo HOME Menu.");
-        it.type = ItemType::Action;
-        it.onChange = [&screen](SettingItem&) {
-            if (screen.m_selfUninstallCb) screen.m_selfUninstallCb();
-        };
-        t.items.push_back(std::move(it));
-    }
-
     return t;
 }
+
+} // namespace themeshop::tabs

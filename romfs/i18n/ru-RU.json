@@ -694,6 +694,19 @@
     "update_state": "Состояние",
     "update_notes": "Что нового",
     "update_unknown": "Ещё не проверялось",
+    "uninstall": "Удалить SwitchU",
+    "uninstall_desc": "Полностью удалить SwitchU и вернуться в меню HOME Nintendo.",
+    "uninstall_information": "Это действие полностью удалит SwitchU с консоли и перезагрузит систему в исходное меню HOME Nintendo.\n\nВсе данные SwitchU на карте SD будут полностью удалены, включая:\n• Все настройки, конфигурации и журналы\n• Все загруженные статичные и анимированные темы\n• Все сохранённые обложки и значки\n• Исполняемые файлы SwitchU и SwitchU Manager\n\nЧтобы снова использовать SwitchU в будущем, потребуется повторная ручная установка.",
+    "uninstall_continue": "Продолжить",
+    "uninstall_confirm_title": "Удалить SwitchU навсегда?",
+    "uninstall_confirm": "Это действие нельзя отменить. Все файлы, темы, обложки и настройки SwitchU будут безвозвратно удалены с карты SD.",
+    "uninstall_confirm_action": "Удалить и стереть всё",
+    "uninstall_progress_title": "Удаление SwitchU",
+    "uninstall_preparing": "Подготовка к удалению...",
+    "uninstall_restarting": "Перезагрузка...",
+    "uninstall_failed_title": "Не удалось подготовить удаление",
+    "uninstall_failed": "SwitchU не был изменён. Проверьте, доступна ли карта SD для записи, и повторите попытку.",
+    "uninstall_daemon_failed": "SwitchU не был изменён из-за ошибки запроса перезагрузки.",
     "source": {
       "builtin": "Встроенный",
       "custom": "Свой",
@@ -706,7 +719,8 @@
       "community": "Статичные темы",
       "animated": "Анимированные темы",
       "options": "Опции",
-      "update": "Обновление"
+      "update": "Обновление",
+      "uninstall": "Удаление"
     },
     "accessibility": {
       "fullscreen_preview": "Полноэкранный просмотр",

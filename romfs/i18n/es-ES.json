@@ -694,6 +694,19 @@
     "update_state": "Estado",
     "update_notes": "Novedades",
     "update_unknown": "Aún no comprobado",
+    "uninstall": "Desinstalar SwitchU",
+    "uninstall_desc": "Elimina permanentemente SwitchU y vuelve al Nintendo HOME Menu.",
+    "uninstall_information": "Esto eliminará permanentemente SwitchU de tu consola y reiniciará en el Nintendo HOME Menu original.\n\nTodos los datos de SwitchU en la tarjeta SD se eliminarán por completo, incluidos:\n• Todos los ajustes, configuraciones y registros\n• Todos los temas estáticos y animados descargados\n• Todas las carátulas e iconos en caché\n• Los binarios de SwitchU y el SwitchU Manager\n\nPara volver a usar SwitchU en el futuro, se requerirá una nueva instalación manual.",
+    "uninstall_continue": "Continuar",
+    "uninstall_confirm_title": "¿Eliminar permanentemente SwitchU?",
+    "uninstall_confirm": "Esta acción no se puede deshacer. Todos los archivos, temas, carátulas y ajustes de SwitchU se borrarán permanentemente de la tarjeta SD.",
+    "uninstall_confirm_action": "Desinstalar y borrar todo",
+    "uninstall_progress_title": "Eliminando SwitchU",
+    "uninstall_preparing": "Preparando eliminación...",
+    "uninstall_restarting": "Reiniciando...",
+    "uninstall_failed_title": "No se pudo preparar la eliminación",
+    "uninstall_failed": "SwitchU no se modificó. Comprueba que la tarjeta SD tenga permisos de escritura e inténtalo de nuevo.",
+    "uninstall_daemon_failed": "SwitchU no se modificó porque falló la solicitud de reinicio.",
     "source": {
       "builtin": "Incluido",
       "custom": "Personalizado",
@@ -706,7 +719,8 @@
       "community": "Temas estáticos",
       "animated": "Temas animados",
       "options": "Opciones",
-      "update": "Actualización"
+      "update": "Actualización",
+      "uninstall": "Desinstalar"
     },
     "accessibility": {
       "fullscreen_preview": "Vista previa a pantalla completa",

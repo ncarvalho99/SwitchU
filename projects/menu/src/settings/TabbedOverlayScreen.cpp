@@ -412,12 +412,19 @@ void TabbedOverlayScreen::rebuildTabBar() {
     float tabW = std::max(0.f, tr.width - kTabRailInset * 2.f);
     float tabH = tabCardHeight((int)m_tabs.size(), tr);
 
+    const bool hasBottomPinnedTab = (m_mode == ScreenMode::ThemeShop && m_tabs.size() > 1);
+
     for (int i = 0; i < (int)m_tabs.size(); ++i) {
         auto tabBox = std::make_shared<SettingsTabWidget>(m_tabs[i].name);
         tabBox->setTag(m_tabs[i].name);
-        tabBox->setRect({tabX, tabY, tabW, tabH});
+        float currentY = (hasBottomPinnedTab && i == (int)m_tabs.size() - 1)
+            ? (tr.bottom() - kTabRailInset - tabH)
+            : tabY;
+        tabBox->setRect({tabX, currentY, tabW, tabH});
         m_tabBar->addChild(tabBox);
-        tabY += tabH + kTabCardGap;
+        if (!(hasBottomPinnedTab && i == (int)m_tabs.size() - 1)) {
+            tabY += tabH + kTabCardGap;
+        }
     }
 }
 
@@ -638,9 +645,15 @@ void TabbedOverlayScreen::syncDebugWireframeRects(const nxui::Rect& panel) {
     float tabY = tr.y + kTabRailInset;
     float tabW = std::max(0.f, tr.width - kTabRailInset * 2.f);
     float tabH = tabCardHeight((int)tabChildren.size(), tr);
+    const bool hasBottomPinnedTab = (m_mode == ScreenMode::ThemeShop && tabChildren.size() > 1);
     for (int i = 0; i < (int)tabChildren.size(); ++i) {
-        tabChildren[i]->setRect({tr.x + kTabRailInset, tabY, tabW, tabH});
-        tabY += tabH + kTabCardGap;
+        float currentY = (hasBottomPinnedTab && i == (int)tabChildren.size() - 1)
+            ? (tr.bottom() - kTabRailInset - tabH)
+            : tabY;
+        tabChildren[i]->setRect({tr.x + kTabRailInset, currentY, tabW, tabH});
+        if (!(hasBottomPinnedTab && i == (int)tabChildren.size() - 1)) {
+            tabY += tabH + kTabCardGap;
+        }
     }
 
     m_tabContent->setRect(cr);
@@ -703,9 +716,14 @@ void TabbedOverlayScreen::drawTabs(nxui::Renderer& ren, const nxui::Rect& panel,
     float rowOpacity = opacity * reveal;
     float rowYOffset = (1.f - reveal) * 6.f;
 
+    const bool hasBottomPinnedTab = (m_mode == ScreenMode::ThemeShop && tabChildren.size() > 1);
+
     for (int i = 0; i < (int)tabChildren.size() && i < (int)m_tabs.size(); ++i) {
         auto* tab = static_cast<SettingsTabWidget*>(tabChildren[i].get());
-        tab->setRect({tr.x + kTabRailInset, tabY + rowYOffset, tabW, tabH});
+        float currentY = (hasBottomPinnedTab && i == (int)tabChildren.size() - 1)
+            ? (tr.bottom() - kTabRailInset - tabH)
+            : tabY;
+        tab->setRect({tr.x + kTabRailInset, currentY + rowYOffset, tabW, tabH});
         tab->setOpacity(rowOpacity);
         tab->sync(m_tabs[i].name,
                   m_font,
@@ -714,7 +732,9 @@ void TabbedOverlayScreen::drawTabs(nxui::Renderer& ren, const nxui::Rect& panel,
                   m_focusArea == FocusArea::Tabs && i == m_tabIndex,
                   m_uiTime,
                   m_tabAccentW.value());
-        tabY += tabH + kTabCardGap;
+        if (!(hasBottomPinnedTab && i == (int)tabChildren.size() - 1)) {
+            tabY += tabH + kTabCardGap;
+        }
     }
 
     if (m_focusArea == FocusArea::Tabs && m_tabIndex >= 0 && m_tabIndex < (int)tabChildren.size()) {
