@@ -114,7 +114,7 @@ ThemeShopScreen::Tab themeshop::tabs::UpdateTab::build(ThemeShopScreen& screen) 
         SettingItem it;
         it.label = i18n.tr("themeshop.uninstall", "Uninstall SwitchU");
         it.description = i18n.tr("themeshop.uninstall_desc",
-                                 "Return to the Nintendo HOME Menu after a restart.");
+                                 "Permanently delete SwitchU and return to the Nintendo HOME Menu.");
         it.type = ItemType::Action;
         it.onChange = [&screen](SettingItem&) {
             if (screen.m_selfUninstallCb) screen.m_selfUninstallCb();
