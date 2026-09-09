@@ -244,6 +244,12 @@
       "manual_time_saved": "Data e hora atualizadas.",
       "minute": "Minuto",
       "month": "Mês",
+      "ntp_sync_button": "Sincronizar",
+      "ntp_sync_failed": "Não foi possível sincronizar o relógio. Verifique a conexão.",
+      "ntp_sync_now": "Sincronizar relógio agora",
+      "ntp_sync_now_desc": "Sincroniza com pool.ntp.org imediatamente.",
+      "ntp_sync_success": "Relógio sincronizado pela Internet.",
+      "ntp_syncing": "Sincronizando relógio pela Internet...",
       "time_change_failed": "Não foi possível alterar a data e a hora.",
       "year": "Ano"
     },
