@@ -19,6 +19,7 @@ class CommunityTab;
 class AnimatedTab;
 class OptionsTab;
 class UpdateTab;
+class UninstallTab;
 }
 
 namespace nxui {
@@ -166,6 +167,7 @@ private:
     friend class themeshop::tabs::AnimatedTab;
     friend class themeshop::tabs::OptionsTab;
     friend class themeshop::tabs::UpdateTab;
+    friend class themeshop::tabs::UninstallTab;
 
     enum class PreviewPhase {
         Idle,
