@@ -11,6 +11,7 @@
 #include "app_manager.hpp"
 #include "ecs.hpp"
 #include "update_apply.hpp"
+#include "self_uninstall.hpp"
 #include "menu_launcher.hpp"
 #include "library_applet_runner.hpp"
 #include "system_action_queue.hpp"
@@ -1634,6 +1635,19 @@ static void handleMenuCommand() {
         startPowerSequence("smi-reboot", smi::SystemMessage::Reboot);
         break;
 
+    case smi::SystemMessage::RequestSelfUninstall:
+        if (reader.remaining() != 0) {
+            switchu::FileLog::log("[uninstall] rejected request with unexpected payload=%zu",
+                                  reader.remaining());
+            break;
+        }
+        // The menu wrote and committed the marker before sending this command.
+        // Never alter the override while this qlaunch replacement is executing;
+        // reboot so the boot-time apply path can do it before a menu is opened.
+        switchu::FileLog::log("[uninstall] staged request accepted; rebooting");
+        startPowerSequence("smi-self-uninstall", smi::SystemMessage::Reboot);
+        break;
+
     case smi::SystemMessage::RequestForeground:
         appletRequestToGetForeground();
         break;
@@ -2359,6 +2373,20 @@ int main(int argc, char* argv[]) {
 
     appletLoadAndApplyIdlePolicySettings();
 
+    // Apply removal before the catalogue workers or an external menu start. A
+    // request that cannot be applied blocks staged updates so they cannot
+    // restore its qlaunch override behind the player's back.
+    const auto uninstallResult = switchu::daemon::self_uninstall::applyStagedRequest();
+    if (uninstallResult == switchu::daemon::self_uninstall::StagedRequestResult::Applied) {
+        switchu::FileLog::flush();
+        requestPowerStateChange("self-uninstall applied", true);
+        return 0;
+    }
+    const bool uninstallPending =
+        uninstallResult == switchu::daemon::self_uninstall::StagedRequestResult::Pending;
+    if (uninstallPending)
+        switchu::FileLog::log("[uninstall] pending request blocks update apply");
+
     rebuildAppCatalog("boot");
 
     Result rc = startControlCacheWorker();
@@ -2369,8 +2397,10 @@ int main(int argc, char* argv[]) {
     if (R_FAILED(rc))
         switchu::FileLog::log("[daemon] event manager failed: 0x%X (non-fatal)", rc);
 
-    // Before the menu exists, so nothing it would replace is open.
-    switchu::daemon::update::applyStagedUpdate();
+    // Before the menu exists, so nothing it would replace is open. Never apply
+    // an archive while an uninstall marker remains unresolved.
+    if (!uninstallPending)
+        switchu::daemon::update::applyStagedUpdate();
 
     switchu::FileLog::log("[daemon] launching menu...");
     rc = daemon::menu_la::launch(

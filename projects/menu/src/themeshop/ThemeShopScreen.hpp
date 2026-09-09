@@ -50,6 +50,7 @@ public:
     void onUpdateCheck(std::function<void()> cb)   { m_updateCheckCb = std::move(cb); }
     void onUpdateInstall(std::function<void()> cb) { m_updateInstallCb = std::move(cb); }
     void onUpdateRestart(std::function<void()> cb) { m_updateRestartCb = std::move(cb); }
+    void onSelfUninstall(std::function<void()> cb) { m_selfUninstallCb = std::move(cb); }
     // Called by the app whenever the update state changes, so the tab redraws
     // with the answer instead of polling for it.
     void setUpdateState(std::string installed, std::string available,
@@ -303,6 +304,7 @@ private:
     std::function<void()> m_updateCheckCb;
     std::function<void()> m_updateInstallCb;
     std::function<void()> m_updateRestartCb;
+    std::function<void()> m_selfUninstallCb;
     VoidCb m_reloadCatalogCb;
     std::function<void()> m_releaseNotesCb;
     std::string m_updateLatestVersion;

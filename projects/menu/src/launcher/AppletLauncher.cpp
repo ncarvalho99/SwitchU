@@ -124,6 +124,12 @@ void AppletLauncher::reboot() {
     switchu::menu::smi_cmd::reboot();
 }
 
+Result AppletLauncher::requestSelfUninstall() {
+    quiesceForPower("self-uninstall");
+    DebugLog::log("[launcher] requesting staged SwitchU removal");
+    return switchu::menu::smi_cmd::requestSelfUninstall();
+}
+
 Result AppletLauncher::refreshCatalog() {
     DebugLog::log("[launcher] requesting catalog refresh");
     return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RefreshCatalog);

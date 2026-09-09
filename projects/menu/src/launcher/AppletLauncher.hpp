@@ -29,6 +29,9 @@ public:
     void enterSleep();
     void shutdown();
     void reboot();
+    // Requests a reboot after the caller has written the staged removal marker.
+    // The daemon alone changes the live qlaunch override at the following boot.
+    Result requestSelfUninstall();
     // Pede ao daemon que releia os titulos instalados, jogando fora nomes e
     // icones em cache. Sem daemon nao ha catalogo para reler, e a versao
     // homebrew simplesmente nao faz nada.

@@ -6,15 +6,18 @@
 
 #include <switchu/fs_remove.hpp>
 #include <switchu/sd_commit.hpp>
+#include <switchu/self_uninstall.hpp>
 
 #include <nxui/core/I18n.hpp>
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <cstdio>
 #include <nlohmann/json.hpp>
 #include <system_error>
 #include <utility>
@@ -36,6 +39,48 @@ bool pathExists(const std::string& path) {
 
     std::error_code ec;
     return std::filesystem::exists(path, ec);
+}
+
+bool stageSelfUninstallRequest() {
+    namespace uninstall = switchu::self_uninstall;
+
+    std::error_code ec;
+    std::filesystem::create_directories(uninstall::kDirectory, ec);
+    if (ec)
+        return false;
+
+    // A complete temporary marker is renamed into place only after it has been
+    // flushed. The daemon ignores a missing request, so a power loss cannot
+    // turn a partial write into an uninstall request. Commit it before rename:
+    // FAT has no atomic rename durability guarantee across sudden power loss.
+    std::remove(uninstall::kRequestTemporary);
+    std::FILE* request = std::fopen(uninstall::kRequestTemporary, "wb");
+    if (!request)
+        return false;
+    const bool wrote = std::fwrite(uninstall::kRequestContents, 1,
+                                   sizeof(uninstall::kRequestContents) - 1, request)
+                       == sizeof(uninstall::kRequestContents) - 1;
+    const bool closed = std::fclose(request) == 0;
+    if (!wrote || !closed) {
+        std::remove(uninstall::kRequestTemporary);
+        return false;
+    }
+    if (!switchu::commitSdCard("write self-uninstall marker"))
+        return false;
+
+    // A prior failed attempt leaves a valid request marker behind. Replacing it
+    // is intentional: this confirmation stages a fresh, fully committed request.
+    if (std::remove(uninstall::kRequest) != 0 && errno != ENOENT)
+        return false;
+    if (std::rename(uninstall::kRequestTemporary, uninstall::kRequest) != 0)
+        return false;
+    if (switchu::commitSdCard("stage self-uninstall"))
+        return true;
+
+    // The marker might be durable even though the commit call reported an
+    // error; retain it rather than falsely claim cancellation and re-enable a
+    // removal the player already confirmed. The daemon validates it on boot.
+    return false;
 }
 
 std::string joinPath(const std::string& base, const std::string& name) {
@@ -743,6 +788,82 @@ void WiiUMenuApp::createThemeShop() {
         m_audio.playSfx(up ? Sfx::SliderUp : Sfx::SliderDown);
     });
     m_themeShop->onUpdateCheck([this]() { startUpdateCheck(true); });
+    m_themeShop->onSelfUninstall([this]() {
+        auto& i18n = nxui::I18n::instance();
+        m_audio.playSfx(Sfx::ModalShow);
+        raiseOverlay(m_dialog);
+        m_dialog->show(
+            i18n.tr("themeshop.uninstall", "Uninstall SwitchU"),
+            i18n.tr("themeshop.uninstall_information",
+                    "This disables SwitchU's HOME Menu override and restarts the console. "
+                    "After the restart, the stock Nintendo HOME Menu returns.\n\n"
+                    "SwitchU's menu files, settings, themes, artwork, logs, and the "
+                    "SwitchU Manager stay on the SD card so recovery remains possible. "
+                    "To use SwitchU again, reinstall or re-enable it manually."),
+            {
+                {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                {i18n.tr("themeshop.uninstall_continue", "Continue"), [this]() {
+                    auto& i18n = nxui::I18n::instance();
+                    m_audio.playSfx(Sfx::ModalShow);
+                    raiseOverlay(m_dialog);
+                    m_dialog->show(
+                        i18n.tr("themeshop.uninstall_confirm_title", "Remove SwitchU?"),
+                        i18n.tr("themeshop.uninstall_confirm",
+                                "This cannot be undone from the Nintendo HOME Menu. "
+                                "You must manually reinstall or re-enable SwitchU later."),
+                        {
+                            {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                            {i18n.tr("themeshop.uninstall_confirm_action", "Uninstall and restart"),
+                             [this]() {
+                                auto& i18n = nxui::I18n::instance();
+                                if (m_progressDialog) {
+                                    m_progressDialog->setTheme(&m_theme);
+                                    raiseOverlay(m_progressDialog);
+                                    m_progressDialog->show(
+                                        i18n.tr("themeshop.uninstall_progress_title", "Removing SwitchU"),
+                                        i18n.tr("themeshop.uninstall_preparing", "Preparing removal..."), 0.25f);
+                                    focusManager().setFocus(m_progressDialog.get());
+                                }
+
+                                if (!stageSelfUninstallRequest()) {
+                                    DebugLog::log("[uninstall] failed to stage request");
+                                    if (m_progressDialog)
+                                        m_progressDialog->hide();
+                                    raiseOverlay(m_dialog);
+                                    m_dialog->show(
+                                        i18n.tr("themeshop.uninstall_failed_title", "Removal could not be prepared"),
+                                        i18n.tr("themeshop.uninstall_failed",
+                                                "SwitchU was not changed. Check that the SD card is writable and try again."),
+                                        {{i18n.tr("button.ok", "OK"), [this]() {}, true}}, 0, {});
+                                    focusManager().setFocus(m_dialog.get());
+                                    return;
+                                }
+
+                                if (m_progressDialog)
+                                    m_progressDialog->updateState(
+                                        i18n.tr("themeshop.uninstall_restarting", "Restarting..."), 1.f);
+                                const Result rc = m_launcher.requestSelfUninstall();
+                                DebugLog::log("[uninstall] daemon request rc=0x%X", rc);
+                                if (R_FAILED(rc)) {
+                                    if (m_progressDialog)
+                                        m_progressDialog->hide();
+                                    raiseOverlay(m_dialog);
+                                    m_dialog->show(
+                                        i18n.tr("themeshop.uninstall_failed_title", "Removal could not be prepared"),
+                                        i18n.tr("themeshop.uninstall_daemon_failed",
+                                                "SwitchU was not changed because the restart request failed."),
+                                        {{i18n.tr("button.ok", "OK"), [this]() {}, true}}, 0, {});
+                                    focusManager().setFocus(m_dialog.get());
+                                }
+                             }, false},
+                        },
+                        0, {});
+                    focusManager().setFocus(m_dialog.get());
+                }, false},
+            },
+            0, {});
+        focusManager().setFocus(m_dialog.get());
+    });
     m_themeShop->onReleaseNotes([this]() { showReleaseNotes(); });
     m_themeShop->onUpdateInstall([this]() {
         // The notes dialog is the confirmation step: nothing downloads until a
