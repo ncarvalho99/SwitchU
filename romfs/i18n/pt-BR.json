@@ -700,7 +700,7 @@
     "uninstall_information": "Isso remove permanentemente o SwitchU do seu console e reinicia no Nintendo HOME Menu original.\n\nTodos os dados do SwitchU no cartão SD serão completamente apagados, incluindo:\n• Todas as configurações e registros de log\n• Todos os temas estáticos e animados baixados\n• Todas as artes de jogos e ícones em cache\n• Os executáveis do SwitchU e o SwitchU Manager\n\nAtenção: O console irá reiniciar duas vezes para concluir a remoção completa e carregar o HOME Menu original.\n\nPara usar o SwitchU novamente no futuro, será necessária uma nova instalação manual.",
     "uninstall_continue": "Continuar",
     "uninstall_confirm_title": "Excluir permanentemente o SwitchU?",
-    "uninstall_confirm": "Esta ação não pode ser desfeita. Todos os arquivos, temas, artes e configurações do SwitchU serão apagados permanentemente do cartão SD.",
+    "uninstall_confirm": "Esta ação não pode ser desfeita. Todos os arquivos, temas, artes e configurações do SwitchU serão apagados permanentemente do cartão SD.\n\nO console irá reiniciar duas vezes para concluir a remoção completa e carregar o HOME Menu original.",
     "uninstall_confirm_action": "Desinstalar e apagar tudo",
     "uninstall_progress_title": "Removendo SwitchU",
     "uninstall_preparing": "Preparando remoção...",

@@ -41,6 +41,11 @@ private:
     nxui::AnimatedFloat m_progressAnim{0.f};
     float m_spinnerT = 0.f;
 
+    bool m_backdropCacheValid = false;
+    float m_cachedPreBlurRadius = -1.f;
+    int m_cachedBlurIterations = -1;
+
+    static constexpr int kBackdropCacheTarget = 1;
     static constexpr float kPanelW = 620.f;
     static constexpr float kPanelH = 230.f;
     static constexpr float kPanelRadius = 26.f;

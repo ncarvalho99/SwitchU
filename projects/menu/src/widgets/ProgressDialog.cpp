@@ -1,4 +1,6 @@
 #include "ProgressDialog.hpp"
+#include "../settings/SettingsGlassTuning.hpp"
+#include <nxui/core/GpuDevice.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <algorithm>
 #include <cmath>
@@ -53,6 +55,7 @@ void ProgressDialog::show(const std::string& title, const std::string& message, 
     m_panelScale.setImmediate(0.92f);
     m_panelScale.set(1.f, 0.20f, nxui::Easing::outCubic);
     m_progressAnim.setImmediate(std::clamp(progress01, 0.f, 1.f));
+    m_backdropCacheValid = false;
     setVisible(true);
 }
 
@@ -94,10 +97,55 @@ void ProgressDialog::render(nxui::Renderer& ren) {
     ren.drawRect({0.f, 0.f, 1280.f, 720.f}, nxui::Color(0.f, 0.f, 0.f, 0.50f * alpha));
 
     nxui::Rect panel = scaledRect(panelRect(), m_panelScale.value());
-    nxui::Color panelFill = m_theme->panelBase.withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.82f : 0.76f) * alpha);
-    ren.drawRoundedRect(panel, panelFill, kPanelRadius);
-    ren.drawRoundedRectOutline(panel, m_theme->panelBorder.withAlpha(0.34f * alpha), kPanelRadius, 1.2f);
-    ren.drawRoundedRectOutline(panel.shrunk(1.5f), m_theme->panelHighlight.withAlpha(0.08f * alpha), kPanelRadius - 1.5f, 1.f);
+
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    bool needsBackdropRefresh = !m_backdropCacheValid
+        || std::abs(m_cachedPreBlurRadius - tuning.preBlurRadius) > 0.001f
+        || m_cachedBlurIterations != tuning.blurIterations;
+
+    if (needsBackdropRefresh) {
+        ren.captureToOffscreenSharp();
+        if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
+            ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
+        }
+        ren.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, kBackdropCacheTarget);
+        m_backdropCacheValid = true;
+        m_cachedPreBlurRadius = tuning.preBlurRadius;
+        m_cachedBlurIterations = tuning.blurIterations;
+    }
+
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    nxui::Color glassTint = m_theme->panelBase.withAlpha(m_theme->mode == nxui::ThemeMode::Dark
+        ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+        : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f));
+    nxui::Rect glassRect = panel.shrunk(std::max(0.0f, tuning.inset));
+    float glassRadius = std::max(12.0f, kPanelRadius - std::max(0.0f, tuning.inset) * 0.5f);
+
+    ren.drawLiquidGlass(kBackdropCacheTarget,
+                        glassRect,
+                        glassRadius,
+                        glassTint,
+                        alpha,
+                        std::clamp(tuning.shade, 0.0f, 1.0f));
+    ren.drawRoundedRectOutline(glassRect,
+                               m_theme->panelBorder.withAlpha(std::clamp(m_theme->panelBorder.a * 0.90f, 0.14f, 0.34f) * alpha),
+                               glassRadius,
+                               1.2f);
+    ren.drawRoundedRectOutline(glassRect.shrunk(1.5f),
+                               m_theme->panelHighlight.withAlpha(std::clamp(m_theme->panelHighlight.a * 0.90f, 0.04f, 0.10f) * alpha),
+                               std::max(0.0f, glassRadius - 1.5f),
+                               1.0f);
+    ren.liquidGlassSettings() = savedGlass;
 
     float pad = 38.f;
     if (m_font) {
@@ -112,11 +160,11 @@ void ProgressDialog::render(nxui::Renderer& ren) {
     }
 
     nxui::Rect track = {panel.x + pad, panel.y + 148.f, panel.width - pad * 2.f, 18.f};
-    nxui::Color trackBg = m_theme->panelBase.withAlpha(0.18f * alpha);
-    nxui::Color trackBorder = m_theme->panelBorder.withAlpha(0.26f * alpha);
-    nxui::Color trackHighlight = m_theme->panelHighlight.withAlpha(0.12f * alpha);
+    nxui::Color trackBg = m_theme->panelBase.withAlpha(0.12f * alpha);
+    nxui::Color trackBorder = m_theme->panelBorder.withAlpha(0.32f * alpha);
+    nxui::Color trackHighlight = m_theme->panelHighlight.withAlpha(0.18f * alpha);
     ren.drawRoundedRect(track, trackBg, 9.f);
-    ren.drawRoundedRectOutline(track, trackBorder, 9.f, 1.f);
+    ren.drawRoundedRectOutline(track, trackBorder, 9.f, 1.2f);
     ren.drawRoundedRectOutline(track.shrunk(1.f), trackHighlight, 8.f, 1.f);
 
     if (m_progress01 >= 0.f) {
