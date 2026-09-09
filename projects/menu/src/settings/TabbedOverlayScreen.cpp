@@ -972,9 +972,12 @@ void TabbedOverlayScreen::drawDropdown(nxui::Renderer& ren, const nxui::Rect& pa
 void TabbedOverlayScreen::drawTrackChangedToast(nxui::Renderer& ren, const nxui::Rect& panel, float opacity) {
     if (!m_smallFont || !m_theme) return;
     float t = m_trackToastAnim.value();
-    if (t <= 0.01f || m_toastText.empty()) return;
-
-    std::string displayText = m_toastText;
+    std::string displayText;
+    {
+        std::lock_guard<std::mutex> lk(m_toastMutex);
+        if (t <= 0.01f || m_toastText.empty()) return;
+        displayText = m_toastText;
+    }
     float maxTextWidth = 420.f - 40.f;
     nxui::Vec2 tsz = m_smallFont->measure(displayText);
     if (tsz.x * 0.78f > maxTextWidth) {

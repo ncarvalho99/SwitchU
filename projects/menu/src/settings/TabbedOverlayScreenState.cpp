@@ -93,6 +93,7 @@ void TabbedOverlayScreen::requestDateTimeEditor(
 
 void TabbedOverlayScreen::requestToast(const std::string& msg, float holdSeconds) {
     if (msg.empty()) return;
+    std::lock_guard<std::mutex> lk(m_toastMutex);
     m_toastText = msg;
     m_trackToastHold = std::max(0.f, holdSeconds);
     m_trackToastFading = false;

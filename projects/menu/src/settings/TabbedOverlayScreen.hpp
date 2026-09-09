@@ -11,6 +11,7 @@
 #include <vector>
 #include <functional>
 #include <algorithm>
+#include <mutex>
 
 class OverlayDialog;
 
@@ -289,6 +290,7 @@ protected:
     nxui::AnimatedFloat m_trackToastAnim;
     float m_trackToastHold = 0.f;
     bool  m_trackToastFading = false;
+    mutable std::mutex m_toastMutex;
     std::string m_toastText;
     float m_uiTime = 0.f;
 

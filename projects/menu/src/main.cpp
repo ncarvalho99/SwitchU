@@ -4,6 +4,7 @@
 #include "core/Config.hpp"
 #include "core/NsService.hpp"
 #include "tutorial/TutorialActivity.hpp"
+#include "services/NtpClient.hpp"
 #include <nxui/Application.hpp>
 #include <fmt/format.h>
 #ifdef SWITCHU_MENU
@@ -338,6 +339,7 @@ int main(int argc, char* argv[]) {
         }
         DebugLog::log("[menu] app.shutdown...");
         app.shutdown();
+        switchu::services::NtpClient::cleanup();
 #endif
     }
 
