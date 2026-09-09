@@ -9,11 +9,18 @@ inline constexpr const char* kRequest = "sdmc:/config/SwitchU/uninstall/request"
 inline constexpr const char* kRequestTemporary = "sdmc:/config/SwitchU/uninstall/request.tmp";
 inline constexpr char kRequestContents[] = "SwitchU self-uninstall request v1\n";
 
-// This is the one SwitchU file that needs to change for stock Nintendo HOME to
-// return. Keep the original as .disabled so manual recovery remains possible.
-inline constexpr const char* kActiveOverride =
-    "sdmc:/atmosphere/contents/0100000000001000/exefs.nsp";
-inline constexpr const char* kDisabledOverride =
-    "sdmc:/atmosphere/contents/0100000000001000/exefs.nsp.disabled";
+// SD card paths completely removed when self-uninstall is applied.
+inline constexpr const char* kOverrideDirectory =
+    "sdmc:/atmosphere/contents/0100000000001000";
+inline constexpr const char* kMenuDirectory =
+    "sdmc:/switch/SwitchU";
+inline constexpr const char* kMenuNro =
+    "sdmc:/switch/SwitchU.nro";
+inline constexpr const char* kManagerDirectory =
+    "sdmc:/switch/SwitchU-Manager";
+inline constexpr const char* kManagerNro =
+    "sdmc:/switch/SwitchU-Manager.nro";
+inline constexpr const char* kConfigDirectory =
+    "sdmc:/config/SwitchU";
 
 } // namespace switchu::self_uninstall

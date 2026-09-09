@@ -795,11 +795,13 @@ void WiiUMenuApp::createThemeShop() {
         m_dialog->show(
             i18n.tr("themeshop.uninstall", "Uninstall SwitchU"),
             i18n.tr("themeshop.uninstall_information",
-                    "This disables SwitchU's HOME Menu override and restarts the console. "
-                    "After the restart, the stock Nintendo HOME Menu returns.\n\n"
-                    "SwitchU's menu files, settings, themes, artwork, logs, and the "
-                    "SwitchU Manager stay on the SD card so recovery remains possible. "
-                    "To use SwitchU again, reinstall or re-enable it manually."),
+                    "This permanently removes SwitchU from your console and restarts into the stock Nintendo HOME Menu.\n\n"
+                    "All SwitchU data on your SD card will be completely deleted, including:\n"
+                    "• All settings, configurations, and logs\n"
+                    "• All downloaded static and animated themes\n"
+                    "• All cached game artwork and icons\n"
+                    "• SwitchU menu binaries and SwitchU Manager\n\n"
+                    "To use SwitchU again in the future, a fresh manual installation will be required."),
             {
                 {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
                 {i18n.tr("themeshop.uninstall_continue", "Continue"), [this]() {
@@ -807,13 +809,13 @@ void WiiUMenuApp::createThemeShop() {
                     m_audio.playSfx(Sfx::ModalShow);
                     raiseOverlay(m_dialog);
                     m_dialog->show(
-                        i18n.tr("themeshop.uninstall_confirm_title", "Remove SwitchU?"),
+                        i18n.tr("themeshop.uninstall_confirm_title", "Permanently Delete SwitchU?"),
                         i18n.tr("themeshop.uninstall_confirm",
-                                "This cannot be undone from the Nintendo HOME Menu. "
-                                "You must manually reinstall or re-enable SwitchU later."),
+                                "This action cannot be undone. "
+                                "All SwitchU files, themes, artwork, and settings will be permanently erased from your SD card."),
                         {
                             {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
-                            {i18n.tr("themeshop.uninstall_confirm_action", "Uninstall and restart"),
+                            {i18n.tr("themeshop.uninstall_confirm_action", "Uninstall and delete everything"),
                              [this]() {
                                 auto& i18n = nxui::I18n::instance();
                                 if (m_progressDialog) {
