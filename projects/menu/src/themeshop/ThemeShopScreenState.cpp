@@ -17,6 +17,8 @@ void ThemeShopScreen::buildTabs() {
     m_tabs.push_back(themeshop::tabs::OptionsTab::build(*this));
     DebugLog::log("[themeshop]   UpdateTab...");
     m_tabs.push_back(themeshop::tabs::UpdateTab::build(*this));
+    DebugLog::log("[themeshop]   UninstallTab...");
+    m_tabs.push_back(themeshop::tabs::UninstallTab::build(*this));
     DebugLog::log("[themeshop] buildTabs() done (%d tabs)", (int)m_tabs.size());
     // Quanto do orcamento de imagem sobra para as previas. Sem este numero,
     // uma previa que nao aparece nao se distingue de uma previa que nao coube.

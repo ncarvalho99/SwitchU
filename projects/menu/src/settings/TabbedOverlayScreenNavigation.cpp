@@ -740,10 +740,22 @@ void TabbedOverlayScreen::handleTouch(nxui::Input& input) {
 
         if (tr.contains(tx, ty)) {
             m_touchTarget = TouchTarget::Tab;
-            int idx = (int)((ty - tr.y) / kTabRowHeight);
-            idx = std::clamp(idx, 0, (int)m_tabs.size() - 1);
-            m_touchHitIndex = idx;
-            m_touchOnSelected = (idx == m_tabIndex && m_focusArea == FocusArea::Tabs);
+            int hit = -1;
+            if (m_tabBar) {
+                const auto& tabChildren = m_tabBar->children();
+                for (int i = 0; i < (int)tabChildren.size(); ++i) {
+                    if (tabChildren[i]->rect().contains(tx, ty)) {
+                        hit = i;
+                        break;
+                    }
+                }
+            }
+            if (hit < 0) {
+                int idx = (int)((ty - tr.y) / kTabRowHeight);
+                hit = std::clamp(idx, 0, (int)m_tabs.size() - 1);
+            }
+            m_touchHitIndex = hit;
+            m_touchOnSelected = (hit == m_tabIndex && m_focusArea == FocusArea::Tabs);
             return;
         }
 

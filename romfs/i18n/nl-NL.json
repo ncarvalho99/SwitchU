@@ -694,6 +694,19 @@
     "update_state": "Status",
     "update_notes": "Wat is er veranderd",
     "update_unknown": "Nog niet gecontroleerd",
+    "uninstall": "SwitchU verwijderen",
+    "uninstall_desc": "Verwijdert SwitchU permanent en keert terug naar het Nintendo HOME-menu.",
+    "uninstall_information": "Hiermee wordt SwitchU permanent van het systeem verwijderd en opnieuw opgestart naar het officiële Nintendo HOME-menu.\n\nAlle SwitchU-gegevens op de SD-kaart worden volledig gewist, inclusief:\n• Alle instellingen, configuraties en logboeken\n• Alle gedownloade statische en geanimeerde thema's\n• Alle gecachte game-artworks en pictogrammen\n• SwitchU-programmabestanden en SwitchU Manager\n\nOm SwitchU in de toekomst opnieuw te gebruiken, is een nieuwe handmatige installatie vereist.",
+    "uninstall_continue": "Doorgaan",
+    "uninstall_confirm_title": "SwitchU permanent verwijderen?",
+    "uninstall_confirm": "Deze actie kan niet ongedaan worden gemaakt. Alle SwitchU-bestanden, thema's, illustraties en instellingen worden definitief gewist van de SD-kaart.",
+    "uninstall_confirm_action": "Verwijderen en alles wissen",
+    "uninstall_progress_title": "SwitchU verwijderen",
+    "uninstall_preparing": "Verwijdering voorbereiden...",
+    "uninstall_restarting": "Opnieuw opstarten...",
+    "uninstall_failed_title": "Verwijdering kon niet worden voorbereid",
+    "uninstall_failed": "SwitchU is niet gewijzigd. Controleer of de SD-kaart beschrijfbaar is en probeer het opnieuw.",
+    "uninstall_daemon_failed": "SwitchU is niet gewijzigd omdat het verzoek om opnieuw op te starten is mislukt.",
     "source": {
       "builtin": "Ingebouwd",
       "custom": "Eigen",
@@ -706,7 +719,8 @@
       "community": "Statische thema’s",
       "animated": "Geanimeerde thema’s",
       "options": "Opties",
-      "update": "Bijwerken"
+      "update": "Bijwerken",
+      "uninstall": "Verwijderen"
     },
     "accessibility": {
       "fullscreen_preview": "Volledig scherm",

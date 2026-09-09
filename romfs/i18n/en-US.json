@@ -719,7 +719,8 @@
       "community": "Static Themes",
       "animated": "Animated Themes",
       "options": "Options",
-      "update": "Update"
+      "update": "Update",
+      "uninstall": "Uninstall"
     },
     "accessibility": {
       "fullscreen_preview": "Fullscreen preview",
