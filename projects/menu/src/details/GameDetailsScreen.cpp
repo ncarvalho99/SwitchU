@@ -441,7 +441,6 @@ std::vector<std::string> GameDetailsScreen::actionLabels() const {
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
         m_isFavorite ? i18n.tr("dialog.unmark_favorite", "Remove from favorites")
                      : i18n.tr("dialog.mark_as_favorite", "Mark as favorite"),
-        i18n.tr("activity_log.view_activity", "View in Activity Log"),
     };
     if (m_isGamePort) {
         actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
@@ -467,22 +466,21 @@ void GameDetailsScreen::activateAction() {
         case 2: if (m_restoreArtworkCb) m_restoreArtworkCb(); break;
         case 3: if (m_manageModsCb) m_manageModsCb(); break;
         case 4: if (m_toggleFavoriteCb) m_toggleFavoriteCb(); break;
-        case 5: if (m_openActivityLogCb) m_openActivityLogCb(m_titleId); break;
-        case 6:
+        case 5:
             if (m_isGamePort) {
                 if (m_editSearchTitleCb) m_editSearchTitleCb();
             } else {
                 if (m_markAsGamePortCb) m_markAsGamePortCb();
             }
             break;
-        case 7:
+        case 6:
             if (m_isGamePort) {
                 if (m_removeGamePortCb) m_removeGamePortCb();
             } else {
                 if (m_deleteSoftwareCb) m_deleteSoftwareCb();
             }
             break;
-        case 8:
+        case 7:
             if (m_isGamePort && m_deleteSoftwareCb) m_deleteSoftwareCb();
             break;
     }

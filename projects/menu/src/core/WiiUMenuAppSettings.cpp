@@ -778,6 +778,17 @@ void WiiUMenuApp::createActivityLog() {
     m_activityLog->setThreadPool(&m_threadPool);
     m_activityLog->setRenderContext(&app().gpu(), &app().renderer());
     m_activityLog->setManager(&m_activityLogManager);
+    m_activityLog->setInput(&app().input());
+    m_activityLog->setIconProvider([this](std::uint64_t titleId) -> nxui::Texture* {
+        if (m_grid) {
+            for (const auto& icon : m_grid->allIcons()) {
+                if (icon && icon->titleId() == titleId && icon->texture()) {
+                    return icon->texture();
+                }
+            }
+        }
+        return nullptr;
+    });
 
     m_activityLog->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
     m_activityLog->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
@@ -1315,12 +1326,6 @@ void WiiUMenuApp::createGameDetails() {
     m_gameDetails->onManageMods([this]() {
         if (!m_gameDetails) return;
         showGameMods(m_gameDetails->titleId(), m_gameDetails->title());
-    });
-    m_gameDetails->onOpenActivityLog([this](std::uint64_t titleId) {
-        if (!m_gameDetails) return;
-        m_gameDetailsReturnFocus = nullptr;
-        m_gameDetails->hide();
-        openActivityLog(titleId);
     });
     m_gameDetails->onFolderAction([this]() {
         if (!m_gameDetails) return;

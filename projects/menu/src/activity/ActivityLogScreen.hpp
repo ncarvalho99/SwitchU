@@ -34,7 +34,10 @@ public:
     using VoidCb = std::function<void()>;
     using BoolCb = std::function<void(bool)>;
     using TitleCb = std::function<void(std::uint64_t)>;
+    using IconProvider = std::function<nxui::Texture*(std::uint64_t)>;
 
+    void setInput(nxui::Input* input)            { m_input = input; }
+    void setIconProvider(IconProvider provider)  { m_iconProvider = std::move(provider); }
     void onClose(VoidCb cb)                      { m_closeCb = std::move(cb); }
     void onTabChangeSfx(VoidCb cb)               { m_tabChangeSfxCb = std::move(cb); }
     void onDateChangeSfx(BoolCb cb)              { m_dateChangeSfxCb = std::move(cb); }
@@ -111,4 +114,11 @@ private:
 
     // Touch interaction
     int m_touchDownTarget = -1; // -1: none, 0: prev, 1: next, 2: today, 10+: list item
+
+    nxui::Input* m_input = nullptr;
+    IconProvider m_iconProvider;
+    std::unordered_map<std::uint64_t, std::unique_ptr<nxui::Texture>> m_cachedIcons;
+
+    nxui::Texture* getIconTexture(std::uint64_t titleId);
+    void setupCustomKeyActions();
 };

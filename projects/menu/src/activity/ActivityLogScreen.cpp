@@ -1,5 +1,7 @@
 #include "ActivityLogScreen.hpp"
 #include "core/DebugLog.hpp"
+#include "launcher/AppListLoader.hpp"
+#include "launcher/IconStreamer.hpp"
 
 #include <nxui/core/Renderer.hpp>
 #include <nxui/core/I18n.hpp>
@@ -70,6 +72,11 @@ std::string ellipsizeText(nxui::Font* font, const std::string& text, float maxW,
 
 ActivityLogScreen::ActivityLogScreen()
     : TabbedOverlayScreen(ScreenMode::ActivityLog) {
+    setupCustomKeyActions();
+}
+
+void ActivityLogScreen::setupCustomKeyActions() {
+    setupActions();
     addAction(static_cast<uint64_t>(nxui::Button::L),  [this]() { cycleTab(-1); });
     addAction(static_cast<uint64_t>(nxui::Button::R),  [this]() { cycleTab(1); });
     addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() {
@@ -81,6 +88,7 @@ ActivityLogScreen::ActivityLogScreen()
         else if (m_tabIndex == 1) cycleMonth(1);
     });
     addAction(static_cast<uint64_t>(nxui::Button::Y),  [this]() { jumpToToday(); });
+    addAction(static_cast<uint64_t>(nxui::Button::X),  [this]() { jumpToToday(); });
 }
 
 ActivityLogScreen::~ActivityLogScreen() = default;
@@ -126,6 +134,9 @@ void ActivityLogScreen::open(std::uint64_t initialTitleId) {
     m_focusArea = FocusArea::Content;
     rebuildTabBar();
     show();
+    // Re-establish content focus and actions after show() overrides them
+    m_focusArea = FocusArea::Content;
+    setupCustomKeyActions();
 }
 
 void ActivityLogScreen::buildTabs() {
@@ -207,6 +218,26 @@ void ActivityLogScreen::jumpToToday() {
 }
 
 void ActivityLogScreen::updateCustomContent(float) {
+    if (m_input) {
+        if (m_input->isDown(nxui::Button::ZL)) {
+            if (m_tabIndex == 0) cycleDay(-1);
+            else if (m_tabIndex == 1) cycleMonth(-1);
+        }
+        if (m_input->isDown(nxui::Button::ZR)) {
+            if (m_tabIndex == 0) cycleDay(1);
+            else if (m_tabIndex == 1) cycleMonth(1);
+        }
+        if (m_input->isDown(nxui::Button::L)) {
+            cycleTab(-1);
+        }
+        if (m_input->isDown(nxui::Button::R)) {
+            cycleTab(1);
+        }
+        if (m_input->isDown(nxui::Button::Y) || m_input->isDown(nxui::Button::X)) {
+            jumpToToday();
+        }
+    }
+
     // Keep selection within bounds
     if (m_manager) {
         const auto& rankings = m_manager->allTimeRankings();
@@ -222,6 +253,33 @@ void ActivityLogScreen::updateCustomContent(float) {
             }
         }
     }
+}
+
+nxui::Texture* ActivityLogScreen::getIconTexture(std::uint64_t titleId) {
+    if (titleId == 0) return nullptr;
+    if (m_iconProvider) {
+        nxui::Texture* tex = m_iconProvider(titleId);
+        if (tex) return tex;
+    }
+    auto it = m_cachedIcons.find(titleId);
+    if (it != m_cachedIcons.end()) {
+        return it->second.get();
+    }
+    if (m_gpu && m_renderer) {
+        auto rawData = AppListLoader::loadIconData(titleId);
+        if (!rawData.empty()) {
+            auto decoded = IconStreamer::decodeIconData(rawData);
+            if (!decoded.rgba.empty() && decoded.w > 0 && decoded.h > 0) {
+                auto tex = std::make_unique<nxui::Texture>();
+                if (tex->loadFromPixels(*m_gpu, *m_renderer, decoded.rgba.data(), decoded.w, decoded.h)) {
+                    auto* ret = tex.get();
+                    m_cachedIcons[titleId] = std::move(tex);
+                    return ret;
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 
 void ActivityLogScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&,
@@ -331,18 +389,30 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
         // Glass background card
         ren.drawRoundedRect(rowRect, kCardBg.withAlpha(0.16f * opacity), 12.f);
 
-        // Color badge for rank
+        // Ranking number on the left
         nxui::Color titleColor = getTitleColor(idx);
-        nxui::Rect badgeRect{rowRect.x + 12.f, rowRect.y + 12.f, 38.f, 38.f};
-        ren.drawRoundedRect(badgeRect, titleColor.withAlpha(0.85f * opacity), 10.f);
+        std::string rankStr = std::to_string(idx + 1);
+        float rw = m_font ? m_font->measure(rankStr).x * 0.78f : 14.f;
+        ren.drawText(rankStr, {rowRect.x + 6.f + (28.f - rw) * 0.5f, rowRect.y + 18.f}, m_font, titleColor.withAlpha(opacity), 0.78f);
 
-        std::string rankStr = "#" + std::to_string(idx + 1);
-        ren.drawText(rankStr, {badgeRect.x + 6.f, badgeRect.y + 10.f}, m_smallFont, nxui::Color(1, 1, 1, opacity), 0.65f);
+        // Logo/Icon of the game/homebrew
+        nxui::Rect iconRect{rowRect.x + 38.f, rowRect.y + 9.f, 44.f, 44.f};
+        nxui::Texture* iconTex = getIconTexture(entry.titleId);
+        if (iconTex) {
+            ren.drawTextureRounded(iconTex, iconRect, 8.f, nxui::Color(1, 1, 1, opacity));
+            ren.drawRoundedRectOutline(iconRect, nxui::Color(1, 1, 1, 0.25f * opacity), 8.f, 1.0f);
+        } else {
+            ren.drawRoundedRect(iconRect, titleColor.withAlpha(0.35f * opacity), 8.f);
+            ren.drawRoundedRectOutline(iconRect, titleColor.withAlpha(0.6f * opacity), 8.f, 1.0f);
+            std::string initial = entry.titleName.empty() ? "?" : entry.titleName.substr(0, 1);
+            ren.drawText(initial, {iconRect.x + 14.f, iconRect.y + 10.f}, m_font, nxui::Color(1, 1, 1, opacity), 0.80f);
+        }
 
         // Title Name
-        float textW = rowRect.width - 240.f;
+        float textX = rowRect.x + 92.f;
+        float textW = rowRect.width - textX - 160.f;
         std::string displayTitle = ellipsizeText(m_font, entry.titleName.empty() ? ("Title " + std::to_string(entry.titleId)) : entry.titleName, textW, 0.80f);
-        ren.drawText(displayTitle, {rowRect.x + 58.f, rowRect.y + 10.f}, m_font, textPri, 0.80f);
+        ren.drawText(displayTitle, {textX, rowRect.y + 10.f}, m_font, textPri, 0.80f);
 
         // Playtime and launches text
         std::string timeStr = formatPlaytime(entry.playtimeSeconds);
@@ -353,9 +423,9 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
         ren.drawText(timeStr, {rowRect.right() - timeW - 16.f, rowRect.y + 12.f}, m_font, titleColor.withAlpha(opacity), 0.75f);
 
         // Bar Chart Track & Fill
-        float barX = rowRect.x + 58.f;
-        float barY = rowRect.y + 40.f;
-        float barMaxW = rowRect.width - 76.f;
+        float barX = textX;
+        float barY = rowRect.y + 38.f;
+        float barMaxW = rowRect.right() - barX - 16.f;
         float barH = 10.f;
         nxui::Rect trackRect{barX, barY, barMaxW, barH};
         ren.drawRoundedRect(trackRect, kBarTrack, 5.f);
@@ -473,11 +543,20 @@ void ActivityLogScreen::drawMonthlyTab(nxui::Renderer& ren, const nxui::Rect& co
             ren.drawRoundedRect(rowRect, kCardBg.withAlpha(0.12f * opacity), 10.f);
 
             nxui::Color color = getTitleColor(i);
-            std::string rank = "#" + std::to_string(i + 1);
-            ren.drawText(rank, {rowRect.x + 12.f, rowRect.y + 10.f}, m_smallFont, color.withAlpha(opacity), 0.70f);
+            std::string rankStr = std::to_string(i + 1);
+            ren.drawText(rankStr, {rowRect.x + 8.f, rowRect.y + 11.f}, m_smallFont, color.withAlpha(opacity), 0.75f);
 
-            std::string name = ellipsizeText(m_font, t.titleName.empty() ? ("Title " + std::to_string(t.titleId)) : t.titleName, rowRect.width - 220.f, 0.75f);
-            ren.drawText(name, {rowRect.x + 46.f, rowRect.y + 10.f}, m_font, textPri, 0.75f);
+            nxui::Rect iconRect{rowRect.x + 28.f, rowRect.y + 5.f, 32.f, 32.f};
+            nxui::Texture* iconTex = getIconTexture(t.titleId);
+            if (iconTex) {
+                ren.drawTextureRounded(iconTex, iconRect, 6.f, nxui::Color(1, 1, 1, opacity));
+                ren.drawRoundedRectOutline(iconRect, nxui::Color(1, 1, 1, 0.2f * opacity), 6.f, 1.0f);
+            } else {
+                ren.drawRoundedRect(iconRect, color.withAlpha(0.35f * opacity), 6.f);
+            }
+
+            std::string name = ellipsizeText(m_font, t.titleName.empty() ? ("Title " + std::to_string(t.titleId)) : t.titleName, rowRect.width - 240.f, 0.75f);
+            ren.drawText(name, {rowRect.x + 68.f, rowRect.y + 10.f}, m_font, textPri, 0.75f);
 
             std::string pt = formatPlaytime(t.playtimeSeconds);
             float ptW = m_font ? m_font->measure(pt).x * 0.72f : 80.f;
@@ -533,20 +612,30 @@ void ActivityLogScreen::drawTitlesTab(nxui::Renderer& ren, const nxui::Rect& con
             ren.drawRoundedRectOutline(cardRect, kColorCyan.withAlpha(0.75f * opacity), 12.f, 2.0f);
         }
 
-        // Rank Medallion (1st: Gold, 2nd: Silver, 3rd: Bronze, 4+: Neutral)
-        nxui::Color medalColor = (idx == 0) ? kColorGold : ((idx == 1) ? kColorSilver : ((idx == 2) ? kColorBronze : nxui::Color(0.5f, 0.6f, 0.7f, 1.0f)));
-        nxui::Rect medalRect{cardRect.x + 12.f, cardRect.y + 14.f, 40.f, 40.f};
-        ren.drawRoundedRect(medalRect, medalColor.withAlpha(0.25f * opacity), 10.f);
-        ren.drawRoundedRectOutline(medalRect, medalColor.withAlpha(0.85f * opacity), 10.f, 1.5f);
+        // Rank Number on the left (1st: Gold, 2nd: Silver, 3rd: Bronze, 4+: Neutral)
+        nxui::Color medalColor = (idx == 0) ? kColorGold : ((idx == 1) ? kColorSilver : ((idx == 2) ? kColorBronze : textSec));
+        std::string rankStr = std::to_string(idx + 1);
+        float rw = m_font ? m_font->measure(rankStr).x * 0.85f : 16.f;
+        ren.drawText(rankStr, {cardRect.x + 8.f + (28.f - rw) * 0.5f, cardRect.y + 22.f}, m_font, medalColor.withAlpha(opacity), 0.85f);
 
-        std::string rankStr = "#" + std::to_string(idx + 1);
-        float rw = m_smallFont ? m_smallFont->measure(rankStr).x * 0.70f : 20.f;
-        ren.drawText(rankStr, {medalRect.x + (medalRect.width - rw) * 0.5f, medalRect.y + 11.f}, m_smallFont, medalColor.withAlpha(opacity), 0.70f);
+        // Logo/Icon of the game/homebrew
+        nxui::Rect iconRect{cardRect.x + 42.f, cardRect.y + 9.f, 50.f, 50.f};
+        nxui::Texture* iconTex = getIconTexture(stats.titleId);
+        if (iconTex) {
+            ren.drawTextureRounded(iconTex, iconRect, 10.f, nxui::Color(1, 1, 1, opacity));
+            ren.drawRoundedRectOutline(iconRect, nxui::Color(1, 1, 1, 0.25f * opacity), 10.f, 1.2f);
+        } else {
+            ren.drawRoundedRect(iconRect, medalColor.withAlpha(0.25f * opacity), 10.f);
+            ren.drawRoundedRectOutline(iconRect, medalColor.withAlpha(0.60f * opacity), 10.f, 1.2f);
+            std::string initial = stats.titleName.empty() ? "?" : stats.titleName.substr(0, 1);
+            ren.drawText(initial, {iconRect.x + 18.f, iconRect.y + 13.f}, m_font, medalColor.withAlpha(opacity), 0.85f);
+        }
 
         // Title Name
-        float nameMaxW = cardRect.width - 250.f;
+        float textX = cardRect.x + 104.f;
+        float nameMaxW = cardRect.width - textX - 160.f;
         std::string nameStr = ellipsizeText(m_font, stats.titleName.empty() ? ("Title " + std::to_string(stats.titleId)) : stats.titleName, nameMaxW, 0.82f);
-        ren.drawText(nameStr, {cardRect.x + 62.f, cardRect.y + 10.f}, m_font, textPri, 0.82f);
+        ren.drawText(nameStr, {textX, cardRect.y + 10.f}, m_font, textPri, 0.82f);
 
         // Statistics row below title name: Times Played, Average Session, First Played, Last Played
         std::string statRow = i18n.tr("activity_log.times_played", "Times Played") + ": " + std::to_string(stats.totalLaunches) +
@@ -554,7 +643,7 @@ void ActivityLogScreen::drawTitlesTab(nxui::Renderer& ren, const nxui::Rect& con
         if (stats.lastPlayedTimestamp > 0) {
             statRow += "  |  " + i18n.tr("activity_log.last_played", "Last") + ": " + formatDateNumeric(stats.lastPlayedTimestamp);
         }
-        ren.drawText(statRow, {cardRect.x + 62.f, cardRect.y + 36.f}, m_smallFont, textSec, 0.58f);
+        ren.drawText(statRow, {textX, cardRect.y + 36.f}, m_smallFont, textSec, 0.58f);
 
         // Total Playtime text on right
         std::string totalStr = formatPlaytime(stats.totalPlaytimeSeconds);
@@ -562,9 +651,9 @@ void ActivityLogScreen::drawTitlesTab(nxui::Renderer& ren, const nxui::Rect& con
         ren.drawText(totalStr, {cardRect.right() - tw - 16.f, cardRect.y + 12.f}, m_font, medalColor.withAlpha(opacity), 0.82f);
 
         // Proportional progress bar
-        float pbX = cardRect.x + 62.f;
+        float pbX = textX;
         float pbY = cardRect.y + 54.f;
-        float pbW = cardRect.width - 80.f;
+        float pbW = cardRect.right() - textX - 16.f;
         ren.drawRoundedRect({pbX, pbY, pbW, 6.f}, kBarTrack, 3.f);
 
         float fillW = std::clamp((static_cast<float>(stats.totalPlaytimeSeconds) / static_cast<float>(maxTotalPlaytime)) * pbW, 6.f, pbW);
@@ -649,21 +738,20 @@ bool ActivityLogScreen::handleCustomNavDown() {
 }
 
 bool ActivityLogScreen::handleCustomNavLeft() {
-    if (m_focusArea == FocusArea::Tabs)
-        return false;
-
     if (m_tabIndex == 0) {
         cycleDay(-1);
         return true;
     } else if (m_tabIndex == 1) {
         cycleMonth(-1);
         return true;
-    } else {
-        // Move focus back to tab rail
-        m_focusArea = FocusArea::Tabs;
-        if (m_navSfxCb) m_navSfxCb();
-        return true;
+    } else if (m_tabIndex == 2) {
+        if (m_focusArea == FocusArea::Content) {
+            m_focusArea = FocusArea::Tabs;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
     }
+    return false;
 }
 
 bool ActivityLogScreen::handleCustomNavRight() {
@@ -673,6 +761,12 @@ bool ActivityLogScreen::handleCustomNavRight() {
     } else if (m_tabIndex == 1) {
         cycleMonth(1);
         return true;
+    } else if (m_tabIndex == 2) {
+        if (m_focusArea == FocusArea::Tabs) {
+            m_focusArea = FocusArea::Content;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
     }
     return false;
 }
