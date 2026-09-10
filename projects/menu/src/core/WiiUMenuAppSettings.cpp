@@ -743,6 +743,18 @@ void WiiUMenuApp::closeQuickSettings() {
     if (isCurrentFocusableWidget(m_dialogReturnFocus)) {
         m_suppressNextNavigateSfx = true;
         focusManager().setFocus(m_dialogReturnFocus);
+    } else if (m_grid) {
+        auto* target = m_grid->focusManager().current();
+        if (target && isCurrentFocusableWidget(target)) {
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(target);
+        } else {
+            auto icons = m_grid->allIcons();
+            if (!icons.empty()) {
+                m_suppressNextNavigateSfx = true;
+                focusManager().setFocus(icons[0].get());
+            }
+        }
     }
     m_dialogReturnFocus = nullptr;
     m_audio.playSfx(Sfx::ModalHide);
