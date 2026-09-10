@@ -35,7 +35,8 @@ public:
                      std::vector<std::uint8_t> activeCover,
                       nxui::Texture* liveCover, std::string displayVersion,
                       std::string modSummary, std::string playTime,
-                      std::string metadataPlatform, bool isGamePort);
+                      std::string metadataPlatform, bool isGamePort,
+                      bool isFavorite = false);
     // Resume the dossier after a child full-screen flow (Gallery) closes.
     // It preserves downloaded metadata and the selected artwork instead of
     // requesting the online dossier again.
@@ -50,8 +51,11 @@ public:
     const std::string& title() const { return m_title; }
     const std::string& searchTitle() const { return m_searchTitle; }
     bool isGamePort() const { return m_isGamePort; }
+    bool isFavorite() const { return m_isFavorite; }
+    void setFavorite(bool fav) { m_isFavorite = fav; rebuildCurrentTab(); }
 
     using ActionCb = std::function<void()>;
+    void onToggleFavorite(ActionCb cb) { m_toggleFavoriteCb = std::move(cb); }
     void onOpenGallery(ActionCb cb) { m_openGalleryCb = std::move(cb); }
     void onShowArtwork(ActionCb cb) { m_showArtworkCb = std::move(cb); }
     void onRestoreArtwork(ActionCb cb) { m_restoreArtworkCb = std::move(cb); }
@@ -146,6 +150,8 @@ private:
     bool m_imageExpanded = false;
     bool m_localOnly = false;
     bool m_isGamePort = false;
+    bool m_isFavorite = false;
+    ActionCb m_toggleFavoriteCb;
     ActionCb m_folderActionCb;
     ActionCb m_removeGamePortCb;
     ActionCb m_markAsGamePortCb;

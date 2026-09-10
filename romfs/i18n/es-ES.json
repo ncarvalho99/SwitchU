@@ -179,6 +179,8 @@
     "sort_custom": "Mi orden",
     "sort_alpha": "A-Z",
     "sort_recent": "Recientes",
+    "sort_favorites": "Favoritos",
+    "favorite": "Favorito",
     "options": "Opciones",
     "switch_layout": "Cambiar vista"
   },
@@ -884,6 +886,8 @@
     "non_game_options_body": "Los homebrew y los ports no tienen detalles de juego, ilustraciones ni mods que gestionar. Eliminar es la única acción disponible aquí.",
     "mark_as_game_port": "Marcar como port de juego",
     "unmark_port": "Desmarcar port",
+    "mark_as_favorite": "Marcar como favorito",
+    "unmark_favorite": "Quitar de favoritos",
     "edit_search_title": "Editar título de búsqueda",
     "edit_search_title_guide": "Título de búsqueda",
     "confirm_search_title": "Confirmar título de búsqueda",

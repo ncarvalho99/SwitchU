@@ -271,6 +271,7 @@ void AppletLauncher::launchUserPage(AccountUid) {}
 void AppletLauncher::enterSleep()              {}
 void AppletLauncher::shutdown()                {}
 void AppletLauncher::reboot()                  {}
+Result AppletLauncher::requestSelfUninstall()  { return 0; }
 Result AppletLauncher::prepareApplication(uint64_t, AccountUid,
                                           switchu::smi::LaunchTransitionTrace&) { return 0; }
 void AppletLauncher::launchApplication(uint64_t, AccountUid,

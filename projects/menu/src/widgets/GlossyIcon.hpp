@@ -105,6 +105,8 @@ public:
         m_wideGameHero = hero;
         m_wideGameLogo = logo;
     }
+    void setFavorite(bool fav) { m_isFavorite = fav; }
+    bool isFavorite() const { return m_isFavorite; }
     int gridSpanColumns() const { return m_widgetColumns; }
     int gridSpanRows() const { return m_widgetRows; }
 
@@ -133,6 +135,7 @@ private:
     bool        m_suspended = false;
     bool        m_isGameCard = false;
     bool        m_notLaunchable = false;
+    bool        m_isFavorite = false;
     bool        m_customArtwork = false;
     nxui::Color m_loadingColor = nxui::Color::white();
     float       m_suspendPulse = 0.f;

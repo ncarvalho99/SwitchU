@@ -1114,6 +1114,25 @@ void WiiUMenuApp::createGameDetails() {
                     m_gameDetails->updateSearchTitle(trimmed);
             });
     });
+    m_gameDetails->onToggleFavorite([this]() {
+        if (!m_gameDetails) return;
+        const std::uint64_t titleId = m_gameDetails->titleId();
+        const bool current = m_config.isFavorite(titleId);
+        m_config.setFavorite(titleId, !current);
+        m_config.save();
+        switchu::commitSdCard("toggle favorite");
+        m_gameDetails->setFavorite(!current);
+        if (!current) {
+            m_audio.playSfx(Sfx::Activate);
+        } else {
+            m_audio.playSfx(Sfx::ToggleOff);
+        }
+        if (m_openFolderId != 0) {
+            applyDisplayModel(buildOpenFolderModel(m_openFolderId), titleId, false);
+        } else {
+            applyDisplayModel(buildRootFolderModel(), titleId, false);
+        }
+    });
     m_gameDetails->onDeleteSoftware([this]() {
         if (!m_gameDetails) return;
         m_dialogReturnFocus = m_gameDetails.get();

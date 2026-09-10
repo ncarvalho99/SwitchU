@@ -51,6 +51,28 @@ std::string hours(float value) {
     return stream.str();
 }
 
+void drawStar(nxui::Renderer& ren, const nxui::Vec2& center, float outerRadius, const nxui::Color& color) {
+    const float innerRadius = outerRadius * 0.382f;
+    constexpr int kPoints = 5;
+    nxui::Vec2 outer[kPoints];
+    nxui::Vec2 inner[kPoints];
+    constexpr float kPi = 3.14159265358979323846f;
+    for (int i = 0; i < kPoints; ++i) {
+        float angleOuter = -kPi * 0.5f + i * (2.f * kPi / kPoints);
+        float angleInner = angleOuter + (kPi / kPoints);
+        outer[i] = { center.x + outerRadius * std::cos(angleOuter),
+                     center.y + outerRadius * std::sin(angleOuter) };
+        inner[i] = { center.x + innerRadius * std::cos(angleInner),
+                     center.y + innerRadius * std::sin(angleInner) };
+    }
+    for (int i = 0; i < kPoints; ++i) {
+        int prevInner = (i + kPoints - 1) % kPoints;
+        ren.drawTriangle(center, outer[i], inner[i], color);
+        ren.drawTriangle(center, inner[prevInner], outer[i], color);
+    }
+}
+
+
 nxui::Rect coverTextureSource(const nxui::Texture& texture, const nxui::Rect& destination) {
     const float textureAspect = (float)texture.width() / (float)texture.height();
     const float destinationAspect = destination.width / destination.height;
@@ -74,12 +96,13 @@ void GameDetailsScreen::openForGame(std::uint64_t titleId, std::string title,
                                     nxui::Texture* liveCover,
                                     std::string displayVersion, std::string modSummary,
                                     std::string playTime, std::string metadataPlatform,
-                                    bool isGamePort) {
+                                    bool isGamePort, bool isFavorite) {
     m_titleId = titleId;
     m_title = std::move(title);
     m_searchTitle = searchTitle.empty() ? m_title : std::move(searchTitle);
     m_metadataPlatform = std::move(metadataPlatform);
     m_isGamePort = isGamePort;
+    m_isFavorite = isFavorite;
     m_displayVersion = std::move(displayVersion);
     m_modSummary = std::move(modSummary);
     m_playTime = std::move(playTime);
@@ -416,6 +439,8 @@ std::vector<std::string> GameDetailsScreen::actionLabels() const {
         i18n.tr("dialog.customize_active_art", "Active artwork"),
         i18n.tr("dialog.customize_restore_default", "Restore default"),
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
+        m_isFavorite ? i18n.tr("dialog.unmark_favorite", "Remove from favorites")
+                     : i18n.tr("dialog.mark_as_favorite", "Mark as favorite"),
     };
     if (m_isGamePort) {
         actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
@@ -440,21 +465,22 @@ void GameDetailsScreen::activateAction() {
         case 1: if (m_showArtworkCb) m_showArtworkCb(); break;
         case 2: if (m_restoreArtworkCb) m_restoreArtworkCb(); break;
         case 3: if (m_manageModsCb) m_manageModsCb(); break;
-        case 4:
+        case 4: if (m_toggleFavoriteCb) m_toggleFavoriteCb(); break;
+        case 5:
             if (m_isGamePort) {
                 if (m_editSearchTitleCb) m_editSearchTitleCb();
             } else {
                 if (m_markAsGamePortCb) m_markAsGamePortCb();
             }
             break;
-        case 5:
+        case 6:
             if (m_isGamePort) {
                 if (m_removeGamePortCb) m_removeGamePortCb();
             } else {
                 if (m_deleteSoftwareCb) m_deleteSoftwareCb();
             }
             break;
-        case 6:
+        case 7:
             if (m_isGamePort && m_deleteSoftwareCb) m_deleteSoftwareCb();
             break;
     }
@@ -561,8 +587,13 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
 
     const nxui::Rect main = {panel.x + 292.f, panel.y + 10.f, panel.width - 312.f, panel.height - 20.f};
     const std::string title = m_snapshot.title.empty() ? m_title : m_snapshot.title;
-    ren.drawText(ellipsize(m_font, title, main.width - 230.f, 1.08f),
-                 {main.x + 18.f, main.y + 18.f}, m_font, primary, 1.08f);
+    const std::string titleText = ellipsize(m_font, title, main.width - (m_isFavorite ? 270.f : 230.f), 1.08f);
+    ren.drawText(titleText, {main.x + 18.f, main.y + 18.f}, m_font, primary, 1.08f);
+    if (m_isFavorite) {
+        float titleW = m_font ? m_font->measure(titleText).x * 1.08f : 0.f;
+        drawStar(ren, {main.x + 24.f + titleW + 12.f, main.y + 32.f}, 9.f,
+                 nxui::Color(1.0f, 0.84f, 0.20f, 0.98f * opacity));
+    }
     const float scoreX = main.right() - 256.f;
     const bool onlineMatch = m_snapshot.phase == GameMetadataClient::Phase::Ready && m_snapshot.found;
     const std::string publisherNames = join(m_snapshot.publishers);

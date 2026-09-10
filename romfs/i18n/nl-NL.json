@@ -179,6 +179,8 @@
     "sort_custom": "Mijn volgorde",
     "sort_alpha": "A-Z",
     "sort_recent": "Recent",
+    "sort_favorites": "Favorieten",
+    "favorite": "Favoriet",
     "options": "Opties",
     "switch_layout": "Weergave wisselen"
   },
@@ -884,6 +886,8 @@
     "non_game_options_body": "Homebrew en ports hebben geen spelgegevens, illustraties of mods om te beheren. Verwijderen is hier de enige beschikbare actie.",
     "mark_as_game_port": "Markeren als game-port",
     "unmark_port": "Port-markering verwijderen",
+    "mark_as_favorite": "Aan favorieten toevoegen",
+    "unmark_favorite": "Uit favorieten verwijderen",
     "edit_search_title": "Zoektitel bewerken",
     "edit_search_title_guide": "Zoektitel",
     "confirm_search_title": "Zoektitel bevestigen",

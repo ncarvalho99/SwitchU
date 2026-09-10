@@ -179,6 +179,8 @@
     "sort_custom": "Мой порядок",
     "sort_alpha": "А-Я",
     "sort_recent": "Недавние",
+    "sort_favorites": "Избранное",
+    "favorite": "Избранное",
     "options": "Опции",
     "switch_layout": "Сменить вид"
   },
@@ -884,6 +886,8 @@
     "non_game_options_body": "У homebrew и портов нет сведений об игре, обложек или модов. Единственное доступное здесь действие — удаление.",
     "mark_as_game_port": "Отметить как игровой порт",
     "unmark_port": "Снять отметку порта",
+    "mark_as_favorite": "Добавить в избранное",
+    "unmark_favorite": "Удалить из избранного",
     "edit_search_title": "Изменить название для поиска",
     "edit_search_title_guide": "Название для поиска",
     "confirm_search_title": "Подтвердите название для поиска",
