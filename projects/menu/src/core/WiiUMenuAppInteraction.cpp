@@ -1393,6 +1393,7 @@ void WiiUMenuApp::updateCursor() {
         (m_gameDetails && m_gameDetails->isActive()) ||
         (m_settings && m_settings->isActive()) ||
         (m_dialog && m_dialog->isActive()) ||
+        (m_quickSettings && m_quickSettings->isActive()) ||
         (m_userSelect && m_userSelect->isActive()))
         return;
 

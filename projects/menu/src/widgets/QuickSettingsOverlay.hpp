@@ -103,6 +103,9 @@ private:
 
     SelectionCursor m_cursor;
 
+    // Offscreen backdrop blur caching
+    bool m_backdropCacheValid = false;
+
     // Live state values
     float m_brightness = 0.5f;
     float m_bgmVolume = 0.5f;
