@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace nxui {
@@ -118,6 +120,9 @@ private:
     nxui::Input* m_input = nullptr;
     IconProvider m_iconProvider;
     std::unordered_map<std::uint64_t, std::unique_ptr<nxui::Texture>> m_cachedIcons;
+    std::unordered_set<std::uint64_t> m_pendingIconLoads;
+    std::mutex m_decodedMutex;
+    std::vector<std::pair<std::uint64_t, std::vector<uint8_t>>> m_readyToUpload;
 
     nxui::Texture* getIconTexture(std::uint64_t titleId);
     void setupCustomKeyActions();

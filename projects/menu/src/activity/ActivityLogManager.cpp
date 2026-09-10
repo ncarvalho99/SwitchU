@@ -236,8 +236,7 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
         std::unordered_map<u64, u64> activeStarts;
 
         // Scan the most recent applet events to keep UI opening instantaneous.
-        // The last 400 events cover months of recent daily sessions.
-        s32 cur = std::max(start_entry, end_entry - 400);
+        s32 cur = std::max(start_entry, end_entry - 120);
         while (cur <= end_entry) {
             s32 count = std::min(kChunkSize, end_entry - cur + 1);
             s32 total_out = 0;

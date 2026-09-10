@@ -593,7 +593,9 @@ void TabbedOverlayScreen::onRender(nxui::Renderer& ren) {
         if (m_tabContent) m_tabContent->render(ren);
     }
 
-    m_focusCursor.render(ren);
+    if (m_focusArea == FocusArea::Tabs || !usesCustomContentLayout()) {
+        m_focusCursor.render(ren);
+    }
 
     if (traceRender) {
         const uint64_t traceEnd = armGetSystemTick();

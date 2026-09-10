@@ -131,11 +131,11 @@ void ActivityLogScreen::open(std::uint64_t initialTitleId) {
         }
     }
 
-    m_focusArea = FocusArea::Content;
+    m_focusArea = FocusArea::Tabs;
     rebuildTabBar();
     show();
-    // Re-establish content focus and actions after show() overrides them
-    m_focusArea = FocusArea::Content;
+    // Focus starts cleanly on the tabs rail
+    m_focusArea = FocusArea::Tabs;
     setupCustomKeyActions();
 }
 
@@ -238,6 +238,30 @@ void ActivityLogScreen::updateCustomContent(float) {
         }
     }
 
+    // Upload pending icons (at most 2 per frame to keep 60 FPS rock-solid)
+    if (m_gpu && m_renderer) {
+        int uploadedThisFrame = 0;
+        while (uploadedThisFrame < 2) {
+            std::pair<std::uint64_t, std::vector<uint8_t>> item;
+            {
+                std::lock_guard<std::mutex> lock(m_decodedMutex);
+                if (m_readyToUpload.empty()) break;
+                item = std::move(m_readyToUpload.back());
+                m_readyToUpload.pop_back();
+            }
+            if (item.first != 0 && !item.second.empty()) {
+                auto decoded = IconStreamer::decodeIconData(item.second);
+                if (!decoded.rgba.empty() && decoded.w > 0 && decoded.h > 0) {
+                    auto tex = std::make_unique<nxui::Texture>();
+                    if (tex->loadFromPixels(*m_gpu, *m_renderer, decoded.rgba.data(), decoded.w, decoded.h)) {
+                        m_cachedIcons[item.first] = std::move(tex);
+                    }
+                }
+            }
+            uploadedThisFrame++;
+        }
+    }
+
     // Keep selection within bounds
     if (m_manager) {
         const auto& rankings = m_manager->allTimeRankings();
@@ -265,19 +289,16 @@ nxui::Texture* ActivityLogScreen::getIconTexture(std::uint64_t titleId) {
     if (it != m_cachedIcons.end()) {
         return it->second.get();
     }
-    if (m_gpu && m_renderer) {
-        auto rawData = AppListLoader::loadIconData(titleId);
-        if (!rawData.empty()) {
-            auto decoded = IconStreamer::decodeIconData(rawData);
-            if (!decoded.rgba.empty() && decoded.w > 0 && decoded.h > 0) {
-                auto tex = std::make_unique<nxui::Texture>();
-                if (tex->loadFromPixels(*m_gpu, *m_renderer, decoded.rgba.data(), decoded.w, decoded.h)) {
-                    auto* ret = tex.get();
-                    m_cachedIcons[titleId] = std::move(tex);
-                    return ret;
-                }
+    // Asynchronous background load to prevent UI stutter
+    if (m_pool && m_pendingIconLoads.find(titleId) == m_pendingIconLoads.end()) {
+        m_pendingIconLoads.insert(titleId);
+        m_pool->submit([this, titleId]() {
+            auto rawData = AppListLoader::loadIconData(titleId);
+            if (!rawData.empty()) {
+                std::lock_guard<std::mutex> lock(m_decodedMutex);
+                m_readyToUpload.push_back({titleId, std::move(rawData)});
             }
-        }
+        });
     }
     return nullptr;
 }
@@ -738,35 +759,19 @@ bool ActivityLogScreen::handleCustomNavDown() {
 }
 
 bool ActivityLogScreen::handleCustomNavLeft() {
-    if (m_tabIndex == 0) {
-        cycleDay(-1);
+    if (m_focusArea == FocusArea::Content) {
+        m_focusArea = FocusArea::Tabs;
+        if (m_navSfxCb) m_navSfxCb();
         return true;
-    } else if (m_tabIndex == 1) {
-        cycleMonth(-1);
-        return true;
-    } else if (m_tabIndex == 2) {
-        if (m_focusArea == FocusArea::Content) {
-            m_focusArea = FocusArea::Tabs;
-            if (m_navSfxCb) m_navSfxCb();
-            return true;
-        }
     }
     return false;
 }
 
 bool ActivityLogScreen::handleCustomNavRight() {
-    if (m_tabIndex == 0) {
-        cycleDay(1);
+    if (m_focusArea == FocusArea::Tabs) {
+        m_focusArea = FocusArea::Content;
+        if (m_navSfxCb) m_navSfxCb();
         return true;
-    } else if (m_tabIndex == 1) {
-        cycleMonth(1);
-        return true;
-    } else if (m_tabIndex == 2) {
-        if (m_focusArea == FocusArea::Tabs) {
-            m_focusArea = FocusArea::Content;
-            if (m_navSfxCb) m_navSfxCb();
-            return true;
-        }
     }
     return false;
 }
