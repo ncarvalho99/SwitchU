@@ -118,6 +118,19 @@ bool AppConfig::load() {
             gamePortSearchTitles.emplace_back(std::strtoull(k.c_str(), nullptr, 16), title);
         }
     }
+    favoriteTitleIds.clear();
+    if (auto it = j.find("favorites"); it != j.end() && it->is_array()) {
+        for (auto& v : *it) {
+            if (v.is_string()) {
+                const std::string s = v.get<std::string>();
+                if (!s.empty()) {
+                    favoriteTitleIds.push_back(std::strtoull(s.c_str(), nullptr, 16));
+                }
+            } else if (v.is_number_unsigned()) {
+                favoriteTitleIds.push_back(v.get<std::uint64_t>());
+            }
+        }
+    }
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
     if (sfxVolume   < 0.f) sfxVolume   = 0.f;
@@ -197,6 +210,15 @@ bool AppConfig::save() const {
             searchTitles[key] = entry.second;
         }
         j["gamePortSearchTitles"] = std::move(searchTitles);
+    }
+    {
+        nlohmann::json favorites = nlohmann::json::array();
+        char key[17];
+        for (std::uint64_t tid : favoriteTitleIds) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)tid);
+            favorites.push_back(std::string(key));
+        }
+        j["favorites"] = std::move(favorites);
     }
 
     // Written beside the real file and swapped in, never over it. Truncating

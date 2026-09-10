@@ -4,6 +4,7 @@
 #include "DebugLog.hpp"
 #include "NsService.hpp"
 #include <switchu/title_footprint.hpp>
+#include <switchu/sd_commit.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -940,6 +941,52 @@ void WiiUMenuApp::wireGlobalActions() {
         m_accessibility.repeatLastAnnouncement();
     });
 
+    root.addAction(static_cast<uint64_t>(nxui::Button::RStick), [this]() {
+        if (m_editMode) return;
+        if ((m_dialog && m_dialog->isActive()) ||
+            (m_contextMenu && m_contextMenu->isActive()) ||
+            (m_themeShop && m_themeShop->isActive()) ||
+            (m_gameGallery && m_gameGallery->isActive()) ||
+            (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameDetails && m_gameDetails->isActive()) ||
+            (m_settings && m_settings->isActive()) ||
+            (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+            (m_platformPicker && m_platformPicker->isActive()) ||
+            (m_gameOptions && m_gameOptions->isActive()) ||
+            (m_folderOptions && m_folderOptions->isActive()) ||
+            (m_controllerTest && m_controllerTest->isActive()) ||
+            (m_userSelect && m_userSelect->isActive())) {
+            return;
+        }
+        auto* cur = focusManager().current();
+        if (!cur || cur->tag() != "glossy_icon") return;
+        auto* icon = static_cast<GlossyIcon*>(cur);
+        const std::uint64_t titleId = icon->titleId();
+        if (titleId == 0 || (titleId >> 56) == 0xF1ULL || (titleId >> 56) == 0xF2ULL)
+            return;
+
+        const bool currentFav = m_config.isFavorite(titleId);
+        m_config.setFavorite(titleId, !currentFav);
+        m_config.save();
+        switchu::commitSdCard("toggle favorite");
+
+        if (!currentFav) {
+            m_audio.playSfx(Sfx::Activate);
+        } else {
+            m_audio.playSfx(Sfx::ToggleOff);
+        }
+
+        icon->setFavorite(!currentFav);
+        const int idx = findTitleIndex(titleId);
+        if (idx >= 0) {
+            m_model.at(idx).isFavorite = !currentFav;
+        }
+
+        if (m_config.sortMode == 3) {
+            reflowHomeGrid();
+        }
+    });
+
     // R is deliberately not wired as a press action. Holding it over a game is
     // how the homebrew override reaches Sphaira, and reordering the grid on the
     // initial press moved the tiles out from under the player mid-hold. The
@@ -1635,7 +1682,8 @@ void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& titl
     m_gameDetails->openForGame(titleId, title, searchTitle, std::move(cover), liveCover,
                                 installedDisplayVersion(titleId), installedModSummary(titleId),
                                 installedPlayTime(titleId), metadataPlatform,
-                                m_config.isGamePort(titleId));
+                                m_config.isGamePort(titleId),
+                                m_config.isFavorite(titleId));
     focusManager().setFocus(m_gameDetails.get());
 #else
     (void)titleId;

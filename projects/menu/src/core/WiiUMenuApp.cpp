@@ -278,6 +278,7 @@ std::string buttonGlyph(nxui::Button button) {
         case nxui::Button::ZR: return utf8Codepoint(0xE0E7);
         case nxui::Button::Plus: return utf8Codepoint(0xE0F1);
         case nxui::Button::Minus: return utf8Codepoint(0xE0F2);
+        case nxui::Button::RStick: return utf8Codepoint(0xE0C5);
         default: return {};
     }
 }
@@ -1046,6 +1047,7 @@ std::string WiiUMenuApp::sortModeLabel() const {
     switch (m_config.sortMode) {
         case 1:  return i18n.tr("hint.sort_alpha", "A-Z");
         case 2:  return i18n.tr("hint.sort_recent", "Recent");
+        case 3:  return i18n.tr("hint.sort_favorites", "Favorites");
         default: return i18n.tr("hint.sort_custom", "My order");
     }
 }
@@ -1053,7 +1055,7 @@ std::string WiiUMenuApp::sortModeLabel() const {
 void WiiUMenuApp::cycleSortMode() {
 #ifdef SWITCHU_MENU
     if (m_editMode) return;
-    m_config.sortMode = (m_config.sortMode + 1) % 3;
+    m_config.sortMode = (m_config.sortMode + 1) % 4;
     m_config.save();
     switchu::commitSdCard("sort mode");
     DebugLog::log("[menu] sort mode -> %d", m_config.sortMode);
@@ -1897,6 +1899,7 @@ GridModel WiiUMenuApp::buildRootFolderModel() {
     for (const auto& app : m_allApps) {
         if (m_folderStore.folderForTitle(app.titleId) == 0) {
             AppEntry effective = app;
+            effective.isFavorite = m_config.isFavorite(app.titleId);
             const auto size = gameGridSize(app.titleId, m_appLayoutMode);
             effective.widgetColumns = size.columns;
             effective.widgetRows = size.rows;
@@ -2024,6 +2027,12 @@ GridModel WiiUMenuApp::buildRootFolderModel() {
         const int mode = m_config.sortMode;
         std::stable_sort(apps.begin(), apps.end(),
                          [&](std::uint64_t a, std::uint64_t b) {
+            if (mode == 3) {
+                const bool favA = m_config.isFavorite(a);
+                const bool favB = m_config.isFavorite(b);
+                if (favA != favB) return favA > favB;
+                return false;
+            }
             if (mode == 2) {
                 const auto recentA = m_config.lastOpenedAt(a);
                 const auto recentB = m_config.lastOpenedAt(b);
@@ -2161,6 +2170,7 @@ GridModel WiiUMenuApp::buildOpenFolderModel(std::uint32_t folderId) const {
         }
 
         AppEntry entry = *found;
+        entry.isFavorite = m_config.isFavorite(titleId);
         const auto size = gameGridSize(titleId, m_appLayoutMode);
         entry.widgetColumns = std::max(1, size.columns);
         entry.widgetRows = std::max(1, size.rows);
@@ -4241,6 +4251,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     icon->setIsGameCard(entry.isGameCard());
     icon->setGameCardTexture(&m_gameCardTex);
     icon->setNotLaunchable(!entry.isLaunchable());
+    icon->setFavorite(entry.isFavorite);
     icon->setGridSpan(entry.widgetColumns, entry.widgetRows);
     if (entry.widgetColumns > 1 && entry.widgetRows == 1 &&
         m_appLayoutMode == AppLayoutMode::Grid) {
@@ -6515,6 +6526,8 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             if (m_openFolderId == 0 && m_appLayoutMode != AppLayoutMode::DynamicLine)
                 add(buttonGlyph(nxui::Button::R), sortModeLabel());
 #ifdef SWITCHU_MENU
+            if (entry && entry->isApplication())
+                add(buttonGlyph(nxui::Button::RStick), i18n.tr("hint.favorite", "Favorite"));
             // The options menu was reachable and unannounced: every other
             // button on this icon is listed here, so somebody who never pressed
             // + had no way to learn that software information and delete exist.

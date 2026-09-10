@@ -1,5 +1,6 @@
 #pragma once
 #include "core/AppLayoutMode.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <utility>
@@ -80,6 +81,21 @@ struct AppConfig {
     // every day for a year.
     std::vector<std::pair<std::uint64_t, std::uint64_t>> lastOpened;
     std::vector<std::pair<std::uint64_t, std::string>> gamePortPlatforms;
+    std::vector<std::uint64_t> favoriteTitleIds;
+    bool isFavorite(std::uint64_t titleId) const {
+        for (std::uint64_t id : favoriteTitleIds) {
+            if (id == titleId) return true;
+        }
+        return false;
+    }
+    void setFavorite(std::uint64_t titleId, bool favorite) {
+        auto it = std::find(favoriteTitleIds.begin(), favoriteTitleIds.end(), titleId);
+        if (favorite && it == favoriteTitleIds.end()) {
+            favoriteTitleIds.push_back(titleId);
+        } else if (!favorite && it != favoriteTitleIds.end()) {
+            favoriteTitleIds.erase(it);
+        }
+    }
     // The NACP/catalogue title a community port ships with is often noisy
     // (mod-author credit, ROM-hack branding, "Switch Port" suffixes) and the
     // online catalogue can't match it even after normalisation. This lets a

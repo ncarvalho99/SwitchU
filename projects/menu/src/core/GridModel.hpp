@@ -46,6 +46,7 @@ struct AppEntry {
     int widgetColumns = 1;
     int widgetRows = 1;
     std::string widgetAssetRef;
+    bool isFavorite = false;
 
     bool isApplication() const { return kind == GridEntryKind::Application; }
     bool isFolder() const { return kind == GridEntryKind::Folder; }
