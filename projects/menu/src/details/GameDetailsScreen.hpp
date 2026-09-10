@@ -55,9 +55,7 @@ public:
     void setFavorite(bool fav) { m_isFavorite = fav; rebuildCurrentTab(); }
 
     using ActionCb = std::function<void()>;
-    using OpenActivityLogCb = std::function<void(std::uint64_t)>;
     void onToggleFavorite(ActionCb cb) { m_toggleFavoriteCb = std::move(cb); }
-    void onOpenActivityLog(OpenActivityLogCb cb) { m_openActivityLogCb = std::move(cb); }
     void onOpenGallery(ActionCb cb) { m_openGalleryCb = std::move(cb); }
     void onShowArtwork(ActionCb cb) { m_showArtworkCb = std::move(cb); }
     void onRestoreArtwork(ActionCb cb) { m_restoreArtworkCb = std::move(cb); }
@@ -154,7 +152,6 @@ private:
     bool m_isGamePort = false;
     bool m_isFavorite = false;
     ActionCb m_toggleFavoriteCb;
-    OpenActivityLogCb m_openActivityLogCb;
     ActionCb m_folderActionCb;
     ActionCb m_removeGamePortCb;
     ActionCb m_markAsGamePortCb;
