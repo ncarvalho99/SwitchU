@@ -55,6 +55,7 @@ public:
 
     void setFont(nxui::Font* f)      { m_font = f; }
     void setSmallFont(nxui::Font* f) { m_smallFont = f; }
+    void setIconFont(nxui::Font* f)  { m_iconFont = f; }
     void setTheme(const nxui::Theme* t);
     void setInput(nxui::Input* input) { m_input = input; }
     void setCallbacks(const Callbacks& cb) { m_callbacks = cb; }
@@ -90,6 +91,7 @@ private:
 
     nxui::Font*        m_font = nullptr;
     nxui::Font*        m_smallFont = nullptr;
+    nxui::Font*        m_iconFont = nullptr;
     const nxui::Theme* m_theme = nullptr;
     nxui::Input*       m_input = nullptr;
     Callbacks          m_callbacks;

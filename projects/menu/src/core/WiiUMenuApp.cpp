@@ -278,6 +278,7 @@ std::string buttonGlyph(nxui::Button button) {
         case nxui::Button::ZR: return utf8Codepoint(0xE0E7);
         case nxui::Button::Plus: return utf8Codepoint(0xE0F1);
         case nxui::Button::Minus: return utf8Codepoint(0xE0F2);
+        case nxui::Button::LStick: return utf8Codepoint(0xE0C4);
         case nxui::Button::RStick: return utf8Codepoint(0xE0C5);
         default: return {};
     }
@@ -6544,6 +6545,7 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
 #ifdef SWITCHU_MENU
             if (entry && entry->isApplication())
                 add(buttonGlyph(nxui::Button::RStick), i18n.tr("hint.favorite", "Favorite"));
+            add(buttonGlyph(nxui::Button::LStick), i18n.tr("quicksettings.hint_shortcut", "Quick Settings"));
             // The options menu was reachable and unannounced: every other
             // button on this icon is listed here, so somebody who never pressed
             // + had no way to learn that software information and delete exist.
