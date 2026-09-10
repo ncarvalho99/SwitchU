@@ -257,6 +257,7 @@ void QuickSettingsOverlay::show() {
     m_animating = true;
     m_animProgress = 0.f;
     setVisible(true);
+    setFocusable(true);
     m_selectedItem = ItemIndex::Brightness;
     m_selectedPower = PowerAction::Sleep;
     m_statusPollTimer = 0.f;
@@ -271,6 +272,7 @@ void QuickSettingsOverlay::hide() {
     if (!m_active) return;
     m_active = false;
     m_animating = true;
+    setFocusable(false);
     DebugLog::log("[quicksettings] hiding");
 }
 
@@ -621,31 +623,37 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
     auto& i18n = nxui::I18n::instance();
     float alpha = m_animProgress;
 
-    // 1. Dark Backdrop Scrim
-    ren.drawRect({0.f, 0.f, 1280.f, 720.f}, nxui::Color(0.f, 0.f, 0.f, 0.50f * alpha));
+    // 1. Capture and blur scene backdrop for transparent glassy effect
+    ren.captureToOffscreen(false);
+    ren.applyBlur(2.5f, 2);
 
-    // 2. Liquid Glass Slide-out Panel
+    // 2. Soft translucent backdrop scrim
+    nxui::Rect screen = {0.f, 0.f, (float)ren.width(), (float)ren.height()};
+    nxui::Color scrim = m_theme
+        ? nxui::Color::lerp(m_theme->background, nxui::Color::black(),
+                            m_theme->mode == nxui::ThemeMode::Dark ? 0.65f : 0.20f)
+              .withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.22f : 0.12f) * alpha)
+        : nxui::Color(0.f, 0.f, 0.f, 0.18f * alpha);
+    ren.drawRect(screen, scrim);
+
+    // 3. Glassy blurry slide-out panel
     nxui::Rect panel = computePanelRect();
+    ren.drawOffscreenRounded(0, panel, 24.f, nxui::Color::white().withAlpha(alpha));
 
-    const auto& tuning = settings::debug::settingsGlassTuning();
-    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
-    auto& glass = ren.liquidGlassSettings();
-    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
-    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
-    glass.noiseIntensity = 0.0f;
-    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
-    glass.saturation = std::max(0.0f, tuning.saturation);
-    glass.opacityMultiplier = 1.0f;
-    glass.roughness = std::max(0.0f, tuning.roughness);
-    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+    nxui::Color baseColor = m_theme
+        ? m_theme->panelBase.withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.40f : 0.50f) * alpha)
+        : nxui::Color(0.12f, 0.16f, 0.24f, 0.45f * alpha);
+    ren.drawRoundedRect(panel, baseColor, 24.f);
 
-    nxui::Color glassTint = m_theme
-        ? m_theme->panelBase.withAlpha(0.88f * alpha)
-        : nxui::Color(0.08f, 0.12f, 0.18f, 0.88f * alpha);
+    nxui::Color borderColor = m_theme
+        ? m_theme->panelBorder.withAlpha(0.28f * alpha)
+        : nxui::Color(1.f, 1.f, 1.f, 0.22f * alpha);
+    ren.drawRoundedRectOutline(panel, borderColor, 24.f, 1.2f);
 
-    ren.drawLiquidGlass(0, panel, 22.f, glassTint, alpha, 0.f);
-    ren.drawRoundedRectOutline(panel, nxui::Color(1.f, 1.f, 1.f, 0.22f * alpha), 22.f, 1.5f);
-    ren.liquidGlassSettings() = savedGlass;
+    nxui::Color highlightColor = m_theme
+        ? m_theme->panelHighlight.withAlpha(0.08f * alpha)
+        : nxui::Color(1.f, 1.f, 1.f, 0.08f * alpha);
+    ren.drawRoundedRectOutline(panel.shrunk(1.f), highlightColor, 23.f, 1.0f);
 
     float cx = panel.x + 22.f;
     float cw = panel.width - 44.f;
@@ -773,7 +781,7 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
     drawSlider(ItemIndex::BgmVolume, i18n.tr("quicksettings.bgm_volume", "♫ Music (BGM)"),
                m_bgmVolume, nxui::Color(0.68f, 0.45f, 0.95f, 1.f));
 
-    drawSlider(ItemIndex::SfxVolume, i18n.tr("quicksettings.sfx_volume", "🔊 Sound Effects"),
+    drawSlider(ItemIndex::SfxVolume, i18n.tr("quicksettings.sfx_volume", "♪ Sound Effects"),
                m_sfxVolume, nxui::Color(0.18f, 0.82f, 0.55f, 1.f));
 
     // Helper lambda for rendering a toggle row
@@ -816,7 +824,7 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
     drawToggle(ItemIndex::AirplaneMode, i18n.tr("quicksettings.airplane_mode", "✈ Airplane Mode"),
                m_airplaneMode);
 
-    drawToggle(ItemIndex::Wifi, i18n.tr("quicksettings.wifi", "📶 Wi-Fi"),
+    drawToggle(ItemIndex::Wifi, i18n.tr("quicksettings.wifi", "Wi-Fi"),
                m_wifiEnabled);
 
     // 6. Power Options Section
@@ -847,22 +855,12 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
         }
     };
 
-    drawPowerBtn(PowerAction::Sleep, i18n.tr("quicksettings.sleep", "🌙 Sleep"),
+    drawPowerBtn(PowerAction::Sleep, i18n.tr("quicksettings.sleep", "Sleep"),
                  nxui::Color(0.18f, 0.32f, 0.65f, 1.f), nxui::Color(0.40f, 0.60f, 0.95f, 1.f));
 
-    drawPowerBtn(PowerAction::Reboot, i18n.tr("quicksettings.reboot", "🔄 Reboot"),
+    drawPowerBtn(PowerAction::Reboot, i18n.tr("quicksettings.reboot", "Reboot"),
                  nxui::Color(0.65f, 0.45f, 0.15f, 1.f), nxui::Color(0.95f, 0.75f, 0.30f, 1.f));
 
-    drawPowerBtn(PowerAction::Shutdown, i18n.tr("quicksettings.power_off", "⏻ Power"),
+    drawPowerBtn(PowerAction::Shutdown, i18n.tr("quicksettings.power_off", "Power Off"),
                  nxui::Color(0.65f, 0.20f, 0.20f, 1.f), nxui::Color(0.95f, 0.40f, 0.40f, 1.f));
-
-    // 7. Footer Hint
-    if (m_smallFont) {
-        std::string footer = i18n.tr("quicksettings.footer_hint",
-                                     "[◄ ►] Adjust   [A] Toggle/Select   [B / −] Close");
-        nxui::Vec2 fsz = m_smallFont->measure(footer);
-        float fx = panel.x + (panel.width - fsz.x * 0.70f) * 0.5f;
-        ren.drawText(footer, {fx, panel.y + 612.f}, m_smallFont,
-                     nxui::Color(0.62f, 0.68f, 0.78f, alpha), 0.70f);
-    }
 }

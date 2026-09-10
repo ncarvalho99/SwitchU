@@ -6275,7 +6275,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         && !m_launchAnim->isPlaying())
     {
         auto* cur = focusManager().current();
-        if (!cur || !cur->isFocusable()) {
+        if (!cur || !cur->isFocusable() || cur == m_quickSettings.get()) {
             if (m_themeShop && m_themeShop->isActive()) {
                 focusManager().setFocus(m_themeShop.get());
             } else if (m_gameGallery && m_gameGallery->isActive()) {
@@ -6286,8 +6286,6 @@ void WiiUMenuApp::onUpdate(float dt) {
                 focusManager().setFocus(m_gameDetails.get());
             } else if (m_settings && m_settings->isActive()) {
                 focusManager().setFocus(m_settings.get());
-            } else if (m_quickSettings && m_quickSettings->isActive()) {
-                focusManager().setFocus(m_quickSettings.get());
             } else {
                 auto* target = m_grid->focusManager().current();
                 if (target)
@@ -6392,9 +6390,8 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
 
     if (m_quickSettings && m_quickSettings->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
-        add("◄►", i18n.tr("quicksettings.hint_adjust", "Adjust"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
-        add(buttonGlyph(nxui::Button::B) + " / " + buttonGlyph(nxui::Button::LStick), i18n.tr("hint.close", "Close"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.close", "Close"));
         return hints;
     }
 
