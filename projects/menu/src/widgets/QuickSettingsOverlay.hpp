@@ -71,6 +71,7 @@ public:
     void setInitialValues(float brightness, float bgmVolume, float sfxVolume,
                           bool airplaneMode, bool wifiEnabled);
 
+    void handleTouch(nxui::Input& input);
     void update(float dt) override;
     void render(nxui::Renderer& ren) override;
 
@@ -81,7 +82,6 @@ private:
     void toggleItem(ItemIndex item);
     void triggerPowerAction(PowerAction action);
     void updateCursorTarget();
-    void handleTouch(nxui::Input& input);
 
     nxui::Rect computePanelRect() const;
     nxui::Rect computeItemRect(ItemIndex item) const;

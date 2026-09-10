@@ -737,7 +737,7 @@ void WiiUMenuApp::openQuickSettings() {
 }
 
 void WiiUMenuApp::closeQuickSettings() {
-    if (!m_quickSettings) return;
+    if (!m_quickSettings || !m_quickSettings->isActive()) return;
     m_quickSettings->hide();
     m_config.save();
     if (isCurrentFocusableWidget(m_dialogReturnFocus)) {

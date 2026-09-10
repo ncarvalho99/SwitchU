@@ -6106,6 +6106,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         !app().input().isDown(nxui::Button::Plus) &&
         m_navigator.route() == switchu::navigation::Route::Home &&
         !m_editMode &&
+        !(m_quickSettings && m_quickSettings->isActive()) &&
         !(m_contextMenu && m_contextMenu->isActive()) &&
         !(m_dialog && m_dialog->isActive()) &&
         !(m_settings && m_settings->isActive()) &&
@@ -6175,7 +6176,8 @@ void WiiUMenuApp::onUpdate(float dt) {
         && !(m_folderOptions && m_folderOptions->isActive())
         && !(m_controllerTest && m_controllerTest->isActive())
         && !(m_textEntry && m_textEntry->isActive())
-        && !(m_userSelect && m_userSelect->isActive()))
+        && !(m_userSelect && m_userSelect->isActive())
+        && !(m_quickSettings && m_quickSettings->isActive()))
     {
         handleTouch();
     }
@@ -6264,8 +6266,12 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (!debugTouchBlocked && !lockScreenUp && m_userSelect && m_userSelect->isActive())
         m_userSelect->handleTouch(app().input());
 
+    if (!debugTouchBlocked && !lockScreenUp && m_quickSettings && m_quickSettings->isActive())
+        m_quickSettings->handleTouch(app().input());
+
     if (!(m_userSelect && m_userSelect->isActive())
         && !(m_dialog && m_dialog->isActive())
+        && !(m_quickSettings && m_quickSettings->isActive())
         && !m_launchAnim->isPlaying())
     {
         auto* cur = focusManager().current();
@@ -6280,6 +6286,8 @@ void WiiUMenuApp::onUpdate(float dt) {
                 focusManager().setFocus(m_gameDetails.get());
             } else if (m_settings && m_settings->isActive()) {
                 focusManager().setFocus(m_settings.get());
+            } else if (m_quickSettings && m_quickSettings->isActive()) {
+                focusManager().setFocus(m_quickSettings.get());
             } else {
                 auto* target = m_grid->focusManager().current();
                 if (target)
@@ -6386,7 +6394,7 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
         add("◄►", i18n.tr("quicksettings.hint_adjust", "Adjust"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
-        add(buttonGlyph(nxui::Button::B) + " / " + buttonGlyph(nxui::Button::Minus), i18n.tr("hint.close", "Close"));
+        add(buttonGlyph(nxui::Button::B) + " / " + buttonGlyph(nxui::Button::LStick), i18n.tr("hint.close", "Close"));
         return hints;
     }
 
@@ -6575,9 +6583,12 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         }
     }
 
-    if (m_navigator.route() == switchu::navigation::Route::Home && !m_editMode)
+    if (m_navigator.route() == switchu::navigation::Route::Home && !m_editMode) {
         add(buttonGlyph(nxui::Button::Minus),
+            i18n.tr("hint.switch_layout", "Switch view"));
+        add(buttonGlyph(nxui::Button::LStick),
             i18n.tr("quicksettings.hint_shortcut", "Quick Settings"));
+    }
     addVoiceControls();
 
     return hints;

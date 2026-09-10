@@ -118,7 +118,7 @@ void QuickSettingsOverlay::setTheme(const nxui::Theme* t) {
 void QuickSettingsOverlay::setupNavigationActions() {
     // Up / Down navigation across items
     addDirectionAction(nxui::FocusDirection::UP, [this]() {
-        if (!isFullyVisible()) return;
+        if (!m_active) return;
         int next = static_cast<int>(m_selectedItem) - 1;
         if (next < 0)
             next = static_cast<int>(ItemIndex::Count) - 1;
@@ -128,7 +128,7 @@ void QuickSettingsOverlay::setupNavigationActions() {
     });
 
     addDirectionAction(nxui::FocusDirection::DOWN, [this]() {
-        if (!isFullyVisible()) return;
+        if (!m_active) return;
         int next = static_cast<int>(m_selectedItem) + 1;
         if (next >= static_cast<int>(ItemIndex::Count))
             next = 0;
@@ -139,7 +139,7 @@ void QuickSettingsOverlay::setupNavigationActions() {
 
     // Left / Right navigation / slider adjustment
     addDirectionAction(nxui::FocusDirection::LEFT, [this]() {
-        if (!isFullyVisible()) return;
+        if (!m_active) return;
         switch (m_selectedItem) {
             case ItemIndex::Brightness:
                 adjustSlider(ItemIndex::Brightness, -0.05f);
@@ -170,7 +170,7 @@ void QuickSettingsOverlay::setupNavigationActions() {
     });
 
     addDirectionAction(nxui::FocusDirection::RIGHT, [this]() {
-        if (!isFullyVisible()) return;
+        if (!m_active) return;
         switch (m_selectedItem) {
             case ItemIndex::Brightness:
                 adjustSlider(ItemIndex::Brightness, 0.05f);
@@ -202,7 +202,7 @@ void QuickSettingsOverlay::setupNavigationActions() {
 
     // Activation (Button A)
     addAction(static_cast<uint64_t>(nxui::Button::A), [this]() {
-        if (!isFullyVisible()) return;
+        if (!m_active) return;
         switch (m_selectedItem) {
             case ItemIndex::AirplaneMode:
                 toggleItem(ItemIndex::AirplaneMode);
@@ -218,13 +218,23 @@ void QuickSettingsOverlay::setupNavigationActions() {
         }
     });
 
-    // Dismissal (Button B or Button Minus)
+    // Dismissal (Button B or Click Left Stick)
     addAction(static_cast<uint64_t>(nxui::Button::B), [this]() {
-        hide();
+        if (!m_active) return;
+        if (m_callbacks.onClose) {
+            m_callbacks.onClose();
+        } else {
+            hide();
+        }
     });
 
-    addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
-        hide();
+    addAction(static_cast<uint64_t>(nxui::Button::LStick), [this]() {
+        if (!m_active) return;
+        if (m_callbacks.onClose) {
+            m_callbacks.onClose();
+        } else {
+            hide();
+        }
     });
 }
 
@@ -258,13 +268,10 @@ void QuickSettingsOverlay::show() {
 }
 
 void QuickSettingsOverlay::hide() {
-    if (!m_active && !m_animating) return;
+    if (!m_active) return;
     m_active = false;
     m_animating = true;
     DebugLog::log("[quicksettings] hiding");
-    if (m_callbacks.onClose) {
-        m_callbacks.onClose();
-    }
 }
 
 void QuickSettingsOverlay::refreshHardwareStatus() {
@@ -540,7 +547,11 @@ void QuickSettingsOverlay::handleTouch(nxui::Input& input) {
 
         // Tap outside panel to dismiss
         if (tx < panel.x) {
-            hide();
+            if (m_callbacks.onClose) {
+                m_callbacks.onClose();
+            } else {
+                hide();
+            }
             return;
         }
 

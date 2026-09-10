@@ -985,7 +985,7 @@
   },
   "quicksettings": {
     "title": "Schnelleinstellungen",
-    "close_hint": "[-] Schließen",
+    "close_hint": "[B] Schließen",
     "battery": "BATTERIE",
     "charging": "⚡ Lädt",
     "discharging": "Entladen",
@@ -1003,7 +1003,7 @@
     "sleep": "🌙 Standby",
     "reboot": "🔄 Neustart",
     "power_off": "⏻ Ausschalten",
-    "footer_hint": "[◄ ►] Einstellen   [A] Umschalten/Auswählen   [B / −] Schließen",
+    "footer_hint": "[◄ ►] Einstellen   [A] Umschalten/Auswählen   [B / L3] Schließen",
     "hint_adjust": "Einstellen",
     "hint_shortcut": "Schnelleinstellungen"
   }

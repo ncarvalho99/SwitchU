@@ -985,7 +985,7 @@
   },
   "quicksettings": {
     "title": "Impostazioni rapide",
-    "close_hint": "[-] Chiudi",
+    "close_hint": "[B] Chiudi",
     "battery": "BATTERIA",
     "charging": "⚡ In carica",
     "discharging": "Scaricamento",
@@ -1003,7 +1003,7 @@
     "sleep": "🌙 Modalità riposo",
     "reboot": "🔄 Riavvia",
     "power_off": "⏻ Spegni",
-    "footer_hint": "[◄ ►] Regola   [A] Attiva/Seleziona   [B / −] Chiudi",
+    "footer_hint": "[◄ ►] Regola   [A] Attiva/Seleziona   [B / L3] Chiudi",
     "hint_adjust": "Regola",
     "hint_shortcut": "Impostazioni rapide"
   }
