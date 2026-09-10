@@ -439,17 +439,11 @@ std::vector<std::string> GameDetailsScreen::actionLabels() const {
         i18n.tr("dialog.customize_active_art", "Active artwork"),
         i18n.tr("dialog.customize_restore_default", "Restore default"),
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
-        m_isFavorite ? i18n.tr("dialog.unmark_favorite", "Remove from favorites")
-                     : i18n.tr("dialog.mark_as_favorite", "Mark as favorite"),
     };
     if (m_isGamePort) {
         actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
         actions.push_back(i18n.tr("dialog.unmark_port", "Unmark port"));
-    } else {
-        // Native-id-range titles used to be assumed to always be a genuine
-        // Switch release and never offered this: a community port with a
-        // native-looking title id (the GTA V case) had no way to leave the
-        // "nintendo-switch" lookup that never matches it.
+    } else if (!isNativeApplicationId(m_titleId)) {
         actions.push_back(i18n.tr("dialog.mark_as_game_port", "Mark as game port"));
     }
     actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
@@ -460,29 +454,25 @@ void GameDetailsScreen::activateAction() {
     const auto actions = actionLabels();
     if (m_selectedAction < 0 || (std::size_t)m_selectedAction >= actions.size())
         return;
-    switch (m_selectedAction) {
-        case 0: if (m_openGalleryCb) m_openGalleryCb(); break;
-        case 1: if (m_showArtworkCb) m_showArtworkCb(); break;
-        case 2: if (m_restoreArtworkCb) m_restoreArtworkCb(); break;
-        case 3: if (m_manageModsCb) m_manageModsCb(); break;
-        case 4: if (m_toggleFavoriteCb) m_toggleFavoriteCb(); break;
-        case 5:
-            if (m_isGamePort) {
-                if (m_editSearchTitleCb) m_editSearchTitleCb();
-            } else {
-                if (m_markAsGamePortCb) m_markAsGamePortCb();
-            }
-            break;
-        case 6:
-            if (m_isGamePort) {
-                if (m_removeGamePortCb) m_removeGamePortCb();
-            } else {
-                if (m_deleteSoftwareCb) m_deleteSoftwareCb();
-            }
-            break;
-        case 7:
-            if (m_isGamePort && m_deleteSoftwareCb) m_deleteSoftwareCb();
-            break;
+    const std::string& label = actions[m_selectedAction];
+    auto& i18n = nxui::I18n::instance();
+
+    if (label == i18n.tr("dialog.icon_options_gallery", "Gallery")) {
+        if (m_openGalleryCb) m_openGalleryCb();
+    } else if (label == i18n.tr("dialog.customize_active_art", "Active artwork")) {
+        if (m_showArtworkCb) m_showArtworkCb();
+    } else if (label == i18n.tr("dialog.customize_restore_default", "Restore default")) {
+        if (m_restoreArtworkCb) m_restoreArtworkCb();
+    } else if (label == i18n.tr("dialog.details_manage_mods", "Manage mods")) {
+        if (m_manageModsCb) m_manageModsCb();
+    } else if (label == i18n.tr("dialog.edit_search_title", "Edit search title")) {
+        if (m_editSearchTitleCb) m_editSearchTitleCb();
+    } else if (label == i18n.tr("dialog.unmark_port", "Unmark port")) {
+        if (m_removeGamePortCb) m_removeGamePortCb();
+    } else if (label == i18n.tr("dialog.mark_as_game_port", "Mark as game port")) {
+        if (m_markAsGamePortCb) m_markAsGamePortCb();
+    } else if (label == i18n.tr("dialog.icon_options_delete", "Delete software")) {
+        if (m_deleteSoftwareCb) m_deleteSoftwareCb();
     }
 }
 

@@ -818,15 +818,20 @@ void WiiUMenuApp::openActivityLog(std::uint64_t initialTitleId) {
 
     m_activityLogReturnFocus = focusManager().current();
 
-    // Collect installed titles
-    std::vector<std::pair<std::uint64_t, std::string>> installed;
-    for (int i = 0; i < m_model.count(); ++i) {
-        const auto& entry = m_model.at(i);
-        if (entry.titleId != 0 && (entry.isApplication() || m_config.isGamePort(entry.titleId))) {
-            installed.emplace_back(entry.titleId, entry.title);
+    static uint64_t s_lastRefreshTick = 0;
+    const uint64_t nowTick = armGetSystemTick();
+    if (s_lastRefreshTick == 0 || (armTicksToNs(nowTick - s_lastRefreshTick) > 20000000000ULL)) {
+        // Collect installed titles
+        std::vector<std::pair<std::uint64_t, std::string>> installed;
+        for (int i = 0; i < m_model.count(); ++i) {
+            const auto& entry = m_model.at(i);
+            if (entry.titleId != 0 && (entry.isApplication() || m_config.isGamePort(entry.titleId))) {
+                installed.emplace_back(entry.titleId, entry.title);
+            }
         }
+        m_activityLogManager.refresh(installed);
+        s_lastRefreshTick = nowTick;
     }
-    m_activityLogManager.refresh(installed);
 
     raiseOverlay(m_activityLog);
     m_activityLog->open(initialTitleId);
