@@ -947,8 +947,11 @@ void WiiUMenuApp::wireGlobalActions() {
 
     root.addAction(static_cast<uint64_t>(nxui::Button::LStick), [this]() {
         if (m_editMode) return;
+        if (m_quickSettings && m_quickSettings->isActive()) {
+            closeQuickSettings();
+            return;
+        }
         if ((m_dialog && m_dialog->isActive()) ||
-            (m_quickSettings && m_quickSettings->isActive()) ||
             (m_contextMenu && m_contextMenu->isActive()) ||
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
@@ -1094,9 +1097,7 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
         if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
             return;
-        if (handleAccessibilityToggleCombo())
-            return;
-        openQuickSettings();
+        handleAccessibilityToggleCombo();
     });
 #endif
 #ifdef SWITCHU_HOMEBREW

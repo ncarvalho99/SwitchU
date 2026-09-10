@@ -991,7 +991,7 @@
   },
   "quicksettings": {
     "title": "Quick Settings",
-    "close_hint": "[-] Close",
+    "close_hint": "[B] Close",
     "battery": "BATTERY",
     "charging": "⚡ Charging",
     "discharging": "Discharging",
@@ -1009,7 +1009,7 @@
     "sleep": "🌙 Sleep",
     "reboot": "🔄 Reboot",
     "power_off": "⏻ Power",
-    "footer_hint": "[◄ ►] Adjust   [A] Toggle/Select   [B / −] Close",
+    "footer_hint": "[◄ ►] Adjust   [A] Toggle/Select   [B / L3] Close",
     "hint_adjust": "Adjust",
     "hint_shortcut": "Quick Settings"
   }

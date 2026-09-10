@@ -991,7 +991,7 @@
   },
   "quicksettings": {
     "title": "Configurações Rápidas",
-    "close_hint": "[-] Fechar",
+    "close_hint": "[B] Fechar",
     "battery": "BATERIA",
     "charging": "⚡ Carregando",
     "discharging": "Descarregando",
@@ -1009,7 +1009,7 @@
     "sleep": "🌙 Modo de espera",
     "reboot": "🔄 Reiniciar",
     "power_off": "⏻ Desligar",
-    "footer_hint": "[◄ ►] Ajustar   [A] Alternar/Selecionar   [B / −] Fechar",
+    "footer_hint": "[◄ ►] Ajustar   [A] Alternar/Selecionar   [B / L3] Fechar",
     "hint_adjust": "Ajustar",
     "hint_shortcut": "Config. Rápidas"
   }
