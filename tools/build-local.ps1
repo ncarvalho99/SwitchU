@@ -142,6 +142,13 @@ function Deploy-SysmoduleToConsole {
     Copy-TreeToConsole -Source $sourceSwitch -Destination $destinationSwitch -Label 'switch'
     Remove-RetiredDefaultThemeMedia -SourceSwitchU (Join-Path $sourceSwitch 'SwitchU') -ConsoleSwitchU $consoleSwitchU
 
+    # Garante que todos os arquivos i18n sejam copiados sem serem ignorados pelo robocopy no FAT32
+    $sourceI18n = Join-Path $sourceSwitch 'SwitchU\i18n'
+    $consoleI18n = Join-Path $consoleSwitchU 'i18n'
+    if ((Test-Path -LiteralPath $sourceI18n) -and (Test-Path -LiteralPath $consoleI18n)) {
+        Copy-Item -Path (Join-Path $sourceI18n '*') -Destination $consoleI18n -Force
+    }
+
     $checks = @(
         @{ Source = Join-Path $sourceAtmosphere 'contents\0100000000001000\exefs.nsp'; Destination = Join-Path $destinationAtmosphere 'contents\0100000000001000\exefs.nsp' },
         @{ Source = Join-Path $sourceSwitch 'SwitchU\bin\menu\main'; Destination = Join-Path $destinationSwitch 'SwitchU\bin\menu\main' },

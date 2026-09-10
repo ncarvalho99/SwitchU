@@ -256,6 +256,7 @@ void QuickSettingsOverlay::show() {
     m_active = true;
     m_animating = true;
     m_animProgress = 0.f;
+    m_backdropCacheValid = false;
     setVisible(true);
     setFocusable(true);
     m_selectedItem = ItemIndex::Brightness;
@@ -272,6 +273,7 @@ void QuickSettingsOverlay::hide() {
     if (!m_active) return;
     m_active = false;
     m_animating = true;
+    m_backdropCacheValid = false;
     setFocusable(false);
     DebugLog::log("[quicksettings] hiding");
 }
@@ -506,6 +508,8 @@ void QuickSettingsOverlay::updateCursorTarget() {
 void QuickSettingsOverlay::update(float dt) {
     if (!isVisible()) return;
 
+    setRect(computePanelRect());
+
     // Animation progress
     if (m_animating) {
         if (m_active) {
@@ -623,27 +627,49 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
     auto& i18n = nxui::I18n::instance();
     float alpha = m_animProgress;
 
-    // 1. Capture and blur scene backdrop for transparent glassy effect
-    ren.captureToOffscreen(false);
-    ren.applyBlur(2.5f, 2);
+    // 1. Capture and blur scene backdrop for authentic liquid frosted glass
+    if (!m_backdropCacheValid) {
+        ren.captureToOffscreenSharp();
+        const auto& tuning = settings::debug::settingsGlassTuning();
+        if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
+            ren.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
+        }
+        ren.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, nxui::GpuDevice::OFF_DIALOG);
+        m_backdropCacheValid = true;
+    }
 
     // 2. Soft translucent backdrop scrim
     nxui::Rect screen = {0.f, 0.f, (float)ren.width(), (float)ren.height()};
     nxui::Color scrim = m_theme
         ? nxui::Color::lerp(m_theme->background, nxui::Color::black(),
                             m_theme->mode == nxui::ThemeMode::Dark ? 0.65f : 0.20f)
-              .withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.22f : 0.12f) * alpha)
-        : nxui::Color(0.f, 0.f, 0.f, 0.18f * alpha);
+              .withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.25f : 0.14f) * alpha)
+        : nxui::Color(0.f, 0.f, 0.f, 0.20f * alpha);
     ren.drawRect(screen, scrim);
 
-    // 3. Glassy blurry slide-out panel
+    // 3. Liquid Glass blurry slide-out panel
     nxui::Rect panel = computePanelRect();
-    ren.drawOffscreenRounded(0, panel, 24.f, nxui::Color::white().withAlpha(alpha));
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    nxui::LiquidGlassSettings savedGlass = ren.liquidGlassSettings();
+    auto& glass = ren.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
 
-    nxui::Color baseColor = m_theme
-        ? m_theme->panelBase.withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.40f : 0.50f) * alpha)
-        : nxui::Color(0.12f, 0.16f, 0.24f, 0.45f * alpha);
-    ren.drawRoundedRect(panel, baseColor, 24.f);
+    nxui::Color glassTint = m_theme
+        ? m_theme->panelBase.withAlpha(m_theme->mode == nxui::ThemeMode::Dark
+            ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+            : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f))
+        : nxui::Color(0.12f, 0.16f, 0.24f, 0.20f);
+
+    ren.drawLiquidGlass(nxui::GpuDevice::OFF_DIALOG, panel, 24.f, glassTint, alpha,
+                        std::clamp(tuning.shade, 0.0f, 1.0f));
+    ren.liquidGlassSettings() = savedGlass;
 
     nxui::Color borderColor = m_theme
         ? m_theme->panelBorder.withAlpha(0.28f * alpha)
@@ -663,12 +689,6 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
         std::string title = i18n.tr("quicksettings.title", "Quick Settings");
         ren.drawText(title, {cx, panel.y + 20.f}, m_font,
                      nxui::Color(1.f, 1.f, 1.f, alpha), 0.95f);
-    }
-    if (m_smallFont) {
-        std::string closeHint = i18n.tr("quicksettings.close_hint", "[-] Close");
-        nxui::Vec2 sz = m_smallFont->measure(closeHint);
-        ren.drawText(closeHint, {panel.x + panel.width - 24.f - sz.x * 0.76f, panel.y + 24.f},
-                     m_smallFont, nxui::Color(0.7f, 0.75f, 0.82f, alpha), 0.76f);
     }
 
     // 4. Hardware Status Card (Battery & Thermals)

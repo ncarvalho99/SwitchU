@@ -1571,9 +1571,10 @@ void WiiUMenuApp::updateCursor() {
         return;
     }
     if ((m_contextMenu && m_contextMenu->isActive()) ||
-        (m_textEntry && m_textEntry->isActive())) {
-        // The keyboard is one focusable widget, so the ring framed the whole
-        // panel. It draws its own key selection.
+        (m_textEntry && m_textEntry->isActive()) ||
+        (m_quickSettings && m_quickSettings->isActive())) {
+        // The keyboard and quick settings are focusable widgets that draw their
+        // own internal selection. Hide the global cursor so it doesn't frame the panel.
         if (m_cursor) m_cursor->setVisible(false);
         return;
     }
