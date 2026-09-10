@@ -87,10 +87,30 @@ static Result setAirplaneModeSetting(bool enableAirplaneMode) {
 #endif
 
 static constexpr float kPanelWidth  = 440.f;
-static constexpr float kPanelHeight = 672.f;
-static constexpr float kPanelTop    = 24.f;
-static constexpr float kPanelMarginRight = 24.f;
+static constexpr float kPanelHeight = 636.f;
+static constexpr float kPanelTop    = 16.f;
+static constexpr float kPanelMarginRight = 20.f;
 static constexpr float kAnimDuration = 0.25f;
+
+static std::string utf8Codepoint(uint32_t cp) {
+    std::string out;
+    if (cp <= 0x7F) {
+        out.push_back(static_cast<char>(cp));
+    } else if (cp <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+    return out;
+}
 
 } // namespace
 
@@ -455,15 +475,15 @@ nxui::Rect QuickSettingsOverlay::computeItemRect(ItemIndex item) const {
 
     switch (item) {
         case ItemIndex::Brightness:
-            return {cx - 4.f, panel.y + 160.f, cw + 8.f, 64.f};
+            return {cx - 4.f, panel.y + 144.f, cw + 8.f, 60.f};
         case ItemIndex::BgmVolume:
-            return {cx - 4.f, panel.y + 234.f, cw + 8.f, 64.f};
+            return {cx - 4.f, panel.y + 214.f, cw + 8.f, 60.f};
         case ItemIndex::SfxVolume:
-            return {cx - 4.f, panel.y + 308.f, cw + 8.f, 64.f};
+            return {cx - 4.f, panel.y + 284.f, cw + 8.f, 60.f};
         case ItemIndex::AirplaneMode:
-            return {cx - 4.f, panel.y + 382.f, cw + 8.f, 52.f};
+            return {cx - 4.f, panel.y + 354.f, cw + 8.f, 48.f};
         case ItemIndex::Wifi:
-            return {cx - 4.f, panel.y + 442.f, cw + 8.f, 52.f};
+            return {cx - 4.f, panel.y + 410.f, cw + 8.f, 48.f};
         case ItemIndex::PowerActions:
             return computePowerButtonRect(m_selectedPower);
         default:
@@ -475,7 +495,7 @@ nxui::Rect QuickSettingsOverlay::computePowerButtonRect(PowerAction action) cons
     nxui::Rect panel = computePanelRect();
     float cx = panel.x + 22.f;
     float btnW = (panel.width - 44.f - 20.f) / 3.f; // ~125px
-    float by = panel.y + 532.f;
+    float by = panel.y + 494.f;
 
     int idx = static_cast<int>(action);
     float bx = cx + idx * (btnW + 10.f);
@@ -489,11 +509,11 @@ nxui::Rect QuickSettingsOverlay::computeSliderTrackRect(ItemIndex item) const {
 
     switch (item) {
         case ItemIndex::Brightness:
-            return {cx, panel.y + 196.f, cw, 14.f};
+            return {cx, panel.y + 176.f, cw, 14.f};
         case ItemIndex::BgmVolume:
-            return {cx, panel.y + 270.f, cw, 14.f};
+            return {cx, panel.y + 246.f, cw, 14.f};
         case ItemIndex::SfxVolume:
-            return {cx, panel.y + 344.f, cw, 14.f};
+            return {cx, panel.y + 316.f, cw, 14.f};
         default:
             return {};
     }
@@ -692,13 +712,13 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
     }
 
     // 4. Hardware Status Card (Battery & Thermals)
-    nxui::Rect statusCard = {cx, panel.y + 60.f, cw, 84.f};
+    nxui::Rect statusCard = {cx, panel.y + 54.f, cw, 78.f};
     ren.drawRoundedRect(statusCard, nxui::Color(0.12f, 0.18f, 0.28f, 0.65f * alpha), 14.f);
     ren.drawRoundedRectOutline(statusCard, nxui::Color(1.f, 1.f, 1.f, 0.14f * alpha), 14.f, 1.f);
 
     // Battery Column (Left)
     if (m_smallFont) {
-        ren.drawText(i18n.tr("quicksettings.battery", "BATTERY"), {statusCard.x + 16.f, statusCard.y + 12.f},
+        ren.drawText(i18n.tr("quicksettings.battery", "BATTERY"), {statusCard.x + 16.f, statusCard.y + 10.f},
                      m_smallFont, nxui::Color(0.65f, 0.72f, 0.82f, alpha), 0.72f);
 
         char bBuf[32];
@@ -707,7 +727,7 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
         else
             std::snprintf(bBuf, sizeof(bBuf), "--%%");
 
-        ren.drawText(bBuf, {statusCard.x + 16.f, statusCard.y + 32.f},
+        ren.drawText(bBuf, {statusCard.x + 16.f, statusCard.y + 28.f},
                      m_font ? m_font : m_smallFont, nxui::Color(1.f, 1.f, 1.f, alpha), 0.95f);
 
         std::string chgText = m_batteryCharging
@@ -716,19 +736,19 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
         nxui::Color chgCol = m_batteryCharging
             ? nxui::Color(0.25f, 0.90f, 0.45f, alpha)
             : nxui::Color(0.60f, 0.68f, 0.78f, alpha);
-        ren.drawText(chgText, {statusCard.x + 16.f, statusCard.y + 58.f},
+        ren.drawText(chgText, {statusCard.x + 16.f, statusCard.y + 54.f},
                      m_smallFont, chgCol, 0.72f);
     }
 
     // Divider
-    ren.drawLine({statusCard.x + cw * 0.5f, statusCard.y + 10.f},
-                 {statusCard.x + cw * 0.5f, statusCard.y + 74.f},
+    ren.drawLine({statusCard.x + cw * 0.5f, statusCard.y + 8.f},
+                 {statusCard.x + cw * 0.5f, statusCard.y + 70.f},
                  nxui::Color(1.f, 1.f, 1.f, 0.12f * alpha), 1.f);
 
     // Thermal Column (Right)
     float rx = statusCard.x + cw * 0.5f + 16.f;
     if (m_smallFont) {
-        ren.drawText(i18n.tr("quicksettings.hardware_temp", "THERMALS"), {rx, statusCard.y + 12.f},
+        ren.drawText(i18n.tr("quicksettings.hardware_temp", "THERMALS"), {rx, statusCard.y + 10.f},
                      m_smallFont, nxui::Color(0.65f, 0.72f, 0.82f, alpha), 0.72f);
 
         char tBuf[64];
@@ -743,7 +763,7 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
             std::snprintf(tBuf, sizeof(tBuf), "-- °C");
         }
 
-        ren.drawText(tBuf, {rx, statusCard.y + 34.f},
+        ren.drawText(tBuf, {rx, statusCard.y + 30.f},
                      m_smallFont, nxui::Color(1.f, 1.f, 1.f, alpha), 0.85f);
 
         float maxT = std::max(m_socTemp, m_pcbTemp);
@@ -753,11 +773,11 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
                 ? nxui::Color(0.95f, 0.75f, 0.20f, alpha) // Warm / Amber
                 : nxui::Color(0.20f, 0.85f, 0.50f, alpha); // Optimal / Green
 
-        ren.drawCircle({rx + 6.f, statusCard.y + 64.f}, 4.5f, badgeCol);
+        ren.drawCircle({rx + 6.f, statusCard.y + 58.f}, 4.5f, badgeCol);
         std::string badgeText = (maxT > 65.f)
             ? i18n.tr("quicksettings.temp_warm", "Warm")
             : i18n.tr("quicksettings.temp_optimal", "Optimal");
-        ren.drawText(badgeText, {rx + 16.f, statusCard.y + 58.f},
+        ren.drawText(badgeText, {rx + 16.f, statusCard.y + 52.f},
                      m_smallFont, badgeCol, 0.72f);
     }
 
@@ -805,14 +825,29 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
                m_sfxVolume, nxui::Color(0.18f, 0.82f, 0.55f, 1.f));
 
     // Helper lambda for rendering a toggle row
-    auto drawToggle = [&](ItemIndex idx, const std::string& label, bool enabled) {
+    auto drawToggle = [&](ItemIndex idx, const std::string& label, bool enabled,
+                          const std::string& iconGlyph = "", bool iconInSwitchFont = false) {
         nxui::Rect card = computeItemRect(idx);
         ren.drawRoundedRect(card, nxui::Color(0.12f, 0.18f, 0.26f, 0.45f * alpha), 12.f);
         ren.drawRoundedRectOutline(card, nxui::Color(1.f, 1.f, 1.f, 0.08f * alpha), 12.f, 1.f);
 
+        float textX = card.x + 14.f;
+        if (!iconGlyph.empty()) {
+            nxui::Font* fIcon = (iconInSwitchFont && m_iconFont) ? m_iconFont : m_smallFont;
+            if (fIcon) {
+                float iconScale = iconInSwitchFont ? 0.82f : 0.82f;
+                nxui::Vec2 isz = fIcon->measure(iconGlyph);
+                float iy = card.y + (card.height - isz.y * iconScale) * 0.5f;
+                ren.drawText(iconGlyph, {textX, iy}, fIcon,
+                             nxui::Color(0.95f, 0.95f, 0.98f, alpha), iconScale);
+                textX += isz.x * iconScale + 7.f;
+            }
+        }
+
         if (m_smallFont) {
-            ren.drawText(label, {card.x + 14.f, card.y + 16.f}, m_smallFont,
-                         nxui::Color(0.95f, 0.95f, 0.98f, alpha), 0.85f);
+            float ty = card.y + (card.height - m_smallFont->measure(label).y * 0.82f) * 0.5f;
+            ren.drawText(label, {textX, ty}, m_smallFont,
+                         nxui::Color(0.95f, 0.95f, 0.98f, alpha), 0.82f);
         }
 
         // Pill Switch
@@ -835,52 +870,88 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
                 : i18n.tr("quicksettings.off", "OFF");
             nxui::Vec2 ssz = m_smallFont->measure(stateStr);
             float tx = enabled ? (pill.x + 8.f) : (pill.x + pill.width - ssz.x * 0.65f - 8.f);
-            ren.drawText(stateStr, {tx, pill.y + 7.f}, m_smallFont,
+            ren.drawText(stateStr, {tx, pill.y + (pillH - ssz.y * 0.65f) * 0.5f}, m_smallFont,
                          nxui::Color(1.f, 1.f, 1.f, 0.95f * alpha), 0.65f);
         }
     };
 
     // Toggles
-    drawToggle(ItemIndex::AirplaneMode, i18n.tr("quicksettings.airplane_mode", "✈ Airplane Mode"),
-               m_airplaneMode);
+    drawToggle(ItemIndex::AirplaneMode, i18n.tr("quicksettings.airplane_mode", "Modo avião"),
+               m_airplaneMode, "✈", false);
 
     drawToggle(ItemIndex::Wifi, i18n.tr("quicksettings.wifi", "Wi-Fi"),
-               m_wifiEnabled);
+               m_wifiEnabled, utf8Codepoint(0xE076), true);
 
     // 6. Power Options Section
     if (m_smallFont) {
-        ren.drawText(i18n.tr("quicksettings.power_options", "POWER OPTIONS"),
-                     {cx, panel.y + 510.f}, m_smallFont,
+        ren.drawText(i18n.tr("quicksettings.power_options", "OPÇÕES DE ENERGIA"),
+                     {cx, panel.y + 472.f}, m_smallFont,
                      nxui::Color(0.65f, 0.72f, 0.82f, alpha), 0.72f);
     }
 
-    auto drawPowerBtn = [&](PowerAction pa, const std::string& label,
-                            const nxui::Color& baseColor, const nxui::Color& borderColor) {
+    auto drawPowerBtn = [&](PowerAction pa, const std::string& iconGlyph, bool iconInSwitchFont,
+                            const std::string& label, const nxui::Color& tint) {
         nxui::Rect btn = computePowerButtonRect(pa);
         bool focused = (m_selectedItem == ItemIndex::PowerActions && m_selectedPower == pa);
 
-        nxui::Color bg = focused
-            ? baseColor.withAlpha(0.85f * alpha)
-            : baseColor.withAlpha(0.40f * alpha);
+        // Clean frosted translucent card base
+        ren.drawRoundedRect(btn, nxui::Color(0.12f, 0.16f, 0.24f, 0.45f * alpha), 12.f);
 
-        ren.drawRoundedRect(btn, bg, 12.f);
-        ren.drawRoundedRectOutline(btn, borderColor.withAlpha(0.35f * alpha), 12.f, 1.f);
+        // Transparent color wash
+        nxui::Color fill = focused
+            ? tint.withAlpha(0.42f * alpha)
+            : tint.withAlpha(0.18f * alpha);
+        nxui::Color border = focused
+            ? tint.withAlpha(0.95f * alpha)
+            : tint.withAlpha(0.35f * alpha);
+
+        ren.drawRoundedRect(btn, fill, 12.f);
+        ren.drawRoundedRectOutline(btn, border, 12.f, focused ? 1.4f : 1.0f);
+
+        // 1px top specular highlight line
+        ren.drawLine({btn.x + 8.f, btn.y + 1.f}, {btn.x + btn.width - 8.f, btn.y + 1.f},
+                     nxui::Color(1.f, 1.f, 1.f, 0.16f * alpha), 1.f);
 
         if (m_smallFont) {
+            float iconScale = iconInSwitchFont ? 0.72f : 0.70f;
+            float textScale = 0.70f;
+            nxui::Vec2 isz = {0.f, 0.f};
+            nxui::Font* fIcon = (iconInSwitchFont && m_iconFont) ? m_iconFont : m_smallFont;
+            if (!iconGlyph.empty() && fIcon) {
+                isz = fIcon->measure(iconGlyph);
+            }
             nxui::Vec2 lsz = m_smallFont->measure(label);
-            float lx = btn.x + (btn.width - lsz.x * 0.78f) * 0.5f;
-            float ly = btn.y + (btn.height - lsz.y * 0.78f) * 0.5f;
-            ren.drawText(label, {lx, ly}, m_smallFont,
-                         nxui::Color(1.f, 1.f, 1.f, alpha), 0.78f);
+
+            float totalW = lsz.x * textScale;
+            if (isz.x > 0.001f) {
+                totalW += isz.x * iconScale + 5.f;
+            }
+
+            float curX = btn.x + (btn.width - totalW) * 0.5f;
+            nxui::Color textColor = focused
+                ? nxui::Color(1.f, 1.f, 1.f, alpha)
+                : nxui::Color(0.92f, 0.94f, 0.98f, 0.88f * alpha);
+
+            if (isz.x > 0.001f && fIcon) {
+                float iy = btn.y + (btn.height - isz.y * iconScale) * 0.5f;
+                ren.drawText(iconGlyph, {curX, iy}, fIcon, textColor, iconScale);
+                curX += isz.x * iconScale + 5.f;
+            }
+
+            float ty = btn.y + (btn.height - lsz.y * textScale) * 0.5f;
+            ren.drawText(label, {curX, ty}, m_smallFont, textColor, textScale);
         }
     };
 
-    drawPowerBtn(PowerAction::Sleep, i18n.tr("quicksettings.sleep", "Sleep"),
-                 nxui::Color(0.18f, 0.32f, 0.65f, 1.f), nxui::Color(0.40f, 0.60f, 0.95f, 1.f));
+    drawPowerBtn(PowerAction::Sleep, utf8Codepoint(0x263E), false,
+                 i18n.tr("quicksettings.sleep", "Suspender"),
+                 nxui::Color(0.20f, 0.55f, 0.95f, 1.f));
 
-    drawPowerBtn(PowerAction::Reboot, i18n.tr("quicksettings.reboot", "Reboot"),
-                 nxui::Color(0.65f, 0.45f, 0.15f, 1.f), nxui::Color(0.95f, 0.75f, 0.30f, 1.f));
+    drawPowerBtn(PowerAction::Reboot, utf8Codepoint(0x21BB), false,
+                 i18n.tr("quicksettings.reboot", "Reiniciar"),
+                 nxui::Color(0.95f, 0.65f, 0.20f, 1.f));
 
-    drawPowerBtn(PowerAction::Shutdown, i18n.tr("quicksettings.power_off", "Power Off"),
-                 nxui::Color(0.65f, 0.20f, 0.20f, 1.f), nxui::Color(0.95f, 0.40f, 0.40f, 1.f));
+    drawPowerBtn(PowerAction::Shutdown, utf8Codepoint(0xE0A0), true,
+                 i18n.tr("quicksettings.power_off", "Desligar"),
+                 nxui::Color(0.95f, 0.28f, 0.35f, 1.f));
 }

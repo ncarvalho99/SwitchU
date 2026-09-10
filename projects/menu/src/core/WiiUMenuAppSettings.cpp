@@ -626,6 +626,7 @@ void WiiUMenuApp::createQuickSettings() {
     }
     m_quickSettings->setFont(&m_fontNormal);
     m_quickSettings->setSmallFont(&m_fontSmall);
+    m_quickSettings->setIconFont(&m_fontIcons);
     m_quickSettings->setTheme(&m_theme);
     m_quickSettings->setInput(&app().input());
 
