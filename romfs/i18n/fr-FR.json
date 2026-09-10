@@ -1005,5 +1005,26 @@
     "power_off": "Éteindre",
     "hint_adjust": "Ajuster",
     "hint_shortcut": "Paramètres rapides"
+  },
+  "activity_log": {
+    "title": "Journal d'activité quotidien",
+    "tab_daily": "Journal quotidien",
+    "tab_monthly": "Journal mensuel",
+    "tab_titles": "Bibliothèque de logiciels",
+    "today": "Aujourd'hui",
+    "total_playtime": "Temps total de jeu",
+    "titles_played": "Titres joués",
+    "empty_day": "Aucun enregistrement de jeu pour ce jour.",
+    "empty_day_sub": "Lancez un jeu pour voir son enregistrement quotidien ici !",
+    "active_days": "Jours actifs",
+    "daily_distribution": "Distribution quotidienne du temps de jeu",
+    "empty_month": "Aucun enregistrement de jeu pour ce mois.",
+    "empty_titles": "Aucun historique de jeu enregistré pour le moment.",
+    "all_time": "Classement général",
+    "times_played": "Fois joué",
+    "avg_playtime": "Session moyenne",
+    "last_played": "Dernier",
+    "view_activity": "Voir dans le journal d'activité",
+    "hint_shortcut": "Journal"
   }
 }

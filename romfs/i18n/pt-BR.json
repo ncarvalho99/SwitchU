@@ -1011,5 +1011,26 @@
     "power_off": "Desligar",
     "hint_adjust": "Ajustar",
     "hint_shortcut": "Config. Rápidas"
+  },
+  "activity_log": {
+    "title": "Registro Diário de Atividades",
+    "tab_daily": "Registro Diário",
+    "tab_monthly": "Registro Mensal",
+    "tab_titles": "Biblioteca de Softwares",
+    "today": "Hoje",
+    "total_playtime": "Tempo Total de Jogo",
+    "titles_played": "Títulos Jogados",
+    "empty_day": "Sem registros de jogo para este dia.",
+    "empty_day_sub": "Jogue um jogo para ver seu registro diário aqui!",
+    "active_days": "Dias Ativos",
+    "daily_distribution": "Distribuição Diária de Tempo de Jogo",
+    "empty_month": "Sem registros de jogo para este mês.",
+    "empty_titles": "Nenhum histórico de jogo gravado ainda.",
+    "all_time": "Classificação Geral",
+    "times_played": "Vezes jogado",
+    "avg_playtime": "Sessão média",
+    "last_played": "Último",
+    "view_activity": "Ver no Registro de Atividades",
+    "hint_shortcut": "Registro Diário"
   }
 }

@@ -1005,5 +1005,26 @@
     "power_off": "Apagar",
     "hint_adjust": "Ajustar",
     "hint_shortcut": "Ajustes rápidos"
+  },
+  "activity_log": {
+    "title": "Registro de actividad diario",
+    "tab_daily": "Registro diario",
+    "tab_monthly": "Registro mensual",
+    "tab_titles": "Biblioteca de programas",
+    "today": "Hoy",
+    "total_playtime": "Tiempo total jugado",
+    "titles_played": "Títulos jugados",
+    "empty_day": "No hay registros de juego para este día.",
+    "empty_day_sub": "¡Juega a un juego para que su registro aparezca aquí!",
+    "active_days": "Días activos",
+    "daily_distribution": "Distribución diaria del tiempo de juego",
+    "empty_month": "No hay registros de juego para este mes.",
+    "empty_titles": "Aún no hay historial de juego registrado.",
+    "all_time": "Clasificación histórica",
+    "times_played": "Veces jugado",
+    "avg_playtime": "Sesión media",
+    "last_played": "Último",
+    "view_activity": "Ver en el registro de actividad",
+    "hint_shortcut": "Registro diario"
   }
 }

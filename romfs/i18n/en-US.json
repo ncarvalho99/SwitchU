@@ -1011,5 +1011,26 @@
     "power_off": "Power Off",
     "hint_adjust": "Adjust",
     "hint_shortcut": "Quick Settings"
+  },
+  "activity_log": {
+    "title": "Daily Activity Log",
+    "tab_daily": "Daily Log",
+    "tab_monthly": "Monthly Log",
+    "tab_titles": "Software Library",
+    "today": "Today",
+    "total_playtime": "Total Play Time",
+    "titles_played": "Titles Played",
+    "empty_day": "No play records for this day.",
+    "empty_day_sub": "Play a game to see its daily record appear here!",
+    "active_days": "Active Days",
+    "daily_distribution": "Daily Play Time Distribution",
+    "empty_month": "No play records for this month.",
+    "empty_titles": "No software play history recorded yet.",
+    "all_time": "All-Time Rankings",
+    "times_played": "Times Played",
+    "avg_playtime": "Avg Session",
+    "last_played": "Last",
+    "view_activity": "View in Activity Log",
+    "hint_shortcut": "Daily Log"
   }
 }
