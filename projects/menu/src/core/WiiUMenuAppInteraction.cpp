@@ -639,6 +639,7 @@ bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (m_gameDetails && m_gameDetails.get() == w) return w->isFocusable();
     if (m_themeShop && m_themeShop.get() == w) return w->isFocusable();
     if (m_settings && m_settings.get() == w) return w->isFocusable();
+    if (m_quickSettings && m_quickSettings.get() == w) return w->isFocusable();
     for (const auto& btn : m_sidebar.leftButtons())
         if (btn.get() == w) return w->isFocusable();
     for (const auto& btn : m_sidebar.rightButtons())
@@ -749,6 +750,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         m_contextMenu->hide();
     if (m_userSelect && m_userSelect->isActive())
         m_userSelect->hide();
+    if (m_quickSettings && m_quickSettings->isActive())
+        m_quickSettings->hide();
     if (!preserveDialog && m_dialog && m_dialog->isActive())
         m_dialog->hide();
     if (m_settings && m_settings->isActive())
@@ -802,6 +805,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_gameDetails && m_gameDetails->isActive()) return m_gameDetails.get();
     if (m_themeShop && m_themeShop->isActive()) return m_themeShop.get();
     if (m_settings && m_settings->isActive()) return m_settings.get();
+    if (m_quickSettings && m_quickSettings->isActive()) return m_quickSettings.get();
     if (m_userSelect && m_userSelect->isActive()) return m_userSelect.get();
     return &rootBox();
 }
@@ -941,9 +945,31 @@ void WiiUMenuApp::wireGlobalActions() {
         m_accessibility.repeatLastAnnouncement();
     });
 
+    root.addAction(static_cast<uint64_t>(nxui::Button::LStick), [this]() {
+        if (m_editMode) return;
+        if ((m_dialog && m_dialog->isActive()) ||
+            (m_quickSettings && m_quickSettings->isActive()) ||
+            (m_contextMenu && m_contextMenu->isActive()) ||
+            (m_themeShop && m_themeShop->isActive()) ||
+            (m_gameGallery && m_gameGallery->isActive()) ||
+            (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameDetails && m_gameDetails->isActive()) ||
+            (m_settings && m_settings->isActive()) ||
+            (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+            (m_platformPicker && m_platformPicker->isActive()) ||
+            (m_gameOptions && m_gameOptions->isActive()) ||
+            (m_folderOptions && m_folderOptions->isActive()) ||
+            (m_controllerTest && m_controllerTest->isActive()) ||
+            (m_userSelect && m_userSelect->isActive())) {
+            return;
+        }
+        openQuickSettings();
+    });
+
     root.addAction(static_cast<uint64_t>(nxui::Button::RStick), [this]() {
         if (m_editMode) return;
         if ((m_dialog && m_dialog->isActive()) ||
+            (m_quickSettings && m_quickSettings->isActive()) ||
             (m_contextMenu && m_contextMenu->isActive()) ||
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
@@ -1007,6 +1033,7 @@ void WiiUMenuApp::wireGlobalActions() {
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::Y), [this]() {
         if ((m_dialog && m_dialog->isActive()) ||
+            (m_quickSettings && m_quickSettings->isActive()) ||
             (m_contextMenu && m_contextMenu->isActive()) ||
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
@@ -1067,7 +1094,9 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
         if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
             return;
-        handleAccessibilityToggleCombo();
+        if (handleAccessibilityToggleCombo())
+            return;
+        openQuickSettings();
     });
 #endif
 #ifdef SWITCHU_HOMEBREW
@@ -1230,6 +1259,16 @@ void WiiUMenuApp::handleTouch() {
         m_touchAvatarTarget = hitAvatar(tx, ty);
         m_touchAvatarWasFocused = m_touchAvatarTarget && (focusManager().current() == m_touchAvatarTarget);
         if (m_touchAvatarTarget) {
+            m_touchHitIndex = -1;
+            m_touchOnFocused = false;
+            m_touchEditDragActive = false;
+            return;
+        }
+
+        if (ty <= 80.f && !m_editMode &&
+            !(m_dialog && m_dialog->isActive()) &&
+            !(m_quickSettings && m_quickSettings->isActive())) {
+            openQuickSettings();
             m_touchHitIndex = -1;
             m_touchOnFocused = false;
             m_touchEditDragActive = false;

@@ -617,6 +617,137 @@ void WiiUMenuApp::createSettings() {
 
 }
 
+void WiiUMenuApp::createQuickSettings() {
+    if (m_quickSettings) return;
+
+    m_quickSettings = std::make_shared<QuickSettingsOverlay>();
+    if (m_overlayLayer) {
+        m_overlayLayer->addChild(m_quickSettings);
+    }
+    m_quickSettings->setFont(&m_fontNormal);
+    m_quickSettings->setSmallFont(&m_fontSmall);
+    m_quickSettings->setTheme(&m_theme);
+    m_quickSettings->setInput(&app().input());
+
+    QuickSettingsOverlay::Callbacks cbs;
+    cbs.onBrightnessChanged = [](float /*val*/) {
+    };
+    cbs.onBgmVolumeChanged = [this](float val) {
+        m_audio.setVolume(val);
+        m_config.musicVolume = val;
+    };
+    cbs.onSfxVolumeChanged = [this](float val) {
+        m_audio.setSfxVolume(val);
+        m_config.sfxVolume = val;
+    };
+    cbs.onAirplaneModeToggled = [](bool /*enabled*/) {
+    };
+    cbs.onWifiToggled = [](bool /*enabled*/) {
+    };
+    cbs.onSleepRequested = [this]() {
+        if (!m_dialog) return;
+        auto& i18n = nxui::I18n::instance();
+        m_audio.playSfx(Sfx::ModalShow);
+        m_dialogReturnFocus = focusManager().current();
+        m_dialog->show(
+            i18n.tr("power.title", "Power"),
+            i18n.tr("settings.sleep.sleep_confirm", "Put the console into sleep mode?"),
+            {
+                {i18n.tr("button.cancel", "Cancel"), []() {}, true},
+                {i18n.tr("power.sleep", "Sleep"), [this]() {
+#ifdef SWITCHU_MENU
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_launcher.enterSleep();
+#else
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    app().requestExit();
+#endif
+                }, true}
+            });
+    };
+    cbs.onRebootRequested = [this]() {
+        if (!m_dialog) return;
+        auto& i18n = nxui::I18n::instance();
+        m_audio.playSfx(Sfx::ModalShow);
+        m_dialogReturnFocus = focusManager().current();
+        m_dialog->show(
+            i18n.tr("power.title", "Power"),
+            i18n.tr("settings.sleep.reboot_confirm", "Restart the console?"),
+            {
+                {i18n.tr("button.cancel", "Cancel"), []() {}, true},
+                {i18n.tr("power.reboot", "Reboot"), [this]() {
+#ifdef SWITCHU_MENU
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_launcher.reboot();
+#else
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    app().requestExit();
+#endif
+                }, true}
+            });
+    };
+    cbs.onShutdownRequested = [this]() {
+        if (!m_dialog) return;
+        auto& i18n = nxui::I18n::instance();
+        m_audio.playSfx(Sfx::ModalShow);
+        m_dialogReturnFocus = focusManager().current();
+        m_dialog->show(
+            i18n.tr("power.title", "Power"),
+            i18n.tr("settings.sleep.shutdown_confirm", "Power off the console?"),
+            {
+                {i18n.tr("button.cancel", "Cancel"), []() {}, true},
+                {i18n.tr("power.shutdown", "Shutdown"), [this]() {
+#ifdef SWITCHU_MENU
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    m_launcher.shutdown();
+#else
+                    m_audio.playSfx(Sfx::ConfirmPositive);
+                    app().requestExit();
+#endif
+                }, true}
+            });
+    };
+    cbs.onClose = [this]() {
+        closeQuickSettings();
+    };
+    cbs.onNavigateSfx = [this]() { m_audio.playSfx(Sfx::Navigate); };
+    cbs.onActivateSfx = [this]() { m_audio.playSfx(Sfx::Activate); };
+    cbs.onToggleOffSfx = [this]() { m_audio.playSfx(Sfx::ToggleOff); };
+
+    m_quickSettings->setCallbacks(cbs);
+}
+
+void WiiUMenuApp::openQuickSettings() {
+    createQuickSettings();
+    if (!m_quickSettings || m_quickSettings->isActive()) return;
+
+    if (m_editMode) return;
+    if (m_dialog && m_dialog->isActive()) return;
+    if (m_userSelect && m_userSelect->isActive()) return;
+
+    m_dialogReturnFocus = focusManager().current();
+
+    m_quickSettings->setInitialValues(0.5f, m_audio.volume(), m_audio.sfxVolume(), false, true);
+    m_quickSettings->setBatteryStatus(m_consoleBatteryPercent, m_consoleBatteryCharging);
+
+    raiseOverlay(m_quickSettings);
+    m_quickSettings->show();
+    focusManager().setFocus(m_quickSettings.get());
+    m_audio.playSfx(Sfx::ModalShow);
+}
+
+void WiiUMenuApp::closeQuickSettings() {
+    if (!m_quickSettings) return;
+    m_quickSettings->hide();
+    m_config.save();
+    if (isCurrentFocusableWidget(m_dialogReturnFocus)) {
+        m_suppressNextNavigateSfx = true;
+        focusManager().setFocus(m_dialogReturnFocus);
+    }
+    m_dialogReturnFocus = nullptr;
+    m_audio.playSfx(Sfx::ModalHide);
+}
+
 void WiiUMenuApp::createThemeShop() {
     if (m_themeShop) return;
 
