@@ -112,6 +112,51 @@ static std::string utf8Codepoint(uint32_t cp) {
     return out;
 }
 
+static void drawWifiIcon(nxui::Renderer& ren, nxui::Vec2 center, const nxui::Color& color, float scale = 1.0f) {
+    ren.drawCircle(center, 1.8f * scale, color);
+
+    const float radii[] = { 5.5f * scale, 10.0f * scale, 14.5f * scale };
+    for (float r : radii) {
+        constexpr int steps = 8;
+        constexpr float degStart = 225.0f;
+        constexpr float degEnd = 315.0f;
+        constexpr float degStep = (degEnd - degStart) / steps;
+        nxui::Vec2 prev;
+        for (int i = 0; i <= steps; ++i) {
+            float deg = degStart + i * degStep;
+            float rad = deg * (3.14159265358979323846f / 180.0f);
+            nxui::Vec2 pt = { center.x + r * std::cos(rad), center.y + r * std::sin(rad) };
+            if (i > 0) {
+                ren.drawLine(prev, pt, color, 1.8f * scale);
+            }
+            prev = pt;
+        }
+    }
+}
+
+static void drawMoonIcon(nxui::Renderer& ren, nxui::Vec2 center, const nxui::Color& color, float scale = 1.0f) {
+    const int R = static_cast<int>(std::round(7.0f * scale));
+    const float r = 6.0f * scale;
+    const float dx = 2.5f * scale;
+
+    for (int y_off = -R; y_off <= R; ++y_off) {
+        float val_out = static_cast<float>(R * R - y_off * y_off);
+        if (val_out < 0.0f) continue;
+        float x_out_left = -std::sqrt(val_out);
+        float x_out_right = std::sqrt(val_out);
+
+        float val_in = r * r - static_cast<float>(y_off * y_off);
+        float x_in_left = (val_in >= 0.0f) ? (dx - std::sqrt(val_in)) : x_out_right;
+
+        float x1 = center.x + x_out_left;
+        float x2 = center.x + std::min(x_out_right, x_in_left);
+        if (x2 > x1) {
+            ren.drawLine({x1, center.y + static_cast<float>(y_off)},
+                         {x2, center.y + static_cast<float>(y_off)}, color, 1.0f);
+        }
+    }
+}
+
 } // namespace
 
 QuickSettingsOverlay::QuickSettingsOverlay() {
@@ -825,23 +870,16 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
                m_sfxVolume, nxui::Color(0.18f, 0.82f, 0.55f, 1.f));
 
     // Helper lambda for rendering a toggle row
-    auto drawToggle = [&](ItemIndex idx, const std::string& label, bool enabled,
-                          const std::string& iconGlyph = "", bool iconInSwitchFont = false) {
+    auto drawToggle = [&](ItemIndex idx, const std::string& label, bool enabled) {
         nxui::Rect card = computeItemRect(idx);
         ren.drawRoundedRect(card, nxui::Color(0.12f, 0.18f, 0.26f, 0.45f * alpha), 12.f);
         ren.drawRoundedRectOutline(card, nxui::Color(1.f, 1.f, 1.f, 0.08f * alpha), 12.f, 1.f);
 
         float textX = card.x + 14.f;
-        if (!iconGlyph.empty()) {
-            nxui::Font* fIcon = (iconInSwitchFont && m_iconFont) ? m_iconFont : m_smallFont;
-            if (fIcon) {
-                float iconScale = iconInSwitchFont ? 0.82f : 0.82f;
-                nxui::Vec2 isz = fIcon->measure(iconGlyph);
-                float iy = card.y + (card.height - isz.y * iconScale) * 0.5f;
-                ren.drawText(iconGlyph, {textX, iy}, fIcon,
-                             nxui::Color(0.95f, 0.95f, 0.98f, alpha), iconScale);
-                textX += isz.x * iconScale + 7.f;
-            }
+        if (idx == ItemIndex::Wifi) {
+            drawWifiIcon(ren, {card.x + 24.f, card.y + card.height * 0.5f + 3.f},
+                         nxui::Color(0.95f, 0.95f, 0.98f, alpha), 0.95f);
+            textX = card.x + 40.f;
         }
 
         if (m_smallFont) {
@@ -877,10 +915,10 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
 
     // Toggles
     drawToggle(ItemIndex::AirplaneMode, i18n.tr("quicksettings.airplane_mode", "Modo avião"),
-               m_airplaneMode, "✈", false);
+               m_airplaneMode);
 
     drawToggle(ItemIndex::Wifi, i18n.tr("quicksettings.wifi", "Wi-Fi"),
-               m_wifiEnabled, utf8Codepoint(0xE076), true);
+               m_wifiEnabled);
 
     // 6. Power Options Section
     if (m_smallFont) {
@@ -889,8 +927,7 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
                      nxui::Color(0.65f, 0.72f, 0.82f, alpha), 0.72f);
     }
 
-    auto drawPowerBtn = [&](PowerAction pa, const std::string& iconGlyph, bool iconInSwitchFont,
-                            const std::string& label, const nxui::Color& tint) {
+    auto drawPowerBtn = [&](PowerAction pa, const std::string& label, const nxui::Color& tint) {
         nxui::Rect btn = computePowerButtonRect(pa);
         bool focused = (m_selectedItem == ItemIndex::PowerActions && m_selectedPower == pa);
 
@@ -913,45 +950,44 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
                      nxui::Color(1.f, 1.f, 1.f, 0.16f * alpha), 1.f);
 
         if (m_smallFont) {
-            float iconScale = iconInSwitchFont ? 0.72f : 0.70f;
             float textScale = 0.70f;
-            nxui::Vec2 isz = {0.f, 0.f};
-            nxui::Font* fIcon = (iconInSwitchFont && m_iconFont) ? m_iconFont : m_smallFont;
-            if (!iconGlyph.empty() && fIcon) {
-                isz = fIcon->measure(iconGlyph);
-            }
+            float iconScale = 0.78f;
             nxui::Vec2 lsz = m_smallFont->measure(label);
-
-            float totalW = lsz.x * textScale;
-            if (isz.x > 0.001f) {
-                totalW += isz.x * iconScale + 5.f;
-            }
-
-            float curX = btn.x + (btn.width - totalW) * 0.5f;
             nxui::Color textColor = focused
                 ? nxui::Color(1.f, 1.f, 1.f, alpha)
                 : nxui::Color(0.92f, 0.94f, 0.98f, 0.88f * alpha);
 
-            if (isz.x > 0.001f && fIcon) {
-                float iy = btn.y + (btn.height - isz.y * iconScale) * 0.5f;
-                ren.drawText(iconGlyph, {curX, iy}, fIcon, textColor, iconScale);
-                curX += isz.x * iconScale + 5.f;
-            }
+            if (pa == PowerAction::Sleep) {
+                float iconW = 14.f;
+                float totalW = iconW + 6.f + lsz.x * textScale;
+                float curX = btn.x + (btn.width - totalW) * 0.5f;
+                drawMoonIcon(ren, {curX + 6.f, btn.y + btn.height * 0.5f}, textColor, 0.9f);
+                float ty = btn.y + (btn.height - lsz.y * textScale) * 0.5f;
+                ren.drawText(label, {curX + iconW + 6.f, ty}, m_smallFont, textColor, textScale);
+            } else {
+                std::string iconGlyph = (pa == PowerAction::Reboot) ? utf8Codepoint(0xE08F) : utf8Codepoint(0xE0B8);
+                nxui::Font* fIcon = m_iconFont ? m_iconFont : m_smallFont;
+                nxui::Vec2 isz = fIcon ? fIcon->measure(iconGlyph) : nxui::Vec2{16.f, 16.f};
+                float actualIconW = isz.x * iconScale;
+                float totalW = actualIconW + 6.f + lsz.x * textScale;
+                float curX = btn.x + (btn.width - totalW) * 0.5f;
 
-            float ty = btn.y + (btn.height - lsz.y * textScale) * 0.5f;
-            ren.drawText(label, {curX, ty}, m_smallFont, textColor, textScale);
+                if (fIcon) {
+                    float iy = btn.y + (btn.height - isz.y * iconScale) * 0.5f;
+                    ren.drawText(iconGlyph, {curX, iy}, fIcon, textColor, iconScale);
+                }
+                float ty = btn.y + (btn.height - lsz.y * textScale) * 0.5f;
+                ren.drawText(label, {curX + actualIconW + 6.f, ty}, m_smallFont, textColor, textScale);
+            }
         }
     };
 
-    drawPowerBtn(PowerAction::Sleep, utf8Codepoint(0x263E), false,
-                 i18n.tr("quicksettings.sleep", "Suspender"),
+    drawPowerBtn(PowerAction::Sleep, i18n.tr("quicksettings.sleep", "Suspender"),
                  nxui::Color(0.20f, 0.55f, 0.95f, 1.f));
 
-    drawPowerBtn(PowerAction::Reboot, utf8Codepoint(0x21BB), false,
-                 i18n.tr("quicksettings.reboot", "Reiniciar"),
+    drawPowerBtn(PowerAction::Reboot, i18n.tr("quicksettings.reboot", "Reiniciar"),
                  nxui::Color(0.95f, 0.65f, 0.20f, 1.f));
 
-    drawPowerBtn(PowerAction::Shutdown, utf8Codepoint(0xE0A0), true,
-                 i18n.tr("quicksettings.power_off", "Desligar"),
+    drawPowerBtn(PowerAction::Shutdown, i18n.tr("quicksettings.power_off", "Desligar"),
                  nxui::Color(0.95f, 0.28f, 0.35f, 1.f));
 }
