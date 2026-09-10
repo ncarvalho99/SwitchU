@@ -275,6 +275,10 @@ void QuickSettingsOverlay::setupNavigationActions() {
             case ItemIndex::Wifi:
                 toggleItem(ItemIndex::Wifi);
                 break;
+            case ItemIndex::ActivityLog:
+                if (m_callbacks.onActivateSfx) m_callbacks.onActivateSfx();
+                if (m_callbacks.onActivityLogRequested) m_callbacks.onActivityLogRequested();
+                break;
             case ItemIndex::PowerActions:
                 triggerPowerAction(m_selectedPower);
                 break;
@@ -520,15 +524,17 @@ nxui::Rect QuickSettingsOverlay::computeItemRect(ItemIndex item) const {
 
     switch (item) {
         case ItemIndex::Brightness:
-            return {cx - 4.f, panel.y + 144.f, cw + 8.f, 60.f};
+            return {cx - 4.f, panel.y + 142.f, cw + 8.f, 54.f};
         case ItemIndex::BgmVolume:
-            return {cx - 4.f, panel.y + 214.f, cw + 8.f, 60.f};
+            return {cx - 4.f, panel.y + 204.f, cw + 8.f, 54.f};
         case ItemIndex::SfxVolume:
-            return {cx - 4.f, panel.y + 284.f, cw + 8.f, 60.f};
+            return {cx - 4.f, panel.y + 266.f, cw + 8.f, 54.f};
         case ItemIndex::AirplaneMode:
-            return {cx - 4.f, panel.y + 354.f, cw + 8.f, 48.f};
+            return {cx - 4.f, panel.y + 328.f, cw + 8.f, 42.f};
         case ItemIndex::Wifi:
-            return {cx - 4.f, panel.y + 410.f, cw + 8.f, 48.f};
+            return {cx - 4.f, panel.y + 378.f, cw + 8.f, 42.f};
+        case ItemIndex::ActivityLog:
+            return {cx - 4.f, panel.y + 428.f, cw + 8.f, 42.f};
         case ItemIndex::PowerActions:
             return computePowerButtonRect(m_selectedPower);
         default:
@@ -540,7 +546,7 @@ nxui::Rect QuickSettingsOverlay::computePowerButtonRect(PowerAction action) cons
     nxui::Rect panel = computePanelRect();
     float cx = panel.x + 22.f;
     float btnW = (panel.width - 44.f - 20.f) / 3.f; // ~125px
-    float by = panel.y + 494.f;
+    float by = panel.y + 514.f;
 
     int idx = static_cast<int>(action);
     float bx = cx + idx * (btnW + 10.f);
@@ -554,11 +560,11 @@ nxui::Rect QuickSettingsOverlay::computeSliderTrackRect(ItemIndex item) const {
 
     switch (item) {
         case ItemIndex::Brightness:
-            return {cx, panel.y + 176.f, cw, 14.f};
+            return {cx, panel.y + 172.f, cw, 12.f};
         case ItemIndex::BgmVolume:
-            return {cx, panel.y + 246.f, cw, 14.f};
+            return {cx, panel.y + 234.f, cw, 12.f};
         case ItemIndex::SfxVolume:
-            return {cx, panel.y + 316.f, cw, 14.f};
+            return {cx, panel.y + 296.f, cw, 12.f};
         default:
             return {};
     }
@@ -657,6 +663,16 @@ void QuickSettingsOverlay::handleTouch(nxui::Input& input) {
             m_selectedItem = ItemIndex::Wifi;
             toggleItem(ItemIndex::Wifi);
             updateCursorTarget();
+            return;
+        }
+
+        // Check Activity Log button
+        nxui::Rect actRect = computeItemRect(ItemIndex::ActivityLog);
+        if (actRect.contains(tx, ty)) {
+            m_selectedItem = ItemIndex::ActivityLog;
+            updateCursorTarget();
+            if (m_callbacks.onActivateSfx) m_callbacks.onActivateSfx();
+            if (m_callbacks.onActivityLogRequested) m_callbacks.onActivityLogRequested();
             return;
         }
 
@@ -920,10 +936,30 @@ void QuickSettingsOverlay::render(nxui::Renderer& ren) {
     drawToggle(ItemIndex::Wifi, i18n.tr("quicksettings.wifi", "Wi-Fi"),
                m_wifiEnabled);
 
+    // 5. Activity Log Button
+    nxui::Rect actCard = computeItemRect(ItemIndex::ActivityLog);
+    bool isActSelected = (m_selectedItem == ItemIndex::ActivityLog);
+    ren.drawRoundedRect(actCard,
+                        isActSelected ? nxui::Color(0.20f, 0.55f, 0.85f, 0.45f * alpha)
+                                      : nxui::Color(0.12f, 0.18f, 0.28f, 0.65f * alpha),
+                        14.f);
+    ren.drawRoundedRectOutline(actCard,
+                               isActSelected ? nxui::Color(0.25f, 0.75f, 1.00f, 0.85f * alpha)
+                                             : nxui::Color(1.f, 1.f, 1.f, 0.14f * alpha),
+                               14.f, 1.f);
+    if (m_smallFont) {
+        std::string actLabel = i18n.tr("activity_log.title", "Daily Activity Log");
+        float ty = actCard.y + (actCard.height - m_smallFont->measure(actLabel).y * 0.82f) * 0.5f;
+        ren.drawText(actLabel, {actCard.x + 16.f, ty}, m_smallFont,
+                     nxui::Color(0.95f, 0.95f, 0.98f, alpha), 0.82f);
+        ren.drawText(">", {actCard.right() - 28.f, ty}, m_smallFont,
+                     nxui::Color(0.40f, 0.80f, 1.00f, alpha), 0.82f);
+    }
+
     // 6. Power Options Section
     if (m_smallFont) {
         ren.drawText(i18n.tr("quicksettings.power_options", "OPÇÕES DE ENERGIA"),
-                     {cx, panel.y + 472.f}, m_smallFont,
+                     {cx, panel.y + 490.f}, m_smallFont,
                      nxui::Color(0.65f, 0.72f, 0.82f, alpha), 0.72f);
     }
 

@@ -24,6 +24,7 @@ public:
         SfxVolume,
         AirplaneMode,
         Wifi,
+        ActivityLog,
         PowerActions,
         Count
     };
@@ -41,6 +42,7 @@ public:
         std::function<void(float)> onSfxVolumeChanged;
         std::function<void(bool)>  onAirplaneModeToggled;
         std::function<void(bool)>  onWifiToggled;
+        std::function<void()>      onActivityLogRequested;
         std::function<void()>      onSleepRequested;
         std::function<void()>      onRebootRequested;
         std::function<void()>      onShutdownRequested;

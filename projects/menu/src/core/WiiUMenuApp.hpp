@@ -40,6 +40,8 @@
 #include "details/GameDetailsScreen.hpp"
 #include "update/UpdateClient.hpp"
 #include "mods/GameModsScreen.hpp"
+#include "activity/ActivityLogScreen.hpp"
+#include "activity/ActivityLogManager.hpp"
 #include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
 #include "core/FolderStore.hpp"
@@ -362,6 +364,9 @@ private:
     void createQuickSettings();
     void openQuickSettings();
     void closeQuickSettings();
+    void createActivityLog();
+    void openActivityLog(std::uint64_t initialTitleId = 0);
+    void closeActivityLog();
     void createThemeShop();
     void createGameOptions();
     void createFolderOptions();
@@ -467,6 +472,9 @@ private:
     std::shared_ptr<FolderOptionsScreen> m_folderOptions;
     std::shared_ptr<ControllerTestScreen> m_controllerTest;
     std::shared_ptr<TextEntryScreen>      m_textEntry;
+    std::shared_ptr<ActivityLogScreen>    m_activityLog;
+    switchu::activity::ActivityLogManager m_activityLogManager;
+    nxui::Widget* m_activityLogReturnFocus = nullptr;
 
     nxui::Texture m_gameCardTex;
     nxui::Texture m_arrowTexLeft;

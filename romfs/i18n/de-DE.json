@@ -1005,5 +1005,26 @@
     "power_off": "Ausschalten",
     "hint_adjust": "Einstellen",
     "hint_shortcut": "Schnelleinstellungen"
+  },
+  "activity_log": {
+    "title": "Tägliches Aktivitätslog",
+    "tab_daily": "Tagesprotokoll",
+    "tab_monthly": "Monatsprotokoll",
+    "tab_titles": "Software-Bibliothek",
+    "today": "Heute",
+    "total_playtime": "Gesamte Spielzeit",
+    "titles_played": "Gespielte Titel",
+    "empty_day": "Keine Spielaufzeichnungen für diesen Tag.",
+    "empty_day_sub": "Spiele ein Spiel, damit sein Tagesbericht hier erscheint!",
+    "active_days": "Aktive Tage",
+    "daily_distribution": "Tägliche Spielzeitverteilung",
+    "empty_month": "Keine Spielaufzeichnungen für diesen Monat.",
+    "empty_titles": "Bisher kein Spielverlauf aufgezeichnet.",
+    "all_time": "Gesamtrangliste",
+    "times_played": "Gespielt",
+    "avg_playtime": "Durchschnitt",
+    "last_played": "Zuletzt",
+    "view_activity": "Im Aktivitätslog ansehen",
+    "hint_shortcut": "Aktivitätslog"
   }
 }

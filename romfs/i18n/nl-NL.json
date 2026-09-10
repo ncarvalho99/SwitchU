@@ -1005,5 +1005,26 @@
     "power_off": "Uitschakelen",
     "hint_adjust": "Aanpassen",
     "hint_shortcut": "Snelle instellingen"
+  },
+  "activity_log": {
+    "title": "Dagelijks activiteitenlogboek",
+    "tab_daily": "Dagelijks logboek",
+    "tab_monthly": "Maandelijks logboek",
+    "tab_titles": "Softwarebibliotheek",
+    "today": "Vandaag",
+    "total_playtime": "Totale speeltijd",
+    "titles_played": "Gespeelde titels",
+    "empty_day": "Geen speelgegevens voor deze dag.",
+    "empty_day_sub": "Speel een game om de dagelijkse gegevens hier te zien!",
+    "active_days": "Actieve dagen",
+    "daily_distribution": "Dagelijkse speeltijdverdeling",
+    "empty_month": "Geen speelgegevens voor deze maand.",
+    "empty_titles": "Nog geen speelgeschiedenis geregistreerd.",
+    "all_time": "Algemeen klassement",
+    "times_played": "Keer gespeeld",
+    "avg_playtime": "Gem. sessie",
+    "last_played": "Laatst",
+    "view_activity": "Bekijken in activiteitenlogboek",
+    "hint_shortcut": "Logboek"
   }
 }

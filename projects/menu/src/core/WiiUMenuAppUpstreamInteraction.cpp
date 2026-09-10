@@ -1566,7 +1566,8 @@ void WiiUMenuApp::updateCursor() {
         (m_gameGallery && m_gameGallery->isActive()) ||
         (m_gameMods && m_gameMods->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||
-        (m_steamGridDbPicker && m_steamGridDbPicker->isActive())) {
+        (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+        (m_activityLog && m_activityLog->isActive())) {
         if (m_cursor) m_cursor->setVisible(false);
         return;
     }

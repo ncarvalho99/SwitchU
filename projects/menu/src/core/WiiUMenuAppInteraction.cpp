@@ -764,6 +764,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         m_gameMods->hide();
     if (m_gameDetails && m_gameDetails->isActive())
         m_gameDetails->hide();
+    if (m_activityLog && m_activityLog->isActive())
+        m_activityLog->hide();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
         m_steamGridDbPicker->hide();
     if (m_platformPicker && m_platformPicker->isActive())
@@ -803,6 +805,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_gameMods && m_gameMods->isActive()) return m_gameMods.get();
     if (m_gameGallery && m_gameGallery->isActive()) return m_gameGallery.get();
     if (m_gameDetails && m_gameDetails->isActive()) return m_gameDetails.get();
+    if (m_activityLog && m_activityLog->isActive()) return m_activityLog.get();
     if (m_themeShop && m_themeShop->isActive()) return m_themeShop.get();
     if (m_settings && m_settings->isActive()) return m_settings.get();
     if (m_quickSettings && m_quickSettings->isActive()) return m_quickSettings.get();
@@ -824,6 +827,8 @@ void WiiUMenuApp::toggleAccessibilitySpeech() {
         m_gameMods->setAccessibilityVoiceEnabled(enabled);
     if (m_gameDetails)
         m_gameDetails->setAccessibilityVoiceEnabled(enabled);
+    if (m_activityLog)
+        m_activityLog->setAccessibilityVoiceEnabled(enabled);
     if (m_gameOptions)
         m_gameOptions->setAccessibilityVoiceEnabled(enabled);
     if (m_folderOptions)
@@ -1097,7 +1102,11 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
         if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
             return;
-        handleAccessibilityToggleCombo();
+        if (handleAccessibilityToggleCombo())
+            return;
+        if (m_navigator.route() == switchu::navigation::Route::Home) {
+            openActivityLog();
+        }
     });
 #endif
 #ifdef SWITCHU_HOMEBREW

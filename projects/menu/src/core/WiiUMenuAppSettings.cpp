@@ -645,6 +645,10 @@ void WiiUMenuApp::createQuickSettings() {
     };
     cbs.onWifiToggled = [](bool /*enabled*/) {
     };
+    cbs.onActivityLogRequested = [this]() {
+        closeQuickSettings();
+        openActivityLog();
+    };
     cbs.onSleepRequested = [this]() {
         if (!m_dialog) return;
         auto& i18n = nxui::I18n::instance();
@@ -759,6 +763,90 @@ void WiiUMenuApp::closeQuickSettings() {
     }
     m_dialogReturnFocus = nullptr;
     m_audio.playSfx(Sfx::ModalHide);
+}
+
+void WiiUMenuApp::createActivityLog() {
+    if (m_activityLog) return;
+
+    m_activityLog = std::make_shared<ActivityLogScreen>();
+    if (m_overlayLayer) {
+        m_overlayLayer->addChild(m_activityLog);
+    }
+    m_activityLog->setFont(&m_fontNormal);
+    m_activityLog->setSmallFont(&m_fontSmall);
+    m_activityLog->setTheme(&m_theme);
+    m_activityLog->setThreadPool(&m_threadPool);
+    m_activityLog->setRenderContext(&app().gpu(), &app().renderer());
+    m_activityLog->setManager(&m_activityLogManager);
+
+    m_activityLog->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+    m_activityLog->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+    m_activityLog->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+    m_activityLog->onTabChangeSfx([this]() { m_audio.playSfx(Sfx::ThemeToggle); });
+    m_activityLog->onDateChangeSfx([this](bool forward) {
+        m_audio.playSfx(forward ? Sfx::SliderUp : Sfx::SliderDown);
+    });
+    m_activityLog->onClose([this]() {
+        closeActivityLog();
+    });
+    m_activityLog->onTitleSelected([this](std::uint64_t titleId) {
+        if (titleId != 0) {
+            closeActivityLog();
+            showGameDetails(titleId, "");
+        }
+    });
+}
+
+void WiiUMenuApp::openActivityLog(std::uint64_t initialTitleId) {
+    if (m_editMode) return;
+    if (m_dialog && m_dialog->isActive()) return;
+    if (m_userSelect && m_userSelect->isActive()) return;
+
+    createActivityLog();
+    if (!m_activityLog || m_activityLog->isActive()) return;
+
+    m_activityLogReturnFocus = focusManager().current();
+
+    // Collect installed titles
+    std::vector<std::pair<std::uint64_t, std::string>> installed;
+    for (int i = 0; i < m_model.count(); ++i) {
+        const auto& entry = m_model.at(i);
+        if (entry.titleId != 0 && (entry.isApplication() || m_config.isGamePort(entry.titleId))) {
+            installed.emplace_back(entry.titleId, entry.title);
+        }
+    }
+    m_activityLogManager.refresh(installed);
+
+    raiseOverlay(m_activityLog);
+    m_activityLog->open(initialTitleId);
+    m_navigator.navigate(switchu::navigation::Route::ActivityLog);
+    focusManager().setFocus(m_activityLog.get());
+    m_audio.playSfx(Sfx::ModalShow);
+}
+
+void WiiUMenuApp::closeActivityLog() {
+    if (!m_activityLog || !m_activityLog->isActive()) return;
+    m_activityLog->hide();
+    m_navigator.routeDidClose(switchu::navigation::Route::ActivityLog);
+    m_audio.playSfx(Sfx::ModalHide);
+
+    if (isCurrentFocusableWidget(m_activityLogReturnFocus)) {
+        m_suppressNextNavigateSfx = true;
+        focusManager().setFocus(m_activityLogReturnFocus);
+    } else if (m_grid) {
+        auto* target = m_grid->focusManager().current();
+        if (target && isCurrentFocusableWidget(target)) {
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(target);
+        } else {
+            auto icons = m_grid->allIcons();
+            if (!icons.empty()) {
+                m_suppressNextNavigateSfx = true;
+                focusManager().setFocus(icons[0].get());
+            }
+        }
+    }
+    m_activityLogReturnFocus = nullptr;
 }
 
 void WiiUMenuApp::createThemeShop() {
@@ -1227,6 +1315,12 @@ void WiiUMenuApp::createGameDetails() {
     m_gameDetails->onManageMods([this]() {
         if (!m_gameDetails) return;
         showGameMods(m_gameDetails->titleId(), m_gameDetails->title());
+    });
+    m_gameDetails->onOpenActivityLog([this](std::uint64_t titleId) {
+        if (!m_gameDetails) return;
+        m_gameDetailsReturnFocus = nullptr;
+        m_gameDetails->hide();
+        openActivityLog(titleId);
     });
     m_gameDetails->onFolderAction([this]() {
         if (!m_gameDetails) return;
