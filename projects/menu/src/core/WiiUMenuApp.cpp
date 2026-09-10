@@ -6002,6 +6002,9 @@ void WiiUMenuApp::onUpdate(float dt) {
                                   (unsigned)percent,
                                   charging ? 1 : 0);
                 }
+                if (m_quickSettings) {
+                    m_quickSettings->setBatteryStatus(static_cast<int>(percent), charging);
+                }
                 break;
             }
             default:
@@ -6379,6 +6382,14 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
     if (m_launchAnim && m_launchAnim->isPlaying())
         return hints;
 
+    if (m_quickSettings && m_quickSettings->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add("◄►", i18n.tr("quicksettings.hint_adjust", "Adjust"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::B) + " / " + buttonGlyph(nxui::Button::Minus), i18n.tr("hint.close", "Close"));
+        return hints;
+    }
+
     if (m_contextMenu && m_contextMenu->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
@@ -6566,7 +6577,7 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
 
     if (m_navigator.route() == switchu::navigation::Route::Home && !m_editMode)
         add(buttonGlyph(nxui::Button::Minus),
-            i18n.tr("hint.switch_layout", "Switch view"));
+            i18n.tr("quicksettings.hint_shortcut", "Quick Settings"));
     addVoiceControls();
 
     return hints;

@@ -982,5 +982,29 @@
     "shift": "Maiuscole",
     "space": "Spazio",
     "symbols": "?12#"
+  },
+  "quicksettings": {
+    "title": "Impostazioni rapide",
+    "close_hint": "[-] Chiudi",
+    "battery": "BATTERIA",
+    "charging": "⚡ In carica",
+    "discharging": "Scaricamento",
+    "hardware_temp": "TEMPERATURA",
+    "temp_optimal": "Ottimale",
+    "temp_warm": "Caldo",
+    "brightness": "☀ Luminosità",
+    "bgm_volume": "♫ Volume musica",
+    "sfx_volume": "🔊 Effetti sonori",
+    "airplane_mode": "✈ Modalità aereo",
+    "wifi": "📶 Wi-Fi",
+    "on": "ON",
+    "off": "OFF",
+    "power_options": "OPZIONI DI ENERGIA",
+    "sleep": "🌙 Modalità riposo",
+    "reboot": "🔄 Riavvia",
+    "power_off": "⏻ Spegni",
+    "footer_hint": "[◄ ►] Regola   [A] Attiva/Seleziona   [B / −] Chiudi",
+    "hint_adjust": "Regola",
+    "hint_shortcut": "Impostazioni rapide"
   }
 }

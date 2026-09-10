@@ -982,5 +982,29 @@
     "shift": "Регистр",
     "space": "Пробел",
     "symbols": "?12#"
+  },
+  "quicksettings": {
+    "title": "Быстрые настройки",
+    "close_hint": "[-] Закрыть",
+    "battery": "БАТАРЕЯ",
+    "charging": "⚡ Зарядка",
+    "discharging": "Разрядка",
+    "hardware_temp": "ТЕМПЕРАТУРА",
+    "temp_optimal": "Норма",
+    "temp_warm": "Нагрев",
+    "brightness": "☀ Яркость экрана",
+    "bgm_volume": "♫ Громкость музыки",
+    "sfx_volume": "🔊 Звуковые эффекты",
+    "airplane_mode": "✈ Режим полёта",
+    "wifi": "📶 Wi-Fi",
+    "on": "ВКЛ",
+    "off": "ВЫКЛ",
+    "power_options": "ПИТАНИЕ",
+    "sleep": "🌙 Спящий режим",
+    "reboot": "🔄 Перезагрузить",
+    "power_off": "⏻ Выключить",
+    "footer_hint": "[◄ ►] Настроить   [A] Переключить/Выбрать   [B / −] Закрыть",
+    "hint_adjust": "Настроить",
+    "hint_shortcut": "Быстрые настройки"
   }
 }
