@@ -113,6 +113,8 @@ std::string WiiUMenuApp::accessibilityContextFor(nxui::Widget* w) const {
         return i18n.tr("dialog.gallery_title", "Gallery");
     if (m_gameMods && m_gameMods->isActive() && w == m_gameMods.get())
         return i18n.tr("dialog.mods_title", "Mods");
+    if (m_gameCheats && m_gameCheats->isActive() && w == m_gameCheats.get())
+        return i18n.tr("dialog.cheats_title", "Cheats");
     if (m_gameDetails && m_gameDetails->isActive() && w == m_gameDetails.get())
         return i18n.tr("dialog.details_title", "Game details");
     if (w->tag() == "glossy_icon" && m_grid)
@@ -152,6 +154,8 @@ std::string WiiUMenuApp::accessibilityActionsFor(nxui::Widget* w) const {
         return i18n.tr("accessibility.actions.themes", "Up and down to navigate. A to choose. B to close.");
     if (m_gameMods && w == m_gameMods.get())
         return i18n.tr("dialog.mods_hint", "A enable/disable. X remove. B back.");
+    if (m_gameCheats && w == m_gameCheats.get())
+        return i18n.tr("dialog.cheats_hint", "A toggle  •  X toggle all  •  B back");
     if (m_gameDetails && w == m_gameDetails.get())
         return i18n.tr("dialog.details_actions", "Left and right to select gameplay art. A to expand. B to return.");
     if ((m_dialog && w == m_dialog.get()) || (m_userSelect && w == m_userSelect.get()))
@@ -513,6 +517,7 @@ void WiiUMenuApp::wireFocusCallback() {
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
             (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameCheats && m_gameCheats->isActive()) ||
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_userSelect && m_userSelect->isActive()))
@@ -636,6 +641,7 @@ bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (m_platformPicker && m_platformPicker.get() == w) return w->isFocusable();
     if (m_gameGallery && m_gameGallery.get() == w) return w->isFocusable();
     if (m_gameMods && m_gameMods.get() == w) return w->isFocusable();
+    if (m_gameCheats && m_gameCheats.get() == w) return w->isFocusable();
     if (m_gameDetails && m_gameDetails.get() == w) return w->isFocusable();
     if (m_themeShop && m_themeShop.get() == w) return w->isFocusable();
     if (m_settings && m_settings.get() == w) return w->isFocusable();
@@ -762,6 +768,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         m_gameGallery->hide();
     if (m_gameMods && m_gameMods->isActive())
         m_gameMods->hide();
+    if (m_gameCheats && m_gameCheats->isActive())
+        m_gameCheats->hide();
     if (m_gameDetails && m_gameDetails->isActive())
         m_gameDetails->hide();
     if (m_activityLog && m_activityLog->isActive())
@@ -802,6 +810,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_controllerTest && m_controllerTest->isActive()) return m_controllerTest.get();
     if (m_folderOptions && m_folderOptions->isActive()) return m_folderOptions.get();
     if (m_gameOptions && m_gameOptions->isActive()) return m_gameOptions.get();
+    if (m_gameCheats && m_gameCheats->isActive()) return m_gameCheats.get();
     if (m_gameMods && m_gameMods->isActive()) return m_gameMods.get();
     if (m_gameGallery && m_gameGallery->isActive()) return m_gameGallery.get();
     if (m_gameDetails && m_gameDetails->isActive()) return m_gameDetails.get();
@@ -825,6 +834,8 @@ void WiiUMenuApp::toggleAccessibilitySpeech() {
         m_gameGallery->setAccessibilityVoiceEnabled(enabled);
     if (m_gameMods)
         m_gameMods->setAccessibilityVoiceEnabled(enabled);
+    if (m_gameCheats)
+        m_gameCheats->setAccessibilityVoiceEnabled(enabled);
     if (m_gameDetails)
         m_gameDetails->setAccessibilityVoiceEnabled(enabled);
     if (m_activityLog)
@@ -898,6 +909,7 @@ void WiiUMenuApp::handleSortShortcutRelease(float dt) {
         (m_themeShop && m_themeShop->isActive()) ||
         (m_gameGallery && m_gameGallery->isActive()) ||
         (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameCheats && m_gameCheats->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||
         (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
         (m_gameOptions && m_gameOptions->isActive()) ||
@@ -961,6 +973,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
             (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameCheats && m_gameCheats->isActive()) ||
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
@@ -982,6 +995,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
             (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameCheats && m_gameCheats->isActive()) ||
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
@@ -1046,6 +1060,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_themeShop && m_themeShop->isActive()) ||
             (m_gameGallery && m_gameGallery->isActive()) ||
             (m_gameMods && m_gameMods->isActive()) ||
+            (m_gameCheats && m_gameCheats->isActive()) ||
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
@@ -1419,6 +1434,7 @@ void WiiUMenuApp::showIconOptions() {
 #ifdef SWITCHU_MENU
     if (m_editMode) return;
     if ((m_dialog && m_dialog->isActive()) || (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameCheats && m_gameCheats->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive())) return;
 
     auto* cur = focusManager().current();
@@ -1759,6 +1775,8 @@ void WiiUMenuApp::showGameMods(std::uint64_t titleId, const std::string& title) 
             if (m_gameDetails && m_gameDetails->isActive()) {
                 m_suppressNextNavigateSfx = true;
                 focusManager().setFocus(m_gameDetails.get());
+            } else if (auto* target = m_grid ? m_grid->focusManager().current() : nullptr) {
+                focusManager().setFocus(target);
             }
         });
     }
@@ -1793,9 +1811,12 @@ void WiiUMenuApp::showGameCheats(std::uint64_t titleId, const std::string& title
             if (m_gameDetails && m_gameDetails->isActive()) {
                 m_suppressNextNavigateSfx = true;
                 focusManager().setFocus(m_gameDetails.get());
+            } else if (auto* target = m_grid ? m_grid->focusManager().current() : nullptr) {
+                focusManager().setFocus(target);
             }
         });
     }
+    raiseOverlay(m_gameCheats);
     m_audio.playSfx(Sfx::ModalShow);
     m_gameCheats->openForGame(titleId, title);
     focusManager().setFocus(m_gameCheats.get());

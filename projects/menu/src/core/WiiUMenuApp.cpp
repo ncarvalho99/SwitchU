@@ -994,6 +994,7 @@ void WiiUMenuApp::reflowHomeGrid() {
         (m_themeShop && m_themeShop->isActive()) ||
         (m_gameGallery && m_gameGallery->isActive()) ||
         (m_gameMods && m_gameMods->isActive()) ||
+        (m_gameCheats && m_gameCheats->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||
         (m_settings && m_settings->isActive()) ||
         (m_userSelect && m_userSelect->isActive());
@@ -5766,8 +5767,9 @@ void WiiUMenuApp::onUpdate(float dt) {
         const bool themeShopUp = m_themeShop && m_themeShop->isFullyVisible();
         const bool galleryUp = m_gameGallery && m_gameGallery->isFullyVisible();
         const bool modsUp = m_gameMods && m_gameMods->isFullyVisible();
+        const bool cheatsUp = m_gameCheats && m_gameCheats->isFullyVisible();
         const bool detailsUp = m_gameDetails && m_gameDetails->isFullyVisible();
-        const bool hideScene = (settingsUp || themeShopUp || galleryUp || modsUp || detailsUp) &&
+        const bool hideScene = (settingsUp || themeShopUp || galleryUp || modsUp || cheatsUp || detailsUp) &&
                                app().renderer().holdOffscreenCapture();
         m_probeSceneHidden = hideScene;
         // Each overlay is told only about itself: the one that is not up must
@@ -5780,6 +5782,8 @@ void WiiUMenuApp::onUpdate(float dt) {
             m_gameGallery->setSceneHidden(hideScene && galleryUp);
         if (m_gameMods)
             m_gameMods->setSceneHidden(hideScene && modsUp);
+        if (m_gameCheats)
+            m_gameCheats->setSceneHidden(hideScene && cheatsUp);
         if (m_gameDetails)
             m_gameDetails->setSceneHidden(hideScene && detailsUp);
         if (m_bgLayer) m_bgLayer->setVisible(!hideScene);
@@ -6085,6 +6089,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         !(m_themeShop && m_themeShop->isActive()) &&
         !(m_gameGallery && m_gameGallery->isActive()) &&
         !(m_gameMods && m_gameMods->isActive()) &&
+        !(m_gameCheats && m_gameCheats->isActive()) &&
         !(m_gameDetails && m_gameDetails->isActive()) &&
         !(m_gameOptions && m_gameOptions->isActive()) &&
         !(m_folderOptions && m_folderOptions->isActive()) &&
@@ -6134,6 +6139,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         !(m_themeShop && m_themeShop->isActive()) &&
         !(m_gameGallery && m_gameGallery->isActive()) &&
         !(m_gameMods && m_gameMods->isActive()) &&
+        !(m_gameCheats && m_gameCheats->isActive()) &&
         !(m_gameDetails && m_gameDetails->isActive()) &&
         !(m_gameOptions && m_gameOptions->isActive()) &&
         !(m_folderOptions && m_folderOptions->isActive()) &&
@@ -6191,6 +6197,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         && !(m_themeShop && m_themeShop->isActive())
         && !(m_gameGallery && m_gameGallery->isActive())
         && !(m_gameMods && m_gameMods->isActive())
+        && !(m_gameCheats && m_gameCheats->isActive())
         && !(m_gameDetails && m_gameDetails->isActive())
         && !(m_settings && m_settings->isActive())
         && !(m_gameOptions && m_gameOptions->isActive())
@@ -6227,7 +6234,11 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (!debugTouchBlocked && !lockScreenUp && m_gameMods && m_gameMods->isActive())
         m_gameMods->handleTouch(app().input());
 
+    if (!debugTouchBlocked && !lockScreenUp && m_gameCheats && m_gameCheats->isActive())
+        m_gameCheats->handleTouch(app().input());
+
     if (!debugTouchBlocked && !lockScreenUp && !(m_gameMods && m_gameMods->isActive())
+        && !(m_gameCheats && m_gameCheats->isActive())
         && m_gameDetails && m_gameDetails->isActive())
         m_gameDetails->handleTouch(app().input());
 
@@ -6303,6 +6314,8 @@ void WiiUMenuApp::onUpdate(float dt) {
                 focusManager().setFocus(m_gameGallery.get());
             } else if (m_gameMods && m_gameMods->isActive()) {
                 focusManager().setFocus(m_gameMods.get());
+            } else if (m_gameCheats && m_gameCheats->isActive()) {
+                focusManager().setFocus(m_gameCheats.get());
             } else if (m_gameDetails && m_gameDetails->isActive()) {
                 focusManager().setFocus(m_gameDetails.get());
             } else if (m_settings && m_settings->isActive()) {
@@ -6481,6 +6494,15 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
         add(buttonGlyph(nxui::Button::X), i18n.tr("dialog.mods_remove", "Remove"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
+        return hints;
+    }
+
+    if (m_gameCheats && m_gameCheats->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::X), i18n.tr("dialog.cheats_toggle_all", "Toggle all"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
         addVoiceControls();
         return hints;

@@ -235,6 +235,7 @@ void WiiUMenuApp::offerUpdate(const update::UpdateClient::Release& release, bool
         if (m_dialog->isActive() || (m_settings && m_settings->isActive())
             || (m_themeShop && m_themeShop->isActive()) || (m_gameDetails && m_gameDetails->isActive())
             || (m_gameGallery && m_gameGallery->isActive()) || (m_gameMods && m_gameMods->isActive())
+            || (m_gameCheats && m_gameCheats->isActive())
             || (m_userSelect && m_userSelect->isActive()) || m_editMode)
             return;
     }

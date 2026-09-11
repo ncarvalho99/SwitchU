@@ -154,17 +154,15 @@ bool GameCheatsScreen::handleCustomNavDown() {
 bool GameCheatsScreen::handleCustomNavLeft() {
     if (m_builds.size() > 1) {
         switchBuild(-1);
-        return true;
     }
-    return false;
+    return true;
 }
 
 bool GameCheatsScreen::handleCustomNavRight() {
     if (m_builds.size() > 1) {
         switchBuild(1);
-        return true;
     }
-    return false;
+    return true;
 }
 
 std::string GameCheatsScreen::currentAccessibilitySummary() const {

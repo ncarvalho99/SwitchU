@@ -414,6 +414,8 @@ void WiiUMenuApp::createSettings() {
             m_gameGallery->setAccessibilityVoiceEnabled(enabled);
         if (m_gameMods)
             m_gameMods->setAccessibilityVoiceEnabled(enabled);
+        if (m_gameCheats)
+            m_gameCheats->setAccessibilityVoiceEnabled(enabled);
         if (m_gameDetails)
             m_gameDetails->setAccessibilityVoiceEnabled(enabled);
         if (enabled) {
@@ -442,6 +444,9 @@ void WiiUMenuApp::createSettings() {
         if (m_gameMods)
             m_gameMods->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                           m_config.accessibilitySpeakPosition);
+        if (m_gameCheats)
+            m_gameCheats->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                            m_config.accessibilitySpeakPosition);
         if (m_gameDetails)
             m_gameDetails->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                               m_config.accessibilitySpeakPosition);
@@ -470,6 +475,9 @@ void WiiUMenuApp::createSettings() {
         if (m_gameMods)
             m_gameMods->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                           m_config.accessibilitySpeakPosition);
+        if (m_gameCheats)
+            m_gameCheats->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                            m_config.accessibilitySpeakPosition);
         if (m_gameDetails)
             m_gameDetails->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
                                                               m_config.accessibilitySpeakPosition);
@@ -2066,6 +2074,8 @@ void WiiUMenuApp::applyTheme() {
         m_gameGallery->setTheme(&m_theme);
     if (m_gameMods)
         m_gameMods->setTheme(&m_theme);
+    if (m_gameCheats)
+        m_gameCheats->setTheme(&m_theme);
     if (m_gameDetails)
         m_gameDetails->setTheme(&m_theme);
     // The 1.2 overlays were left out of the recolor pass and kept the previous
