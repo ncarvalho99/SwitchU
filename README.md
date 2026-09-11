@@ -1,18 +1,18 @@
 <div align="center">
     <h1>SwitchU</h1>
     <p>A Wii U-style custom home menu replacement for Nintendo Switch</p>
-    <p><i>Fork of <a href="https://github.com/PoloNX/SwitchU">PoloNX/SwitchU</a>, whose work this is built on.</i></p>
+    <p><i>Fork of <a href="https://github.com/ncarvalho99/SwitchU">ncarvalho99/SwitchU</a>, itself a fork of <a href="https://github.com/PoloNX/SwitchU">PoloNX/SwitchU</a>, whose work this is built on.</i></p>
 </div>
 
 <p align="center">
-  <a rel="LICENSE" href="https://github.com/ncarvalho99/SwitchU/blob/master/LICENSE">
+  <a rel="LICENSE" href="https://github.com/robsonbaioco/SwitchU/blob/master/LICENSE">
     <img src="https://img.shields.io/static/v1?label=license&message=GPLV3&labelColor=111111&color=0057da&style=for-the-badge" alt="License">
   </a>
-  <a rel="VERSION" href="https://github.com/ncarvalho99/SwitchU/releases/latest">
-    <img src="https://img.shields.io/github/v/release/ncarvalho99/SwitchU?labelColor=111111&color=06f&style=for-the-badge" alt="Version">
+  <a rel="VERSION" href="https://github.com/robsonbaioco/SwitchU/releases/latest">
+    <img src="https://img.shields.io/github/v/release/robsonbaioco/SwitchU?labelColor=111111&color=06f&style=for-the-badge" alt="Version">
   </a>
-  <a rel="BUILD" href="https://github.com/ncarvalho99/SwitchU/actions">
-      <img src="https://img.shields.io/github/actions/workflow/status/ncarvalho99/SwitchU/switch.yml?branch=master&labelColor=111111&color=06f&style=for-the-badge" alt="Build">
+  <a rel="BUILD" href="https://github.com/robsonbaioco/SwitchU/actions">
+      <img src="https://img.shields.io/github/actions/workflow/status/robsonbaioco/SwitchU/switch.yml?branch=master&labelColor=111111&color=06f&style=for-the-badge" alt="Build">
   </a>
 </p>
 
@@ -41,10 +41,12 @@
   side, the game's hero art filling the screen behind it and its logo above the
   row. It is a carousel — it wraps in both directions, skips empty slots, and
   repeats while ZL, ZR or the d-pad is held.
-- Sorting on **R** by name, by recently played and by install order. The grid
-  remembers the page you were on per title rather than per page number, so it
-  lands in the right place after being rebuilt at a different width. The
-  single-row view keeps your own arrangement instead, so R does nothing there.
+- Sorting on **R**: your own arrangement, A–Z, recently played, and **most
+  played**, ordered by the play time the console itself records. In the most
+  played view each icon carries its hours. The grid remembers the page you were
+  on per title rather than per page number, so it lands in the right place after
+  being rebuilt at a different width. The single-row view keeps your own
+  arrangement instead, so R does nothing there.
 
 ### Folders
 
@@ -84,8 +86,9 @@ Pressing **+** on a game opens its panel:
 
 - SteamGridDB heroes and logos behind the menu, scanned for the whole library or
   chosen title by title.
-- **No API key needed.** Searches, heroes and grids go through this fork's own
-  service. A personal key is still accepted and additionally unlocks logos.
+- **No API key needed.** Searches, heroes and grids go through the service
+  ncarvalho99 runs for the SwitchU forks. A personal key is still accepted and
+  additionally unlocks logos.
 
 ### Themes
 
@@ -172,7 +175,7 @@ Pressing **+** on a game opens its panel:
 
 ## Installing
 
-Download the archive from the [latest release](https://github.com/ncarvalho99/SwitchU/releases/latest)
+Download the archive from the [latest release](https://github.com/robsonbaioco/SwitchU/releases/latest)
 and copy `atmosphere` and `switch` to the root of the microSD card, replacing
 what is there. Restart the console.
 
@@ -190,7 +193,7 @@ launcher does not own: your themes, artwork and settings live under
 ### Clone
 
 ```bash
-git clone --recursive https://github.com/ncarvalho99/SwitchU
+git clone --recursive https://github.com/robsonbaioco/SwitchU
 cd SwitchU
 ```
 
@@ -261,9 +264,12 @@ when the console crashed, the files from `atmosphere/fatal_errors` and
 
 - [PoloNX](https://github.com/PoloNX) for SwitchU itself. This fork adds to his
   work and does not replace it.
+- [ncarvalho99](https://github.com/ncarvalho99) for the
+  [fork this one continues](https://github.com/ncarvalho99/SwitchU), and for the
+  metadata, gallery and theme catalogue services the menu still uses.
 - Thanks to [Xortroll](https://github.com/Xortroll) for the help and for
   [uLaunch](https://github.com/Xortroll/uLaunch) which inspired this project a lot
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](https://github.com/ncarvalho99/SwitchU/blob/master/LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](https://github.com/robsonbaioco/SwitchU/blob/master/LICENSE) file for details.

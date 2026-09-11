@@ -484,11 +484,12 @@
       "acknowledgements": "Благодарности",
       "acknowledgements_desc": "Спасибо xortroll за помощь с проектом uLaunch и за поддержку и советы во время разработки.",
       "source_code": "Исходный код (форк)",
-      "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "source_code_value": "github.com/robsonbaioco/SwitchU",
       "check_updates": "Проверить обновления",
       "check_updates_desc": "Спрашивает у GitHub, вышла ли новая версия.",
       "check_updates_running": "Проверка обновлений...",
       "fork_maintainer": "Форк поддерживает",
+      "based_on_fork": "Основан на форке",
       "upstream_source": "Исходный код (оригинал)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
     }

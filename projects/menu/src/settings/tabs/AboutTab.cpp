@@ -34,11 +34,13 @@ SettingsScreen::Tab settings::tabs::AboutTab::build(SettingsScreen& /* screen */
     info("settings.about.version", "Version", "SwitchU " SWITCHU_VERSION);
     info("settings.about.based_on", "Based on", "SwitchU " SWITCHU_UPSTREAM_VERSION);
     info("settings.about.author", "Original author", "PoloNX");
-    info("settings.about.fork_maintainer", "Fork maintained by", "ncarvalho99");
+    info("settings.about.fork_maintainer", "Fork maintained by", "robsonbaioco");
+    // The line this fork continues from, and whose releases it kept numbering.
+    info("settings.about.based_on_fork", "Based on the fork by", "ncarvalho99");
     info("settings.about.license", "License",
          i18n.tr("settings.about.license_value", "GPL-2.0"));
     info("settings.about.source_code", "Source code (fork)",
-         i18n.tr("settings.about.source_code_value", "github.com/ncarvalho99/SwitchU"));
+         i18n.tr("settings.about.source_code_value", "github.com/robsonbaioco/SwitchU"));
     info("settings.about.upstream_source", "Source code (upstream)",
          i18n.tr("settings.about.upstream_source_value", "github.com/PoloNX/SwitchU"));
 

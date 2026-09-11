@@ -484,11 +484,12 @@
       "acknowledgements": "Remerciements",
       "acknowledgements_desc": "Merci à xortroll pour l'aide vis à vis du développements.",
       "source_code": "Code source (fork)",
-      "source_code_value": "github.com/ncarvalho99/SwitchU",
+      "source_code_value": "github.com/robsonbaioco/SwitchU",
       "check_updates": "Rechercher des mises à jour",
       "check_updates_desc": "Demande à GitHub si une version plus récente est parue.",
       "check_updates_running": "Recherche de mises à jour...",
       "fork_maintainer": "Fork maintenu par",
+      "based_on_fork": "Basé sur le fork de",
       "upstream_source": "Code source (original)",
       "upstream_source_value": "github.com/PoloNX/SwitchU"
     }

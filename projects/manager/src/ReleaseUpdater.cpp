@@ -23,7 +23,7 @@ namespace switchu::manager {
 namespace {
 
 constexpr const char* kLatestReleaseUrl =
-    "https://api.github.com/repos/ncarvalho99/SwitchU/releases/latest";
+    "https://api.github.com/repos/robsonbaioco/SwitchU/releases/latest";
 constexpr const char* kWorkRoot = "sdmc:/config/SwitchU/update";
 constexpr const char* kArchivePath = "sdmc:/config/SwitchU/update/SwitchU-update.zip";
 constexpr const char* kArchivePartPath = "sdmc:/config/SwitchU/update/SwitchU-update.zip.part";
