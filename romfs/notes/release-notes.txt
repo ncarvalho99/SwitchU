@@ -1,75 +1,11 @@
 
-Game favorites
-- Mark any game as a favorite from the home menu with a Right Stick click (RStick / R3) on the focused icon, with audio and visual feedback (Sfx::Activate / Sfx::ToggleOff).
-- Favorited games show a golden 5-point star medallion on the home grid icon and beside the title in the Software Information dossier.
-- The grid view cycle (R) gained a Favorites mode that stably projects every favorited game to the front of the grid.
-- Favorites persist in config.json under favorites (AppConfig::favoriteTitleIds), and the selected sort mode survives restarts.
-- Added favorites strings and hints across all 8 supported languages.
-
-Quick Settings HUD
-- Added a slide-out Quick Settings panel with cubic slide animation, opened with a Left Stick click (LStick / L3) or by tapping the status bar, and closed with B, L3, or a tap outside the panel.
-- Live hardware card with battery charge and charging state (psmGetBatteryChargePercentage / psmGetChargerType) and real-time thermals (tsGetTemperature, tcGetSkinTemperatureMilliC).
-- Sliders for screen brightness (lblGetCurrentBrightnessSetting / lblSetCurrentBrightnessSetting), BGM volume and sound-effect volume, with touch scrub and stick control.
-- Pill switches for Airplane Mode (nifm:s system session IPC) and Wi-Fi (setsysSetWirelessLanEnableFlag), with a procedural vector Wi-Fi icon.
-- Power options for Sleep, Reboot and Power Off as frosted glass buttons with authentic Switch glyphs; their confirmation dialogs now layer above the panel instead of behind it.
-- The panel renders with the GPU Liquid Glass pipeline, so the wallpaper and icons genuinely blur and refract beneath it; the global selection cursor hides while the HUD is open and focus returns to the active icon on close.
-- Added a Daily Activity Log entry point inside the panel, and localized every Quick Settings string across all 8 supported languages.
-
 Daily Activity Log
-- Added a Wii U-style Activity Log built on the Horizon OS pdm:qry service (pdmqryQueryPlayStatisticsByApplicationId, pdmqryGetAvailablePlayEventRange, pdmqryQueryAppletEvent), opened from Quick Settings.
-- Daily Log: date navigation, total play time, titles played, and proportional per-title bars with Wii U colour coding.
-- Monthly Log: month navigation, active-day count, the classic daily distribution bar graph with a today indicator, and a scrollable monthly ranking.
-- Software Library: all-time rankings with gold, silver and bronze medallions, play counts, average session length, and first and last played dates.
-- Every ranked row shows the real game or homebrew icon beside a left-aligned ranking number.
-- Homebrew ports resolve to real names and artwork through sdmc:/switch/DBI/dbi.titles, control_cache / nsGetApplicationControlData, and sdmc:/switch/P2PNX/installed-icons/, with alternate launcher IDs merged into one entry.
-- CFW tools, homebrew menus and utility launchers are filtered out of every view so only games and game ports are ranked.
-- Playtime accounting closes active sessions when a launcher or qlaunch takes focus and reconciles daily totals against lifetime statistics, so sleep and suspension no longer inflate the numbers.
-- Statistics prefetch in a background worker and icons decode off the render thread, so the log opens without a stall and navigates at 60 FPS.
-- Bidirectional navigation between the tab rail and the content list, ZL / ZR date stepping clamped to today, Y to jump back to today, and A to open the dossier with B returning to the log.
-
-Atmosphère cheat manager
-- Added an in-dossier Cheats screen that lists and toggles Atmosphère cheats from sdmc:/atmosphere/contents/<titleId>/cheats/ without launching an external overlay.
-- Resolves uppercase and lowercase title directories and the .switchu-disabled/cheats/ location, and switches between build IDs with L / R when a title has cheats for several versions.
-- Parses standard [Cheat Name] and master {Master Code} headers, strips UTF-8 BOMs, and skips overlay directives (--SectionStart:, --SectionEnd:, --DisableSubmenus) and separator punctuation common in community cheat packs.
-- Understands the EdiZon and Ultrahand :ENABLED suffix, stripping it from the displayed name.
-- Toggle state is written to toggles.txt in Atmosphère's native dmnt format, matched case-insensitively for interoperability with dmnt, EdiZon, EdiZon-SE and Ultrahand-Overlay; the <buildId>.txt cheat files are never modified.
-- Animated switch pills, master-code indicators, opcode line counts, a live opcode preview and a build summary such as Build 1/3: 0/15 active; A toggles one cheat, X toggles all, B returns to the dossier.
-- An informative empty state names the exact SD card path when a title has no cheats installed.
+- Fixed the Software Information dossier rendering behind the still-active Activity Log after selecting a game from Daily Log, Monthly Log, or Software Library.
+- The dossier is now explicitly raised to the top of the overlay stack whenever it opens, while preserving the existing B navigation back to the Activity Log.
+- The regression was independent of the Phase 5 Mii avatar milestone: that commit only added avatar-manager initialization and state, while the missing overlay raise already existed in the 2.5.0 activity-to-dossier path.
 --pt-BR--
 
-Jogos favoritos
-- Marque qualquer jogo como favorito no menu principal pressionando o Analógico Direito (RStick / R3) sobre o ícone em foco, com retorno sonoro e visual (Sfx::Activate / Sfx::ToggleOff).
-- Jogos favoritos exibem um medalhão de estrela dourada de 5 pontas no ícone da grade e ao lado do título na ficha de Informações do Software.
-- O ciclo de visualização da grade (R) ganhou o modo Favoritos, que projeta de forma estável todos os favoritos para o início da grade.
-- Os favoritos são salvos em config.json na chave favorites (AppConfig::favoriteTitleIds) e o modo de ordenação escolhido é preservado entre reinicializações.
-- Adicionados textos e dicas de favoritos nos 8 idiomas suportados.
-
-Ajustes Rápidos (HUD)
-- Adicionado painel deslizante de Ajustes Rápidos com animação cúbica, aberto com o clique do Analógico Esquerdo (LStick / L3) ou tocando na barra de status, e fechado com B, L3 ou toque fora do painel.
-- Cartão de hardware em tempo real com carga e estado de carregamento da bateria (psmGetBatteryChargePercentage / psmGetChargerType) e temperaturas reais (tsGetTemperature, tcGetSkinTemperatureMilliC).
-- Controles deslizantes de brilho da tela (lblGetCurrentBrightnessSetting / lblSetCurrentBrightnessSetting), volume da música e volume dos efeitos sonoros, com arraste por toque e controle pelo analógico.
-- Chaves para Modo Avião (IPC de sessão de sistema nifm:s) e Wi-Fi (setsysSetWirelessLanEnableFlag), com ícone vetorial de Wi-Fi desenhado proceduralmente.
-- Opções de energia de Suspender, Reiniciar e Desligar como botões de vidro fosco com glifos autênticos do Switch; seus diálogos de confirmação agora aparecem acima do painel, e não atrás dele.
-- O painel é renderizado pelo pipeline Liquid Glass na GPU, desfocando e refratando o papel de parede e os ícones; o cursor global é ocultado com o painel aberto e o foco retorna ao ícone ativo ao fechar.
-- Adicionado o acesso ao Registro de Atividades dentro do painel, com todos os textos dos Ajustes Rápidos localizados nos 8 idiomas suportados.
-
 Registro de Atividades
-- Adicionado o Registro de Atividades no estilo Wii U, construído sobre o serviço pdm:qry do Horizon OS (pdmqryQueryPlayStatisticsByApplicationId, pdmqryGetAvailablePlayEventRange, pdmqryQueryAppletEvent), acessível pelos Ajustes Rápidos.
-- Registro Diário: navegação por data, tempo total de jogo, quantidade de títulos jogados e barras proporcionais por título com as cores do Wii U.
-- Registro Mensal: navegação por mês, contagem de dias ativos, o clássico gráfico de distribuição diária com indicador do dia atual e ranking mensal com rolagem.
-- Biblioteca de Software: ranking histórico com medalhões de ouro, prata e bronze, número de partidas, duração média de sessão e datas de primeira e última execução.
-- Cada linha do ranking exibe o ícone real do jogo ou do homebrew ao lado do número de classificação alinhado à esquerda.
-- Ports de homebrew passam a exibir nome e arte reais por meio de sdmc:/switch/DBI/dbi.titles, control_cache / nsGetApplicationControlData e sdmc:/switch/P2PNX/installed-icons/, unificando IDs alternativos de lançadores em uma única entrada.
-- Ferramentas de CFW, menus de homebrew e lançadores utilitários são filtrados de todas as visões, de modo que apenas jogos e ports sejam classificados.
-- A contabilização de tempo encerra sessões ativas quando um lançador ou o qlaunch recebe o foco e reconcilia os totais diários com as estatísticas vitalícias, evitando que suspensão e repouso inflem os números.
-- As estatísticas são pré-carregadas em thread de segundo plano e os ícones são decodificados fora da thread de renderização, abrindo o registro sem travamentos e navegando a 60 FPS.
-- Navegação bidirecional entre as abas e a lista de conteúdo, avanço de datas com ZL / ZR limitado ao dia atual, Y para voltar a hoje e A para abrir a ficha, com B retornando ao registro.
-
-Gerenciador de cheats do Atmosphère
-- Adicionada a tela de Cheats dentro da ficha do jogo, que lista e ativa cheats do Atmosphère em sdmc:/atmosphere/contents/<titleId>/cheats/ sem abrir um overlay externo.
-- Resolve diretórios de título em maiúsculas e minúsculas e o local .switchu-disabled/cheats/, alternando entre build IDs com L / R quando o título possui cheats para várias versões.
-- Interpreta cabeçalhos padrão [Nome do Cheat] e master {Master Code}, remove BOM UTF-8 e ignora diretivas de overlay (--SectionStart:, --SectionEnd:, --DisableSubmenus) e separadores comuns em pacotes de cheats da comunidade.
-- Reconhece o sufixo :ENABLED do EdiZon e do Ultrahand, removendo-o do nome exibido.
-- O estado das chaves é gravado em toggles.txt no formato nativo dmnt do Atmosphère, comparado sem diferenciar maiúsculas para interoperar com dmnt, EdiZon, EdiZon-SE e Ultrahand-Overlay; os arquivos <buildId>.txt nunca são modificados.
-- Chaves animadas, indicadores de master code, contagem de linhas de opcode, pré-visualização de opcode e resumo de build como Build 1/3: 0/15 ativos; A alterna um cheat, X alterna todos e B volta para a ficha.
-- Quando o título não possui cheats instalados, um estado vazio informativo indica o caminho exato no cartão SD.
+- Corrigida a ficha de Informações do Software que era renderizada atrás do Registro de Atividades ainda ativo após selecionar um jogo no Registro Diário, Registro Mensal ou Biblioteca de Software.
+- A ficha agora é explicitamente movida para o topo da pilha de overlays sempre que é aberta, preservando a navegação existente com B de volta ao Registro de Atividades.
+- A regressão era independente do marco de avatares Mii da Fase 5: esse commit apenas adicionou inicialização e estado do gerenciador de avatares, enquanto a ausência da elevação do overlay já existia no caminho do Registro de Atividades para a ficha na versão 2.5.0.

@@ -1,3 +1,27 @@
+# SwitchU 2.5.1 (Hotfix)
+
+Hotfix restoring correct Game Details dossier layering when a title is opened from the Daily Activity Log.
+
+## English
+
+### Daily Activity Log
+
+- Fixed the Software Information dossier rendering behind the still-active Activity Log after selecting a game from Daily Log, Monthly Log, or Software Library.
+- The dossier is now explicitly raised to the top of the overlay stack whenever it opens, while preserving the existing `B` navigation back to the Activity Log.
+- The regression was independent of the Phase 5 Mii avatar milestone: that commit only added avatar-manager initialization and state, while the missing overlay raise already existed in the 2.5.0 activity-to-dossier path.
+
+---
+
+## Português
+
+### Registro de Atividades
+
+- Corrigida a ficha de Informações do Software que era renderizada atrás do Registro de Atividades ainda ativo após selecionar um jogo no Registro Diário, Registro Mensal ou Biblioteca de Software.
+- A ficha agora é explicitamente movida para o topo da pilha de overlays sempre que é aberta, preservando a navegação existente com `B` de volta ao Registro de Atividades.
+- A regressão era independente do marco de avatares Mii da Fase 5: esse commit apenas adicionou inicialização e estado do gerenciador de avatares, enquanto a ausência da elevação do overlay já existia no caminho do Registro de Atividades para a ficha na versão 2.5.0.
+
+---
+
 # SwitchU 2.5.0
 
 Feature release adding game favorites, a slide-out Quick Settings HUD, a Wii U-style Daily Activity Log, and an in-dossier Atmosphère cheat manager.

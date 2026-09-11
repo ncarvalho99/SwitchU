@@ -1746,6 +1746,12 @@ void WiiUMenuApp::showGameDetails(std::uint64_t titleId, const std::string& titl
                                 installedPlayTime(titleId), metadataPlatform,
                                 m_config.isGamePort(titleId),
                                 m_config.isFavorite(titleId));
+    // Game Details is persistent and may already sit below an overlay created
+    // later (notably Activity Log). Opening it changed visibility and focus but
+    // did not change sibling draw order, so selecting an activity row left the
+    // dossier rendered behind the still-active log. Reinsert it at the top just
+    // like every other overlay that can be opened from another overlay.
+    raiseOverlay(m_gameDetails);
     focusManager().setFocus(m_gameDetails.get());
 #else
     (void)titleId;
