@@ -53,6 +53,50 @@ int ActivityLogManager::daysInMonth(int year, int month) {
     return 31;
 }
 
+bool ActivityLogManager::isUtilityOrLauncher(std::uint64_t titleId, const std::string& titleName) {
+    switch (titleId) {
+        case 0x05446530ACA7E000ULL: // sphaira
+        case 0x05FBF3FAE702C000ULL: // CNX Updater
+        case 0x05D45EEC8EB90000ULL: // DBI
+        case 0x010000000000100DULL: // Album / hbmenu applet
+        case 0x0100000000001008ULL: // Mii Editor
+        case 0x010000000000100BULL: // Controller pairing applet
+        case 0x0100000000001000ULL: // qlaunch / SwitchU itself
+            return true;
+        default:
+            break;
+    }
+
+    if (titleName.empty()) return false;
+
+    std::string lower = titleName;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    // Explicit game ports must never be filtered out
+    if (lower.find("port") != std::string::npos) {
+        return false;
+    }
+
+    if (lower.find("sphaira") != std::string::npos ||
+        lower.find("updater") != std::string::npos ||
+        lower.find("dbi") != std::string::npos ||
+        lower.find("hbmenu") != std::string::npos ||
+        lower.find("homebrew menu") != std::string::npos ||
+        lower.find("tinfoil") != std::string::npos ||
+        lower.find("awoo") != std::string::npos ||
+        lower.find("goldleaf") != std::string::npos ||
+        lower.find("daybreak") != std::string::npos ||
+        lower.find("edizon") != std::string::npos ||
+        lower.find("breeze") != std::string::npos ||
+        lower.find("jksv") != std::string::npos)
+    {
+        return true;
+    }
+
+    return false;
+}
+
 void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std::string>>& installedTitles) {
     m_allTimeRankings.clear();
     m_statsByTitle.clear();
@@ -179,6 +223,11 @@ void ActivityLogManager::queryPdmStatistics(const std::vector<std::pair<std::uin
 
     for (const auto& [titleId, name] : installedTitles) {
         if (titleId == 0) continue;
+        if (isUtilityOrLauncher(titleId, name)) {
+            DebugLog::log("[activity] skipping utility/motor: %016llX ('%s')",
+                          (unsigned long long)titleId, name.c_str());
+            continue;
+        }
         std::memset(&stats, 0, sizeof(stats));
         const Result qrc = pdmqryQueryPlayStatisticsByApplicationId(titleId, true, &stats);
         if (R_SUCCEEDED(qrc)) {
@@ -252,6 +301,12 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
             for (s32 i = 0; i < total_out; ++i) {
                 const auto& ev = events[i];
                 if (ev.program_id == 0) continue;
+
+                auto nameIt = titleNames.find(ev.program_id);
+                const std::string& appName = (nameIt != titleNames.end()) ? nameIt->second : "";
+                if (isUtilityOrLauncher(ev.program_id, appName)) {
+                    continue;
+                }
 
                 u64 ts = toPosixTimestamp(ev.timestamp_user);
                 if (ev.event_type == PdmAppletEventType_Launch || ev.event_type == PdmAppletEventType_InFocus) {

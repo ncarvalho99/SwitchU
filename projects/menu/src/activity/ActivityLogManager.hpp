@@ -58,6 +58,7 @@ public:
     bool hasData() const { return !m_allTimeRankings.empty() || !m_dailyRecords.empty(); }
 
     static int daysInMonth(int year, int month);
+    static bool isUtilityOrLauncher(std::uint64_t titleId, const std::string& titleName);
 
 private:
     void queryPdmStatistics(const std::vector<std::pair<std::uint64_t, std::string>>& installedTitles);

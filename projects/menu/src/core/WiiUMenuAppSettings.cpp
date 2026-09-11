@@ -769,7 +769,7 @@ void WiiUMenuApp::createActivityLog() {
     if (m_activityLog) return;
 
     m_activityLog = std::make_shared<ActivityLogScreen>();
-    m_activityLog->setRect({32.f, 16.f, 1216.f, 608.f});
+    m_activityLog->setRect({32.f, 20.f, 1216.f, 642.f});
     if (m_overlayLayer) {
         m_overlayLayer->addChild(m_activityLog);
     }
