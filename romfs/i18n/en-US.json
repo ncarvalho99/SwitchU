@@ -930,6 +930,7 @@
     "cheats_active_summary": "active",
     "cheats_master": "Master Code",
     "cheats_opcodes": "lines",
+    "cheats_toggle_all": "Toggle all",
     "cheats_on": "ON",
     "cheats_off": "OFF",
     "cheats_preview": "Opcode Preview",
