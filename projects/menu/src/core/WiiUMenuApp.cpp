@@ -6501,6 +6501,10 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
 
     if (m_gameCheats && m_gameCheats->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        if (m_gameCheats->buildCount() > 1) {
+            add(buttonGlyph(nxui::Button::L) + buttonGlyph(nxui::Button::R),
+                i18n.tr("dialog.cheats_build_id", "Build"));
+        }
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
         add(buttonGlyph(nxui::Button::X), i18n.tr("dialog.cheats_toggle_all", "Toggle all"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
@@ -6724,9 +6728,10 @@ void WiiUMenuApp::renderActionHintBar(nxui::Renderer& ren) {
     // ran straight into the first capsule. Wrapping is already how this bar
     // handles not fitting; it just never knew what else was on the line. Giving
     // it the space the pill leaves free turns the overlap into a second row,
-    // which grows upward and away from the pill.
-    float rowMaxW = kHintRowMaxW;
-    if (m_titlePill && m_titlePill->isVisible()) {
+    // which grows upward and away from the pill. Overlays do not show the pill,
+    // so they keep the full width available to stay on a single row.
+    float rowMaxW = (focusRoot() != &rootBox()) ? 1200.f : kHintRowMaxW;
+    if (focusRoot() == &rootBox() && m_titlePill && m_titlePill->isVisible()) {
         const nxui::Rect pill = m_titlePill->rect();
         if (pill.width > 1.f) {
             const float free = 1280.f - kHintEdgeX - pill.right() - kHintPillGap;

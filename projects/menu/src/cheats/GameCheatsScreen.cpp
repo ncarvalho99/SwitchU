@@ -18,6 +18,10 @@ void GameCheatsScreen::openForGame(std::uint64_t titleId, std::string title) {
     reload();
     show();
     m_focusArea = FocusArea::Content;
+    addAction(static_cast<uint64_t>(nxui::Button::L),  [this]() { switchBuild(-1); });
+    addAction(static_cast<uint64_t>(nxui::Button::R),  [this]() { switchBuild(1); });
+    addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() { switchBuild(-1); });
+    addAction(static_cast<uint64_t>(nxui::Button::ZR), [this]() { switchBuild(1); });
 }
 
 void GameCheatsScreen::buildTabs() {
@@ -198,18 +202,6 @@ void GameCheatsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect& 
     ren.drawText(i18n.tr("dialog.cheats_title", "Cheats") + " — " + m_title,
                  {body.x + 12.f, body.y + 12.f}, m_font, primary, 1.02f);
 
-    // Subtitle & Hints
-    if (m_builds.empty()) {
-        ren.drawText(i18n.tr("dialog.cheats_hint_empty", "B back"),
-                     {body.x + 14.f, body.y + 48.f}, m_smallFont, secondary, 0.70f);
-    } else if (m_builds.size() > 1) {
-        ren.drawText(i18n.tr("dialog.cheats_hint_build", "A toggle  •  X toggle all  •  Left/Right switch build  •  B back"),
-                     {body.x + 14.f, body.y + 48.f}, m_smallFont, secondary, 0.70f);
-    } else {
-        ren.drawText(i18n.tr("dialog.cheats_hint", "A toggle  •  X toggle all  •  B back"),
-                     {body.x + 14.f, body.y + 48.f}, m_smallFont, secondary, 0.70f);
-    }
-
     const auto* build = currentBuildCheats();
     if (build) {
         int activeCount = 0;
@@ -236,7 +228,7 @@ void GameCheatsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect& 
     }
 
     // List Container
-    const nxui::Rect list = {body.x + 10.f, body.y + 78.f, body.width - 20.f, body.height - 180.f};
+    const nxui::Rect list = {body.x + 10.f, body.y + 54.f, body.width - 20.f, body.height - 150.f};
     ren.drawRoundedRect(list, m_theme->panelBase.withAlpha(0.07f * opacity), 18.f);
     ren.drawRoundedRectOutline(list, m_theme->panelBorder.withAlpha(0.16f * opacity), 18.f, 1.f);
 
@@ -310,14 +302,14 @@ void GameCheatsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect& 
     }
 
     // Bottom Preview Box
-    const nxui::Rect bottomInfo = {body.x + 10.f, list.bottom() + 10.f, body.width - 20.f, body.bottom() - list.bottom() - 12.f};
+    const nxui::Rect bottomInfo = {body.x + 10.f, list.bottom() + 10.f, body.width - 20.f, body.bottom() - list.bottom() - 10.f};
     ren.drawRoundedRect(bottomInfo, m_theme->panelBase.withAlpha(0.05f * opacity), 12.f);
     ren.drawRoundedRectOutline(bottomInfo, m_theme->panelBorder.withAlpha(0.12f * opacity), 12.f, 1.f);
 
     if (m_selected >= 0 && m_selected < static_cast<int>(cheats.size())) {
         const auto& cur = cheats[static_cast<size_t>(m_selected)];
         ren.drawText(i18n.tr("dialog.cheats_preview", "Opcode Preview") + ":",
-                     {bottomInfo.x + 16.f, bottomInfo.y + 8.f}, m_smallFont, subtle, 0.58f);
+                     {bottomInfo.x + 16.f, bottomInfo.y + 10.f}, m_smallFont, subtle, 0.58f);
 
         std::string preview;
         const size_t maxPreviewLines = 3;
@@ -333,6 +325,6 @@ void GameCheatsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect& 
         if (preview.empty()) {
             preview = "—";
         }
-        ren.drawText(preview, {bottomInfo.x + 16.f, bottomInfo.y + 28.f}, m_smallFont, secondary, 0.64f);
+        ren.drawText(preview, {bottomInfo.x + 16.f, bottomInfo.y + 34.f}, m_smallFont, secondary, 0.64f);
     }
 }

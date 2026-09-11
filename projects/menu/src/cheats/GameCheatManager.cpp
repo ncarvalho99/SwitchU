@@ -30,6 +30,24 @@ std::string trim(const std::string& s) {
     return s.substr(start, end - start + 1);
 }
 
+bool isDirectiveOrSeparator(const std::string& name) {
+    if (name.empty()) return true;
+    if (name.rfind("--Section", 0) == 0 ||
+        name.rfind("--section", 0) == 0 ||
+        name.rfind("--Disable", 0) == 0 ||
+        name.rfind("--disable", 0) == 0) {
+        return true;
+    }
+    bool onlySymbols = true;
+    for (char c : name) {
+        if (c != '-' && c != '=' && c != ' ' && c != '_' && c != '*' && c != '#') {
+            onlySymbols = false;
+            break;
+        }
+    }
+    return onlySymbols;
+}
+
 std::unordered_map<std::string, bool> loadToggleMap(const std::filesystem::path& toggleFile) {
     std::unordered_map<std::string, bool> toggles;
     std::error_code ec;
@@ -151,11 +169,22 @@ std::vector<CheatCode> GameCheatManager::parseCheatFile(const std::string& conte
             const size_t endPos = trimmed.find(closeChar);
             if (endPos != std::string::npos && endPos > 1) {
                 if (inCheat && (!current.lines.empty() || current.isMaster)) {
-                    cheats.push_back(std::move(current));
+                    if (!isDirectiveOrSeparator(current.name)) {
+                        cheats.push_back(std::move(current));
+                    }
                     current = CheatCode{};
                 }
-                current.name = trimmed.substr(1, endPos - 1);
+                std::string headerName = trim(trimmed.substr(1, endPos - 1));
+                bool defaultOn = false;
+                const std::string enabledSuffix = ":ENABLED";
+                if (headerName.size() > enabledSuffix.size() &&
+                    equalsIgnoreCase(headerName.substr(headerName.size() - enabledSuffix.size()), enabledSuffix)) {
+                    headerName = trim(headerName.substr(0, headerName.size() - enabledSuffix.size()));
+                    defaultOn = true;
+                }
+                current.name = headerName;
                 current.isMaster = (closeChar == '}');
+                current.defaultEnabled = defaultOn;
                 current.enabled = false;
                 inCheat = true;
                 continue;
@@ -173,7 +202,9 @@ std::vector<CheatCode> GameCheatManager::parseCheatFile(const std::string& conte
     }
 
     if (inCheat && (!current.lines.empty() || current.isMaster)) {
-        cheats.push_back(std::move(current));
+        if (!isDirectiveOrSeparator(current.name)) {
+            cheats.push_back(std::move(current));
+        }
     }
 
     return cheats;
@@ -216,11 +247,19 @@ std::vector<BuildCheats> GameCheatManager::load(std::uint64_t titleId) {
         if (parsed.empty()) continue;
 
         for (auto& cheat : parsed) {
-            const auto it = toggles.find(cheat.name);
+            auto it = toggles.find(cheat.name);
+            if (it == toggles.end()) {
+                for (auto mapIt = toggles.begin(); mapIt != toggles.end(); ++mapIt) {
+                    if (equalsIgnoreCase(mapIt->first, cheat.name)) {
+                        it = mapIt;
+                        break;
+                    }
+                }
+            }
             if (it != toggles.end()) {
                 cheat.enabled = it->second;
             } else {
-                cheat.enabled = cheat.isMaster;
+                cheat.enabled = cheat.isMaster || cheat.defaultEnabled;
             }
         }
 

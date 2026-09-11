@@ -12,6 +12,7 @@ struct CheatCode {
     std::vector<std::string> lines;
     bool enabled = false;
     bool isMaster = false;
+    bool defaultEnabled = false;
 };
 
 struct BuildCheats {

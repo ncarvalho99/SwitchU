@@ -11,6 +11,7 @@ class GameCheatsScreen final : public TabbedOverlayScreen {
 public:
     GameCheatsScreen();
     void openForGame(std::uint64_t titleId, std::string title);
+    int buildCount() const { return static_cast<int>(m_builds.size()); }
 
     using ToggleOffCb = std::function<void()>;
     void onToggleOffSfx(ToggleOffCb cb) { m_toggleOffSfxCb = std::move(cb); }
