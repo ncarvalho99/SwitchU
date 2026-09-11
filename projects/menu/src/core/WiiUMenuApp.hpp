@@ -40,6 +40,7 @@
 #include "details/GameDetailsScreen.hpp"
 #include "update/UpdateClient.hpp"
 #include "mods/GameModsScreen.hpp"
+#include "cheats/GameCheatsScreen.hpp"
 #include "activity/ActivityLogScreen.hpp"
 #include "activity/ActivityLogManager.hpp"
 #include "gallery/GameArtworkStore.hpp"
@@ -139,6 +140,7 @@ private:
     void showGameDetails(std::uint64_t titleId, const std::string& title,
                          nxui::Texture* liveCover = nullptr);
     void showGameMods(std::uint64_t titleId, const std::string& title);
+    void showGameCheats(std::uint64_t titleId, const std::string& title);
     void confirmDeleteGameMod();
     void confirmGameArtwork(std::uint64_t titleId, const std::string& title,
                             GameGalleryClient::Category category,
@@ -464,6 +466,7 @@ private:
     std::shared_ptr<GameGalleryScreen> m_gameGallery;
     std::shared_ptr<GameDetailsScreen> m_gameDetails;
     std::shared_ptr<GameModsScreen>    m_gameMods;
+    std::shared_ptr<GameCheatsScreen>  m_gameCheats;
     std::shared_ptr<GameOptionsScreen> m_gameOptions;
     std::shared_ptr<SteamGridDbPickerScreen> m_steamGridDbPicker;
     std::shared_ptr<PlatformPickerScreen> m_platformPicker;

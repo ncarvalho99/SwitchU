@@ -439,6 +439,7 @@ std::vector<std::string> GameDetailsScreen::actionLabels() const {
         i18n.tr("dialog.customize_active_art", "Active artwork"),
         i18n.tr("dialog.customize_restore_default", "Restore default"),
         i18n.tr("dialog.details_manage_mods", "Manage mods"),
+        i18n.tr("dialog.details_cheats", "Cheats"),
     };
     if (m_isGamePort) {
         actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
@@ -465,6 +466,8 @@ void GameDetailsScreen::activateAction() {
         if (m_restoreArtworkCb) m_restoreArtworkCb();
     } else if (label == i18n.tr("dialog.details_manage_mods", "Manage mods")) {
         if (m_manageModsCb) m_manageModsCb();
+    } else if (label == i18n.tr("dialog.details_cheats", "Cheats")) {
+        if (m_cheatsCb) m_cheatsCb();
     } else if (label == i18n.tr("dialog.edit_search_title", "Edit search title")) {
         if (m_editSearchTitleCb) m_editSearchTitleCb();
     } else if (label == i18n.tr("dialog.unmark_port", "Unmark port")) {

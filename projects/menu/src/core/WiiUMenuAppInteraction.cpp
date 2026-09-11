@@ -1771,6 +1771,40 @@ void WiiUMenuApp::showGameMods(std::uint64_t titleId, const std::string& title) 
 #endif
 }
 
+void WiiUMenuApp::showGameCheats(std::uint64_t titleId, const std::string& title) {
+#ifdef SWITCHU_MENU
+    if (!m_gameCheats) {
+        m_gameCheats = std::make_shared<GameCheatsScreen>();
+        if (m_overlayLayer) m_overlayLayer->addChild(m_gameCheats);
+        m_gameCheats->setFont(&m_fontNormal);
+        m_gameCheats->setSmallFont(&m_fontSmall);
+        m_gameCheats->setTheme(&m_theme);
+        m_gameCheats->setAccessibilityVoiceEnabled(m_config.accessibilityEnabled);
+        m_gameCheats->setAccessibilitySpeechPreferences(m_config.accessibilitySpeakHints,
+                                                        m_config.accessibilitySpeakPosition);
+        m_gameCheats->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
+        m_gameCheats->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
+        m_gameCheats->onToggleOffSfx([this]() { m_audio.playSfx(Sfx::ToggleOff); });
+        m_gameCheats->onCloseSfx([this]() { m_audio.playSfx(Sfx::ModalHide); });
+        m_gameCheats->onAccessibilityAnnouncement([this](const std::string& text) {
+            m_accessibility.announce(text);
+        });
+        m_gameCheats->onClosed([this]() {
+            if (m_gameDetails && m_gameDetails->isActive()) {
+                m_suppressNextNavigateSfx = true;
+                focusManager().setFocus(m_gameDetails.get());
+            }
+        });
+    }
+    m_audio.playSfx(Sfx::ModalShow);
+    m_gameCheats->openForGame(titleId, title);
+    focusManager().setFocus(m_gameCheats.get());
+#else
+    (void)titleId;
+    (void)title;
+#endif
+}
+
 void WiiUMenuApp::confirmDeleteGameMod() {
 #ifdef SWITCHU_MENU
     if (!m_dialog || !m_gameMods || !m_gameMods->isActive()) return;
