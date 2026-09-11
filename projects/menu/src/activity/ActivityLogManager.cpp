@@ -313,32 +313,67 @@ void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std:
     queryPdmStatistics(installedTitles);
     queryPdmAppletEvents(titleNames);
 
+    // Reconcile daily event totals against authoritative PDM statistics.
+    // If unclosed sessions or sleep caused daily sums to exceed official playtime,
+    // proportionally scale down daily sessions to match reality.
+    std::unordered_map<std::uint64_t, std::uint64_t> totalEventPlaytimeByTitle;
+    for (const auto& [dayKey, day] : m_dailyRecords) {
+        for (const auto& t : day.titles) {
+            totalEventPlaytimeByTitle[t.titleId] += t.playtimeSeconds;
+        }
+    }
+
+    for (const auto& [tid, eventTotal] : totalEventPlaytimeByTitle) {
+        auto it = m_statsByTitle.find(tid);
+        if (it != m_statsByTitle.end() && it->second.totalPlaytimeSeconds > 0 && eventTotal > it->second.totalPlaytimeSeconds) {
+            const double scale = static_cast<double>(it->second.totalPlaytimeSeconds) / static_cast<double>(eventTotal);
+            for (auto& [dayKey, day] : m_dailyRecords) {
+                for (auto& t : day.titles) {
+                    if (t.titleId == tid) {
+                        t.playtimeSeconds = std::max<std::uint64_t>(
+                            1, static_cast<std::uint64_t>(std::round(t.playtimeSeconds * scale)));
+                    }
+                }
+            }
+        }
+    }
+
+    // Recompute totalPlaytimeSeconds for each day
+    for (auto& [dayKey, day] : m_dailyRecords) {
+        day.totalPlaytimeSeconds = 0;
+        for (const auto& t : day.titles) {
+            day.totalPlaytimeSeconds += t.playtimeSeconds;
+        }
+    }
+
     // If event logs are sparse or empty, ensure any title with non-zero playtime has at least
     // a representation on its last-played date so calendar navigation is populated.
     for (const auto& stats : m_allTimeRankings) {
         if (stats.totalPlaytimeSeconds > 0 && stats.lastPlayedTimestamp > 0) {
-            int y = 0, m = 0, d = 0;
-            timestampToDate(stats.lastPlayedTimestamp, y, m, d);
-            int dayKey = makeDayKey(y, m, d);
-            auto& dayRecord = m_dailyRecords[dayKey];
-            dayRecord.year = y;
-            dayRecord.month = m;
-            dayRecord.day = d;
+            auto totalIt = totalEventPlaytimeByTitle.find(stats.titleId);
+            if (totalIt == totalEventPlaytimeByTitle.end() || totalIt->second == 0) {
+                int y = 0, m = 0, d = 0;
+                timestampToDate(stats.lastPlayedTimestamp, y, m, d);
+                int dayKey = makeDayKey(y, m, d);
+                auto& dayRecord = m_dailyRecords[dayKey];
+                dayRecord.year = y;
+                dayRecord.month = m;
+                dayRecord.day = d;
 
-            auto it = std::find_if(dayRecord.titles.begin(), dayRecord.titles.end(),
-                                   [tid = stats.titleId](const DailyTitleEntry& e) {
-                                       return e.titleId == tid;
-                                   });
-            // Use the title's average session or full remaining playtime
-            if (it == dayRecord.titles.end()) {
-                DailyTitleEntry entry;
-                entry.titleId = stats.titleId;
-                entry.titleName = stats.titleName;
-                entry.playtimeSeconds = std::max<std::uint64_t>(
-                    60, std::min<std::uint64_t>(stats.averageSessionSeconds > 0 ? stats.averageSessionSeconds : stats.totalPlaytimeSeconds, 3600 * 4));
-                entry.launches = std::max<std::uint32_t>(1, stats.totalLaunches > 0 ? 1 : 0);
-                dayRecord.titles.push_back(entry);
-                dayRecord.totalPlaytimeSeconds += entry.playtimeSeconds;
+                auto it = std::find_if(dayRecord.titles.begin(), dayRecord.titles.end(),
+                                       [tid = stats.titleId](const DailyTitleEntry& e) {
+                                           return e.titleId == tid;
+                                       });
+                if (it == dayRecord.titles.end()) {
+                    DailyTitleEntry entry;
+                    entry.titleId = stats.titleId;
+                    entry.titleName = stats.titleName;
+                    entry.playtimeSeconds = stats.averageSessionSeconds > 0 ? stats.averageSessionSeconds : stats.totalPlaytimeSeconds;
+                    entry.playtimeSeconds = std::min(entry.playtimeSeconds, stats.totalPlaytimeSeconds);
+                    entry.launches = std::max<std::uint32_t>(1, stats.totalLaunches > 0 ? 1 : 0);
+                    dayRecord.titles.push_back(entry);
+                    dayRecord.totalPlaytimeSeconds += entry.playtimeSeconds;
+                }
             }
         }
     }
@@ -364,7 +399,9 @@ void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std:
                 m_statsByTitle[t.titleId] = s;
                 m_allTimeRankings.push_back(s);
             } else {
-                it->second.totalPlaytimeSeconds = std::max(it->second.totalPlaytimeSeconds, t.playtimeSeconds);
+                if (it->second.totalPlaytimeSeconds == 0 && t.playtimeSeconds > 0) {
+                    it->second.totalPlaytimeSeconds = t.playtimeSeconds;
+                }
                 if (it->second.titleName.empty() && !t.titleName.empty()) {
                     it->second.titleName = t.titleName;
                 }
@@ -576,17 +613,57 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                     }
                 }
 
-                if (isUtilityOrLauncher(rawId, appName) || isUtilityOrLauncher(canonicalId, appName)) {
+                bool isUtil = isUtilityOrLauncher(rawId, appName) || isUtilityOrLauncher(canonicalId, appName);
+                u64 ts = toPosixTimestamp(ev.timestamp_user);
+
+                if (isUtil) {
+                    // Utility, launcher, or Home Menu took foreground: close any active game session at ts
+                    for (auto it = activeStarts.begin(); it != activeStarts.end(); ) {
+                        u64 prevStart = it->second;
+                        if (ts >= prevStart) {
+                            u64 dur = std::min<u64>(ts - prevStart, 1800); // 30 min max for backgrounded
+                            if (dur > 0) {
+                                int y = 0, m = 0, d = 0;
+                                timestampToDate(prevStart, y, m, d);
+                                int dayKey = makeDayKey(y, m, d);
+                                auto& dayRecord = m_dailyRecords[dayKey];
+                                dayRecord.year = y;
+                                dayRecord.month = m;
+                                dayRecord.day = d;
+                                dayRecord.totalPlaytimeSeconds += dur;
+                                auto tit = std::find_if(dayRecord.titles.begin(), dayRecord.titles.end(),
+                                                        [id = it->first](const DailyTitleEntry& e) {
+                                                            return e.titleId == id;
+                                                        });
+                                if (tit != dayRecord.titles.end()) {
+                                    tit->playtimeSeconds += dur;
+                                } else {
+                                    DailyTitleEntry te;
+                                    te.titleId = it->first;
+                                    std::string tname = resolveTitleName(it->first);
+                                    if (tname.empty()) {
+                                        auto nit = titleNames.find(it->first);
+                                        tname = (nit != titleNames.end()) ? nit->second : "";
+                                    }
+                                    te.titleName = tname;
+                                    te.playtimeSeconds = dur;
+                                    te.launches = 1;
+                                    dayRecord.titles.push_back(te);
+                                }
+                                sessionsCount++;
+                            }
+                        }
+                        it = activeStarts.erase(it);
+                    }
                     continue;
                 }
 
-                u64 ts = toPosixTimestamp(ev.timestamp_user);
                 if (ev.event_type == PdmAppletEventType_Launch || ev.event_type == PdmAppletEventType_InFocus) {
                     for (auto it = activeStarts.begin(); it != activeStarts.end(); ) {
                         if (it->first != canonicalId) {
                             u64 prevStart = it->second;
                             if (ts >= prevStart) {
-                                u64 dur = std::min<u64>(ts - prevStart, 3600 * 4);
+                                u64 dur = std::min<u64>(ts - prevStart, 1800);
                                 if (dur > 0) {
                                     int y = 0, m = 0, d = 0;
                                     timestampToDate(prevStart, y, m, d);
@@ -623,7 +700,24 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                             ++it;
                         }
                     }
-                    activeStarts[canonicalId] = ts;
+
+                    if (ev.event_type == PdmAppletEventType_Launch) {
+                        int y = 0, m = 0, d = 0;
+                        timestampToDate(ts, y, m, d);
+                        int dayKey = makeDayKey(y, m, d);
+                        auto& dayRecord = m_dailyRecords[dayKey];
+                        auto tit = std::find_if(dayRecord.titles.begin(), dayRecord.titles.end(),
+                                                [id = canonicalId](const DailyTitleEntry& e) {
+                                                    return e.titleId == id;
+                                                });
+                        if (tit != dayRecord.titles.end()) {
+                            tit->launches += 1;
+                        }
+                    }
+
+                    if (activeStarts.find(canonicalId) == activeStarts.end()) {
+                        activeStarts[canonicalId] = ts;
+                    }
                 } else if (ev.event_type == PdmAppletEventType_Exit || ev.event_type == PdmAppletEventType_OutOfFocus ||
                            ev.event_type == PdmAppletEventType_OutOfFocus4 || ev.event_type == PdmAppletEventType_Exit5 ||
                            ev.event_type == PdmAppletEventType_Exit6) {
@@ -632,7 +726,7 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                         u64 startTs = it->second;
                         activeStarts.erase(it);
                         if (ts >= startTs) {
-                            u64 duration = std::min<u64>(ts - startTs, 3600 * 8);
+                            u64 duration = std::min<u64>(ts - startTs, 3600 * 2);
                             if (duration > 0) {
                                 int y = 0, m = 0, d = 0;
                                 timestampToDate(startTs, y, m, d);
@@ -650,7 +744,6 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                                                         });
                                 if (tit != dayRecord.titles.end()) {
                                     tit->playtimeSeconds += duration;
-                                    tit->launches += 1;
                                 } else {
                                     DailyTitleEntry te;
                                     te.titleId = canonicalId;

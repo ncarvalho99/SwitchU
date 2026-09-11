@@ -473,11 +473,8 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
         std::string displayTitle = ellipsizeText(m_font, entry.titleName.empty() ? formatFallbackTitle(entry.titleId) : entry.titleName, textW, 0.80f);
         ren.drawText(displayTitle, {textX, rowRect.y + 10.f}, m_font, textPri, 0.80f);
 
-        // Playtime and launches text
+        // Playtime text
         std::string timeStr = formatPlaytime(entry.playtimeSeconds);
-        if (entry.launches > 1) {
-            timeStr += " (" + std::to_string(entry.launches) + "x)";
-        }
         float timeW = m_font ? m_font->measure(timeStr).x * 0.75f : 100.f;
         ren.drawText(timeStr, {rowRect.right() - timeW - 16.f, rowRect.y + 12.f}, m_font, titleColor.withAlpha(opacity), 0.75f);
 

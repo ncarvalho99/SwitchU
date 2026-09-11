@@ -654,6 +654,7 @@ void WiiUMenuApp::createQuickSettings() {
         auto& i18n = nxui::I18n::instance();
         m_audio.playSfx(Sfx::ModalShow);
         m_dialogReturnFocus = focusManager().current();
+        raiseOverlay(m_dialog);
         m_dialog->show(
             i18n.tr("power.title", "Power"),
             i18n.tr("settings.sleep.sleep_confirm", "Put the console into sleep mode?"),
@@ -675,6 +676,7 @@ void WiiUMenuApp::createQuickSettings() {
         auto& i18n = nxui::I18n::instance();
         m_audio.playSfx(Sfx::ModalShow);
         m_dialogReturnFocus = focusManager().current();
+        raiseOverlay(m_dialog);
         m_dialog->show(
             i18n.tr("power.title", "Power"),
             i18n.tr("settings.sleep.reboot_confirm", "Restart the console?"),
@@ -696,6 +698,7 @@ void WiiUMenuApp::createQuickSettings() {
         auto& i18n = nxui::I18n::instance();
         m_audio.playSfx(Sfx::ModalShow);
         m_dialogReturnFocus = focusManager().current();
+        raiseOverlay(m_dialog);
         m_dialog->show(
             i18n.tr("power.title", "Power"),
             i18n.tr("settings.sleep.shutdown_confirm", "Power off the console?"),
