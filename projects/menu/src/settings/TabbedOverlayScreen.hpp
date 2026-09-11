@@ -51,6 +51,9 @@ public:
     bool isFullyVisible() const { return m_active && !m_animating; }
     int activeTabIndex() const { return m_tabIndex; }
 
+    enum class FocusArea { Tabs, Content };
+    FocusArea focusArea() const { return m_focusArea; }
+
     // The app hides the occluded home scene while this overlay is settled —
     // measured at ~16ms of GPU per frame spent on content the panel covers.
     // When set, onRender draws the frozen blurred backdrop as the base so the
@@ -229,7 +232,6 @@ protected:
 
     static constexpr float kAnimDuration = 0.22f;
 
-    enum class FocusArea { Tabs, Content };
     FocusArea m_focusArea   = FocusArea::Tabs;
     int       m_tabIndex    = 0;
     int       m_contentIdx  = 0;

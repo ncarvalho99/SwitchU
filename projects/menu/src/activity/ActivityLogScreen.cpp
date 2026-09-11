@@ -58,6 +58,12 @@ int dayOfWeek(int y, int m, int d) {
     return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
 }
 
+std::string formatFallbackTitle(std::uint64_t titleId) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "Title 0x%016llX", static_cast<unsigned long long>(titleId));
+    return std::string(buf);
+}
+
 std::string ellipsizeText(nxui::Font* font, const std::string& text, float maxW, float scale) {
     if (!font || text.empty() || font->measure(text).x * scale <= maxW)
         return text;
@@ -114,7 +120,9 @@ void ActivityLogScreen::open(std::uint64_t initialTitleId) {
     m_monthlySelectedDay = m_todayDay;
 
     m_dailyScrollIndex = 0;
+    m_dailySelectedIdx = 0;
     m_monthlyScrollIndex = 0;
+    m_monthlySelectedIdx = 0;
     m_dailyFocus = 0;
     m_monthlyFocus = 0;
     m_selectedTitleIdx = 0;
@@ -159,13 +167,19 @@ void ActivityLogScreen::cycleTab(int delta) {
             m_monthYear = m_curYear;
             m_monthMonth = m_curMonth;
             m_monthlyScrollIndex = 0;
+            m_monthlySelectedIdx = 0;
         } else if (m_tabIndex == 1 && nextTab == 0) {
             m_curYear = m_monthYear;
             m_curMonth = m_monthMonth;
             int maxDays = switchu::activity::ActivityLogManager::daysInMonth(m_curYear, m_curMonth);
             if (m_curDay > maxDays) m_curDay = maxDays;
             m_dailyScrollIndex = 0;
+            m_dailySelectedIdx = 0;
         }
+        m_dailyScrollIndex = 0;
+        m_dailySelectedIdx = 0;
+        m_monthlyScrollIndex = 0;
+        m_monthlySelectedIdx = 0;
         m_tabIndex = nextTab;
         if (m_tabChangeSfxCb) m_tabChangeSfxCb();
         m_focusArea = FocusArea::Tabs;
@@ -203,6 +217,7 @@ void ActivityLogScreen::cycleDay(int delta) {
         }
     }
     m_dailyScrollIndex = 0;
+    m_dailySelectedIdx = 0;
     if (m_dateChangeSfxCb) m_dateChangeSfxCb(delta > 0);
 }
 
@@ -230,6 +245,7 @@ void ActivityLogScreen::cycleMonth(int delta) {
     if (m_monthlySelectedDay > maxDays)
         m_monthlySelectedDay = maxDays;
     m_monthlyScrollIndex = 0;
+    m_monthlySelectedIdx = 0;
     if (m_dateChangeSfxCb) m_dateChangeSfxCb(delta > 0);
 }
 
@@ -243,7 +259,9 @@ void ActivityLogScreen::jumpToToday() {
     m_monthMonth = m_todayMonth;
     m_monthlySelectedDay = m_todayDay;
     m_dailyScrollIndex = 0;
+    m_dailySelectedIdx = 0;
     m_monthlyScrollIndex = 0;
+    m_monthlySelectedIdx = 0;
     if (changed && m_dateChangeSfxCb) m_dateChangeSfxCb(true);
 }
 
@@ -421,9 +439,14 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
         int idx = m_dailyScrollIndex + i;
         const auto& entry = dayData.titles[idx];
         nxui::Rect rowRect{listArea.x, curY, listArea.width, kDailyItemH};
+        bool isFocused = (m_focusArea == FocusArea::Content && idx == m_dailySelectedIdx);
 
         // Glass background card
-        ren.drawRoundedRect(rowRect, kCardBg.withAlpha(0.16f * opacity), 12.f);
+        ren.drawRoundedRect(rowRect, (isFocused ? kCardBgHighlight : kCardBg).withAlpha(0.18f * opacity), 12.f);
+
+        if (isFocused) {
+            ren.drawRoundedRectOutline(rowRect, kColorCyan.withAlpha(0.75f * opacity), 12.f, 2.0f);
+        }
 
         // Ranking number on the left
         nxui::Color titleColor = getTitleColor(idx);
@@ -447,7 +470,7 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
         // Title Name
         float textX = rowRect.x + 92.f;
         float textW = rowRect.width - textX - 160.f;
-        std::string displayTitle = ellipsizeText(m_font, entry.titleName.empty() ? ("Title " + std::to_string(entry.titleId)) : entry.titleName, textW, 0.80f);
+        std::string displayTitle = ellipsizeText(m_font, entry.titleName.empty() ? formatFallbackTitle(entry.titleId) : entry.titleName, textW, 0.80f);
         ren.drawText(displayTitle, {textX, rowRect.y + 10.f}, m_font, textPri, 0.80f);
 
         // Playtime and launches text
@@ -605,7 +628,13 @@ void ActivityLogScreen::drawMonthlyTab(nxui::Renderer& ren, const nxui::Rect& co
             int idx = m_monthlyScrollIndex + i;
             const auto& t = monthData.titles[idx];
             nxui::Rect rowRect{topTitlesArea.x, ty, rowWidth, 44.f};
-            ren.drawRoundedRect(rowRect, kCardBg.withAlpha(0.14f * opacity), 10.f);
+            bool isFocused = (m_focusArea == FocusArea::Content && idx == m_monthlySelectedIdx);
+
+            ren.drawRoundedRect(rowRect, (isFocused ? kCardBgHighlight : kCardBg).withAlpha(0.18f * opacity), 10.f);
+
+            if (isFocused) {
+                ren.drawRoundedRectOutline(rowRect, kColorCyan.withAlpha(0.75f * opacity), 10.f, 2.0f);
+            }
 
             nxui::Color color = getTitleColor(idx);
             std::string rankStr = std::to_string(idx + 1);
@@ -620,7 +649,7 @@ void ActivityLogScreen::drawMonthlyTab(nxui::Renderer& ren, const nxui::Rect& co
                 ren.drawRoundedRect(iconRect, color.withAlpha(0.35f * opacity), 6.f);
             }
 
-            std::string name = ellipsizeText(m_font, t.titleName.empty() ? ("Title " + std::to_string(t.titleId)) : t.titleName, rowRect.width - 240.f, 0.75f);
+            std::string name = ellipsizeText(m_font, t.titleName.empty() ? formatFallbackTitle(t.titleId) : t.titleName, rowRect.width - 240.f, 0.75f);
             ren.drawText(name, {rowRect.x + 72.f, rowRect.y + 11.f}, m_font, textPri, 0.75f);
 
             std::string pt = formatPlaytime(t.playtimeSeconds);
@@ -713,7 +742,7 @@ void ActivityLogScreen::drawTitlesTab(nxui::Renderer& ren, const nxui::Rect& con
         // Title Name
         float textX = cardRect.x + 104.f;
         float nameMaxW = cardRect.width - textX - 160.f;
-        std::string nameStr = ellipsizeText(m_font, stats.titleName.empty() ? ("Title " + std::to_string(stats.titleId)) : stats.titleName, nameMaxW, 0.82f);
+        std::string nameStr = ellipsizeText(m_font, stats.titleName.empty() ? formatFallbackTitle(stats.titleId) : stats.titleName, nameMaxW, 0.82f);
         ren.drawText(nameStr, {textX, cardRect.y + 10.f}, m_font, textPri, 0.82f);
 
         // Statistics row below title name: Times Played, Average Session, First Played, Last Played
@@ -745,21 +774,33 @@ void ActivityLogScreen::drawTitlesTab(nxui::Renderer& ren, const nxui::Rect& con
 }
 
 bool ActivityLogScreen::handleCustomPressA() {
-    if (m_tabIndex == 2) {
-        if (m_focusArea == FocusArea::Tabs) {
-            m_focusArea = FocusArea::Content;
-            if (m_activateSfxCb) m_activateSfxCb();
-            return true;
-        }
-        if (m_manager) {
+    if (m_focusArea == FocusArea::Tabs) {
+        m_focusArea = FocusArea::Content;
+        if (m_activateSfxCb) m_activateSfxCb();
+        return true;
+    }
+    if (m_focusArea == FocusArea::Content && m_manager) {
+        std::uint64_t targetTitleId = 0;
+        if (m_tabIndex == 0) {
+            auto day = m_manager->queryDay(m_curYear, m_curMonth, m_curDay);
+            if (m_dailySelectedIdx >= 0 && m_dailySelectedIdx < static_cast<int>(day.titles.size())) {
+                targetTitleId = day.titles[m_dailySelectedIdx].titleId;
+            }
+        } else if (m_tabIndex == 1) {
+            auto monthData = m_manager->queryMonth(m_monthYear, m_monthMonth);
+            if (m_monthlySelectedIdx >= 0 && m_monthlySelectedIdx < static_cast<int>(monthData.titles.size())) {
+                targetTitleId = monthData.titles[m_monthlySelectedIdx].titleId;
+            }
+        } else if (m_tabIndex == 2) {
             const auto& rankings = m_manager->allTimeRankings();
             if (m_selectedTitleIdx >= 0 && m_selectedTitleIdx < static_cast<int>(rankings.size())) {
-                if (m_titleSelectedCb) {
-                    if (m_activateSfxCb) m_activateSfxCb();
-                    m_titleSelectedCb(rankings[m_selectedTitleIdx].titleId);
-                    return true;
-                }
+                targetTitleId = rankings[m_selectedTitleIdx].titleId;
             }
+        }
+        if (targetTitleId != 0 && m_titleSelectedCb) {
+            if (m_activateSfxCb) m_activateSfxCb();
+            m_titleSelectedCb(targetTitleId);
+            return true;
         }
     }
     return false;
@@ -782,50 +823,91 @@ bool ActivityLogScreen::handleCustomPressX() {
 }
 
 bool ActivityLogScreen::handleCustomNavUp() {
-    if (m_tabIndex == 0) {
-        if (m_dailyScrollIndex > 0) {
-            m_dailyScrollIndex--;
+    if (m_focusArea != FocusArea::Content) {
+        return false;
+    }
+
+    if (m_tabIndex == 0 && m_manager) {
+        auto day = m_manager->queryDay(m_curYear, m_curMonth, m_curDay);
+        if (day.titles.empty()) return false;
+        if (m_dailySelectedIdx > 0) {
+            m_dailySelectedIdx--;
+            if (m_dailySelectedIdx < m_dailyScrollIndex) {
+                m_dailyScrollIndex = m_dailySelectedIdx;
+            }
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+        return false;
     } else if (m_tabIndex == 1 && m_manager) {
-        if (m_monthlyScrollIndex > 0) {
-            m_monthlyScrollIndex--;
+        auto monthData = m_manager->queryMonth(m_monthYear, m_monthMonth);
+        if (monthData.titles.empty()) return false;
+        if (m_monthlySelectedIdx > 0) {
+            m_monthlySelectedIdx--;
+            if (m_monthlySelectedIdx < m_monthlyScrollIndex) {
+                m_monthlyScrollIndex = m_monthlySelectedIdx;
+            }
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+        return false;
     } else if (m_tabIndex == 2 && m_manager) {
+        const auto& rankings = m_manager->allTimeRankings();
+        if (rankings.empty()) return false;
         if (m_selectedTitleIdx > 0) {
             m_selectedTitleIdx--;
+            if (m_selectedTitleIdx < m_titleScrollTop) {
+                m_titleScrollTop = m_selectedTitleIdx;
+            }
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+        return false;
     }
     return false;
 }
 
 bool ActivityLogScreen::handleCustomNavDown() {
+    if (m_focusArea != FocusArea::Content) {
+        return false;
+    }
+
     if (m_tabIndex == 0 && m_manager) {
         auto day = m_manager->queryDay(m_curYear, m_curMonth, m_curDay);
-        if (m_dailyScrollIndex + 5 < static_cast<int>(day.titles.size())) {
-            m_dailyScrollIndex++;
+        if (day.titles.empty()) return false;
+        if (m_dailySelectedIdx + 1 < static_cast<int>(day.titles.size())) {
+            m_dailySelectedIdx++;
+            if (m_dailySelectedIdx >= m_dailyScrollIndex + 5) {
+                m_dailyScrollIndex = m_dailySelectedIdx - 4;
+            }
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+        return false;
     } else if (m_tabIndex == 1 && m_manager) {
         auto monthData = m_manager->queryMonth(m_monthYear, m_monthMonth);
-        if (m_monthlyScrollIndex + 5 < static_cast<int>(monthData.titles.size())) {
-            m_monthlyScrollIndex++;
+        if (monthData.titles.empty()) return false;
+        if (m_monthlySelectedIdx + 1 < static_cast<int>(monthData.titles.size())) {
+            m_monthlySelectedIdx++;
+            if (m_monthlySelectedIdx >= m_monthlyScrollIndex + 5) {
+                m_monthlyScrollIndex = m_monthlySelectedIdx - 4;
+            }
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+        return false;
     } else if (m_tabIndex == 2 && m_manager) {
         const auto& rankings = m_manager->allTimeRankings();
+        if (rankings.empty()) return false;
         if (m_selectedTitleIdx + 1 < static_cast<int>(rankings.size())) {
             m_selectedTitleIdx++;
+            if (m_selectedTitleIdx >= m_titleScrollTop + 5) {
+                m_titleScrollTop = m_selectedTitleIdx - 4;
+            }
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+        return false;
     }
     return false;
 }
@@ -840,7 +922,7 @@ bool ActivityLogScreen::handleCustomNavLeft() {
 }
 
 bool ActivityLogScreen::handleCustomNavRight() {
-    if (m_tabIndex == 2 && m_focusArea == FocusArea::Tabs) {
+    if (m_focusArea == FocusArea::Tabs) {
         m_focusArea = FocusArea::Content;
         if (m_navSfxCb) m_navSfxCb();
         return true;

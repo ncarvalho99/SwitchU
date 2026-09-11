@@ -6502,9 +6502,10 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
 
     if (m_activityLog && m_activityLog->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
-        if (m_activityLog->activeTabIndex() == 2) {
+        if (m_activityLog->activeTabIndex() == 2 || m_activityLog->focusArea() == TabbedOverlayScreen::FocusArea::Content) {
             add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
-        } else {
+        }
+        if (m_activityLog->activeTabIndex() != 2) {
             add(buttonGlyph(nxui::Button::ZL) + buttonGlyph(nxui::Button::ZR),
                 i18n.tr("activity_log.hint_step", "Change Date"));
             add(buttonGlyph(nxui::Button::Y), i18n.tr("activity_log.hint_today", "Today"));

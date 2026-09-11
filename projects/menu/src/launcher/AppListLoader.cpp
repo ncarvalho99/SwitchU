@@ -1,6 +1,7 @@
 #include "AppListLoader.hpp"
 #include "core/DebugLog.hpp"
 #include "steamgriddb/SteamGridDbManager.hpp"
+#include "activity/ActivityLogManager.hpp"
 #include "smi_commands.hpp"
 #include <switch.h>
 #include <cstdio>
@@ -317,6 +318,9 @@ std::vector<uint8_t> AppListLoader::loadIconData(uint64_t titleId) {
         return iconData;
 
 #ifdef SWITCHU_MENU
+    const uint64_t canonicalId = switchu::activity::ActivityLogManager::canonicalTitleId(titleId);
+
+    // 1. SteamGridDb custom icon (check both titleId and canonicalId)
     {
         std::ifstream custom(SteamGridDbManager::iconPath(titleId), std::ios::binary);
         if (custom.is_open()) {
@@ -325,8 +329,83 @@ std::vector<uint8_t> AppListLoader::loadIconData(uint64_t titleId) {
             if (!iconData.empty())
                 return iconData;
         }
+        if (canonicalId != titleId) {
+            std::ifstream customCanon(SteamGridDbManager::iconPath(canonicalId), std::ios::binary);
+            if (customCanon.is_open()) {
+                iconData.assign(std::istreambuf_iterator<char>(customCanon),
+                                std::istreambuf_iterator<char>());
+                if (!iconData.empty())
+                    return iconData;
+            }
+        }
     }
+
+    // 2. Control cache (check both titleId and canonicalId)
     iconData = switchu::control_cache::readIcon(titleId);
+    if (!iconData.empty())
+        return iconData;
+
+    if (canonicalId != titleId) {
+        iconData = switchu::control_cache::readIcon(canonicalId);
+        if (!iconData.empty())
+            return iconData;
+    }
+
+    // 3. Fallback to P2PNX installed-icons
+    {
+        char p2pPath[128]{};
+        std::snprintf(p2pPath, sizeof(p2pPath), "sdmc:/switch/P2PNX/installed-icons/%016llX.jpg",
+                      static_cast<unsigned long long>(titleId));
+        std::ifstream p2pFile(p2pPath, std::ios::binary);
+        if (p2pFile.is_open()) {
+            iconData.assign(std::istreambuf_iterator<char>(p2pFile),
+                            std::istreambuf_iterator<char>());
+            if (!iconData.empty())
+                return iconData;
+        }
+
+        if (canonicalId != titleId) {
+            std::snprintf(p2pPath, sizeof(p2pPath), "sdmc:/switch/P2PNX/installed-icons/%016llX.jpg",
+                          static_cast<unsigned long long>(canonicalId));
+            std::ifstream p2pCanon(p2pPath, std::ios::binary);
+            if (p2pCanon.is_open()) {
+                iconData.assign(std::istreambuf_iterator<char>(p2pCanon),
+                                std::istreambuf_iterator<char>());
+                if (!iconData.empty())
+                    return iconData;
+            }
+        }
+    }
+
+#ifdef __SWITCH__
+    // 4. Live query from Horizon OS
+    {
+        auto* controlData = new (std::nothrow) NsApplicationControlData();
+        if (controlData) {
+            size_t controlSize = 0;
+            Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
+                                                    titleId,
+                                                    controlData,
+                                                    sizeof(NsApplicationControlData),
+                                                    &controlSize);
+            if (R_FAILED(rc) && canonicalId != titleId) {
+                rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
+                                                 canonicalId,
+                                                 controlData,
+                                                 sizeof(NsApplicationControlData),
+                                                 &controlSize);
+            }
+            if (R_SUCCEEDED(rc) && controlSize > sizeof(controlData->nacp)) {
+                switchu::control_cache::writeFromControlData(
+                    titleId, *controlData, controlSize);
+                iconData = switchu::control_cache::readIcon(titleId);
+            }
+            delete controlData;
+            if (!iconData.empty())
+                return iconData;
+        }
+    }
+#endif
 #endif
 
     return iconData;

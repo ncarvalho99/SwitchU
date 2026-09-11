@@ -103,6 +103,7 @@ private:
     int m_curMonth = 9;
     int m_curDay = 10;
     int m_dailyScrollIndex = 0;
+    int m_dailySelectedIdx = 0;
     int m_dailyFocus = 0; // 0 = Date header, 1 = Titles list
 
     // Monthly Tab State
@@ -111,6 +112,7 @@ private:
     int m_monthlySelectedDay = 10; // day 1..31
     int m_monthlyFocus = 0; // 0 = Month header, 1 = Calendar graph, 2 = Titles list
     int m_monthlyScrollIndex = 0;
+    int m_monthlySelectedIdx = 0;
 
     // Software Library Tab State
     int m_selectedTitleIdx = 0;
