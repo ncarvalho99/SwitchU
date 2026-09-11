@@ -1025,6 +1025,8 @@
     "avg_playtime": "Gem. sessie",
     "last_played": "Laatst",
     "view_activity": "Bekijken in activiteitenlogboek",
-    "hint_shortcut": "Logboek"
+    "hint_shortcut": "Logboek",
+    "hint_step": "Datum wijzigen",
+    "hint_today": "Vandaag"
   }
 }

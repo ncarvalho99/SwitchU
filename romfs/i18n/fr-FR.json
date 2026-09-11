@@ -1025,6 +1025,8 @@
     "avg_playtime": "Session moyenne",
     "last_played": "Dernier",
     "view_activity": "Voir dans le journal d'activité",
-    "hint_shortcut": "Journal"
+    "hint_shortcut": "Journal",
+    "hint_step": "Changer date",
+    "hint_today": "Aujourd'hui"
   }
 }

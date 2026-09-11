@@ -1031,6 +1031,8 @@
     "avg_playtime": "Sessão média",
     "last_played": "Último",
     "view_activity": "Ver no Registro de Atividades",
-    "hint_shortcut": "Registro Diário"
+    "hint_shortcut": "Registro Diário",
+    "hint_step": "Alterar data",
+    "hint_today": "Hoje"
   }
 }

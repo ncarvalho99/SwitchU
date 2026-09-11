@@ -1025,6 +1025,8 @@
     "avg_playtime": "В среднем",
     "last_played": "Посл.",
     "view_activity": "Открыть в журнале активности",
-    "hint_shortcut": "Журнал"
+    "hint_shortcut": "Журнал",
+    "hint_step": "Изменить дату",
+    "hint_today": "Сегодня"
   }
 }

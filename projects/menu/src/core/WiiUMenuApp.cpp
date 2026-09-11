@@ -4856,6 +4856,18 @@ void WiiUMenuApp::buildGrid() {
                                resolveThemeAssetPath(m_effectivePreset, m_effectivePreset.icons.basePath));
     }
 
+    // Prefetch activity log data in background so opening it is instantaneous
+    m_threadPool.submit([this]() {
+        std::vector<std::pair<std::uint64_t, std::string>> installed;
+        for (int i = 0; i < m_model.count(); ++i) {
+            const auto& entry = m_model.at(i);
+            if (entry.titleId != 0 && (entry.isApplication() || m_config.isGamePort(entry.titleId))) {
+                installed.emplace_back(entry.titleId, entry.title);
+            }
+        }
+        m_activityLogManager.refresh(installed);
+    });
+
     wireGlobalActions();
     applyTheme();
 
@@ -6479,6 +6491,17 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         (m_gameOptions && m_gameOptions->isActive()) ||
         (m_folderOptions && m_folderOptions->isActive()))
         return hints;
+
+    if (m_activityLog && m_activityLog->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::ZL) + buttonGlyph(nxui::Button::ZR),
+            i18n.tr("activity_log.hint_step", "Change Date"));
+        add(buttonGlyph(nxui::Button::Y), i18n.tr("activity_log.hint_today", "Today"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
+        return hints;
+    }
 
     if (m_settings && m_settings->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));

@@ -1031,6 +1031,8 @@
     "avg_playtime": "Avg Session",
     "last_played": "Last",
     "view_activity": "View in Activity Log",
-    "hint_shortcut": "Daily Log"
+    "hint_shortcut": "Daily Log",
+    "hint_step": "Change Date",
+    "hint_today": "Today"
   }
 }
