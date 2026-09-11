@@ -145,8 +145,13 @@ function Deploy-SysmoduleToConsole {
     # Garante que todos os arquivos i18n sejam copiados sem serem ignorados pelo robocopy no FAT32
     $sourceI18n = Join-Path $sourceSwitch 'SwitchU\i18n'
     $consoleI18n = Join-Path $consoleSwitchU 'i18n'
-    if ((Test-Path -LiteralPath $sourceI18n) -and (Test-Path -LiteralPath $consoleI18n)) {
-        Copy-Item -Path (Join-Path $sourceI18n '*') -Destination $consoleI18n -Force
+    if (Test-Path -LiteralPath $sourceI18n) {
+        if (-not (Test-Path -LiteralPath $consoleI18n)) {
+            New-Item -ItemType Directory -Path $consoleI18n -Force | Out-Null
+        }
+        Get-ChildItem -LiteralPath $sourceI18n -Filter *.json | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $consoleI18n $_.Name) -Force
+        }
     }
 
     $checks = @(

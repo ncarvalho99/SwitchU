@@ -769,6 +769,7 @@ void WiiUMenuApp::createActivityLog() {
     if (m_activityLog) return;
 
     m_activityLog = std::make_shared<ActivityLogScreen>();
+    m_activityLog->setRect({32.f, 20.f, 1216.f, 638.f});
     if (m_overlayLayer) {
         m_overlayLayer->addChild(m_activityLog);
     }
@@ -802,7 +803,7 @@ void WiiUMenuApp::createActivityLog() {
     });
     m_activityLog->onTitleSelected([this](std::uint64_t titleId) {
         if (titleId != 0) {
-            closeActivityLog();
+            m_gameDetailsReturnFocus = m_activityLog.get();
             showGameDetails(titleId, "");
         }
     });
@@ -818,10 +819,8 @@ void WiiUMenuApp::openActivityLog(std::uint64_t initialTitleId) {
 
     m_activityLogReturnFocus = focusManager().current();
 
-    static uint64_t s_lastRefreshTick = 0;
-    const uint64_t nowTick = armGetSystemTick();
-    if (s_lastRefreshTick == 0 || (armTicksToNs(nowTick - s_lastRefreshTick) > 20000000000ULL)) {
-        // Collect installed titles
+    if (m_activityLogManager.allTimeRankings().empty()) {
+        // Fallback: populate if prefetch hasn't finished yet
         std::vector<std::pair<std::uint64_t, std::string>> installed;
         for (int i = 0; i < m_model.count(); ++i) {
             const auto& entry = m_model.at(i);
@@ -830,7 +829,6 @@ void WiiUMenuApp::openActivityLog(std::uint64_t initialTitleId) {
             }
         }
         m_activityLogManager.refresh(installed);
-        s_lastRefreshTick = nowTick;
     }
 
     raiseOverlay(m_activityLog);

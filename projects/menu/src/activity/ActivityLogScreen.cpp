@@ -131,11 +131,11 @@ void ActivityLogScreen::open(std::uint64_t initialTitleId) {
         }
     }
 
-    m_focusArea = FocusArea::Tabs;
+    m_focusArea = (initialTitleId != 0) ? FocusArea::Content : FocusArea::Tabs;
     rebuildTabBar();
     show();
-    // Focus starts cleanly on the tabs rail
-    m_focusArea = FocusArea::Tabs;
+    // Focus starts cleanly on the tabs rail for general opening, or on content for title jump
+    m_focusArea = (initialTitleId != 0) ? FocusArea::Content : FocusArea::Tabs;
     setupCustomKeyActions();
 }
 
@@ -155,11 +155,19 @@ void ActivityLogScreen::cycleTab(int delta) {
     if (nextTab != m_tabIndex) {
         m_tabIndex = nextTab;
         if (m_tabChangeSfxCb) m_tabChangeSfxCb();
-        m_focusArea = FocusArea::Content;
+        m_focusArea = FocusArea::Tabs;
     }
 }
 
 void ActivityLogScreen::cycleDay(int delta) {
+    if (delta > 0) {
+        // Clamp to Today: cannot step past Today into the future
+        if (m_curYear > m_todayYear ||
+            (m_curYear == m_todayYear && m_curMonth > m_todayMonth) ||
+            (m_curYear == m_todayYear && m_curMonth == m_todayMonth && m_curDay >= m_todayDay)) {
+            return;
+        }
+    }
     m_curDay += delta;
     if (delta > 0) {
         int maxDays = switchu::activity::ActivityLogManager::daysInMonth(m_curYear, m_curMonth);
@@ -186,6 +194,13 @@ void ActivityLogScreen::cycleDay(int delta) {
 }
 
 void ActivityLogScreen::cycleMonth(int delta) {
+    if (delta > 0) {
+        // Clamp to current month: cannot step past current month into the future
+        if (m_monthYear > m_todayYear ||
+            (m_monthYear == m_todayYear && m_monthMonth >= m_todayMonth)) {
+            return;
+        }
+    }
     m_monthMonth += delta;
     if (delta > 0) {
         if (m_monthMonth > 12) {
@@ -218,26 +233,7 @@ void ActivityLogScreen::jumpToToday() {
 }
 
 void ActivityLogScreen::updateCustomContent(float) {
-    if (m_input) {
-        if (m_input->isDown(nxui::Button::ZL)) {
-            if (m_tabIndex == 0) cycleDay(-1);
-            else if (m_tabIndex == 1) cycleMonth(-1);
-        }
-        if (m_input->isDown(nxui::Button::ZR)) {
-            if (m_tabIndex == 0) cycleDay(1);
-            else if (m_tabIndex == 1) cycleMonth(1);
-        }
-        if (m_input->isDown(nxui::Button::L)) {
-            cycleTab(-1);
-        }
-        if (m_input->isDown(nxui::Button::R)) {
-            cycleTab(1);
-        }
-        if (m_input->isDown(nxui::Button::Y) || m_input->isDown(nxui::Button::X)) {
-            jumpToToday();
-        }
-    }
-
+    // Note: ZL, ZR, L, R, Y, X are handled by addAction in setupCustomKeyActions()
     // Upload pending icons (at most 2 per frame to keep 60 FPS rock-solid)
     if (m_gpu && m_renderer) {
         int uploadedThisFrame = 0;
@@ -344,7 +340,7 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
     ren.drawText(">", {nextBtnRect.x + 16.f, nextBtnRect.y + 6.f}, m_font, kColorCyan.withAlpha(opacity), 0.85f);
 
     // Today Badge / Button
-    nxui::Rect todayBtnRect{headerRect.right() - 96.f, headerRect.y + 6.f, 88.f, 34.f};
+    nxui::Rect todayBtnRect{headerRect.right() - 106.f, headerRect.y + 6.f, 98.f, 34.f};
     bool isToday = (m_curYear == m_todayYear && m_curMonth == m_todayMonth && m_curDay == m_todayDay);
     ren.drawRoundedRect(todayBtnRect,
                         isToday ? kColorGold.withAlpha(0.22f * opacity) : kCardBg.withAlpha(0.18f * opacity),
@@ -352,9 +348,13 @@ void ActivityLogScreen::drawDailyTab(nxui::Renderer& ren, const nxui::Rect& cont
     ren.drawRoundedRectOutline(todayBtnRect,
                                isToday ? kColorGold.withAlpha(0.7f * opacity) : kColorCyan.withAlpha(0.4f * opacity),
                                10.f, 1.0f);
-    std::string todayLabel = isToday ? i18n.tr("activity_log.today", "Today") : "TODAY (Y)";
-    ren.drawText(todayLabel, {todayBtnRect.x + 8.f, todayBtnRect.y + 8.f}, m_smallFont,
-                 isToday ? kColorGold.withAlpha(opacity) : textSec, 0.65f);
+    std::string todayLabel = isToday ? i18n.tr("activity_log.today", "Today")
+                                     : (i18n.tr("activity_log.today", "Today") + " (Y)");
+    nxui::Vec2 textSize = m_smallFont ? m_smallFont->measure(todayLabel) * 0.60f : nxui::Vec2{50.f, 14.f};
+    float textX = todayBtnRect.x + (todayBtnRect.width - textSize.x) * 0.5f;
+    float textY = todayBtnRect.y + (todayBtnRect.height - textSize.y) * 0.5f;
+    ren.drawText(todayLabel, {textX, textY}, m_smallFont,
+                 isToday ? kColorGold.withAlpha(opacity) : textSec, 0.60f);
 
     // 2. Day Summary Card
     nxui::Rect summaryRect{content.x + 12.f, headerRect.bottom() + 10.f, content.width - 24.f, kSummaryH};
@@ -483,9 +483,26 @@ void ActivityLogScreen::drawMonthlyTab(nxui::Renderer& ren, const nxui::Rect& co
     ren.drawText(monthStr, {monthX, headerRect.y + 10.f}, m_font, textPri, 0.88f);
 
     // Right Arrow (>)
-    nxui::Rect nextBtnRect{headerRect.right() - 52.f, headerRect.y + 6.f, 44.f, 34.f};
+    nxui::Rect nextBtnRect{headerRect.right() - 160.f, headerRect.y + 6.f, 44.f, 34.f};
     ren.drawRoundedRect(nextBtnRect, kCardBg.withAlpha(0.2f * opacity), 10.f);
     ren.drawText(">", {nextBtnRect.x + 16.f, nextBtnRect.y + 6.f}, m_font, kColorCyan.withAlpha(opacity), 0.85f);
+
+    // Today Badge / Button
+    nxui::Rect todayBtnRect{headerRect.right() - 106.f, headerRect.y + 6.f, 98.f, 34.f};
+    bool isCurrentMonth = (m_monthYear == m_todayYear && m_monthMonth == m_todayMonth);
+    ren.drawRoundedRect(todayBtnRect,
+                        isCurrentMonth ? kColorGold.withAlpha(0.22f * opacity) : kCardBg.withAlpha(0.18f * opacity),
+                        10.f);
+    ren.drawRoundedRectOutline(todayBtnRect,
+                               isCurrentMonth ? kColorGold.withAlpha(0.7f * opacity) : kColorCyan.withAlpha(0.4f * opacity),
+                               10.f, 1.0f);
+    std::string todayLabel = isCurrentMonth ? i18n.tr("activity_log.today", "Today")
+                                           : (i18n.tr("activity_log.today", "Today") + " (Y)");
+    nxui::Vec2 textSize = m_smallFont ? m_smallFont->measure(todayLabel) * 0.60f : nxui::Vec2{50.f, 14.f};
+    float textX = todayBtnRect.x + (todayBtnRect.width - textSize.x) * 0.5f;
+    float textY = todayBtnRect.y + (todayBtnRect.height - textSize.y) * 0.5f;
+    ren.drawText(todayLabel, {textX, textY}, m_smallFont,
+                 isCurrentMonth ? kColorGold.withAlpha(opacity) : textSec, 0.60f);
 
     // 2. Month Summary Card
     nxui::Rect summaryRect{content.x + 12.f, headerRect.bottom() + 10.f, content.width - 24.f, kSummaryH};
@@ -687,19 +704,20 @@ void ActivityLogScreen::drawTitlesTab(nxui::Renderer& ren, const nxui::Rect& con
 }
 
 bool ActivityLogScreen::handleCustomPressA() {
-    if (m_focusArea == FocusArea::Tabs) {
-        m_focusArea = FocusArea::Content;
-        if (m_activateSfxCb) m_activateSfxCb();
-        return true;
-    }
-
-    if (m_tabIndex == 2 && m_manager) {
-        const auto& rankings = m_manager->allTimeRankings();
-        if (m_selectedTitleIdx >= 0 && m_selectedTitleIdx < static_cast<int>(rankings.size())) {
-            if (m_titleSelectedCb) {
-                if (m_activateSfxCb) m_activateSfxCb();
-                m_titleSelectedCb(rankings[m_selectedTitleIdx].titleId);
-                return true;
+    if (m_tabIndex == 2) {
+        if (m_focusArea == FocusArea::Tabs) {
+            m_focusArea = FocusArea::Content;
+            if (m_activateSfxCb) m_activateSfxCb();
+            return true;
+        }
+        if (m_manager) {
+            const auto& rankings = m_manager->allTimeRankings();
+            if (m_selectedTitleIdx >= 0 && m_selectedTitleIdx < static_cast<int>(rankings.size())) {
+                if (m_titleSelectedCb) {
+                    if (m_activateSfxCb) m_activateSfxCb();
+                    m_titleSelectedCb(rankings[m_selectedTitleIdx].titleId);
+                    return true;
+                }
             }
         }
     }
@@ -768,7 +786,7 @@ bool ActivityLogScreen::handleCustomNavLeft() {
 }
 
 bool ActivityLogScreen::handleCustomNavRight() {
-    if (m_focusArea == FocusArea::Tabs) {
+    if (m_tabIndex == 2 && m_focusArea == FocusArea::Tabs) {
         m_focusArea = FocusArea::Content;
         if (m_navSfxCb) m_navSfxCb();
         return true;
@@ -784,8 +802,8 @@ bool ActivityLogScreen::handleCustomTouch(nxui::Input& input, const nxui::Rect&,
 
         nxui::Rect headerRect{content.x + 12.f, content.y + 10.f, content.width - 24.f, kHeaderH};
         nxui::Rect prevBtnRect{headerRect.x + 8.f, headerRect.y + 6.f, 44.f, 34.f};
-        nxui::Rect nextBtnRect{headerRect.right() - (m_tabIndex == 0 ? 150.f : 52.f), headerRect.y + 6.f, 44.f, 34.f};
-        nxui::Rect todayBtnRect{headerRect.right() - 96.f, headerRect.y + 6.f, 88.f, 34.f};
+        nxui::Rect nextBtnRect{headerRect.right() - 160.f, headerRect.y + 6.f, 44.f, 34.f};
+        nxui::Rect todayBtnRect{headerRect.right() - 106.f, headerRect.y + 6.f, 98.f, 34.f};
 
         if (prevBtnRect.contains(tx, ty)) {
             m_touchDownTarget = 0;
@@ -793,7 +811,7 @@ bool ActivityLogScreen::handleCustomTouch(nxui::Input& input, const nxui::Rect&,
         } else if (nextBtnRect.contains(tx, ty)) {
             m_touchDownTarget = 1;
             return true;
-        } else if (m_tabIndex == 0 && todayBtnRect.contains(tx, ty)) {
+        } else if ((m_tabIndex == 0 || m_tabIndex == 1) && todayBtnRect.contains(tx, ty)) {
             m_touchDownTarget = 2;
             return true;
         }

@@ -124,6 +124,14 @@ private:
     std::mutex m_decodedMutex;
     std::vector<std::pair<std::uint64_t, std::vector<uint8_t>>> m_readyToUpload;
 
+    bool m_zlWasDown = false;
+    bool m_zrWasDown = false;
+    bool m_yWasDown = false;
+    bool m_xWasDown = false;
+    bool m_lWasDown = false;
+    bool m_rWasDown = false;
+    float m_holdTimer = 0.f;
+
     nxui::Texture* getIconTexture(std::uint64_t titleId);
     void setupCustomKeyActions();
 };

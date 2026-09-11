@@ -1102,11 +1102,7 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::Minus), [this]() {
         if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
             return;
-        if (handleAccessibilityToggleCombo())
-            return;
-        if (m_navigator.route() == switchu::navigation::Route::Home) {
-            openActivityLog();
-        }
+        handleAccessibilityToggleCombo();
     });
 #endif
 #ifdef SWITCHU_HOMEBREW

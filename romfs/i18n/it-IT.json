@@ -1025,6 +1025,8 @@
     "avg_playtime": "Sessione media",
     "last_played": "Ultimo",
     "view_activity": "Vedi nel registro attività",
-    "hint_shortcut": "Registro"
+    "hint_shortcut": "Registro",
+    "hint_step": "Cambia data",
+    "hint_today": "Oggi"
   }
 }

@@ -1025,6 +1025,8 @@
     "avg_playtime": "Durchschnitt",
     "last_played": "Zuletzt",
     "view_activity": "Im Aktivitätslog ansehen",
-    "hint_shortcut": "Aktivitätslog"
+    "hint_shortcut": "Aktivitätslog",
+    "hint_step": "Datum ändern",
+    "hint_today": "Heute"
   }
 }
