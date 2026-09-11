@@ -1341,6 +1341,10 @@ void WiiUMenuApp::createGameDetails() {
         if (!m_gameDetails) return;
         showGameMods(m_gameDetails->titleId(), m_gameDetails->title());
     });
+    m_gameDetails->onCheats([this]() {
+        if (!m_gameDetails) return;
+        showGameCheats(m_gameDetails->titleId(), m_gameDetails->title());
+    });
     m_gameDetails->onFolderAction([this]() {
         if (!m_gameDetails) return;
         showFolderAssignment(m_gameDetails->titleId(), m_gameDetails->title());

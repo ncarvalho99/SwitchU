@@ -60,6 +60,7 @@ public:
     void onShowArtwork(ActionCb cb) { m_showArtworkCb = std::move(cb); }
     void onRestoreArtwork(ActionCb cb) { m_restoreArtworkCb = std::move(cb); }
     void onManageMods(ActionCb cb) { m_manageModsCb = std::move(cb); }
+    void onCheats(ActionCb cb) { m_cheatsCb = std::move(cb); }
     void onDeleteSoftware(ActionCb cb) { m_deleteSoftwareCb = std::move(cb); }
     void onFolderAction(ActionCb cb) { m_folderActionCb = std::move(cb); }
     void onRemoveGamePort(ActionCb cb) { m_removeGamePortCb = std::move(cb); }
@@ -161,5 +162,6 @@ private:
     ActionCb m_showArtworkCb;
     ActionCb m_restoreArtworkCb;
     ActionCb m_manageModsCb;
+    ActionCb m_cheatsCb;
     ActionCb m_deleteSoftwareCb;
 };
