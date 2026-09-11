@@ -769,7 +769,7 @@ void WiiUMenuApp::createActivityLog() {
     if (m_activityLog) return;
 
     m_activityLog = std::make_shared<ActivityLogScreen>();
-    m_activityLog->setRect({32.f, 20.f, 1216.f, 638.f});
+    m_activityLog->setRect({32.f, 16.f, 1216.f, 608.f});
     if (m_overlayLayer) {
         m_overlayLayer->addChild(m_activityLog);
     }
@@ -822,10 +822,18 @@ void WiiUMenuApp::openActivityLog(std::uint64_t initialTitleId) {
     if (m_activityLogManager.allTimeRankings().empty()) {
         // Fallback: populate if prefetch hasn't finished yet
         std::vector<std::pair<std::uint64_t, std::string>> installed;
-        for (int i = 0; i < m_model.count(); ++i) {
-            const auto& entry = m_model.at(i);
-            if (entry.titleId != 0 && (entry.isApplication() || m_config.isGamePort(entry.titleId))) {
-                installed.emplace_back(entry.titleId, entry.title);
+        if (!m_allApps.empty()) {
+            for (const auto& app : m_allApps) {
+                if (app.titleId != 0 && (app.isApplication() || m_config.isGamePort(app.titleId))) {
+                    installed.emplace_back(app.titleId, app.title);
+                }
+            }
+        } else {
+            for (int i = 0; i < m_model.count(); ++i) {
+                const auto& entry = m_model.at(i);
+                if (entry.titleId != 0 && (entry.isApplication() || m_config.isGamePort(entry.titleId))) {
+                    installed.emplace_back(entry.titleId, entry.title);
+                }
             }
         }
         m_activityLogManager.refresh(installed);
