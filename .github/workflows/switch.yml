@@ -56,15 +56,17 @@ jobs:
         with:
           submodules: recursive
 
+      # zstd: local-repo's libsdl extracts a .pkg.tar.zst with tar --zstd.
+      # tools/Dockerfile.build installs it for the same reason.
       - name: Install system dependencies
         shell: bash
         run: |
           if command -v sudo >/dev/null 2>&1; then
             sudo apt-get update
-            sudo apt-get -y install gcc g++ zip
+            sudo apt-get -y install gcc g++ zip zstd
           else
             apt-get update
-            apt-get -y install gcc g++ zip
+            apt-get -y install gcc g++ zip zstd
           fi
 
       - name: Set xmake env
