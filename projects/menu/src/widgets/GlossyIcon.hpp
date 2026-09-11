@@ -36,6 +36,10 @@ public:
     void setSuspended(bool s)     { m_suspended = s; }
     bool isSuspended() const      { return m_suspended; }
 
+    // Text of the play-time pill in the bottom-left corner. Empty hides it;
+    // the owner decides when there is one to show.
+    void setPlaytimeBadge(std::string text) { m_playtimeBadge = std::move(text); }
+
     void setIsGameCard(bool gc)     { m_isGameCard = gc; }
     bool isGameCard() const         { return m_isGameCard; }
 
@@ -134,6 +138,7 @@ private:
     bool        m_isGameCard = false;
     bool        m_notLaunchable = false;
     bool        m_customArtwork = false;
+    std::string m_playtimeBadge;
     nxui::Color m_loadingColor = nxui::Color::white();
     float       m_suspendPulse = 0.f;
     float       m_batteryRefreshTimer = 0.f;

@@ -3,6 +3,7 @@
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 #include "NsService.hpp"
+#include "core/PlayTime.hpp"
 #include <switchu/title_footprint.hpp>
 
 #include <algorithm>
@@ -59,28 +60,16 @@ std::string installedModSummary(std::uint64_t titleId) {
     return i18n.tr("dialog.details_mods_detected", "Detected") + ": " + std::to_string(count);
 }
 
+// Asked of pdm directly rather than read from the sort cache: the dossier is
+// one title, opened on purpose, and the cache is only kept fresh while the
+// most-played view is in use.
 std::string installedPlayTime(std::uint64_t titleId) {
-#ifdef SWITCHU_MENU
-    PdmPlayStatistics stats{};
-    const Result initRc = pdmqryInitialize();
-    if (R_SUCCEEDED(initRc)) {
-        const Result queryRc = pdmqryQueryPlayStatisticsByApplicationId(titleId, true, &stats);
-        pdmqryExit();
-        if (R_SUCCEEDED(queryRc) && stats.playtime > 0) {
-            const std::uint64_t minutes = stats.playtime / 60000000000ULL;
-            if (minutes >= 60)
-                return std::to_string(minutes / 60) + " h " + std::to_string(minutes % 60) + " min";
-            return std::to_string(minutes) + " min";
-        }
-        DebugLog::log("[details] playtime unavailable title=%016llX init=0x%X query=0x%X",
-                      static_cast<unsigned long long>(titleId), initRc, queryRc);
-    } else {
-        DebugLog::log("[details] pdmqry init failed title=%016llX rc=0x%X",
-                      static_cast<unsigned long long>(titleId), initRc);
-    }
-#else
-    (void)titleId;
-#endif
+    const auto nanoseconds = switchu::menu::playtime::query(titleId);
+    if (nanoseconds && *nanoseconds > 0)
+        return switchu::menu::playtime::format(*nanoseconds);
+    if (nanoseconds)
+        DebugLog::log("[details] no playtime recorded title=%016llX",
+                      static_cast<unsigned long long>(titleId));
     return nxui::I18n::instance().tr("dialog.details_playtime_unavailable", "Not available yet");
 }
 

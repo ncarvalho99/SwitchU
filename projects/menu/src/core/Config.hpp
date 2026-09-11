@@ -71,8 +71,38 @@ struct AppConfig {
 
     // 0 = the arrangement the owner made by hand, which stays the default:
     // somebody who dragged their icons into an order did not do that to have
-    // it thrown away. 1 = A to Z. 2 = most recently opened first.
+    // it thrown away. 1 = A to Z. 2 = most recently opened first. 3 = most
+    // played first, by the play time the system records (see playtime below).
     int sortMode = 0;
+    static constexpr int kSortModeCount = 4;
+
+    // Total play time per title id, in nanoseconds, as pdm last reported it.
+    // A cache, not a record of our own: pdm is the authority and is re-read
+    // off the UI thread whenever the menu comes up in sort mode 3 or enters
+    // it. Kept on disk only so the grid can open in the right order before
+    // that query answers -- the menu is recreated on every return from a game,
+    // so an in-memory copy would start empty every time. Titles never played
+    // are not stored.
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> playtime;
+
+    std::uint64_t playtimeOf(std::uint64_t titleId) const {
+        for (const auto& e : playtime)
+            if (e.first == titleId) return e.second;
+        return 0;
+    }
+    // Whether the stored value changed.
+    bool setPlaytime(std::uint64_t titleId, std::uint64_t nanoseconds) {
+        for (auto it = playtime.begin(); it != playtime.end(); ++it) {
+            if (it->first != titleId) continue;
+            if (it->second == nanoseconds) return false;
+            if (nanoseconds == 0) playtime.erase(it);
+            else it->second = nanoseconds;
+            return true;
+        }
+        if (nanoseconds == 0) return false;
+        playtime.emplace_back(titleId, nanoseconds);
+        return true;
+    }
 
     // When each title was last opened, by title id. The record ns keeps is
     // last_updated -- when it was installed or patched -- which is not the

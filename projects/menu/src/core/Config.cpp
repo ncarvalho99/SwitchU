@@ -100,6 +100,15 @@ bool AppConfig::load() {
                                     v.get<std::uint64_t>());
         }
     }
+    playtime.clear();
+    if (auto it = j.find("playtime"); it != j.end() && it->is_object()) {
+        for (auto& [k, v] : it->items()) {
+            if (!v.is_number_unsigned()) continue;
+            const std::uint64_t ns = v.get<std::uint64_t>();
+            if (ns == 0) continue;
+            playtime.emplace_back(std::strtoull(k.c_str(), nullptr, 16), ns);
+        }
+    }
     gamePortPlatforms.clear();
     if (auto it = j.find("gamePorts"); it != j.end() && it->is_object()) {
         for (auto& [k, v] : it->items()) {
@@ -124,6 +133,7 @@ bool AppConfig::load() {
     if (sfxVolume   > 1.f) sfxVolume   = 1.f;
     gridColumns = std::clamp(gridColumns, 3, 8);
     gridRows = std::clamp(gridRows, 2, 5);
+    if (sortMode < 0 || sortMode >= kSortModeCount) sortMode = 0;
     if (actionHintStyle != "panel" && actionHintStyle != "capsules")
         actionHintStyle = "capsules";
     if (uiLanguageOverride.empty()) uiLanguageOverride = "auto";
@@ -179,6 +189,15 @@ bool AppConfig::save() const {
             opened[key] = e.second;
         }
         j["lastOpened"] = std::move(opened);
+    }
+    {
+        nlohmann::json played = nlohmann::json::object();
+        char key[17];
+        for (const auto& e : playtime) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)e.first);
+            played[key] = e.second;
+        }
+        j["playtime"] = std::move(played);
     }
     {
         nlohmann::json ports = nlohmann::json::object();

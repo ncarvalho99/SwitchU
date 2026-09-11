@@ -1,6 +1,7 @@
 #include "WiiUMenuApp.hpp"
 #include <cctype>
 #include <switchu/sd_commit.hpp>
+#include "core/PlayTime.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "widgets/FolderPalette.hpp"
 #include "themeshop/ThemeHttp.hpp"
@@ -35,21 +36,6 @@ extern "C" size_t g_switchuHeapSize;
 #include <system_error>
 
 namespace {
-
-#ifdef SWITCHU_MENU
-std::optional<std::uint64_t> queryApplicationPlaytimeSeconds(std::uint64_t titleId) {
-    if (titleId == 0) return std::nullopt;
-    PdmApplicationPlayStatistics statistics{};
-    s32 total = 0;
-    const u64 applicationId = titleId;
-    const Result result = appletQueryApplicationPlayStatistics(
-        &statistics, &applicationId, 1, &total);
-    if (R_FAILED(result) || total <= 0 || statistics.application_id != titleId)
-        return std::nullopt;
-    constexpr std::uint64_t kNanosecondsPerSecond = 1000000000ULL;
-    return statistics.playtime / kNanosecondsPerSecond;
-}
-#endif
 
 static constexpr const char* kLayoutPath = "sdmc:/config/SwitchU/layout.json";
 static constexpr int kMinHomePages = 8;
@@ -352,6 +338,10 @@ bool WiiUMenuApp::onCreate() {
     m_appLayoutMode = m_config.appLayoutMode;
     applyGlassSharpness(m_config.glassSharpness);
     loadMenuLayout();
+    // The menu is recreated on every return from a game, so this is also the
+    // moment the session just played has to reach the grid. The first frame
+    // sorts from the cache saved at launch; pdm is asked once the grid is up.
+    m_playtimeRefreshQueued = m_config.sortMode == 3;
     if (!m_folderStore.load())
         DebugLog::log("[folders] store unavailable; continuing with an empty folder list");
     if (!m_widgetStore.load())
@@ -1046,6 +1036,7 @@ std::string WiiUMenuApp::sortModeLabel() const {
     switch (m_config.sortMode) {
         case 1:  return i18n.tr("hint.sort_alpha", "A-Z");
         case 2:  return i18n.tr("hint.sort_recent", "Recent");
+        case 3:  return i18n.tr("hint.sort_playtime", "Most played");
         default: return i18n.tr("hint.sort_custom", "My order");
     }
 }
@@ -1053,7 +1044,7 @@ std::string WiiUMenuApp::sortModeLabel() const {
 void WiiUMenuApp::cycleSortMode() {
 #ifdef SWITCHU_MENU
     if (m_editMode) return;
-    m_config.sortMode = (m_config.sortMode + 1) % 3;
+    m_config.sortMode = (m_config.sortMode + 1) % AppConfig::kSortModeCount;
     m_config.save();
     switchu::commitSdCard("sort mode");
     DebugLog::log("[menu] sort mode -> %d", m_config.sortMode);
@@ -1063,7 +1054,127 @@ void WiiUMenuApp::cycleSortMode() {
     // the owner actually arranged.
     m_audio.playSfx(Sfx::Navigate);
     reflowHomeGrid();
+    // Most played sorts from the cache straight away, so R answers at once,
+    // and asks pdm again behind it. The cache is only as fresh as the last
+    // time this mode was in use; pollPlaytimeRefresh() re-sorts if pdm
+    // disagrees with it.
+    if (m_config.sortMode == 3)
+        requestPlaytimeRefresh("sort mode");
 #endif
+}
+
+void WiiUMenuApp::requestPlaytimeRefresh(const char* reason) {
+#ifdef SWITCHU_MENU
+    // Started by the next pollPlaytimeRefresh(), from onUpdate, rather than
+    // here: callers are in the middle of a rebuild or a notification pass.
+    DebugLog::log("[playtime] refresh requested (%s)", reason);
+    m_playtimeRefreshQueued = true;
+#else
+    (void)reason;
+#endif
+}
+
+void WiiUMenuApp::pollPlaytimeRefresh() {
+#ifdef SWITCHU_MENU
+    if (m_playtimeFuture.valid()) {
+        if (m_playtimeFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+            return;
+        auto state = std::move(m_playtimeRefresh);
+        bool failed = false;
+        try {
+            m_playtimeFuture.get();
+        } catch (...) {
+            // The pool refusing work during shutdown; the cache stays as it was.
+            failed = true;
+        }
+        int changed = 0;
+        if (!failed && state) {
+            for (const auto& [titleId, nanoseconds] : state->playtime)
+                changed += m_config.setPlaytime(titleId, nanoseconds) ? 1 : 0;
+        }
+        DebugLog::log("[playtime] refresh done titles=%zu changed=%d",
+                      state ? state->playtime.size() : static_cast<std::size_t>(0), changed);
+        // Nothing is saved here. Every launch writes the config before the
+        // handoff, and that write carries this cache with it; a write of its
+        // own would be one more SD commit for a copy pdm can always rebuild.
+        if (changed > 0 && m_config.sortMode == 3)
+            m_playtimeResortPending = true;
+    }
+
+    if (m_playtimeResortPending && m_grid) {
+        if (m_config.sortMode != 3) {
+            m_playtimeResortPending = false;
+        } else if (m_openFolderId != 0) {
+            // A folder keeps its own order. closeFolder() recomposes the root,
+            // and that reads the cache just updated.
+            m_playtimeResortPending = false;
+            applyPlaytimeBadges();
+        } else if (focusRoot() == &rootBox() && !m_editMode &&
+                   !(m_launchAnim && m_launchAnim->isPlaying())) {
+            // Held back while anything else owns input: a rebuild moves focus
+            // to the grid and frees every icon, and edit mode and the launch
+            // animation both hold on to one.
+            m_playtimeResortPending = false;
+            GridModel model = buildRootFolderModel();
+            bool sameOrder = model.count() == m_model.count();
+            for (int i = 0; sameOrder && i < model.count(); ++i)
+                sameOrder = model.at(i).titleId == m_model.at(i).titleId;
+            if (sameOrder) {
+                applyPlaytimeBadges();
+            } else {
+                std::uint64_t focused = 0;
+                if (auto* current = m_grid->focusManager().current();
+                    current && current->tag() == "glossy_icon")
+                    focused = static_cast<GlossyIcon*>(current)->titleId();
+                applyDisplayModel(std::move(model), focused, false);
+                if (m_layoutDirty) saveMenuLayout();
+            }
+            DebugLog::log("[playtime] grid %s", sameOrder ? "badges updated" : "re-sorted");
+        }
+    }
+
+    if (!m_playtimeRefreshQueued)
+        return;
+    // Only once the catalogue is in and the first page has had its uploads:
+    // the batch holds one of the pool's two workers for a round trip per title,
+    // and the icons on screen come first.
+    if (!m_grid || m_allApps.empty() || m_asyncRefreshPending ||
+        m_deferredInitialAssetFrames > 0)
+        return;
+    m_playtimeRefreshQueued = false;
+
+    std::vector<std::uint64_t> titleIds;
+    titleIds.reserve(m_allApps.size());
+    for (const auto& app : m_allApps)
+        if (app.isApplication() && app.titleId != 0)
+            titleIds.push_back(app.titleId);
+
+    auto state = std::make_shared<PlaytimeRefreshState>();
+    m_playtimeRefresh = state;
+    m_playtimeFuture = m_threadPool.submit(
+        [state, titleIds = std::move(titleIds)]() {
+            state->playtime = switchu::menu::playtime::queryAll(titleIds);
+        });
+#endif
+}
+
+std::string WiiUMenuApp::playtimeBadgeFor(const AppEntry& entry) const {
+    // Only in the view the number orders. Everywhere else it would be clutter
+    // on every icon, answering a question nobody asked of that view.
+    if (m_config.sortMode != 3 || !entry.isApplication())
+        return {};
+    return switchu::menu::playtime::formatCompact(m_config.playtimeOf(entry.titleId));
+}
+
+void WiiUMenuApp::applyPlaytimeBadges() {
+    if (!m_grid)
+        return;
+    const auto& icons = m_grid->allIcons();
+    for (int i = 0; i < m_model.count() && i < static_cast<int>(icons.size()); ++i) {
+        if (icons[static_cast<std::size_t>(i)])
+            icons[static_cast<std::size_t>(i)]->setPlaytimeBadge(
+                playtimeBadgeFor(m_model.at(i)));
+    }
 }
 
 #if 0 // Replaced by the 1.2.0 folder/widget-aware implementation below.
@@ -2032,6 +2143,16 @@ GridModel WiiUMenuApp::buildRootFolderModel() {
                 if (recentA != recentB) return recentA > recentB;
                 return false;
             }
+            if (mode == 3) {
+                // Read from the cache only: pdm is asked off this thread, in
+                // one batch, by pollPlaytimeRefresh(). A title never played
+                // has zero and sorts last for the same reason as above, and
+                // ties keep the personal order.
+                const auto playedA = m_config.playtimeOf(a);
+                const auto playedB = m_config.playtimeOf(b);
+                if (playedA != playedB) return playedA > playedB;
+                return false;
+            }
             // Compared the way a person reads them, so "apple" and "Apple" land
             // together instead of in two separate blocks of the alphabet.
             const std::string& labelA = entries.at(a).title;
@@ -2595,11 +2716,10 @@ std::string WiiUMenuApp::widgetDurationLabel(std::uint64_t seconds) const {
     auto& i18n = nxui::I18n::instance();
     if (seconds == 0)
         return i18n.tr("widget.no_playtime", "No recent playtime");
-    const std::uint64_t hours = seconds / 3600;
-    const std::uint64_t minutes = (seconds % 3600) / 60;
-    if (hours > 0)
-        return std::to_string(hours) + " h " + std::to_string(minutes) + " min";
-    return std::to_string(std::max<std::uint64_t>(1, minutes)) + " min";
+    // A session that happened reads as at least a minute, never "0 min".
+    constexpr std::uint64_t kNanosecondsPerSecond = 1000000000ULL;
+    return switchu::menu::playtime::format(
+        std::max<std::uint64_t>(60, seconds) * kNanosecondsPerSecond);
 }
 
 void WiiUMenuApp::refreshRecentActivityDuration() {
@@ -2612,9 +2732,14 @@ void WiiUMenuApp::refreshRecentActivityDuration() {
     m_widgetStore.updateRecentDuration(
         static_cast<std::int64_t>(std::time(nullptr)));
 #ifdef SWITCHU_MENU
-    if (const auto total = queryApplicationPlaytimeSeconds(
+    // pdm:qry, like the dossier and the most-played sort. The applet query
+    // this used, appletQueryApplicationPlayStatistics, is documented by libnx
+    // as available to Application applets only; the menu is not one, and when
+    // it failed the total silently stayed a wall-clock estimate.
+    constexpr std::uint64_t kNanosecondsPerSecond = 1000000000ULL;
+    if (const auto total = switchu::menu::playtime::query(
             m_widgetStore.recentActivity().titleId))
-        m_widgetStore.setTotalSeconds(*total);
+        m_widgetStore.setTotalSeconds(*total / kNanosecondsPerSecond);
 #endif
 }
 
@@ -4242,6 +4367,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     icon->setGameCardTexture(&m_gameCardTex);
     icon->setNotLaunchable(!entry.isLaunchable());
     icon->setGridSpan(entry.widgetColumns, entry.widgetRows);
+    icon->setPlaytimeBadge(playtimeBadgeFor(entry));
     if (entry.widgetColumns > 1 && entry.widgetRows == 1 &&
         m_appLayoutMode == AppLayoutMode::Grid) {
         ensureGameArtwork(entry.titleId);
@@ -5399,6 +5525,9 @@ void WiiUMenuApp::finalizeRefresh() {
     if (m_layoutDirty)
         saveMenuLayout();
     DebugLog::log("[refresh] done, %d icons on page %d", m_model.count(), m_grid->currentPage());
+    // A reinstalled title comes back with the play time pdm kept for it.
+    if (m_config.sortMode == 3)
+        requestPlaytimeRefresh("catalogue changed");
 }
 
 #endif
@@ -5929,12 +6058,17 @@ void WiiUMenuApp::onUpdate(float dt) {
                 m_launcher.setAppHasForeground(false);
                 m_launcher.setSuspendedTitleId(0);
                 m_sysMsg.pushAction(SysAction::HomeButton);
+                // The session that just ended is in pdm now.
+                if (m_config.sortMode == 3)
+                    requestPlaytimeRefresh("application exited");
                 break;
             case switchu::smi::MenuMessage::ApplicationSuspended:
                 m_launcher.setAppRunning(true);
                 m_launcher.setAppHasForeground(false);
                 m_launcher.setSuspendedTitleId(notif.app_id);
                 m_sysMsg.pushAction(SysAction::HomeButton);
+                if (m_config.sortMode == 3)
+                    requestPlaytimeRefresh("application suspended");
                 break;
             case switchu::smi::MenuMessage::AppRecordsChanged:
             case switchu::smi::MenuMessage::GameCardMountFailure:
@@ -6011,6 +6145,7 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (m_asyncRefreshPending && m_appLoader.isReady()) {
         finalizeRefresh();
     }
+    pollPlaytimeRefresh();
 #endif
 
     bool debugTouchBlocked = false;

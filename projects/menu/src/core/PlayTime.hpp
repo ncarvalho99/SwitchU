@@ -1,0 +1,32 @@
+#pragma once
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace switchu::menu::playtime {
+
+// Total play time the system recorded for one title, in nanoseconds, as the
+// Play Data Manager reports it. nullopt when pdm could not answer, which is
+// not the same as a title nobody has played: that one answers zero.
+std::optional<std::uint64_t> query(std::uint64_t titleId);
+
+// The same question for a whole catalogue. pdm:qry is opened once for the
+// batch rather than once per title: the details panel's one-off query can
+// afford a session of its own, a catalogue of a few hundred titles cannot.
+// Blocks for one IPC round trip per title, so it belongs on a worker thread.
+// A title whose query fails is logged and left out rather than failing the
+// batch; the caller keeps whatever it knew about it before.
+std::vector<std::pair<std::uint64_t, std::uint64_t>> queryAll(
+    const std::vector<std::uint64_t>& titleIds);
+
+// "12 h 5 min", or "40 min" under an hour. Empty for zero.
+std::string format(std::uint64_t nanoseconds);
+
+// "152 h", or "40 min" under an hour -- the grid badge has room for one unit.
+// Empty for zero.
+std::string formatCompact(std::uint64_t nanoseconds);
+
+} // namespace switchu::menu::playtime

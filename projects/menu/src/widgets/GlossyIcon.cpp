@@ -691,6 +691,27 @@ void GlossyIcon::onRender(nxui::Renderer& ren) {
         nxui::Vec2 p3 = { badgeCenter.x + triW * 0.65f, badgeCenter.y };
         ren.drawTriangle(p1, p2, p3, nxui::Color(0.18f, 0.85f, 0.45f, 0.95f * a));
     }
+
+    // Bottom-left, opposite the suspended badge, so a suspended game that is
+    // also the most played one keeps both.
+    if (!m_playtimeBadge.empty() && m_font && s > 0.5f &&
+        m_entryKind == GridEntryKind::Application) {
+        const nxui::Vec2 measured = m_font->measure(m_playtimeBadge);
+        const float padX = 7.f * s;
+        const float padY = 2.f * s;
+        const float margin = 6.f * s;
+        float textScale = 0.5f * s;
+        const float room = r.width * 0.6f - padX * 2.f;
+        if (measured.x > 0.f && measured.x * textScale > room)
+            textScale = room / measured.x;
+        const float pillW = measured.x * textScale + padX * 2.f;
+        const float pillH = measured.y * textScale + padY * 2.f;
+        const nxui::Rect pill{r.x + margin, r.y + r.height - pillH - margin, pillW, pillH};
+        ren.drawRoundedRect(pill, nxui::Color(0.06f, 0.07f, 0.09f, 0.78f * a),
+                            pillH * 0.5f);
+        ren.drawText(m_playtimeBadge, {pill.x + padX, pill.y + padY}, m_font,
+                     nxui::Color::white().withAlpha(0.96f * a), textScale);
+    }
 }
 
 void GlossyIcon::onContentRender(nxui::Renderer& ren) {

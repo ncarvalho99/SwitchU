@@ -1,0 +1,93 @@
+#include "core/PlayTime.hpp"
+#include "DebugLog.hpp"
+
+#include <switch.h>
+
+namespace switchu::menu::playtime {
+
+namespace {
+
+constexpr std::uint64_t kNanosecondsPerMinute = 60000000000ULL;
+
+} // namespace
+
+std::optional<std::uint64_t> query(std::uint64_t titleId) {
+#ifdef SWITCHU_MENU
+    if (titleId == 0)
+        return std::nullopt;
+    const Result initRc = pdmqryInitialize();
+    if (R_FAILED(initRc)) {
+        DebugLog::log("[playtime] pdmqry init failed title=%016llX rc=0x%X",
+                      static_cast<unsigned long long>(titleId), initRc);
+        return std::nullopt;
+    }
+    PdmPlayStatistics stats{};
+    const Result queryRc = pdmqryQueryPlayStatisticsByApplicationId(titleId, true, &stats);
+    pdmqryExit();
+    if (R_FAILED(queryRc)) {
+        DebugLog::log("[playtime] query failed title=%016llX rc=0x%X",
+                      static_cast<unsigned long long>(titleId), queryRc);
+        return std::nullopt;
+    }
+    return stats.playtime;
+#else
+    (void)titleId;
+    return std::nullopt;
+#endif
+}
+
+std::vector<std::pair<std::uint64_t, std::uint64_t>> queryAll(
+    const std::vector<std::uint64_t>& titleIds) {
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> result;
+#ifdef SWITCHU_MENU
+    if (titleIds.empty())
+        return result;
+    const Result initRc = pdmqryInitialize();
+    if (R_FAILED(initRc)) {
+        DebugLog::log("[playtime] pdmqry init failed for batch of %zu rc=0x%X",
+                      titleIds.size(), initRc);
+        return result;
+    }
+    result.reserve(titleIds.size());
+    int failed = 0;
+    for (const std::uint64_t titleId : titleIds) {
+        if (titleId == 0)
+            continue;
+        PdmPlayStatistics stats{};
+        const Result rc = pdmqryQueryPlayStatisticsByApplicationId(titleId, true, &stats);
+        if (R_FAILED(rc)) {
+            ++failed;
+            DebugLog::log("[playtime] query failed title=%016llX rc=0x%X",
+                          static_cast<unsigned long long>(titleId), rc);
+            continue;
+        }
+        result.emplace_back(titleId, stats.playtime);
+    }
+    pdmqryExit();
+    DebugLog::log("[playtime] batch queried=%zu answered=%zu failed=%d",
+                  titleIds.size(), result.size(), failed);
+#else
+    (void)titleIds;
+#endif
+    return result;
+}
+
+std::string format(std::uint64_t nanoseconds) {
+    const std::uint64_t minutes = nanoseconds / kNanosecondsPerMinute;
+    if (nanoseconds == 0)
+        return {};
+    if (minutes >= 60)
+        return std::to_string(minutes / 60) + " h " + std::to_string(minutes % 60) + " min";
+    return std::to_string(minutes) + " min";
+}
+
+std::string formatCompact(std::uint64_t nanoseconds) {
+    const std::uint64_t minutes = nanoseconds / kNanosecondsPerMinute;
+    if (nanoseconds == 0)
+        return {};
+    if (minutes >= 60)
+        return std::to_string(minutes / 60) + " h";
+    return std::to_string(minutes) + " min";
+}
+
+} // namespace switchu::menu::playtime
