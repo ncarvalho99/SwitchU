@@ -1195,6 +1195,8 @@ void WiiUMenuApp::loadStaticTextures() {
                                           std::string(SD_ASSETS) + "/icons/widget_battery_joycon_right.png");
     m_batteryControllerTex.loadFromFile(app().gpu(), app().renderer(),
                                          std::string(SD_ASSETS) + "/icons/widget_battery_controller.png");
+
+    m_miiAvatarManager.initialize(app().gpu(), app().renderer(), SD_ASSETS);
 }
 
 void WiiUMenuApp::buildUserAvatarBar(bool loadImmediately) {
