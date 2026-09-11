@@ -128,13 +128,13 @@ void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std:
                                    [tid = stats.titleId](const DailyTitleEntry& e) {
                                        return e.titleId == tid;
                                    });
+            // Use the title's average session or full remaining playtime
             if (it == dayRecord.titles.end()) {
                 DailyTitleEntry entry;
                 entry.titleId = stats.titleId;
                 entry.titleName = stats.titleName;
-                // Estimate day playtime as min of average session or 1 hour
                 entry.playtimeSeconds = std::max<std::uint64_t>(
-                    60, std::min<std::uint64_t>(stats.averageSessionSeconds > 0 ? stats.averageSessionSeconds : 1800, 3600 * 2));
+                    60, std::min<std::uint64_t>(stats.averageSessionSeconds > 0 ? stats.averageSessionSeconds : stats.totalPlaytimeSeconds, 3600 * 4));
                 entry.launches = std::max<std::uint32_t>(1, stats.totalLaunches > 0 ? 1 : 0);
                 dayRecord.titles.push_back(entry);
                 dayRecord.totalPlaytimeSeconds += entry.playtimeSeconds;
@@ -152,6 +152,14 @@ void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std:
 
     DebugLog::log("[activity] refresh complete: %zu ranked titles, %zu active days",
                   m_allTimeRankings.size(), m_dailyRecords.size());
+    for (const auto& [dayKey, day] : m_dailyRecords) {
+        DebugLog::log("[activity] dayKey=%d: %zu titles, totalPlaytime=%llus",
+                      dayKey, day.titles.size(), (unsigned long long)day.totalPlaytimeSeconds);
+        for (const auto& t : day.titles) {
+            DebugLog::log("[activity]   -> %016llX ('%s') %llus",
+                          (unsigned long long)t.titleId, t.titleName.c_str(), (unsigned long long)t.playtimeSeconds);
+        }
+    }
 }
 
 const TitlePlayStats* ActivityLogManager::findTitleStats(std::uint64_t titleId) const {
@@ -209,6 +217,13 @@ MonthlyLogSummary ActivityLogManager::queryMonth(int year, int month) const {
                   return a.playtimeSeconds > b.playtimeSeconds;
               });
 
+    DebugLog::log("[activity] queryMonth %d/%d: activeDays=%u, totalPlaytime=%llus, titles=%zu",
+                  year, month, summary.activeDaysCount, (unsigned long long)summary.totalPlaytimeSeconds, summary.titles.size());
+    for (const auto& t : summary.titles) {
+        DebugLog::log("[activity]   monthly title -> %016llX ('%s') %llus",
+                      (unsigned long long)t.titleId, t.titleName.c_str(), (unsigned long long)t.playtimeSeconds);
+    }
+
     return summary;
 }
 
@@ -243,9 +258,14 @@ void ActivityLogManager::queryPdmStatistics(const std::vector<std::pair<std::uin
             m_statsByTitle[titleId] = s;
             m_allTimeRankings.push_back(s);
             if (s.totalLaunches > 0 || s.totalPlaytimeSeconds > 0) {
-                DebugLog::log("[activity] %016llX ('%s') launches=%u playtime=%llus",
+                int fy = 0, fm = 0, fd = 0;
+                int ly = 0, lm = 0, ld = 0;
+                timestampToDate(s.firstPlayedTimestamp, fy, fm, fd);
+                timestampToDate(s.lastPlayedTimestamp, ly, lm, ld);
+                DebugLog::log("[activity] %016llX ('%s') launches=%u playtime=%llus first=%d-%02d-%02d last=%d-%02d-%02d",
                               (unsigned long long)titleId, name.c_str(), stats.total_launches,
-                              (unsigned long long)s.totalPlaytimeSeconds);
+                              (unsigned long long)s.totalPlaytimeSeconds,
+                              fy, fm, fd, ly, lm, ld);
             }
         }
     }
@@ -280,17 +300,26 @@ void ActivityLogManager::queryPdmStatistics(const std::vector<std::pair<std::uin
 void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint64_t, std::string>& titleNames) {
 #ifdef __SWITCH__
     const Result initRc = pdmqryInitialize();
-    if (R_FAILED(initRc)) return;
+    if (R_FAILED(initRc)) {
+        DebugLog::log("[activity] pdmqryInitialize failed in applet events rc=0x%08X", (unsigned int)initRc);
+        return;
+    }
 
     s32 total_entries = 0, start_entry = 0, end_entry = 0;
     const Result rangeRc = pdmqryGetAvailablePlayEventRange(&total_entries, &start_entry, &end_entry);
+    DebugLog::log("[activity] pdm range: rc=0x%08X total=%d start=%d end=%d",
+                  (unsigned int)rangeRc, total_entries, start_entry, end_entry);
+
     if (R_SUCCEEDED(rangeRc) && total_entries > 0 && end_entry >= start_entry) {
         constexpr s32 kChunkSize = 64;
         std::vector<PdmAppletEvent> events(kChunkSize);
         std::unordered_map<u64, u64> activeStarts;
 
-        // Scan the most recent applet events to keep UI opening instantaneous.
-        s32 cur = std::max(start_entry, end_entry - 120);
+        // Scan the entire available range (up to 2048 entries) to ensure all active days and months are covered.
+        s32 cur = std::max(start_entry, end_entry - 2048);
+        DebugLog::log("[activity] scanning applet events from index %d to %d", cur, end_entry);
+        s32 totalParsed = 0;
+        s32 sessionsCount = 0;
         while (cur <= end_entry) {
             s32 count = std::min(kChunkSize, end_entry - cur + 1);
             s32 total_out = 0;
@@ -310,6 +339,43 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
 
                 u64 ts = toPosixTimestamp(ev.timestamp_user);
                 if (ev.event_type == PdmAppletEventType_Launch || ev.event_type == PdmAppletEventType_InFocus) {
+                    for (auto it = activeStarts.begin(); it != activeStarts.end(); ) {
+                        if (it->first != ev.program_id) {
+                            u64 prevStart = it->second;
+                            if (ts >= prevStart) {
+                                u64 dur = std::min<u64>(ts - prevStart, 3600 * 4);
+                                if (dur > 0) {
+                                    int y = 0, m = 0, d = 0;
+                                    timestampToDate(prevStart, y, m, d);
+                                    int dayKey = makeDayKey(y, m, d);
+                                    auto& dayRecord = m_dailyRecords[dayKey];
+                                    dayRecord.year = y;
+                                    dayRecord.month = m;
+                                    dayRecord.day = d;
+                                    dayRecord.totalPlaytimeSeconds += dur;
+                                    auto tit = std::find_if(dayRecord.titles.begin(), dayRecord.titles.end(),
+                                                            [id = it->first](const DailyTitleEntry& e) {
+                                                                return e.titleId == id;
+                                                            });
+                                    if (tit != dayRecord.titles.end()) {
+                                        tit->playtimeSeconds += dur;
+                                    } else {
+                                        DailyTitleEntry te;
+                                        te.titleId = it->first;
+                                        auto nit = titleNames.find(it->first);
+                                        te.titleName = (nit != titleNames.end()) ? nit->second : "";
+                                        te.playtimeSeconds = dur;
+                                        te.launches = 1;
+                                        dayRecord.titles.push_back(te);
+                                    }
+                                    sessionsCount++;
+                                }
+                            }
+                            it = activeStarts.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
                     activeStarts[ev.program_id] = ts;
                 } else if (ev.event_type == PdmAppletEventType_Exit || ev.event_type == PdmAppletEventType_OutOfFocus ||
                            ev.event_type == PdmAppletEventType_OutOfFocus4 || ev.event_type == PdmAppletEventType_Exit5 ||
@@ -347,6 +413,7 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                                     te.launches = 1;
                                     dayRecord.titles.push_back(te);
                                 }
+                                sessionsCount++;
                             }
                         }
                     }
@@ -354,6 +421,8 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
             }
             cur += total_out;
         }
+        DebugLog::log("[activity] applet events parsed: %d events, %d sessions created",
+                      totalParsed, sessionsCount);
     }
     pdmqryExit();
 #else

@@ -114,6 +114,7 @@ void ActivityLogScreen::open(std::uint64_t initialTitleId) {
     m_monthlySelectedDay = m_todayDay;
 
     m_dailyScrollIndex = 0;
+    m_monthlyScrollIndex = 0;
     m_dailyFocus = 0;
     m_monthlyFocus = 0;
     m_selectedTitleIdx = 0;
@@ -153,6 +154,18 @@ void ActivityLogScreen::cycleTab(int delta) {
     if (nextTab < 0) nextTab = static_cast<int>(m_tabs.size()) - 1;
     else if (nextTab >= static_cast<int>(m_tabs.size())) nextTab = 0;
     if (nextTab != m_tabIndex) {
+        // Synchronize view months when switching between Daily and Monthly tabs
+        if (m_tabIndex == 0 && nextTab == 1) {
+            m_monthYear = m_curYear;
+            m_monthMonth = m_curMonth;
+            m_monthlyScrollIndex = 0;
+        } else if (m_tabIndex == 1 && nextTab == 0) {
+            m_curYear = m_monthYear;
+            m_curMonth = m_monthMonth;
+            int maxDays = switchu::activity::ActivityLogManager::daysInMonth(m_curYear, m_curMonth);
+            if (m_curDay > maxDays) m_curDay = maxDays;
+            m_dailyScrollIndex = 0;
+        }
         m_tabIndex = nextTab;
         if (m_tabChangeSfxCb) m_tabChangeSfxCb();
         m_focusArea = FocusArea::Tabs;
@@ -216,6 +229,7 @@ void ActivityLogScreen::cycleMonth(int delta) {
     int maxDays = switchu::activity::ActivityLogManager::daysInMonth(m_monthYear, m_monthMonth);
     if (m_monthlySelectedDay > maxDays)
         m_monthlySelectedDay = maxDays;
+    m_monthlyScrollIndex = 0;
     if (m_dateChangeSfxCb) m_dateChangeSfxCb(delta > 0);
 }
 
@@ -229,6 +243,7 @@ void ActivityLogScreen::jumpToToday() {
     m_monthMonth = m_todayMonth;
     m_monthlySelectedDay = m_todayDay;
     m_dailyScrollIndex = 0;
+    m_monthlyScrollIndex = 0;
     if (changed && m_dateChangeSfxCb) m_dateChangeSfxCb(true);
 }
 
@@ -573,18 +588,30 @@ void ActivityLogScreen::drawMonthlyTab(nxui::Renderer& ren, const nxui::Rect& co
         std::string noData = i18n.tr("activity_log.empty_month", "No play records for this month.");
         ren.drawText(noData, {topTitlesArea.x + 20.f, topTitlesArea.y + 20.f}, m_smallFont, textSec, 0.75f);
     } else {
-        int count = std::min<int>(3, static_cast<int>(monthData.titles.size()));
+        int totalTitles = static_cast<int>(monthData.titles.size());
+        constexpr int kMonthlyMaxVisible = 5;
+        if (m_monthlyScrollIndex < 0) m_monthlyScrollIndex = 0;
+        if (m_monthlyScrollIndex + kMonthlyMaxVisible > totalTitles && totalTitles > kMonthlyMaxVisible) {
+            m_monthlyScrollIndex = totalTitles - kMonthlyMaxVisible;
+        } else if (totalTitles <= kMonthlyMaxVisible) {
+            m_monthlyScrollIndex = 0;
+        }
+
+        int visibleCount = std::min<int>(kMonthlyMaxVisible, totalTitles - m_monthlyScrollIndex);
         float ty = topTitlesArea.y;
-        for (int i = 0; i < count; ++i) {
-            const auto& t = monthData.titles[i];
-            nxui::Rect rowRect{topTitlesArea.x, ty, topTitlesArea.width, 42.f};
-            ren.drawRoundedRect(rowRect, kCardBg.withAlpha(0.12f * opacity), 10.f);
+        float rowWidth = topTitlesArea.width - (totalTitles > kMonthlyMaxVisible ? 16.f : 0.f);
 
-            nxui::Color color = getTitleColor(i);
-            std::string rankStr = std::to_string(i + 1);
-            ren.drawText(rankStr, {rowRect.x + 8.f, rowRect.y + 11.f}, m_smallFont, color.withAlpha(opacity), 0.75f);
+        for (int i = 0; i < visibleCount; ++i) {
+            int idx = m_monthlyScrollIndex + i;
+            const auto& t = monthData.titles[idx];
+            nxui::Rect rowRect{topTitlesArea.x, ty, rowWidth, 44.f};
+            ren.drawRoundedRect(rowRect, kCardBg.withAlpha(0.14f * opacity), 10.f);
 
-            nxui::Rect iconRect{rowRect.x + 28.f, rowRect.y + 5.f, 32.f, 32.f};
+            nxui::Color color = getTitleColor(idx);
+            std::string rankStr = std::to_string(idx + 1);
+            ren.drawText(rankStr, {rowRect.x + 8.f, rowRect.y + 12.f}, m_smallFont, color.withAlpha(opacity), 0.75f);
+
+            nxui::Rect iconRect{rowRect.x + 30.f, rowRect.y + 6.f, 32.f, 32.f};
             nxui::Texture* iconTex = getIconTexture(t.titleId);
             if (iconTex) {
                 ren.drawTextureRounded(iconTex, iconRect, 6.f, nxui::Color(1, 1, 1, opacity));
@@ -594,13 +621,27 @@ void ActivityLogScreen::drawMonthlyTab(nxui::Renderer& ren, const nxui::Rect& co
             }
 
             std::string name = ellipsizeText(m_font, t.titleName.empty() ? ("Title " + std::to_string(t.titleId)) : t.titleName, rowRect.width - 240.f, 0.75f);
-            ren.drawText(name, {rowRect.x + 68.f, rowRect.y + 10.f}, m_font, textPri, 0.75f);
+            ren.drawText(name, {rowRect.x + 72.f, rowRect.y + 11.f}, m_font, textPri, 0.75f);
 
             std::string pt = formatPlaytime(t.playtimeSeconds);
             float ptW = m_font ? m_font->measure(pt).x * 0.72f : 80.f;
-            ren.drawText(pt, {rowRect.right() - ptW - 14.f, rowRect.y + 10.f}, m_font, color.withAlpha(opacity), 0.72f);
+            ren.drawText(pt, {rowRect.right() - ptW - 14.f, rowRect.y + 11.f}, m_font, color.withAlpha(opacity), 0.72f);
 
-            ty += 48.f;
+            ty += 50.f;
+        }
+
+        // Scrollbar indicator on the right side if more than 5 titles exist
+        if (totalTitles > kMonthlyMaxVisible) {
+            float scrollbarH = topTitlesArea.height - 10.f;
+            float thumbH = std::max(24.f, scrollbarH * (static_cast<float>(kMonthlyMaxVisible) / static_cast<float>(totalTitles)));
+            float maxScroll = static_cast<float>(totalTitles - kMonthlyMaxVisible);
+            float thumbY = topTitlesArea.y + 5.f + (static_cast<float>(m_monthlyScrollIndex) / maxScroll) * (scrollbarH - thumbH);
+
+            nxui::Rect trackRect{topTitlesArea.right() - 8.f, topTitlesArea.y + 5.f, 4.f, scrollbarH};
+            ren.drawRoundedRect(trackRect, kCardBg.withAlpha(0.2f * opacity), 2.f);
+
+            nxui::Rect thumbRect{topTitlesArea.right() - 8.f, thumbY, 4.f, thumbH};
+            ren.drawRoundedRect(thumbRect, kColorCyan.withAlpha(0.7f * opacity), 2.f);
         }
     }
 
@@ -747,6 +788,12 @@ bool ActivityLogScreen::handleCustomNavUp() {
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
+    } else if (m_tabIndex == 1 && m_manager) {
+        if (m_monthlyScrollIndex > 0) {
+            m_monthlyScrollIndex--;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
     } else if (m_tabIndex == 2 && m_manager) {
         if (m_selectedTitleIdx > 0) {
             m_selectedTitleIdx--;
@@ -762,6 +809,13 @@ bool ActivityLogScreen::handleCustomNavDown() {
         auto day = m_manager->queryDay(m_curYear, m_curMonth, m_curDay);
         if (m_dailyScrollIndex + 5 < static_cast<int>(day.titles.size())) {
             m_dailyScrollIndex++;
+            if (m_navSfxCb) m_navSfxCb();
+            return true;
+        }
+    } else if (m_tabIndex == 1 && m_manager) {
+        auto monthData = m_manager->queryMonth(m_monthYear, m_monthMonth);
+        if (m_monthlyScrollIndex + 5 < static_cast<int>(monthData.titles.size())) {
+            m_monthlyScrollIndex++;
             if (m_navSfxCb) m_navSfxCb();
             return true;
         }
