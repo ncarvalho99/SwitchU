@@ -6,14 +6,101 @@
 #include <cmath>
 #include <cstring>
 #include <ctime>
+#include <fstream>
+#include <mutex>
 
 #ifdef __SWITCH__
 #include <switch.h>
+#endif
+#ifdef SWITCHU_MENU
+#include <switchu/control_cache.hpp>
 #endif
 
 namespace switchu::activity {
 
 namespace {
+
+static std::mutex s_namesMutex;
+static std::unordered_map<std::uint64_t, std::string> s_resolvedNames;
+static std::unordered_map<std::uint64_t, std::uint64_t> s_canonicalAliases;
+static bool s_mappingsInitialized = false;
+
+struct KnownPortDef {
+    std::uint64_t altId;
+    std::uint64_t canonicalId;
+    const char* name;
+};
+
+static const KnownPortDef kKnownPortDefs[] = {
+    {0x05BC0A1F4DA64000ULL, 0x05BC0A1F4DA84000ULL, "Grand Theft Auto - San Andreas (Android Port)"},
+    {0x05BC0A1F4DA84000ULL, 0x05BC0A1F4DA84000ULL, "Grand Theft Auto - San Andreas (Android Port)"},
+    {0x05BECF2629BB0000ULL, 0x05BECF2629BA0000ULL, "Super Mario 64 - Render 96 (Port)"},
+    {0x05BECF2629BA0000ULL, 0x05BECF2629BA0000ULL, "Super Mario 64 - Render 96 (Port)"},
+    {0x05BECF2629BD0000ULL, 0x05BECF2629BC0000ULL, "Simpsons Hit & Run (Port)"},
+    {0x05BECF2629BC0000ULL, 0x05BECF2629BC0000ULL, "Simpsons Hit & Run (Port)"},
+    {0x05BECF2629B8C000ULL, 0x05BECF2629B8D000ULL, "The Legend of Zelda - Ocarina of Time (Port)"},
+    {0x05BECF2629B8D000ULL, 0x05BECF2629B8D000ULL, "The Legend of Zelda - Ocarina of Time (Port)"},
+    {0x05BECF2629BF0000ULL, 0x05BECF2629BF2000ULL, "The Legend of Zelda - Majoras Mask (Port)"},
+    {0x05BECF2629BF2000ULL, 0x05BECF2629BF2000ULL, "The Legend of Zelda - Majoras Mask (Port)"},
+    {0x0539210E01A62000ULL, 0x0539210E01B62000ULL, "The Legend of Zelda - Link's Awakening DX HD"},
+    {0x0539210E01B62000ULL, 0x0539210E01B62000ULL, "The Legend of Zelda - Link's Awakening DX HD"},
+    {0x05BECF2629C50000ULL, 0x05BECF2629C40000ULL, "The Legend of Zelda - A Link to the Past (Port)"},
+    {0x05BECF2629C40000ULL, 0x05BECF2629C40000ULL, "The Legend of Zelda - A Link to the Past (Port)"},
+    {0x054195EEBB4F2000ULL, 0x054195EEBB5F2000ULL, "The Legend of Zelda - Twilight Princess (Port)"},
+    {0x054195EEBB5F2000ULL, 0x054195EEBB5F2000ULL, "The Legend of Zelda - Twilight Princess (Port)"},
+    {0x05454A7359780000ULL, 0x05454A7359880000ULL, "Bully - Anniversary Edition (Port)"},
+    {0x05454A7359880000ULL, 0x05454A7359880000ULL, "Bully - Anniversary Edition (Port)"},
+    {0x052CC68B92306000ULL, 0x052CC68B92306000ULL, "Counter Strike Source (Android Port)"},
+};
+
+void initMappings(const std::vector<std::pair<std::uint64_t, std::string>>& installed) {
+    std::lock_guard<std::mutex> lock(s_namesMutex);
+    for (const auto& d : kKnownPortDefs) {
+        s_canonicalAliases[d.altId] = d.canonicalId;
+        if (s_resolvedNames.find(d.altId) == s_resolvedNames.end()) {
+            s_resolvedNames[d.altId] = d.name;
+        }
+        if (s_resolvedNames.find(d.canonicalId) == s_resolvedNames.end()) {
+            s_resolvedNames[d.canonicalId] = d.name;
+        }
+    }
+
+    // Load sdmc:/switch/DBI/dbi.titles if present
+    std::ifstream dbiFile("sdmc:/switch/DBI/dbi.titles");
+    if (dbiFile.is_open()) {
+        std::string line;
+        while (std::getline(dbiFile, line)) {
+            auto eq = line.find('=');
+            if (eq == std::string::npos || eq < 16) continue;
+            std::string hexStr = line.substr(0, eq);
+            std::string name = line.substr(eq + 1);
+            while (!name.empty() && (name.back() == '\r' || name.back() == '\n' || name.back() == ' '))
+                name.pop_back();
+            while (!name.empty() && name.front() == ' ')
+                name.erase(name.begin());
+            if (name.empty()) continue;
+            char* end = nullptr;
+            std::uint64_t tid = std::strtoull(hexStr.c_str(), &end, 16);
+            if (tid != 0 && end != hexStr.c_str()) {
+                s_resolvedNames[tid] = name;
+            }
+        }
+    }
+
+    // Map any title with identical name to the installed title ID
+    for (const auto& [instId, instName] : installed) {
+        if (instId == 0 || instName.empty()) continue;
+        s_resolvedNames[instId] = instName;
+        s_canonicalAliases[instId] = instId;
+
+        for (const auto& [otherId, otherName] : s_resolvedNames) {
+            if (otherId != instId && otherName == instName) {
+                s_canonicalAliases[otherId] = instId;
+            }
+        }
+    }
+    s_mappingsInitialized = true;
+}
 
 inline std::uint64_t toPosixTimestamp(std::uint64_t ts) {
     if (ts == 0) return 0;
@@ -42,6 +129,89 @@ void timestampToDate(std::uint64_t posixSeconds, int& outYear, int& outMonth, in
 
 } // namespace
 
+std::uint64_t ActivityLogManager::canonicalTitleId(std::uint64_t titleId) {
+    if (titleId == 0) return 0;
+    std::lock_guard<std::mutex> lock(s_namesMutex);
+    auto it = s_canonicalAliases.find(titleId);
+    if (it != s_canonicalAliases.end()) {
+        return it->second;
+    }
+    for (const auto& d : kKnownPortDefs) {
+        if (d.altId == titleId) return d.canonicalId;
+    }
+    return titleId;
+}
+
+std::string ActivityLogManager::resolveTitleName(std::uint64_t titleId) {
+    if (titleId == 0) return "";
+    {
+        std::lock_guard<std::mutex> lock(s_namesMutex);
+        auto it = s_resolvedNames.find(titleId);
+        if (it != s_resolvedNames.end() && !it->second.empty()) {
+            return it->second;
+        }
+        auto cit = s_canonicalAliases.find(titleId);
+        if (cit != s_canonicalAliases.end() && cit->second != titleId) {
+            auto nit = s_resolvedNames.find(cit->second);
+            if (nit != s_resolvedNames.end() && !nit->second.empty()) {
+                return nit->second;
+            }
+        }
+    }
+
+#ifdef SWITCHU_MENU
+    // Check control_cache
+    switchu::control_cache::Meta meta{};
+    if (switchu::control_cache::readMeta(titleId, meta) && meta.name[0] != '\0') {
+        std::string n = meta.name;
+        std::lock_guard<std::mutex> lock(s_namesMutex);
+        s_resolvedNames[titleId] = n;
+        return n;
+    }
+    std::uint64_t canon = canonicalTitleId(titleId);
+    if (canon != titleId && switchu::control_cache::readMeta(canon, meta) && meta.name[0] != '\0') {
+        std::string n = meta.name;
+        std::lock_guard<std::mutex> lock(s_namesMutex);
+        s_resolvedNames[titleId] = n;
+        s_resolvedNames[canon] = n;
+        return n;
+    }
+#ifdef __SWITCH__
+    // Query NS if available
+    auto* controlData = new (std::nothrow) NsApplicationControlData();
+    if (controlData) {
+        size_t controlSize = 0;
+        Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
+                                                titleId,
+                                                controlData,
+                                                sizeof(NsApplicationControlData),
+                                                &controlSize);
+        if (R_FAILED(rc) && canon != titleId) {
+            rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
+                                             canon,
+                                             controlData,
+                                             sizeof(NsApplicationControlData),
+                                             &controlSize);
+        }
+        if (R_SUCCEEDED(rc) && controlSize > sizeof(controlData->nacp)) {
+            NacpLanguageEntry* preferred = nullptr;
+            if (R_SUCCEEDED(nacpGetLanguageEntry(&controlData->nacp, &preferred)) && preferred && preferred->name[0] != '\0') {
+                std::string n = preferred->name;
+                switchu::control_cache::writeFromControlData(titleId, *controlData, controlSize);
+                delete controlData;
+                std::lock_guard<std::mutex> lock(s_namesMutex);
+                s_resolvedNames[titleId] = n;
+                return n;
+            }
+        }
+        delete controlData;
+    }
+#endif
+#endif
+
+    return "";
+}
+
 int ActivityLogManager::daysInMonth(int year, int month) {
     if (month == 2) {
         const bool leap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
@@ -58,10 +228,23 @@ bool ActivityLogManager::isUtilityOrLauncher(std::uint64_t titleId, const std::s
         case 0x05446530ACA7E000ULL: // sphaira
         case 0x05FBF3FAE702C000ULL: // CNX Updater
         case 0x05D45EEC8EB90000ULL: // DBI
+        case 0x05421CBDD110A000ULL: // P2PNX
+        case 0x05FB92703CF35000ULL: // HB App Store
+        case 0x050000BADDAD0000ULL: // Tinfoil
+        case 0x05B173DA652BC000ULL: // NX-Mod-Manager
+        case 0x056DC0E20BB75000ULL: // NetherSX2
+        case 0x053E096E5B598000ULL: // duckstation
+        case 0x056FCC911FF23000ULL: // TelegramNX
+        case 0x05D8698824D69000ULL: // PortNX
+        case 0x057565ABF674E000ULL: // AmiiboGenerator
         case 0x010000000000100DULL: // Album / hbmenu applet
         case 0x0100000000001008ULL: // Mii Editor
         case 0x010000000000100BULL: // Controller pairing applet
         case 0x0100000000001000ULL: // qlaunch / SwitchU itself
+        case 0x0100000000000025ULL: // erpt
+        case 0x0100000000001007ULL: // photo viewer
+        case 0x0100000000001009ULL: // user select
+        case 0x010000000000100EULL: // web browser applet
             return true;
         default:
             break;
@@ -89,7 +272,15 @@ bool ActivityLogManager::isUtilityOrLauncher(std::uint64_t titleId, const std::s
         lower.find("daybreak") != std::string::npos ||
         lower.find("edizon") != std::string::npos ||
         lower.find("breeze") != std::string::npos ||
-        lower.find("jksv") != std::string::npos)
+        lower.find("jksv") != std::string::npos ||
+        lower.find("p2pnx") != std::string::npos ||
+        lower.find("app store") != std::string::npos ||
+        lower.find("appstore") != std::string::npos ||
+        lower.find("mod manager") != std::string::npos ||
+        lower.find("mod-manager") != std::string::npos ||
+        lower.find("amiibogenerator") != std::string::npos ||
+        lower.find("activity-log") != std::string::npos ||
+        lower.find("switchu") != std::string::npos)
     {
         return true;
     }
@@ -102,10 +293,20 @@ void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std:
     m_statsByTitle.clear();
     m_dailyRecords.clear();
 
+    initMappings(installedTitles);
+
     std::unordered_map<std::uint64_t, std::string> titleNames;
     for (const auto& [tid, name] : installedTitles) {
         if (tid != 0) {
             titleNames[tid] = name;
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(s_namesMutex);
+        for (const auto& [tid, name] : s_resolvedNames) {
+            if (titleNames.find(tid) == titleNames.end()) {
+                titleNames[tid] = name;
+            }
         }
     }
 
@@ -149,6 +350,34 @@ void ActivityLogManager::refresh(const std::vector<std::pair<std::uint64_t, std:
                       return a.playtimeSeconds > b.playtimeSeconds;
                   });
     }
+
+    // Ensure all played canonical titles found in event query are also in all-time rankings
+    for (const auto& [dayKey, day] : m_dailyRecords) {
+        for (const auto& t : day.titles) {
+            auto it = m_statsByTitle.find(t.titleId);
+            if (it == m_statsByTitle.end()) {
+                TitlePlayStats s;
+                s.titleId = t.titleId;
+                s.titleName = t.titleName.empty() ? resolveTitleName(t.titleId) : t.titleName;
+                s.totalPlaytimeSeconds = t.playtimeSeconds;
+                s.totalLaunches = t.launches;
+                m_statsByTitle[t.titleId] = s;
+                m_allTimeRankings.push_back(s);
+            } else {
+                it->second.totalPlaytimeSeconds = std::max(it->second.totalPlaytimeSeconds, t.playtimeSeconds);
+                if (it->second.titleName.empty() && !t.titleName.empty()) {
+                    it->second.titleName = t.titleName;
+                }
+            }
+        }
+    }
+
+    std::sort(m_allTimeRankings.begin(), m_allTimeRankings.end(),
+              [](const TitlePlayStats& a, const TitlePlayStats& b) {
+                  if (a.totalPlaytimeSeconds != b.totalPlaytimeSeconds)
+                      return a.totalPlaytimeSeconds > b.totalPlaytimeSeconds;
+                  return a.totalLaunches > b.totalLaunches;
+              });
 
     DebugLog::log("[activity] refresh complete: %zu ranked titles, %zu active days",
                   m_allTimeRankings.size(), m_dailyRecords.size());
@@ -331,16 +560,30 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                 const auto& ev = events[i];
                 if (ev.program_id == 0) continue;
 
-                auto nameIt = titleNames.find(ev.program_id);
-                const std::string& appName = (nameIt != titleNames.end()) ? nameIt->second : "";
-                if (isUtilityOrLauncher(ev.program_id, appName)) {
+                u64 rawId = ev.program_id;
+                u64 canonicalId = canonicalTitleId(rawId);
+
+                std::string appName = resolveTitleName(canonicalId);
+                if (appName.empty()) {
+                    appName = resolveTitleName(rawId);
+                }
+                if (appName.empty()) {
+                    auto nit = titleNames.find(canonicalId);
+                    if (nit != titleNames.end()) appName = nit->second;
+                    else {
+                        auto rnit = titleNames.find(rawId);
+                        if (rnit != titleNames.end()) appName = rnit->second;
+                    }
+                }
+
+                if (isUtilityOrLauncher(rawId, appName) || isUtilityOrLauncher(canonicalId, appName)) {
                     continue;
                 }
 
                 u64 ts = toPosixTimestamp(ev.timestamp_user);
                 if (ev.event_type == PdmAppletEventType_Launch || ev.event_type == PdmAppletEventType_InFocus) {
                     for (auto it = activeStarts.begin(); it != activeStarts.end(); ) {
-                        if (it->first != ev.program_id) {
+                        if (it->first != canonicalId) {
                             u64 prevStart = it->second;
                             if (ts >= prevStart) {
                                 u64 dur = std::min<u64>(ts - prevStart, 3600 * 4);
@@ -362,8 +605,12 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                                     } else {
                                         DailyTitleEntry te;
                                         te.titleId = it->first;
-                                        auto nit = titleNames.find(it->first);
-                                        te.titleName = (nit != titleNames.end()) ? nit->second : "";
+                                        std::string tname = resolveTitleName(it->first);
+                                        if (tname.empty()) {
+                                            auto nit = titleNames.find(it->first);
+                                            tname = (nit != titleNames.end()) ? nit->second : "";
+                                        }
+                                        te.titleName = tname;
                                         te.playtimeSeconds = dur;
                                         te.launches = 1;
                                         dayRecord.titles.push_back(te);
@@ -376,17 +623,17 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                             ++it;
                         }
                     }
-                    activeStarts[ev.program_id] = ts;
+                    activeStarts[canonicalId] = ts;
                 } else if (ev.event_type == PdmAppletEventType_Exit || ev.event_type == PdmAppletEventType_OutOfFocus ||
                            ev.event_type == PdmAppletEventType_OutOfFocus4 || ev.event_type == PdmAppletEventType_Exit5 ||
                            ev.event_type == PdmAppletEventType_Exit6) {
-                    auto it = activeStarts.find(ev.program_id);
+                    auto it = activeStarts.find(canonicalId);
                     if (it != activeStarts.end()) {
                         u64 startTs = it->second;
                         activeStarts.erase(it);
                         if (ts >= startTs) {
-                            u64 duration = ts - startTs;
-                            if (duration > 0 && duration < 24 * 3600) {
+                            u64 duration = std::min<u64>(ts - startTs, 3600 * 8);
+                            if (duration > 0) {
                                 int y = 0, m = 0, d = 0;
                                 timestampToDate(startTs, y, m, d);
                                 int dayKey = makeDayKey(y, m, d);
@@ -398,7 +645,7 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                                 dayRecord.totalPlaytimeSeconds += duration;
 
                                 auto tit = std::find_if(dayRecord.titles.begin(), dayRecord.titles.end(),
-                                                        [id = ev.program_id](const DailyTitleEntry& e) {
+                                                        [id = canonicalId](const DailyTitleEntry& e) {
                                                             return e.titleId == id;
                                                         });
                                 if (tit != dayRecord.titles.end()) {
@@ -406,9 +653,13 @@ void ActivityLogManager::queryPdmAppletEvents(const std::unordered_map<std::uint
                                     tit->launches += 1;
                                 } else {
                                     DailyTitleEntry te;
-                                    te.titleId = ev.program_id;
-                                    auto nit = titleNames.find(ev.program_id);
-                                    te.titleName = (nit != titleNames.end()) ? nit->second : "";
+                                    te.titleId = canonicalId;
+                                    std::string tname = resolveTitleName(canonicalId);
+                                    if (tname.empty()) {
+                                        auto nit = titleNames.find(canonicalId);
+                                        tname = (nit != titleNames.end()) ? nit->second : "";
+                                    }
+                                    te.titleName = tname;
                                     te.playtimeSeconds = duration;
                                     te.launches = 1;
                                     dayRecord.titles.push_back(te);

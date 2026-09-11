@@ -59,6 +59,8 @@ public:
 
     static int daysInMonth(int year, int month);
     static bool isUtilityOrLauncher(std::uint64_t titleId, const std::string& titleName);
+    static std::uint64_t canonicalTitleId(std::uint64_t titleId);
+    static std::string resolveTitleName(std::uint64_t titleId);
 
 private:
     void queryPdmStatistics(const std::vector<std::pair<std::uint64_t, std::string>>& installedTitles);
