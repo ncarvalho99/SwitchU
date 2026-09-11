@@ -22,7 +22,9 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 # only directories are. Hence notes/.
 OUTPUT = ROOT / "romfs" / "notes" / "release-notes.txt"
 # Matches what the dialog can render, so the console never has to strip Markdown
-# it was not given: headings and bullets, nothing else.
+# it was not given: headings and bullets, nothing else. The budget is per
+# language half: the dialog shows one of them, never both, and a shared budget
+# silently swallowed the tail of the Portuguese half once the release notes grew.
 MAX_CHARS = 6000
 # Splits the English half from the Portuguese one for the console.
 LANGUAGE_MARKER = "--pt-BR--"
@@ -77,6 +79,8 @@ def main() -> int:
             # it can show the reader's own language without parsing headings.
             if title.lower().startswith(("portugu", "português")):
                 kept.append(LANGUAGE_MARKER)
+                # The budget is per half, so the second language starts fresh.
+                total = 0
             elif not title.lower().startswith("english"):
                 kept.append("\n" + title)
             continue

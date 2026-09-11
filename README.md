@@ -167,6 +167,12 @@ Pressing **+** on a game opens its panel:
 ![](./screenshots/28.jpg)
 ![](./screenshots/29.jpg)
 ![](./screenshots/30.jpg)
+![](./screenshots/35.jpg)
+![](./screenshots/36.jpg)
+![](./screenshots/37.jpg)
+![](./screenshots/38.jpg)
+![](./screenshots/39.jpg)
+![](./screenshots/40.jpg)
 
 </details>
 
