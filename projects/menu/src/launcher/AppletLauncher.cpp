@@ -271,6 +271,12 @@ void AppletLauncher::launchUserPage(AccountUid) {}
 void AppletLauncher::enterSleep()              {}
 void AppletLauncher::shutdown()                {}
 void AppletLauncher::reboot()                  {}
+// No daemon to hand the removal to. A failure, not a pretend success: the
+// caller then reports that nothing was changed instead of waiting for a
+// restart that will never come.
+Result AppletLauncher::requestSelfUninstall()  {
+    return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+}
 Result AppletLauncher::prepareApplication(uint64_t, AccountUid,
                                           switchu::smi::LaunchTransitionTrace&) { return 0; }
 void AppletLauncher::launchApplication(uint64_t, AccountUid,
