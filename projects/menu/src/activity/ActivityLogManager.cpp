@@ -193,6 +193,11 @@ void ActivityLogManager::queryPdmStatistics(const std::vector<std::pair<std::uin
 
             m_statsByTitle[titleId] = s;
             m_allTimeRankings.push_back(s);
+            if (s.totalLaunches > 0 || s.totalPlaytimeSeconds > 0) {
+                DebugLog::log("[activity] %016llX ('%s') launches=%u playtime=%llus",
+                              (unsigned long long)titleId, name.c_str(), stats.total_launches,
+                              (unsigned long long)s.totalPlaytimeSeconds);
+            }
         }
     }
     pdmqryExit();

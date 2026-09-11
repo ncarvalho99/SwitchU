@@ -47,6 +47,7 @@ public:
 
 protected:
     void buildTabs() override;
+    float overlayTabWidth() const override { return 256.f; }
     bool usesCustomContentLayout() const override { return true; }
     void drawCustomContent(nxui::Renderer& ren, const nxui::Rect& panel,
                            const nxui::Rect& content, float opacity) override;
