@@ -1,29 +1,49 @@
-# SwitchU 2.4.3 (Hotfix)
+# SwitchU 2.5.0
 
-Hotfix release addressing manual date and time modification failures and adding standalone public SNTP network time synchronization.
+First release of the [robsonbaioco/SwitchU](https://github.com/robsonbaioco/SwitchU) fork, continuing from [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU) 2.4.3. Adds a most-played view to the home grid, with each game's hours on its icon.
 
 ## English
 
-### Date and time management
+### Most played
 
-- Fixed manual date/time modification in SwitchU daemon: resolved Horizon OS permission denial (`0x274` / `Time::PermissionDenied`) by directly configuring `NetworkSystemClock` (`time:s` cmd 1) and `LocalSystemClock` (`time:a` cmd 4) instead of relying on stock automatic correction toggles.
-- Added public SNTP time synchronization client supporting `pool.ntp.org` pools (`0.pool.ntp.org` through `3.pool.ntp.org`) and fallbacks (`time.google.com`, `time.cloudflare.com`). Enables reliable network time synchronization on consoles where stock Nintendo telemetry is blocked by 90DNS or Atmosphère hosts.
-- Added a dedicated "Synchronize Clock Now" action button in the System settings tab.
-- Toggling "Synchronize Clock via Internet" now triggers immediate background SNTP query with on-screen toast feedback.
-- Implemented background worker thread via libnx native Horizon `Thread` API pinned to Core 2, avoiding runtime aborts and preserving 60 FPS UI performance.
-- Hardened toast message presentation (`TabbedOverlayScreen`) with thread-safe mutual exclusion for background worker notifications.
+- **R** now cycles a fourth view, **Most played**, after My order, A–Z and Recent. Games are ordered by the play time the console itself records, most played first; games never played go to the end, and ties keep your own arrangement.
+- In this view every icon shows its hours in a small pill in the bottom-left corner. The other views stay clean.
+- Play time is read from the system in a single batch, off the interface thread, whenever the menu opens in this view (including every return from a game), when you switch to it, and when a game is closed or suspended. The grid opens in the right order straight away from the last known values and re-sorts only if the fresh numbers change it.
+
+### Play time everywhere else
+
+- The game details panel and the Recent playtime widget now read play time the same way. The widget used a system call that libnx documents as available to games only, instead of the menu's own play data service.
+
+### Updates and credits
+
+- The Update tab and the manager now check this fork's releases. About names the fork's maintainer and credits ncarvalho99's fork alongside PoloNX's original.
+
+### Build
+
+- The homebrew (.nro) build links again: a stub for the self-uninstall request was missing outside the sysmodule build.
+- CI installs `zstd`, and the SDL2 package falls back to an archived copy of the same file (same checksum) when its mirror is down.
 
 ---
 
 ## Português
 
-Atualização de correção (hotfix) para alteração manual de data e hora e adição de sincronização de horário via pools SNTP públicos.
+Primeira versão do fork [robsonbaioco/SwitchU](https://github.com/robsonbaioco/SwitchU), a partir do [ncarvalho99/SwitchU](https://github.com/ncarvalho99/SwitchU) 2.4.3. Adiciona a ordenação por mais jogados na grade inicial, com as horas de cada jogo no ícone.
 
-### Gerenciamento de data e hora
+### Mais jogados
 
-- Corrigida a alteração manual de data e hora no daemon do SwitchU: solucionado o erro de permissão do Horizon OS (`0x274` / `Time::PermissionDenied`) através do acesso direto via IPC ao `NetworkSystemClock` (`time:s` cmd 1) e `LocalSystemClock` (`time:a` cmd 4).
-- Adicionado cliente SNTP para sincronização de horário através dos pools públicos do `pool.ntp.org` (`0.pool.ntp.org` a `3.pool.ntp.org`) e servidores de contingência (`time.google.com`, `time.cloudflare.com`). Permite sincronizar a hora pela rede mesmo em consoles com bloqueio de telemetria da Nintendo via 90DNS ou hosts do Atmosphère.
-- Adicionado botão de ação "Sincronizar relógio agora" na aba de Sistema das configurações.
-- Ativar a opção "Sincronizar relógio pela Internet" agora dispara sincronização imediata em segundo plano com feedback em toast.
-- Implementada execução em segundo plano utilizando threads nativas do Horizon OS (`Thread` da libnx) fixadas no Core 2, eliminando falhas de runtime e mantendo a interface fluida a 60 FPS.
-- Protegida a exibição de notificações toast (`TabbedOverlayScreen`) com exclusão mútua (`mutex`) para despacho seguro a partir de threads secundárias.
+- O **R** agora alterna uma quarta ordenação, **Mais jogados**, depois de Minha ordem, A–Z e Recentes. Os jogos são ordenados pelo tempo de jogo que o próprio console registra, do mais jogado para o menos; jogos nunca jogados vão para o fim e empates mantêm a sua arrumação.
+- Nessa ordenação cada ícone mostra as horas jogadas numa pequena etiqueta no canto inferior esquerdo. As outras ordenações continuam limpas.
+- O tempo de jogo é lido do sistema de uma só vez, fora da thread da interface, sempre que o menu abre nessa ordenação (inclusive a cada volta de um jogo), quando você muda para ela e quando um jogo é fechado ou suspenso. A grade já abre na ordem certa com os últimos valores conhecidos e só reordena se os números novos mudarem a ordem.
+
+### Tempo de jogo nos outros lugares
+
+- O painel de detalhes do jogo e o widget de tempo de jogo recente agora leem o tempo de jogo do mesmo jeito. O widget usava uma chamada do sistema que a libnx documenta como disponível só para jogos, em vez do serviço de dados de jogo usado pelo menu.
+
+### Atualizações e créditos
+
+- A aba Atualizar e o gerenciador agora consultam as releases deste fork. A tela Sobre mostra o mantenedor do fork e credita o fork do ncarvalho99 junto com o original do PoloNX.
+
+### Build
+
+- O build homebrew (.nro) volta a linkar: faltava um stub para o pedido de desinstalação fora do build de sysmodule.
+- O CI instala o `zstd`, e o pacote do SDL2 usa uma cópia arquivada do mesmo arquivo (mesmo checksum) quando o mirror está fora do ar.
