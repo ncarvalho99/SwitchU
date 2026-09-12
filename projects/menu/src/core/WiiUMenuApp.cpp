@@ -1197,6 +1197,8 @@ void WiiUMenuApp::loadStaticTextures() {
                                          std::string(SD_ASSETS) + "/icons/widget_battery_controller.png");
 
     m_miiAvatarManager.initialize(app().gpu(), app().renderer(), SD_ASSETS);
+    m_plazaDialogueEngine.initialize(SD_ASSETS);
+    m_animalesePlayer.initialize(std::string(SD_ASSETS) + "/sounds/animalese");
 }
 
 void WiiUMenuApp::buildUserAvatarBar(bool loadImmediately) {
@@ -5489,6 +5491,8 @@ void WiiUMenuApp::setupLockScreen() {
 }
 
 void WiiUMenuApp::onUpdate(float dt) {
+    m_animalesePlayer.update(dt);
+
     // Retire and upload widget-owned textures before the next frame begins.
     syncWidgetPageAssets();
     pollRecentWidgetAssets();

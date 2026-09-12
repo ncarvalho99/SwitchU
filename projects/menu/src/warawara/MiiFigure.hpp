@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MiiAvatarManager.hpp"
+#include "PlazaSpeechBubble.hpp"
 #include <nxui/core/Types.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <nxui/core/Font.hpp>
@@ -74,6 +75,14 @@ public:
     void speak(float duration = 4.5f);
     void idle(float duration = 0.0f);
 
+    /// Speech bubble attachment
+    void showSpeechBubble(const SpeechBubbleData& data, float duration = 6.5f);
+    void dismissSpeechBubble(bool immediate = false);
+    bool hasSpeechBubble() const { return m_speechBubble.isVisible(); }
+    PlazaSpeechBubble& speechBubble() { return m_speechBubble; }
+    const PlazaSpeechBubble& speechBubble() const { return m_speechBubble; }
+    nxui::Vec2 headTopAnchor() const;
+
     /// Facing direction.
     bool isFacingLeft() const { return m_facingLeft; }
     void setFacingLeft(bool left) { m_facingLeft = left; }
@@ -85,15 +94,16 @@ public:
     void update(float dt);
 
     /// Procedural skeletal rendering via nxui::Renderer.
-    void render(nxui::Renderer& ren, nxui::Font* font = nullptr) const;
+    void render(nxui::Renderer& ren, nxui::Font* font = nullptr, nxui::Font* smallFont = nullptr) const;
 
 private:
     void pickNewWanderTarget();
     void onStateTimerExpired();
     float randomFloat(float min, float max);
 
-    MiiAvatarData   m_data;
-    MiiFigureConfig m_config;
+    MiiAvatarData       m_data;
+    MiiFigureConfig     m_config;
+    PlazaSpeechBubble   m_speechBubble;
 
     nxui::Vec2      m_pos{640.0f, 540.0f};      ///< Ground anchor point.
     nxui::Vec2      m_targetPos{640.0f, 540.0f};///< Navigation destination.

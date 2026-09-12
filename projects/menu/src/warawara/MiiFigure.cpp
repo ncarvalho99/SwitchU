@@ -82,7 +82,40 @@ void MiiFigure::idle(float duration) {
     setState(MiiState::Idle, duration);
 }
 
+nxui::Vec2 MiiFigure::headTopAnchor() const {
+    const float effScale = m_scale;
+    const float hScale = 0.85f + (m_data.height / 128.0f) * 0.30f;
+    const float headR = 19.5f * effScale;
+    const float torsoH = 22.0f * hScale * effScale;
+    const float footH = 6.0f * effScale;
+
+    float jumpOffset = 0.0f;
+    if (m_state == MiiState::Cheer) {
+        jumpOffset = std::abs(std::sin(m_animTime * 6.2831853f * 1.5f)) * (13.0f * effScale);
+    }
+    float torsoY = m_pos.y - footH - torsoH + 1.0f * effScale - jumpOffset;
+    float headCenterY = torsoY - headR + 3.0f * effScale;
+    float headCenterX = m_pos.x + (m_facingLeft ? -1.0f : 1.0f) * effScale;
+
+    return {headCenterX, headCenterY - headR};
+}
+
+void MiiFigure::showSpeechBubble(const SpeechBubbleData& data, float duration) {
+    setState(MiiState::Speak, duration);
+    m_speechBubble.show(data, headTopAnchor(), duration);
+}
+
+void MiiFigure::dismissSpeechBubble(bool immediate) {
+    m_speechBubble.dismiss(immediate);
+    if (m_state == MiiState::Speak) {
+        setState(MiiState::Idle, 0.0f);
+    }
+}
+
 bool MiiFigure::hitTest(const nxui::Vec2& point) const {
+    if (m_speechBubble.isVisible() && m_speechBubble.hitTest(point)) {
+        return true;
+    }
     float effScale = m_scale;
     float wScale = 0.85f + (m_data.build / 128.0f) * 0.30f;
     float hScale = 0.85f + (m_data.height / 128.0f) * 0.30f;
@@ -105,6 +138,14 @@ void MiiFigure::update(float dt) {
     if (dt > 0.1f) dt = 0.1f; // Clamp to avoid simulation jump on long frame
 
     m_animTime += dt;
+
+    if (m_speechBubble.isVisible()) {
+        m_speechBubble.setAnchor(headTopAnchor());
+        m_speechBubble.update(dt);
+        if (!m_speechBubble.isVisible() && m_state == MiiState::Speak) {
+            setState(MiiState::Idle, 0.0f);
+        }
+    }
 
     if (m_stateTimer > 0.0f) {
         m_stateTimer -= dt;
@@ -226,7 +267,7 @@ float MiiFigure::randomFloat(float min, float max) {
     return dist(m_rng);
 }
 
-void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font) const {
+void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont) const {
     const float effScale = m_scale;
     const float wScale = 0.85f + (m_data.build / 128.0f) * 0.30f;
     const float hScale = 0.85f + (m_data.height / 128.0f) * 0.30f;
@@ -430,6 +471,11 @@ void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font) const {
             };
             ren.drawText(m_data.nickname, textPos, font, nxui::Color(0.96f, 0.96f, 0.98f), fontScale);
         }
+    }
+
+    // 7. Speech Bubble
+    if (m_speechBubble.isVisible()) {
+        m_speechBubble.render(ren, font, smallFont);
     }
 }
 

@@ -44,6 +44,8 @@
 #include "activity/ActivityLogScreen.hpp"
 #include "activity/ActivityLogManager.hpp"
 #include "warawara/MiiAvatarManager.hpp"
+#include "warawara/PlazaDialogueEngine.hpp"
+#include "warawara/AnimalesePlayer.hpp"
 #include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
 #include "core/FolderStore.hpp"
@@ -414,6 +416,10 @@ private:
     AppLayoutMode appLayoutMode() const { return m_appLayoutMode; }
     warawara::MiiAvatarManager& miiAvatarManager() { return m_miiAvatarManager; }
     const warawara::MiiAvatarManager& miiAvatarManager() const { return m_miiAvatarManager; }
+    warawara::PlazaDialogueEngine& plazaDialogueEngine() { return m_plazaDialogueEngine; }
+    const warawara::PlazaDialogueEngine& plazaDialogueEngine() const { return m_plazaDialogueEngine; }
+    warawara::AnimalesePlayer& animalesePlayer() { return m_animalesePlayer; }
+    const warawara::AnimalesePlayer& animalesePlayer() const { return m_animalesePlayer; }
 
 #ifdef SWITCHU_MENU
     void refreshAppList();
@@ -481,6 +487,8 @@ private:
     std::shared_ptr<ActivityLogScreen>    m_activityLog;
     switchu::activity::ActivityLogManager m_activityLogManager;
     warawara::MiiAvatarManager            m_miiAvatarManager;
+    warawara::PlazaDialogueEngine         m_plazaDialogueEngine;
+    warawara::AnimalesePlayer             m_animalesePlayer;
     nxui::Widget* m_activityLogReturnFocus = nullptr;
 
     nxui::Texture m_gameCardTex;
