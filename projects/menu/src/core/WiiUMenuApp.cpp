@@ -351,6 +351,7 @@ bool WiiUMenuApp::onCreate() {
         if (ThemePreset::sweepInstallLeftovers() > 0)
             switchu::commitSdCard("theme leftovers");
     });
+    DebugLog::log("[init] stores at %lums", initElapsedMs());
     if (!m_folderStore.load())
         DebugLog::log("[folders] store unavailable; continuing with an empty folder list");
     if (!m_widgetStore.load())
@@ -368,6 +369,7 @@ bool WiiUMenuApp::onCreate() {
     // Catalog I/O is independent of font/GPU setup. Start it now so SD reads
     // and metadata parsing overlap with i18n, audio, and resource creation.
     m_appLoader.startAsync(m_threadPool);
+    DebugLog::log("[init] catalogue started at %lums", initElapsedMs());
 
     nxui::I18n::instance().initialize(std::string(SD_ASSETS) + "/i18n", "en-US");
     applyUiLanguage();
@@ -377,6 +379,7 @@ bool WiiUMenuApp::onCreate() {
     m_accessibility.setSpeakHints(m_config.accessibilitySpeakHints);
     m_accessibility.setSpeakContextEveryFocus(m_config.accessibilitySpeakContextEveryFocus);
     m_accessibility.setSpeechRate(m_config.accessibilitySpeechRate);
+    DebugLog::log("[init] i18n and accessibility at %lums", initElapsedMs());
 
     m_audioFuture = m_threadPool.submit([this]() {
         m_audio.initialize();
@@ -2778,14 +2781,17 @@ void WiiUMenuApp::refreshRecentActivityDuration() {
     m_widgetStore.updateRecentDuration(
         static_cast<std::int64_t>(std::time(nullptr)));
 #ifdef SWITCHU_MENU
-    // pdm:qry, like the dossier and the most-played sort. The applet query
-    // this used, appletQueryApplicationPlayStatistics, is documented by libnx
-    // as available to Application applets only; the menu is not one, and when
-    // it failed the total silently stayed a wall-clock estimate.
+    // Read from the play time cache rather than from pdm. This runs while the
+    // menu is being created -- the moment the player is waiting through after
+    // pressing HOME -- and a pdm query costs about a quarter of a second there,
+    // for a total that is stored but never drawn. The cache is filled by the
+    // batch that already runs for the most-played view, so the figure arrives
+    // on its own; until it does, the wall-clock estimate stands.
     constexpr std::uint64_t kNanosecondsPerSecond = 1000000000ULL;
-    if (const auto total = switchu::menu::playtime::query(
-            m_widgetStore.recentActivity().titleId))
-        m_widgetStore.setTotalSeconds(*total / kNanosecondsPerSecond);
+    const std::uint64_t cached =
+        m_config.playtimeOf(m_widgetStore.recentActivity().titleId);
+    if (cached != 0)
+        m_widgetStore.setTotalSeconds(cached / kNanosecondsPerSecond);
 #endif
 }
 
