@@ -211,6 +211,7 @@
       "clock_12h": "12-uursklok",
       "clock_12h_desc": "Toon de tijd in 12-uursformaat.",
       "usb30": "USB 3.0",
+      "usb30_restart": "USB 3.0-wijzigingen werken pas na een herstart.",
       "usb30_desc": "Activeer USB 3.0 voor snellere overdracht.",
       "battery_lot": "Batterijpartij",
       "ui_language": "SwitchU-taal",

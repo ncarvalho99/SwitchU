@@ -211,6 +211,7 @@
       "clock_12h": "12-Stunden-Uhr",
       "clock_12h_desc": "Zeit im 12-Stunden-Format anzeigen.",
       "usb30": "USB 3.0",
+      "usb30_restart": "USB-3.0-Änderungen gelten erst nach einem Neustart.",
       "usb30_desc": "USB 3.0 für schnellere Übertragungsraten aktivieren.",
       "battery_lot": "Akku-Charge",
       "ui_language": "SwitchU-Sprache",

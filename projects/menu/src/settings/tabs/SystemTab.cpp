@@ -326,8 +326,14 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
         setsysGetUsb30EnableFlag(&val);
         it.boolVal = val;
         it.anim01 = val ? 1.f : 0.f;
-        it.onChange = [](SettingItem& self) {
+        it.onChange = [&screen, &i18n](SettingItem& self) {
             setsysSetUsb30EnableFlag(self.boolVal);
+            // The flag is read when the USB stack comes up, so the toggle does
+            // nothing visible until the console restarts. Saying so beats a
+            // switch that appears to have worked and did not.
+            screen.requestToast(i18n.tr("settings.system.usb30_restart",
+                                        "USB 3.0 changes take effect after a restart."),
+                                3.0f);
         };
         t.items.push_back(std::move(it));
     }

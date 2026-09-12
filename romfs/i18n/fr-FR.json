@@ -211,6 +211,7 @@
       "clock_12h": "Horloge 12 heures",
       "clock_12h_desc": "Affiche l'horloge du menu avec AM et PM.",
       "usb30": "USB 3.0",
+      "usb30_restart": "Les changements USB 3.0 prennent effet après un redémarrage.",
       "usb30_desc": "Active l'USB 3.0 pour des transferts plus rapides.",
       "battery_lot": "Lot de batterie",
       "ui_language": "Langue de SwitchU",
