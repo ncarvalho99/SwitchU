@@ -342,6 +342,15 @@ bool WiiUMenuApp::onCreate() {
     // moment the session just played has to reach the grid. The first frame
     // sorts from the cache saved at launch; pdm is asked once the grid is up.
     m_playtimeRefreshQueued = m_config.sortMode == 3;
+    // A theme install that was cut short -- a crash, a power cut -- leaves its
+    // staging folders behind, and one of those still holds a theme.json, so it
+    // came back as a duplicate of the theme it was installing. Nothing is
+    // downloading on the frame the menu is created, which makes this the one
+    // moment the sweep cannot race the installer.
+    m_threadPool.submit([]() {
+        if (ThemePreset::sweepInstallLeftovers() > 0)
+            switchu::commitSdCard("theme leftovers");
+    });
     if (!m_folderStore.load())
         DebugLog::log("[folders] store unavailable; continuing with an empty folder list");
     if (!m_widgetStore.load())
