@@ -15,6 +15,7 @@
 #include "menu_launcher.hpp"
 #include "library_applet_runner.hpp"
 #include "system_action_queue.hpp"
+#include <ctime>
 #include <cstdio>
 #include <cstring>
 #include <atomic>
@@ -41,6 +42,14 @@ static bool g_avmReady = false;
 static bool g_psmReady = false;
 static bool g_lblReady = false;
 static bool g_hidReady = false;
+
+// libnx reads the clock exactly once, in __libnx_init_time(), and derives every
+// later timestamp from the tick counter since then. The default __appInit calls
+// it; this daemon has its own and never did, so the sample stayed at zero and
+// every line it ever logged was dated 1970 plus the console's uptime -- which
+// also went into the names of its archived logs. Not declared in any libnx
+// header, so it is declared here.
+extern "C" void __libnx_init_time(void);
 
 extern "C" {
     u32 __nx_applet_type = AppletType_SystemApplet;
@@ -86,6 +95,8 @@ extern "C" void __appInit(void) {
     g_timeReady = R_SUCCEEDED(rc);
     if (R_FAILED(rc))
         svcOutputDebugString("[SwitchU-daemon] timeInitialize FAIL", 37);
+    if (g_timeReady)
+        __libnx_init_time();
 
     rc = setsysInitialize();
     g_setsysReady = R_SUCCEEDED(rc);
@@ -373,6 +384,11 @@ static void enqueueControlCacheTitles(const std::vector<uint64_t>& titleIds) {
             g_controlCacheQueue.push_back(titleId);
         }
     }
+}
+
+static std::size_t controlCacheQueueSize() {
+    std::lock_guard<std::mutex> lock(g_controlCacheQueueMutex);
+    return g_controlCacheQueue.size();
 }
 
 static bool popControlCacheTitle(uint64_t& outTitleId) {
@@ -2402,8 +2418,13 @@ static void controlCacheThreadFunc(void* arg) {
             // catalogue is rebuilt. Reload games and shortcuts forgets it and
             // starts this over, which is the way back once the content that
             // carries the name is installed again.
+            //
+            // Each notification makes the menu rebuild its entire grid, so while
+            // there is still a queue the next one is held back: a full rebuild
+            // was telling the menu about once a second for minutes, and the grid
+            // spent that time being torn down and built again.
             g_controlCacheRefreshPending.store(true);
-            g_controlCacheRefreshDelay.store(60);
+            g_controlCacheRefreshDelay.store(controlCacheQueueSize() > 0 ? 800 : 60);
         }
         if (!named) {
             switchu::FileLog::log("[control-cache] no name for 0x%016lX from any source",
@@ -2445,6 +2466,23 @@ static void stopControlCacheWorker() {
     threadWaitForExit(&g_controlCacheThread);
     threadClose(&g_controlCacheThread);
     g_controlCacheStarted = false;
+}
+
+// The system clock is not necessarily set when a sysmodule starts at boot, and
+// libnx only samples it once. One failed sample would date the whole session
+// from 1970, so the sample is retried from the main loop until it looks like a
+// real date -- after which this costs one comparison per iteration.
+static bool g_wallClockReady = false;
+static void ensureWallClock() {
+    if (g_wallClockReady || !g_timeReady)
+        return;
+    __libnx_init_time();
+    const std::time_t now = std::time(nullptr);
+    std::tm calendar{};
+    if (::localtime_r(&now, &calendar) && calendar.tm_year + 1900 >= 2020) {
+        g_wallClockReady = true;
+        switchu::FileLog::log("[daemon] wall clock available");
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -2504,6 +2542,7 @@ int main(int argc, char* argv[]) {
             svcSleepThread(50'000'000ULL);
             continue;
         }
+        ensureWallClock();
         mainLoop();
         // The daemon never closes its log, so drain the write buffer on a timer.
         switchu::FileLog::flushIfStale();

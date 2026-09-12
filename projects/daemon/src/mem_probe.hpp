@@ -3,6 +3,7 @@
 #include <switch.h>
 #include <switchu/file_log.hpp>
 #include <cstdio>
+#include <malloc.h>
 
 namespace switchu::daemon::mem {
 
@@ -57,9 +58,17 @@ inline void snapshot(const char* phase) {
     if (R_SUCCEEDED(svcGetInfo(&procUsed, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0))
         && R_SUCCEEDED(svcGetInfo(&procTotal, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0))
         && at > 0 && at < static_cast<int>(sizeof(line))) {
-        std::snprintf(line + at, sizeof(line) - at, " daemon=%luKB/%luKB",
-                      static_cast<unsigned long>(procUsed >> 10),
-                      static_cast<unsigned long>(procTotal >> 10));
+        // What the process holds is what it was given, not what it needs: the
+        // heap is mapped up front, so this figure never moves. malloc's own
+        // accounting is what says whether the heap can be made smaller -- and
+        // on a console whose System pool has ten megabytes free, this daemon's
+        // twelve are worth arguing about.
+        const struct mallinfo info = mallinfo();
+        at += std::snprintf(line + at, sizeof(line) - at,
+                            " daemon=%luKB/%luKB heap=%luKB",
+                            static_cast<unsigned long>(procUsed >> 10),
+                            static_cast<unsigned long>(procTotal >> 10),
+                            static_cast<unsigned long>(info.uordblks >> 10));
     }
 
     switchu::FileLog::log("%s", line);
