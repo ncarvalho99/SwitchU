@@ -1,23 +1,39 @@
 
-Most played
-- R now cycles a fourth view, Most played, after My order, A-Z and Recent. Games are ordered by the play time the console records, most played first; games never played go to the end.
-- In this view every icon shows its hours in a small pill in the bottom-left corner.
-- Play time is read from the system in one batch, off the interface thread, whenever the menu opens in this view, when you switch to it, and when a game is closed or suspended.
+Names
+- A game whose control data carried no usable name had its hex title id cached as the name, which nothing could tell apart from a real one afterwards: the title was never asked about again, and artwork lookups searched for the id. The placeholder is gone, caches already carrying one repair themselves, and two more control-data sources are tried before giving up.
 
-Play time everywhere else
-- The game details panel and the Recent playtime widget now read play time the same way.
+Settings
+- TV resolution: 720p and 1080p were swapped, and 480p can now be chosen.
+- Screen burn-in reduction wrote the auto-brightness flag instead of the burn-in one.
+- Brightness and auto-brightness are saved now, so a restart keeps them.
+- Default profile appeared twice.
+- DNS shows the servers actually in use instead of a fixed "Auto (DHCP)".
+- USB 3.0 says the change needs a restart.
+- Region is read-only rather than a selector that did nothing.
+- The console nickname can be edited.
 
-Updates and credits
-- The Update tab now checks the releases of the robsonbaioco/SwitchU fork. About credits ncarvalho99's fork alongside PoloNX's original.
+Themes
+- Folders left behind by an interrupted install no longer appear as duplicate themes, and are swept when the menu starts.
+
+Under the hood
+- The daemon logs the console's memory pools around a game launch.
 --pt-BR--
 
-Mais jogados
-- O R agora alterna uma quarta ordenação, Mais jogados, depois de Minha ordem, A-Z e Recentes. Os jogos são ordenados pelo tempo de jogo que o console registra, do mais jogado para o menos; jogos nunca jogados vão para o fim.
-- Nessa ordenação cada ícone mostra as horas jogadas numa pequena etiqueta no canto inferior esquerdo.
-- O tempo de jogo é lido do sistema de uma só vez, fora da thread da interface, sempre que o menu abre nessa ordenação, quando você muda para ela e quando um jogo é fechado ou suspenso.
+Nomes
+- Um jogo cujos dados de controle não traziam nome utilizável tinha o id em hexadecimal gravado como nome, e depois disso nada distinguia um do outro: o título nunca mais era consultado e a busca de capas procurava pelo id. O valor falso não é mais gravado, caches que já tenham um se consertam sozinhos, e mais duas fontes de dados são tentadas antes de desistir.
 
-Tempo de jogo nos outros lugares
-- O painel de detalhes do jogo e o widget de tempo de jogo recente agora leem o tempo de jogo do mesmo jeito.
+Configurações
+- Resolução da TV: 720p e 1080p estavam trocados, e agora dá para escolher 480p.
+- Redução de burn-in gravava o flag de brilho automático em vez do de burn-in.
+- Brilho e brilho automático passam a ser salvos, então sobrevivem ao reinício.
+- Perfil padrão aparecia duas vezes.
+- DNS mostra os servidores realmente em uso, em vez de um fixo "Auto (DHCP)".
+- USB 3.0 avisa que a mudança precisa de reinício.
+- Região virou somente leitura, em vez de um seletor que não fazia nada.
+- O apelido do console pode ser editado.
 
-Atualizações e créditos
-- A aba Atualizar agora consulta as releases do fork robsonbaioco/SwitchU. A tela Sobre credita o fork do ncarvalho99 junto com o original do PoloNX.
+Temas
+- Pastas deixadas por uma instalação interrompida não aparecem mais como temas duplicados, e são varridas quando o menu abre.
+
+Por baixo
+- O daemon registra os pools de memória do console ao redor do lançamento de um jogo.
