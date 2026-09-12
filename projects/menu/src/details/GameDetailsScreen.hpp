@@ -68,6 +68,9 @@ public:
     // correct the string sent to the online catalogue without re-picking a
     // platform.
     void onEditSearchTitle(ActionCb cb) { m_editSearchTitleCb = std::move(cb); }
+    void onRename(ActionCb cb) { m_renameCb = std::move(cb); }
+    // The name shown in the header, after the owner renames the game.
+    void updateTitle(std::string title) { m_title = std::move(title); }
     // Reads "Add to folder" or "Remove from folder" depending on where the
     // title currently lives; the owner sets it before opening.
     void setFolderActionLabel(std::string label) { m_folderActionLabel = std::move(label); }
@@ -96,6 +99,11 @@ private:
     // Gallery/Active artwork/Restore default/Manage mods stay fixed at 0-3.
     // What follows depends on port state, so draw, activate and nav-clamp all
     // read the same list instead of three separately hand-kept index maps.
+    struct RailAction {
+        std::string label;
+        ActionCb callback;
+    };
+    std::vector<RailAction> railActions() const;
     std::vector<std::string> actionLabels() const;
     struct ImageState {
         std::mutex mutex;
@@ -150,6 +158,7 @@ private:
     ActionCb m_removeGamePortCb;
     ActionCb m_markAsGamePortCb;
     ActionCb m_editSearchTitleCb;
+    ActionCb m_renameCb;
     std::string m_folderActionLabel;
     ActionCb m_openGalleryCb;
     ActionCb m_showArtworkCb;

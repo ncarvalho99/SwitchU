@@ -116,6 +116,32 @@ struct AppConfig {
     // player replace only the string sent to the metadata lookup, without
     // touching what the icon displays on the grid.
     std::vector<std::pair<std::uint64_t, std::string>> gamePortSearchTitles;
+    // A name chosen by the owner, which wins over the one the console reports.
+    // Some titles have no usable name to report at all -- a downgraded release
+    // whose content carries no NACP name leaves the grid showing the title id
+    // -- and others are simply named something nobody would choose.
+    std::vector<std::pair<std::uint64_t, std::string>> customTitles;
+
+    std::string customTitle(std::uint64_t titleId, const std::string& fallback) const {
+        for (const auto& entry : customTitles)
+            if (entry.first == titleId) return entry.second;
+        return fallback;
+    }
+    bool hasCustomTitle(std::uint64_t titleId) const {
+        for (const auto& entry : customTitles)
+            if (entry.first == titleId) return true;
+        return false;
+    }
+    void setCustomTitle(std::uint64_t titleId, const std::string& title) {
+        for (auto it = customTitles.begin(); it != customTitles.end(); ++it) {
+            if (it->first != titleId) continue;
+            if (title.empty()) customTitles.erase(it);
+            else it->second = title;
+            return;
+        }
+        if (!title.empty())
+            customTitles.emplace_back(titleId, title);
+    }
     bool isGamePort(std::uint64_t titleId) const {
         for (const auto& port : gamePortPlatforms)
             if (port.first == titleId) return true;

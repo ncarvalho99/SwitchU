@@ -1135,6 +1135,37 @@ void WiiUMenuApp::createGameDetails() {
                     m_gameDetails->updateSearchTitle(trimmed);
             });
     });
+    m_gameDetails->onRename([this]() {
+        if (!m_gameDetails) return;
+        const std::uint64_t titleId = m_gameDetails->titleId();
+        auto& i18n = nxui::I18n::instance();
+        requestTextEntry(
+            i18n.tr("dialog.details_rename", "Rename"),
+            i18n.tr("dialog.details_rename_guide",
+                    "Enter a name. Leave it empty to use the original."),
+            m_gameDetails->title(), 128, false,
+            [this, titleId](const std::string& value) {
+                // An empty field restores whatever the console reports, which
+                // is the only way back from a name that turned out worse.
+                m_config.setCustomTitle(titleId, trimWhitespace(value));
+                m_config.save();
+                switchu::commitSdCard("custom title");
+                for (auto& app : m_allApps) {
+                    if (app.titleId != titleId) continue;
+                    app.title = m_config.customTitle(titleId, app.title);
+                    break;
+                }
+                if (m_gameDetails && m_gameDetails->titleId() == titleId)
+                    m_gameDetails->updateTitle(m_config.customTitle(titleId,
+                                                                   m_gameDetails->title()));
+                // The entry above is what the grid, the sort and the folders
+                // are built from, so recomposing is enough -- and instant.
+                // Re-reading the catalogue would cost a full control-data pass
+                // over every installed title for one renamed game.
+                if (m_grid && m_openFolderId == 0)
+                    applyDisplayModel(buildRootFolderModel(), titleId, false);
+            });
+    });
     m_gameDetails->onDeleteSoftware([this]() {
         if (!m_gameDetails) return;
         m_dialogReturnFocus = m_gameDetails.get();

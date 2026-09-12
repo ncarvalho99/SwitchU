@@ -409,55 +409,41 @@ bool GameDetailsScreen::handleCustomNavRight() {
     return true;
 }
 
-std::vector<std::string> GameDetailsScreen::actionLabels() const {
+// The labels and what they do, built together. They used to be two lists kept
+// in step by hand -- a vector of strings and a switch on the index -- where the
+// port branch already made the same index mean two different things, and any
+// new action had to be inserted into both in the same place.
+std::vector<GameDetailsScreen::RailAction> GameDetailsScreen::railActions() const {
     auto& i18n = nxui::I18n::instance();
-    std::vector<std::string> actions = {
-        i18n.tr("dialog.icon_options_gallery", "Gallery"),
-        i18n.tr("dialog.customize_active_art", "Active artwork"),
-        i18n.tr("dialog.customize_restore_default", "Restore default"),
-        i18n.tr("dialog.details_manage_mods", "Manage mods"),
-    };
+    std::vector<RailAction> actions;
+    actions.push_back({i18n.tr("dialog.icon_options_gallery", "Gallery"), m_openGalleryCb});
+    actions.push_back({i18n.tr("dialog.customize_active_art", "Active artwork"), m_showArtworkCb});
+    actions.push_back({i18n.tr("dialog.customize_restore_default", "Restore default"), m_restoreArtworkCb});
+    actions.push_back({i18n.tr("dialog.details_manage_mods", "Manage mods"), m_manageModsCb});
+    actions.push_back({i18n.tr("dialog.details_rename", "Rename"), m_renameCb});
     if (m_isGamePort) {
-        actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
-        actions.push_back(i18n.tr("dialog.unmark_port", "Unmark port"));
+        actions.push_back({i18n.tr("dialog.edit_search_title", "Edit search title"), m_editSearchTitleCb});
+        actions.push_back({i18n.tr("dialog.unmark_port", "Unmark port"), m_removeGamePortCb});
     } else {
-        // Native-id-range titles used to be assumed to always be a genuine
-        // Switch release and never offered this: a community port with a
-        // native-looking title id (the GTA V case) had no way to leave the
-        // "nintendo-switch" lookup that never matches it.
-        actions.push_back(i18n.tr("dialog.mark_as_game_port", "Mark as game port"));
+        actions.push_back({i18n.tr("dialog.mark_as_game_port", "Mark as game port"), m_markAsGamePortCb});
     }
-    actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
+    actions.push_back({i18n.tr("dialog.icon_options_delete", "Delete software"), m_deleteSoftwareCb});
     return actions;
 }
 
+std::vector<std::string> GameDetailsScreen::actionLabels() const {
+    std::vector<std::string> labels;
+    for (const auto& action : railActions())
+        labels.push_back(action.label);
+    return labels;
+}
+
 void GameDetailsScreen::activateAction() {
-    const auto actions = actionLabels();
+    const auto actions = railActions();
     if (m_selectedAction < 0 || (std::size_t)m_selectedAction >= actions.size())
         return;
-    switch (m_selectedAction) {
-        case 0: if (m_openGalleryCb) m_openGalleryCb(); break;
-        case 1: if (m_showArtworkCb) m_showArtworkCb(); break;
-        case 2: if (m_restoreArtworkCb) m_restoreArtworkCb(); break;
-        case 3: if (m_manageModsCb) m_manageModsCb(); break;
-        case 4:
-            if (m_isGamePort) {
-                if (m_editSearchTitleCb) m_editSearchTitleCb();
-            } else {
-                if (m_markAsGamePortCb) m_markAsGamePortCb();
-            }
-            break;
-        case 5:
-            if (m_isGamePort) {
-                if (m_removeGamePortCb) m_removeGamePortCb();
-            } else {
-                if (m_deleteSoftwareCb) m_deleteSoftwareCb();
-            }
-            break;
-        case 6:
-            if (m_isGamePort && m_deleteSoftwareCb) m_deleteSoftwareCb();
-            break;
-    }
+    if (actions[(std::size_t)m_selectedAction].callback)
+        actions[(std::size_t)m_selectedAction].callback();
 }
 
 std::string GameDetailsScreen::onlineStatusMessage() const {

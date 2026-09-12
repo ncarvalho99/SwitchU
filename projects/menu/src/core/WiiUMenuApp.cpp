@@ -1793,6 +1793,22 @@ void WiiUMenuApp::applyMenuLayoutToPending(std::vector<PendingApp>& apps) {
 }
 
 void WiiUMenuApp::composeRootPending(std::vector<PendingApp>& apps) {
+    // The one place a chosen name is applied. Everything downstream -- the grid
+    // label, the title pill, the A-Z order, folders, the dossier, the widgets --
+    // reads these entries, so applying it once here keeps the name from
+    // disagreeing with itself in one of them.
+    for (auto& pending : apps) {
+        if (pending.titleId == 0 || !m_config.hasCustomTitle(pending.titleId))
+            continue;
+        const std::string chosen = m_config.customTitle(pending.titleId, pending.title);
+        // The artwork lookup searches englishTitle, and a title with no usable
+        // name of its own carries the hex id there too -- which never matches
+        // anything. A name the owner typed is a better search term than that.
+        if (pending.englishTitle.empty() || pending.englishTitle == pending.title)
+            pending.englishTitle = chosen;
+        pending.title = chosen;
+    }
+
     const int cols = std::clamp(m_config.gridColumns, 3, 8);
     const int rows = std::clamp(m_config.gridRows, 2, 5);
     const int perPage = std::max(1, cols * rows);
