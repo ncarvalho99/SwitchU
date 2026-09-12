@@ -205,6 +205,8 @@
       "not_detected": "Не обнаружено",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Неактивно / SysNAND",
+      "console_nickname_guide": "Введите имя для этой консоли",
+      "console_nickname_desc": "Имя, которое видят другие консоли и приложения.",
       "console_nickname": "Имя консоли",
       "serial_number": "Серийный номер",
       "timezone": "Часовой пояс",

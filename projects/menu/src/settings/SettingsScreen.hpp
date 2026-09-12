@@ -38,6 +38,7 @@ public:
     void onNetConnect(VoidCb cb)        { m_netConnectCb = std::move(cb); }
     void onSteamGridDbEnabledChange(BoolCb cb) { m_steamGridDbEnabledCb = std::move(cb); }
     void onSteamGridDbApiKeyRequest(VoidCb cb) { m_steamGridDbApiKeyCb = std::move(cb); }
+    void onConsoleNicknameRequest(VoidCb cb) { m_consoleNicknameCb = std::move(cb); }
     void onSteamGridDbScrapeRequest(VoidCb cb) { m_steamGridDbScrapeCb = std::move(cb); }
     void onControllerPairing(VoidCb cb) { m_controllerPairingCb = std::move(cb); }
     void onControllerRemapping(VoidCb cb) { m_controllerRemappingCb = std::move(cb); }
@@ -136,6 +137,7 @@ private:
     VoidCb m_netConnectCb;
     BoolCb m_steamGridDbEnabledCb;
     VoidCb m_steamGridDbApiKeyCb;
+    VoidCb m_consoleNicknameCb;
     VoidCb m_steamGridDbScrapeCb;
     VoidCb m_controllerPairingCb;
     VoidCb m_controllerRemappingCb;

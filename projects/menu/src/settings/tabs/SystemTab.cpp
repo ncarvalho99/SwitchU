@@ -174,12 +174,19 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
+        // Editable, like the stock menu has it. It was a read-only row, which
+        // is a strange thing for a name the owner chooses.
         SetSysDeviceNickName nick{};
-        SettingItem it; it.label = i18n.tr("settings.system.console_nickname", "Console Nickname"); it.type = ItemType::Info;
+        SettingItem it; it.label = i18n.tr("settings.system.console_nickname", "Console Nickname"); it.type = ItemType::Action;
+        it.description = i18n.tr("settings.system.console_nickname_desc",
+                                 "The name other consoles and apps see.");
         if (R_SUCCEEDED(setsysGetDeviceNickname(&nick)))
             it.infoText = nick.nickname;
         else
             it.infoText = i18n.tr("common.na", "N/A");
+        it.onChange = [&screen](SettingItem& /* self */) {
+            if (screen.m_consoleNicknameCb) screen.m_consoleNicknameCb();
+        };
         t.items.push_back(std::move(it));
     }
 

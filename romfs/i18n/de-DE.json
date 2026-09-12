@@ -205,6 +205,8 @@
       "not_detected": "Nicht erkannt",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inaktiv / SysNAND",
+      "console_nickname_guide": "Gib dieser Konsole einen Namen",
+      "console_nickname_desc": "Der Name, den andere Konsolen und Apps sehen.",
       "console_nickname": "Konsolen-Spitzname",
       "serial_number": "Seriennummer",
       "timezone": "Zeitzone",

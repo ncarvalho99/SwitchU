@@ -498,6 +498,27 @@ void WiiUMenuApp::createSettings() {
     m_settings->onSteamGridDbApiKeyRequest([this]() {
         editSteamGridDbApiKey();
     });
+    m_settings->onConsoleNicknameRequest([this]() {
+        auto& i18n = nxui::I18n::instance();
+        SetSysDeviceNickName current{};
+        setsysGetDeviceNickname(&current);
+        requestTextEntry(
+            i18n.tr("settings.system.console_nickname", "Console Nickname"),
+            i18n.tr("settings.system.console_nickname_guide", "Enter a name for this console"),
+            current.nickname, 32, false,
+            [this](const std::string& value) {
+                const std::string trimmed = trimWhitespace(value);
+                if (trimmed.empty())
+                    return;
+                SetSysDeviceNickName nickname{};
+                std::snprintf(nickname.nickname, sizeof(nickname.nickname), "%s",
+                              trimmed.c_str());
+                const Result rc = setsysSetDeviceNickname(&nickname);
+                DebugLog::log("[settings] console nickname rc=0x%X", rc);
+                if (m_settings)
+                    m_settings->rebuildCurrentTab();
+            });
+    });
     m_settings->onSteamGridDbScrapeRequest([this]() {
         startSteamGridDbScrape();
     });

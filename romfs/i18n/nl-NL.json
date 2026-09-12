@@ -205,6 +205,8 @@
       "not_detected": "Niet gedetecteerd",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inactief / SysNAND",
+      "console_nickname_guide": "Voer een naam in voor deze console",
+      "console_nickname_desc": "De naam die andere consoles en apps zien.",
       "console_nickname": "Consolenaam",
       "serial_number": "Serienummer",
       "timezone": "Tijdzone",

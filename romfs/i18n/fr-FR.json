@@ -205,6 +205,8 @@
       "not_detected": "Non détecté",
       "emunand": "EmuNAND",
       "inactive_sysnand": "Inactif / SysNAND",
+      "console_nickname_guide": "Saisis un nom pour cette console",
+      "console_nickname_desc": "Le nom que voient les autres consoles et applications.",
       "console_nickname": "Surnom de la console",
       "serial_number": "Numéro de série",
       "timezone": "Fuseau horaire",
