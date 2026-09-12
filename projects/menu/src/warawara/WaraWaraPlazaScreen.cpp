@@ -16,8 +16,6 @@ WaraWaraPlazaScreen::WaraWaraPlazaScreen() {
 }
 
 void WaraWaraPlazaScreen::setupCommunities(const std::vector<GameCommunityEntry>& entries) {
-    m_pedestals.clear();
-
     struct FallbackCommunity {
         uint64_t titleId;
         const char* title;
@@ -71,6 +69,26 @@ void WaraWaraPlazaScreen::setupCommunities(const std::vector<GameCommunityEntry>
             communityList.push_back(data);
         }
     }
+
+    // If pedestals are already built with matching communities, update data (textures/playtime)
+    // without reallocating pedestals or rebuilding Miis for instantaneous opening
+    if (m_pedestals.size() == communityList.size() && !m_miis.empty()) {
+        bool matches = true;
+        for (size_t i = 0; i < communityList.size(); ++i) {
+            if (m_pedestals[i]->data().titleId != communityList[i].titleId) {
+                matches = false;
+                break;
+            }
+        }
+        if (matches) {
+            for (size_t i = 0; i < communityList.size(); ++i) {
+                m_pedestals[i]->setData(communityList[i]);
+            }
+            return;
+        }
+    }
+
+    m_pedestals.clear();
 
     // 3. Position the 10 pedestals across the 2100px wide virtual plaza in two perspective depth tiers
     // Back tier (5 pedestals): Y = 320.0f, scale = 0.88f
@@ -302,14 +320,8 @@ void WaraWaraPlazaScreen::update(float dt) {
 bool WaraWaraPlazaScreen::handleInput(const nxui::Input& input, float dt) {
     if (!m_active || m_fadeAlpha < 0.2f) return false;
 
-    // 1. Controller Return: B button or L+R combo
+    // 1. Controller Return: B button
     if (input.isDown(nxui::Button::B)) {
-        close();
-        if (m_closeCb) m_closeCb();
-        return true;
-    }
-
-    if (input.isDown(nxui::Button::L) && input.isDown(nxui::Button::R)) {
         close();
         if (m_closeCb) m_closeCb();
         return true;

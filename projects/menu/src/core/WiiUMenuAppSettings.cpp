@@ -966,8 +966,11 @@ void WiiUMenuApp::openWaraWaraPlaza() {
         return;
     }
 
-    createWaraWaraPlaza();
-    refreshPlazaCommunities();
+    if (!m_plazaScreen) {
+        createWaraWaraPlaza();
+    } else {
+        refreshPlazaCommunities();
+    }
     m_navigator.navigate(switchu::navigation::Route::WaraWaraPlaza);
     m_plazaScreen->open();
     if (m_screenSwapButton) {

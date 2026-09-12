@@ -314,6 +314,7 @@ bool gridModelsRefreshEquivalent(const GridModel& a, const GridModel& b) {
 
 WiiUMenuApp::WiiUMenuApp() {}
 WiiUMenuApp::~WiiUMenuApp() {
+    m_animalesePlayer.clear();
     rootBox().clearChildren();
 }
 
@@ -618,6 +619,7 @@ void WiiUMenuApp::onDestroy() {
 #endif
     if (m_layoutDirty)
         saveMenuLayout();
+    m_animalesePlayer.clear();
     m_accessibility.shutdown();
     m_audio.shutdown();
 }
@@ -6168,28 +6170,6 @@ void WiiUMenuApp::onUpdate(float dt) {
         toggleAppLayoutMode();
     }
 
-    // L + R screen swap shortcut to toggle between Home Menu and WaraWara Plaza
-    if (!lockScreenUp &&
-        app().input().isDown(nxui::Button::L) &&
-        app().input().isDown(nxui::Button::R) &&
-        !m_editMode &&
-        !(m_quickSettings && m_quickSettings->isActive()) &&
-        !(m_contextMenu && m_contextMenu->isActive()) &&
-        !(m_dialog && m_dialog->isActive()) &&
-        !(m_settings && m_settings->isActive()) &&
-        !(m_themeShop && m_themeShop->isActive()) &&
-        !(m_gameGallery && m_gameGallery->isActive()) &&
-        !(m_gameMods && m_gameMods->isActive()) &&
-        !(m_gameCheats && m_gameCheats->isActive()) &&
-        !(m_gameDetails && m_gameDetails->isActive()) &&
-        !(m_gameOptions && m_gameOptions->isActive()) &&
-        !(m_folderOptions && m_folderOptions->isActive()) &&
-        !(m_controllerTest && m_controllerTest->isActive()) &&
-        !(m_textEntry && m_textEntry->isActive()) &&
-        !(m_userSelect && m_userSelect->isActive())) {
-        toggleWaraWaraPlaza();
-    }
-
     if (!lockScreenUp && m_plazaScreen && m_plazaScreen->isActive()) {
         m_plazaScreen->handleInput(app().input(), dt);
     }
@@ -6477,7 +6457,6 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         add(dpadGlyph(), i18n.tr("plaza.pan", "Pan Plaza"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select / Talk"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Return"));
-        add(buttonGlyph(nxui::Button::L) + buttonGlyph(nxui::Button::R), i18n.tr("hint.screen_swap", "Screen Swap"));
         return hints;
     }
 
@@ -6670,7 +6649,6 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             // button on this icon is listed here, so somebody who never pressed
             // + had no way to learn that software information and delete exist.
             add(buttonGlyph(nxui::Button::Plus), i18n.tr("hint.options", "Options"));
-            add(buttonGlyph(nxui::Button::L) + buttonGlyph(nxui::Button::R), i18n.tr("hint.plaza", "Plaza"));
 #endif
             if (m_openFolderId == 0)
                 add(buttonGlyph(nxui::Button::Y), i18n.tr("hint.move", "Move"));

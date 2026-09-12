@@ -48,18 +48,33 @@ bool AnimalesePlayer::initialize(const std::string& soundBase) {
 }
 
 void AnimalesePlayer::clear() {
-    stop();
+    int freq = 0;
+    Uint16 format = 0;
+    int channels = 0;
+    const bool audioOpen = (Mix_QuerySpec(&freq, &format, &channels) != 0);
+
+    if (audioOpen) {
+        stop();
+    } else {
+        m_phonemeQueue.clear();
+        m_queueIndex = 0;
+        m_timer = 0.0f;
+    }
 
     for (auto*& chunk : m_letterChunks) {
         if (chunk) {
-            Mix_FreeChunk(chunk);
+            if (audioOpen) {
+                Mix_FreeChunk(chunk);
+            }
             chunk = nullptr;
         }
     }
 
     for (auto*& chunk : m_digitChunks) {
         if (chunk) {
-            Mix_FreeChunk(chunk);
+            if (audioOpen) {
+                Mix_FreeChunk(chunk);
+            }
             chunk = nullptr;
         }
     }
@@ -116,11 +131,23 @@ void AnimalesePlayer::stop() {
     m_phonemeQueue.clear();
     m_queueIndex = 0;
     m_timer = 0.0f;
-    // Halt speech audio channel (channel 14 reserved for Animalese)
-    Mix_HaltChannel(14);
+    // Halt speech audio channel (channel 14 reserved for Animalese) if audio subsystem is open
+    int freq = 0;
+    Uint16 format = 0;
+    int channels = 0;
+    if (Mix_QuerySpec(&freq, &format, &channels) != 0) {
+        Mix_HaltChannel(14);
+    }
 }
 
 void AnimalesePlayer::playPhoneme(char c) {
+    int freq = 0;
+    Uint16 format = 0;
+    int channels = 0;
+    if (Mix_QuerySpec(&freq, &format, &channels) == 0) {
+        return;
+    }
+
     Mix_Chunk* chunk = nullptr;
 
     if (c >= 'a' && c <= 'z') {

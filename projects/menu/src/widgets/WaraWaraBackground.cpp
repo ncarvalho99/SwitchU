@@ -907,6 +907,10 @@ void WaraWaraBackground::drawRoundedShape(nxui::Renderer& ren, const Shape& s, c
         float roundness = std::clamp(m_config.cornerRoundness, 0.f, 1.f);
         if (roundness > 0.001f) {
             float radius = h * roundness;
+            if (std::abs(r) < 0.001f) {
+                ren.drawRoundedRect(nxui::Rect{s.pos.x - h, s.pos.y - h, h * 2.f, h * 2.f}, c, radius);
+                break;
+            }
             std::vector<nxui::Vec2> points;
             points.reserve(16);
             appendArcPoints(points,  h - radius, -h + radius, radius, -kHalfPi, 0.f,      3, true);
@@ -919,6 +923,11 @@ void WaraWaraBackground::drawRoundedShape(nxui::Renderer& ren, const Shape& s, c
 
             for (size_t i = 0; i < points.size(); ++i)
                 ren.drawTriangle(s.pos, points[i], points[(i + 1) % points.size()], c);
+            break;
+        }
+
+        if (std::abs(r) < 0.001f) {
+            ren.drawRect(nxui::Rect{s.pos.x - h, s.pos.y - h, h * 2.f, h * 2.f}, c);
             break;
         }
 
