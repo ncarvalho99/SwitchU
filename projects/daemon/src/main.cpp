@@ -1590,6 +1590,17 @@ static void handleMenuCommand() {
         switchu::FileLog::log("[smi] queued user creator launch (actions=%zu)", g_actionQueue.size());
         break;
 
+    case smi::SystemMessage::RotateLogs:
+        // open() closes the current file, renames it to daemon-<timestamp>.log
+        // and starts a fresh one. The renamed copy is held by nobody, so it can
+        // be read over MTP with the console still running.
+        switchu::FileLog::log("[smi] rotating log on request");
+        switchu::FileLog::flush();
+        switchu::FileLog::open("daemon");
+        fsdevCommitDevice("sdmc");
+        switchu::FileLog::log("[smi] log rotated");
+        break;
+
     case smi::SystemMessage::LaunchNetConnect:
         {
             Action action{};

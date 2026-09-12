@@ -135,6 +135,19 @@ Result AppletLauncher::refreshCatalog() {
     return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RefreshCatalog);
 }
 
+Result AppletLauncher::rotateLogs() {
+    DebugLog::log("[launcher] rotating logs on request");
+    // The menu holds menu.log open for as long as it runs, and the daemon does
+    // the same with daemon.log, so neither can be copied over MTP while the
+    // console is up. Both are rotated: this process closes and reopens its own,
+    // and the daemon is asked to do the same with its.
+    switchu::FileLog::flush();
+    switchu::FileLog::open("menu");
+    const Result rc = switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RotateLogs);
+    DebugLog::log("[launcher] log rotation rc=0x%X", rc);
+    return rc;
+}
+
 Result AppletLauncher::prepareApplication(uint64_t titleId, AccountUid uid,
                                           switchu::smi::LaunchTransitionTrace& trace) {
     const Result rc = switchu::menu::smi_cmd::prepareApplication(titleId, uid, trace);
@@ -282,6 +295,7 @@ Result AppletLauncher::prepareApplication(uint64_t, AccountUid,
 void AppletLauncher::launchApplication(uint64_t, AccountUid,
                                        switchu::smi::LaunchTransitionTrace) {}
 Result AppletLauncher::refreshCatalog()                { return 0; }
+Result AppletLauncher::rotateLogs()                    { return 0; }
 void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace) {}
 void AppletLauncher::terminateApplication()    {}
 void AppletLauncher::checkRunningApplication() {}

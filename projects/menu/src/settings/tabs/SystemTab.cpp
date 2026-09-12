@@ -346,6 +346,20 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
+        // Both logs are held open while the console runs, so copying them over
+        // MTP fails with "resource already in use". This closes them, which
+        // leaves finished copies on the card that anything can read.
+        SettingItem it; it.label = i18n.tr("settings.system.save_logs", "Save logs for copying");
+        it.type = ItemType::Action;
+        it.description = i18n.tr("settings.system.save_logs_desc",
+                                 "Closes the current logs so they can be copied from config/SwitchU.");
+        it.onChange = [&screen](SettingItem& /* self */) {
+            if (screen.m_rotateLogsCb) screen.m_rotateLogsCb();
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
         SetBatteryLot lot{};
         SettingItem it; it.label = i18n.tr("settings.system.battery_lot", "Battery Lot"); it.type = ItemType::Info;
         if (R_SUCCEEDED(setsysGetBatteryLot(&lot)))

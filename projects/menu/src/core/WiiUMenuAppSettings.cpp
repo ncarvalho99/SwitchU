@@ -498,6 +498,20 @@ void WiiUMenuApp::createSettings() {
     m_settings->onSteamGridDbApiKeyRequest([this]() {
         editSteamGridDbApiKey();
     });
+    m_settings->onRotateLogsRequest([this]() {
+        auto& i18n = nxui::I18n::instance();
+        const Result rc = m_launcher.rotateLogs();
+        switchu::commitSdCard("log rotation");
+        if (m_settings) {
+            m_settings->requestToast(
+                R_SUCCEEDED(rc)
+                    ? i18n.tr("settings.system.save_logs_done",
+                              "Logs saved. Copy menu-*.log and daemon-*.log from config/SwitchU.")
+                    : i18n.tr("settings.system.save_logs_failed",
+                              "The menu log was saved; the daemon did not answer."),
+                4.5f);
+        }
+    });
     m_settings->onConsoleNicknameRequest([this]() {
         auto& i18n = nxui::I18n::instance();
         SetSysDeviceNickName current{};

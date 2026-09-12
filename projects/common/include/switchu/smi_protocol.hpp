@@ -68,6 +68,11 @@ enum class SystemMessage : uint32_t {
     // Sent after the first real menu frame has been submitted. MenuReady
     // measures construction; this measures the first usable visual frame.
     MenuFirstFrame        = 43,
+    // Closes the daemon's log and starts a new one, so the finished file can be
+    // copied off the card. Nothing can read it while the daemon holds it open:
+    // copying it over MTP with the console running fails with 2002-0007,
+    // "resource already in use", which is how diagnostics kept getting stuck.
+    RotateLogs            = 44,
 #ifdef SWITCHU_TERMINATION_QUEUE_TEST
     // Diagnostic-only commands. Production builds neither expose nor handle
     // these IDs, so lifecycle fault injection cannot alter normal timing.

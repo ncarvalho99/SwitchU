@@ -36,6 +36,9 @@ public:
     // icones em cache. Sem daemon nao ha catalogo para reler, e a versao
     // homebrew simplesmente nao faz nada.
     Result refreshCatalog();
+    // Closes both logs and starts fresh ones, so the finished files can be
+    // copied off the card while the console is running.
+    Result rotateLogs();
 
     Result prepareApplication(uint64_t titleId, AccountUid uid,
                               switchu::smi::LaunchTransitionTrace& trace);
