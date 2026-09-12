@@ -882,85 +882,23 @@ void WaraWaraBackground::drawGlassShape(nxui::Renderer& ren, const Shape& s) con
 }
 
 void WaraWaraBackground::drawRoundedShape(nxui::Renderer& ren, const Shape& s, const nxui::Color& c) const {
-    float r  = s.rotation;
     float sz = s.size;
-
-    auto rot = [&](float lx, float ly) -> nxui::Vec2 {
-        float cs = std::cos(r), sn = std::sin(r);
-        return {s.pos.x + lx * cs - ly * sn,
-                s.pos.y + lx * sn + ly * cs};
-    };
+    float h = sz * 0.707f;
 
     switch (s.type) {
     case Circle:
         ren.drawCircle(s.pos, sz, c, 12);
         break;
-    case Triangle: {
-        nxui::Vec2 p0 = rot(0,             -sz);
-        nxui::Vec2 p1 = rot(-sz * 0.866f,   sz * 0.5f);
-        nxui::Vec2 p2 = rot( sz * 0.866f,   sz * 0.5f);
-        ren.drawTriangle(p0, p1, p2, c);
-        break;
-    }
-    case Square: {
-        float h = sz * 0.707f;
+    case Square:
+    case Triangle:
+    case Diamond:
+    case Hexagon:
+    default: {
         float roundness = std::clamp(m_config.cornerRoundness, 0.f, 1.f);
-        if (roundness > 0.001f) {
-            float radius = h * roundness;
-            if (std::abs(r) < 0.001f) {
-                ren.drawRoundedRect(nxui::Rect{s.pos.x - h, s.pos.y - h, h * 2.f, h * 2.f}, c, radius);
-                break;
-            }
-            std::vector<nxui::Vec2> points;
-            points.reserve(16);
-            appendArcPoints(points,  h - radius, -h + radius, radius, -kHalfPi, 0.f,      3, true);
-            appendArcPoints(points,  h - radius,  h - radius, radius,  0.f,      kHalfPi,  3, false);
-            appendArcPoints(points, -h + radius,  h - radius, radius,  kHalfPi,  kPi,      3, false);
-            appendArcPoints(points, -h + radius, -h + radius, radius,  kPi,      kPi * 1.5f, 3, false);
-
-            for (size_t i = 0; i < points.size(); ++i)
-                points[i] = rot(points[i].x, points[i].y);
-
-            for (size_t i = 0; i < points.size(); ++i)
-                ren.drawTriangle(s.pos, points[i], points[(i + 1) % points.size()], c);
-            break;
-        }
-
-        if (std::abs(r) < 0.001f) {
-            ren.drawRect(nxui::Rect{s.pos.x - h, s.pos.y - h, h * 2.f, h * 2.f}, c);
-            break;
-        }
-
-        nxui::Vec2 p0 = rot(-h, -h);
-        nxui::Vec2 p1 = rot( h, -h);
-        nxui::Vec2 p2 = rot( h,  h);
-        nxui::Vec2 p3 = rot(-h,  h);
-        ren.drawTriangle(p0, p1, p2, c);
-        ren.drawTriangle(p0, p2, p3, c);
+        float radius = h * (roundness > 0.001f ? roundness : 0.32f);
+        ren.drawRoundedRect(nxui::Rect{s.pos.x - h, s.pos.y - h, h * 2.f, h * 2.f}, c, radius);
         break;
     }
-    case Diamond: {
-        nxui::Vec2 p0 = rot(0,            -sz);
-        nxui::Vec2 p1 = rot( sz * 0.6f,    0);
-        nxui::Vec2 p2 = rot(0,             sz);
-        nxui::Vec2 p3 = rot(-sz * 0.6f,    0);
-        ren.drawTriangle(p0, p1, p2, c);
-        ren.drawTriangle(p0, p2, p3, c);
-        break;
-    }
-    case Hexagon: {
-        constexpr int N = 6;
-        const float step = 6.28318f / N;
-        nxui::Vec2 pts[N];
-        for (int i = 0; i < N; ++i) {
-            float a2 = step * i;
-            pts[i] = rot(std::cos(a2) * sz, std::sin(a2) * sz);
-        }
-        for (int i = 1; i < N - 1; ++i)
-            ren.drawTriangle(pts[0], pts[i], pts[i + 1], c);
-        break;
-    }
-    default: break;
     }
 }
 

@@ -15,7 +15,10 @@ PlazaScreenSwapButton::PlazaScreenSwapButton() {
     setTag("plaza_screen_swap");
     setAccessibilityRole("button");
     setAccessibilityLabel("Screen Swap");
-    setAccessibilityHint("A or L+R to switch between Home Menu and WaraWara Plaza");
+    setAccessibilityHint("A to switch between Home Menu and WaraWara Plaza");
+    addAction(static_cast<uint64_t>(nxui::Button::A), [this]() {
+        if (m_onActivateCb) m_onActivateCb();
+    });
 }
 
 void PlazaScreenSwapButton::setPlazaActive(bool active) {

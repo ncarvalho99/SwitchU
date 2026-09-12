@@ -3,6 +3,7 @@
 #include <nxui/widgets/GlassWidget.hpp>
 #include <nxui/core/Renderer.hpp>
 #include <nxui/core/Types.hpp>
+#include <nxui/core/Input.hpp>
 #include <functional>
 
 namespace warawara {
@@ -17,7 +18,18 @@ public:
     void setPlazaActive(bool active);
     bool isPlazaActive() const { return m_plazaActive; }
 
-    void onActivate(std::function<void()> cb) { m_onActivateCb = std::move(cb); }
+    void onActivate(std::function<void()> cb) {
+        m_onActivateCb = cb;
+        setOnActivate(cb);
+        addAction(static_cast<uint64_t>(nxui::Button::A), cb);
+    }
+    bool activate() override {
+        if (m_onActivateCb) {
+            m_onActivateCb();
+            return true;
+        }
+        return false;
+    }
 
     void onFocusGained() override { m_focused = true; }
     void onFocusLost() override { m_focused = false; }

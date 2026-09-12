@@ -1290,9 +1290,8 @@ void WiiUMenuApp::appendAddUserButton() {
 
 void WiiUMenuApp::wireUserAvatarNavigation() {
     const bool dynamicLine = m_appLayoutMode == AppLayoutMode::DynamicLine;
-    auto returnToRow = [this]() {
-        if (!m_grid || m_appLayoutMode != AppLayoutMode::DynamicLine
-            || m_navigator.route() != switchu::navigation::Route::Home)
+    auto returnToGrid = [this]() {
+        if (!m_grid || m_navigator.route() != switchu::navigation::Route::Home)
             return;
         if (auto* target = m_grid->focusManager().current())
             focusManager().setFocus(target);
@@ -1307,6 +1306,8 @@ void WiiUMenuApp::wireUserAvatarNavigation() {
         nxui::Widget* right = current;
         if (i + 1 < m_userAvatarButtons.size())
             right = m_userAvatarButtons[i + 1].get();
+        else if (m_screenSwapButton)
+            right = m_screenSwapButton.get();
         else if (dynamicLine && !m_sidebar.rightButtons().empty())
             right = m_sidebar.rightButtons().front().get();
         current->setCustomNavigation(nxui::FocusDirection::LEFT, left);
@@ -1315,8 +1316,20 @@ void WiiUMenuApp::wireUserAvatarNavigation() {
         current->removeAction(static_cast<uint64_t>(nxui::Button::DDown));
         current->removeAction(static_cast<uint64_t>(nxui::Button::LStickD));
         current->removeAction(static_cast<uint64_t>(nxui::Button::RStickD));
-        if (dynamicLine)
-            current->addDirectionAction(nxui::FocusDirection::DOWN, returnToRow);
+        current->addDirectionAction(nxui::FocusDirection::DOWN, returnToGrid);
+    }
+    if (m_screenSwapButton) {
+        nxui::Widget* left = m_userAvatarButtons.empty() ? nullptr : m_userAvatarButtons.back().get();
+        nxui::Widget* right = (dynamicLine && !m_sidebar.rightButtons().empty())
+            ? m_sidebar.rightButtons().front().get()
+            : nullptr;
+        m_screenSwapButton->setCustomNavigation(nxui::FocusDirection::LEFT, left);
+        m_screenSwapButton->setCustomNavigation(nxui::FocusDirection::RIGHT, right);
+        m_screenSwapButton->setCustomNavigation(nxui::FocusDirection::DOWN, nullptr);
+        m_screenSwapButton->removeAction(static_cast<uint64_t>(nxui::Button::DDown));
+        m_screenSwapButton->removeAction(static_cast<uint64_t>(nxui::Button::LStickD));
+        m_screenSwapButton->removeAction(static_cast<uint64_t>(nxui::Button::RStickD));
+        m_screenSwapButton->addDirectionAction(nxui::FocusDirection::DOWN, returnToGrid);
     }
     if (dynamicLine && !m_userAvatarButtons.empty()) {
         if (m_grid)
@@ -7091,6 +7104,10 @@ bool WiiUMenuApp::flipPage(int dir) {
 }
 
 void WiiUMenuApp::renderPageArrows(nxui::Renderer& ren) {
+    if (m_plazaScreen && m_plazaScreen->isActive()) return;
+    if (m_navigator.route() != switchu::navigation::Route::Home) return;
+    if (focusRoot() != &rootBox()) return;
+
     constexpr float kGlyphScale = 0.70f;
     auto drawArrow = [&](bool left, const nxui::Texture& texture,
                          const PageArrowAnim& animation,

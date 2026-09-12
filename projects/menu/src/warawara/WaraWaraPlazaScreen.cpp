@@ -332,31 +332,76 @@ bool WaraWaraPlazaScreen::handleInput(const nxui::Input& input, float dt) {
     float lx = input.leftStickX();
     if (std::abs(lx) > 0.15f) {
         m_cameraTargetX += lx * panSpeed * dt;
+        if (m_focusedPedestalIndex >= 0) {
+            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
+            m_focusedPedestalIndex = -1;
+        }
     }
 
     float rx = input.rightStickX();
     if (std::abs(rx) > 0.15f) {
         m_cameraTargetX += rx * panSpeed * dt;
+        if (m_focusedPedestalIndex >= 0) {
+            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
+            m_focusedPedestalIndex = -1;
+        }
     }
 
     // 3. Camera Panning via D-Pad
     if (input.isHeld(nxui::Button::DLeft)) {
         m_cameraTargetX -= panSpeed * 0.9f * dt;
+        if (m_focusedPedestalIndex >= 0) {
+            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
+            m_focusedPedestalIndex = -1;
+        }
     }
     if (input.isHeld(nxui::Button::DRight)) {
         m_cameraTargetX += panSpeed * 0.9f * dt;
+        if (m_focusedPedestalIndex >= 0) {
+            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
+            m_focusedPedestalIndex = -1;
+        }
     }
 
-    // 4. Pedestal Navigation via D-Pad Up/Down or A button
-    if (input.isDown(nxui::Button::A)) {
-        if (m_focusedPedestalIndex >= 0 && m_focusedPedestalIndex < (int)m_pedestals.size()) {
+    // Clamp camera within virtual plaza bounds
+    const float maxCamX = std::max(0.0f, m_plazaWidth - 1280.0f);
+    m_cameraTargetX = std::clamp(m_cameraTargetX, 0.0f, maxCamX);
+
+    // 4. Talk with Miis or Launch Game via A button, X button, or Y button
+    if (input.isDown(nxui::Button::A) || input.isDown(nxui::Button::X) || input.isDown(nxui::Button::Y)) {
+        if (input.isDown(nxui::Button::A) && m_focusedPedestalIndex >= 0 && m_focusedPedestalIndex < (int)m_pedestals.size()) {
             uint64_t tid = m_pedestals[m_focusedPedestalIndex]->data().titleId;
             if (m_launchGameCb && tid != 0) {
                 m_launchGameCb(tid);
                 return true;
             }
+        }
+
+        // Find the Mii closest to the screen center
+        float viewCenterX = m_cameraX + 640.0f;
+        MiiFigure* bestMii = nullptr;
+        float bestDist = 1e9f;
+
+        for (auto& mii : m_miis) {
+            float sx = mii->position().x - m_cameraX;
+            if (sx >= 40.0f && sx <= 1240.0f) {
+                float dx = mii->position().x - viewCenterX;
+                float dy = mii->position().y - 480.0f;
+                float dist = dx * dx + dy * dy;
+                if (mii->hasSpeechBubble()) {
+                    dist += 400.0f * 400.0f;
+                }
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestMii = mii.get();
+                }
+            }
+        }
+
+        if (bestMii) {
+            interactWithMii(bestMii);
+            return true;
         } else {
-            // Trigger random speech bubble or interact with nearest Mii
             triggerRandomSpeechBubble();
             return true;
         }
@@ -480,27 +525,6 @@ void WaraWaraPlazaScreen::drawHeader(nxui::Renderer& ren) const {
             titleY + (titleH - tSize.y * tScale) * 0.5f - 1.0f
         };
         ren.drawText(titleText, tPos, m_fontNormal, nxui::Color(0.97f, 0.98f, 1.0f, m_fadeAlpha), tScale);
-    }
-
-    // 2. Bottom Navigation Hints Bar
-    const float hintW = 620.0f;
-    const float hintH = 34.0f;
-    const float hintX = (1280.0f - hintW) * 0.5f;
-    const float hintY = 672.0f;
-    nxui::Rect hintRect{hintX, hintY, hintW, hintH};
-
-    ren.drawRoundedRect(hintRect, nxui::Color(0.05f, 0.08f, 0.14f, 0.58f * m_fadeAlpha), hintH * 0.5f);
-    ren.drawRoundedRectOutline(hintRect, nxui::Color(1.0f, 1.0f, 1.0f, 0.22f * m_fadeAlpha), hintH * 0.5f, 1.0f);
-
-    if (m_fontSmall) {
-        std::string hints = "Left Stick: Pan Plaza  |  A: Select / Talk  |  B or L+R: Return to Menu";
-        nxui::Vec2 hSize = m_fontSmall->measure(hints);
-        float hScale = 0.50f;
-        nxui::Vec2 hPos{
-            hintX + (hintW - hSize.x * hScale) * 0.5f,
-            hintY + (hintH - hSize.y * hScale) * 0.5f - 1.0f
-        };
-        ren.drawText(hints, hPos, m_fontSmall, nxui::Color(0.92f, 0.95f, 0.98f, 0.92f * m_fadeAlpha), hScale);
     }
 }
 

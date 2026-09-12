@@ -574,6 +574,11 @@ void WiiUMenuApp::wireFocusCallback() {
                     return;
                 }
             }
+            if (m_screenSwapButton && m_screenSwapButton.get() == cur) {
+                m_titlePill->setText(m_screenSwapButton->isPlazaActive() ? "Home Menu" : "WaraWara Plaza");
+                m_titlePill->setVisible(true);
+                return;
+            }
             m_titlePill->hideAnimated();
         } else {
             refreshGameArtworkBackdrop(0);
@@ -817,6 +822,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_gameGallery && m_gameGallery->isActive()) return m_gameGallery.get();
     if (m_gameDetails && m_gameDetails->isActive()) return m_gameDetails.get();
     if (m_activityLog && m_activityLog->isActive()) return m_activityLog.get();
+    if (m_plazaScreen && m_plazaScreen->isActive()) return m_plazaScreen.get();
     if (m_themeShop && m_themeShop->isActive()) return m_themeShop.get();
     if (m_settings && m_settings->isActive()) return m_settings.get();
     if (m_quickSettings && m_quickSettings->isActive()) return m_quickSettings.get();
