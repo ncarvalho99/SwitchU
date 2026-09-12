@@ -4945,6 +4945,15 @@ void WiiUMenuApp::buildGrid() {
     m_topHud->addChild(m_clock);
     if (m_userAvatarBar)
         m_topHud->addChild(m_userAvatarBar);
+
+    m_screenSwapButton = std::make_shared<warawara::PlazaScreenSwapButton>();
+    m_screenSwapButton->setMarginTop(18.f);
+    m_screenSwapButton->onActivate([this]() {
+        m_audio.playSfx(Sfx::Activate);
+        toggleWaraWaraPlaza();
+    });
+    m_topHud->addChild(m_screenSwapButton);
+
     m_topHud->addChild(m_battery);
     m_topHud->layout();
 
@@ -5079,6 +5088,10 @@ void WiiUMenuApp::buildGrid() {
         m_contextMenuReturnFocus = nullptr;
     });
     m_overlayLayer->addChild(m_contextMenu);
+    createWaraWaraPlaza();
+    if (m_background) {
+        m_background->setAmbientAvatars(m_miiAvatarManager.avatars(), &m_fontNormal, &m_fontSmall);
+    }
     m_overlayLayer->addChild(m_dialog);
     m_overlayLayer->addChild(m_progressDialog);
     m_overlayLayer->addChild(m_launchAnim);
@@ -6155,6 +6168,32 @@ void WiiUMenuApp::onUpdate(float dt) {
         toggleAppLayoutMode();
     }
 
+    // L + R screen swap shortcut to toggle between Home Menu and WaraWara Plaza
+    if (!lockScreenUp &&
+        app().input().isDown(nxui::Button::L) &&
+        app().input().isDown(nxui::Button::R) &&
+        !m_editMode &&
+        !(m_quickSettings && m_quickSettings->isActive()) &&
+        !(m_contextMenu && m_contextMenu->isActive()) &&
+        !(m_dialog && m_dialog->isActive()) &&
+        !(m_settings && m_settings->isActive()) &&
+        !(m_themeShop && m_themeShop->isActive()) &&
+        !(m_gameGallery && m_gameGallery->isActive()) &&
+        !(m_gameMods && m_gameMods->isActive()) &&
+        !(m_gameCheats && m_gameCheats->isActive()) &&
+        !(m_gameDetails && m_gameDetails->isActive()) &&
+        !(m_gameOptions && m_gameOptions->isActive()) &&
+        !(m_folderOptions && m_folderOptions->isActive()) &&
+        !(m_controllerTest && m_controllerTest->isActive()) &&
+        !(m_textEntry && m_textEntry->isActive()) &&
+        !(m_userSelect && m_userSelect->isActive())) {
+        toggleWaraWaraPlaza();
+    }
+
+    if (!lockScreenUp && m_plazaScreen && m_plazaScreen->isActive()) {
+        m_plazaScreen->handleInput(app().input(), dt);
+    }
+
 #ifdef SWITCHU_MENU
     // ZL and ZR are plain actions, so they fired once per press while the d-pad
     // already repeated through Application's navigation hold. Holding either one
@@ -6307,6 +6346,12 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (!debugTouchBlocked && !lockScreenUp && m_quickSettings && m_quickSettings->isActive())
         m_quickSettings->handleTouch(app().input());
 
+    if (!debugTouchBlocked && !lockScreenUp && m_screenSwapButton)
+        m_screenSwapButton->handleTouch(app().input());
+
+    if (!debugTouchBlocked && !lockScreenUp && m_plazaScreen && m_plazaScreen->isActive())
+        m_plazaScreen->handleTouch(app().input());
+
     if (!(m_userSelect && m_userSelect->isActive())
         && !(m_dialog && m_dialog->isActive())
         && !(m_quickSettings && m_quickSettings->isActive())
@@ -6427,6 +6472,14 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
 
     if (m_launchAnim && m_launchAnim->isPlaying())
         return hints;
+
+    if (m_plazaScreen && m_plazaScreen->isActive()) {
+        add(dpadGlyph(), i18n.tr("plaza.pan", "Pan Plaza"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select / Talk"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Return"));
+        add(buttonGlyph(nxui::Button::L) + buttonGlyph(nxui::Button::R), i18n.tr("hint.screen_swap", "Screen Swap"));
+        return hints;
+    }
 
     if (m_quickSettings && m_quickSettings->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
@@ -6617,6 +6670,7 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             // button on this icon is listed here, so somebody who never pressed
             // + had no way to learn that software information and delete exist.
             add(buttonGlyph(nxui::Button::Plus), i18n.tr("hint.options", "Options"));
+            add(buttonGlyph(nxui::Button::L) + buttonGlyph(nxui::Button::R), i18n.tr("hint.plaza", "Plaza"));
 #endif
             if (m_openFolderId == 0)
                 add(buttonGlyph(nxui::Button::Y), i18n.tr("hint.move", "Move"));

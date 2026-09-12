@@ -46,6 +46,8 @@
 #include "warawara/MiiAvatarManager.hpp"
 #include "warawara/PlazaDialogueEngine.hpp"
 #include "warawara/AnimalesePlayer.hpp"
+#include "warawara/WaraWaraPlazaScreen.hpp"
+#include "warawara/PlazaScreenSwapButton.hpp"
 #include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
 #include "core/FolderStore.hpp"
@@ -378,6 +380,11 @@ private:
     void createControllerTest();
     void createGameGallery();
     void createGameDetails();
+    void createWaraWaraPlaza();
+    void openWaraWaraPlaza();
+    void closeWaraWaraPlaza();
+    void toggleWaraWaraPlaza();
+    void refreshPlazaCommunities();
     void reloadThemePresets();
     void refreshThemeShopState();
     std::vector<ThemeShopScreen::ThemeShopEntry> buildThemeShopEntries();
@@ -489,6 +496,8 @@ private:
     warawara::MiiAvatarManager            m_miiAvatarManager;
     warawara::PlazaDialogueEngine         m_plazaDialogueEngine;
     warawara::AnimalesePlayer             m_animalesePlayer;
+    std::shared_ptr<warawara::WaraWaraPlazaScreen>   m_plazaScreen;
+    std::shared_ptr<warawara::PlazaScreenSwapButton> m_screenSwapButton;
     nxui::Widget* m_activityLogReturnFocus = nullptr;
 
     nxui::Texture m_gameCardTex;

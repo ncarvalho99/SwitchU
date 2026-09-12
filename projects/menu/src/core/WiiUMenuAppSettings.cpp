@@ -882,6 +882,119 @@ void WiiUMenuApp::closeActivityLog() {
     m_activityLogReturnFocus = nullptr;
 }
 
+void WiiUMenuApp::createWaraWaraPlaza() {
+    if (m_plazaScreen) return;
+
+    m_plazaScreen = std::make_shared<warawara::WaraWaraPlazaScreen>();
+    m_plazaScreen->setFonts(&m_fontNormal, &m_fontSmall);
+    m_plazaScreen->setServices(&m_miiAvatarManager,
+                               &m_plazaDialogueEngine,
+                               &m_animalesePlayer,
+                               &m_activityLogManager);
+    refreshPlazaCommunities();
+
+    m_plazaScreen->onClose([this]() {
+        closeWaraWaraPlaza();
+    });
+
+    m_plazaScreen->onLaunchGame([this](std::uint64_t titleId) {
+        if (titleId == 0) return;
+        for (auto& app : m_allApps) {
+            if (app.titleId == titleId) {
+                closeWaraWaraPlaza();
+                activateApplication(nullptr, &app, app.titleId, app.title);
+                break;
+            }
+        }
+    });
+
+    if (m_overlayLayer) {
+        m_overlayLayer->addChild(m_plazaScreen);
+    }
+}
+
+void WiiUMenuApp::refreshPlazaCommunities() {
+    if (!m_plazaScreen) return;
+
+    std::vector<warawara::WaraWaraPlazaScreen::GameCommunityEntry> entries;
+    entries.reserve(10);
+
+    for (const auto& app : m_allApps) {
+        if (entries.size() >= 10) break;
+        if (app.titleId == 0 || app.isWidget()) continue;
+
+        warawara::WaraWaraPlazaScreen::GameCommunityEntry entry;
+        entry.titleId = app.titleId;
+        entry.title = app.title;
+
+        const auto* stats = m_activityLogManager.findTitleStats(app.titleId);
+        std::uint64_t playtimeSec = stats ? stats->totalPlaytimeSeconds : 0;
+        if (playtimeSec > 0) {
+            std::uint32_t hours = static_cast<std::uint32_t>(playtimeSec / 3600);
+            std::uint32_t minutes = static_cast<std::uint32_t>((playtimeSec % 3600) / 60);
+            if (hours > 0) {
+                entry.subtitle = std::to_string(hours) + "h " + std::to_string(minutes) + "m played";
+            } else {
+                entry.subtitle = std::to_string(minutes) + "m played";
+            }
+        } else {
+            entry.subtitle = "Installed Game";
+        }
+
+        if (m_grid) {
+            for (const auto& icon : m_grid->allIcons()) {
+                if (icon && icon->titleId() == app.titleId && icon->texture()) {
+                    entry.iconTexture = icon->texture();
+                    break;
+                }
+            }
+        }
+
+        entries.push_back(std::move(entry));
+    }
+
+    m_plazaScreen->setupCommunities(entries);
+}
+
+void WiiUMenuApp::openWaraWaraPlaza() {
+    if (m_editMode) return;
+    if ((m_dialog && m_dialog->isActive()) ||
+        (m_userSelect && m_userSelect->isActive()) ||
+        (m_settings && m_settings->isActive()) ||
+        (m_themeShop && m_themeShop->isActive()) ||
+        (m_activityLog && m_activityLog->isActive())) {
+        return;
+    }
+
+    createWaraWaraPlaza();
+    refreshPlazaCommunities();
+    m_navigator.navigate(switchu::navigation::Route::WaraWaraPlaza);
+    m_plazaScreen->open();
+    if (m_screenSwapButton) {
+        m_screenSwapButton->setPlazaActive(true);
+    }
+    m_audio.playSfx(Sfx::ThemeToggle);
+}
+
+void WiiUMenuApp::closeWaraWaraPlaza() {
+    if (!m_plazaScreen || !m_plazaScreen->isActive()) return;
+
+    m_plazaScreen->close();
+    m_navigator.routeDidClose(switchu::navigation::Route::WaraWaraPlaza);
+    if (m_screenSwapButton) {
+        m_screenSwapButton->setPlazaActive(false);
+    }
+    m_audio.playSfx(Sfx::ModalHide);
+}
+
+void WiiUMenuApp::toggleWaraWaraPlaza() {
+    if (m_plazaScreen && m_plazaScreen->isActive()) {
+        closeWaraWaraPlaza();
+    } else {
+        openWaraWaraPlaza();
+    }
+}
+
 void WiiUMenuApp::createThemeShop() {
     if (m_themeShop) return;
 

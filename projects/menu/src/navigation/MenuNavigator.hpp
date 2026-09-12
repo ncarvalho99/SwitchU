@@ -12,6 +12,7 @@ enum class Route : std::uint8_t {
     FolderOptions,
     ControllerTest,
     ActivityLog,
+    WaraWaraPlaza,
 };
 
 // Authoritative owner of primary-screen input. Visual exit animations may

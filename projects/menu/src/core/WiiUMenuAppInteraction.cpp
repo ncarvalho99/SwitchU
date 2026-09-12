@@ -774,6 +774,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         m_gameDetails->hide();
     if (m_activityLog && m_activityLog->isActive())
         m_activityLog->hide();
+    if (m_plazaScreen && m_plazaScreen->isActive())
+        closeWaraWaraPlaza();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
         m_steamGridDbPicker->hide();
     if (m_platformPicker && m_platformPicker->isActive())

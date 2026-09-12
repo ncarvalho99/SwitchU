@@ -1026,6 +1026,8 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
             return m_folderOptions ? m_folderOptions.get() : &rootBox();
         case switchu::navigation::Route::ControllerTest:
             return m_controllerTest ? m_controllerTest.get() : &rootBox();
+        case switchu::navigation::Route::ActivityLog:
+        case switchu::navigation::Route::WaraWaraPlaza:
         case switchu::navigation::Route::Home:
             break;
     }

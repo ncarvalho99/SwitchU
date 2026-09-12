@@ -4,6 +4,8 @@
 #include <nxui/core/Renderer.hpp>
 #include <nxui/core/Texture.hpp>
 #include <nxui/core/Types.hpp>
+#include <nxui/core/Font.hpp>
+#include "warawara/MiiFigure.hpp"
 #include <atomic>
 #include <cstdint>
 #include <deque>
@@ -130,6 +132,13 @@ public:
         m_frameSpeedScale = v < 0.f ? 0.f : (v > 3.f ? 3.f : v);
     }
 
+    // Ambient Mii Support
+    void setAmbientAvatars(const std::vector<warawara::MiiAvatarData>& avatars,
+                           nxui::Font* font = nullptr,
+                           nxui::Font* smallFont = nullptr);
+    void setAmbientMiisEnabled(bool enabled) { m_ambientMiisEnabled = enabled; }
+    bool ambientMiisEnabled() const { return m_ambientMiisEnabled; }
+
 protected:
     void onUpdate(float dt) override;
     void onRender(nxui::Renderer& ren) override;
@@ -199,5 +208,10 @@ private:
     float m_pendingFrameSourceFps = 0.f;
     size_t m_pendingFrameStride = 1;
     size_t m_pendingFrameSourceCount = 0;
+
+    bool m_ambientMiisEnabled = true;
+    std::vector<std::unique_ptr<warawara::MiiFigure>> m_ambientMiis;
+    nxui::Font* m_ambientFont = nullptr;
+    nxui::Font* m_ambientSmallFont = nullptr;
 };
 
