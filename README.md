@@ -247,7 +247,7 @@ Raw-tick hardware traces of launch and HOME-return can be summarized with
 
 ## Known issues
 
-As of 2.5.2. Each one is tracked as an issue with what is known so far and what
+As of 2.5.3. Each one is tracked as an issue with what is known so far and what
 it would take to close it.
 
 - **Parts of Settings are read-only or missing**
@@ -259,10 +259,13 @@ it would take to close it.
   live inside the HOME menu that SwitchU replaces, so each one has to be built
   against its own system service.
 - **Memory is tight with many sysmodules running**
-  ([#2](https://github.com/robsonbaioco/SwitchU/issues/2)). Launching a game on a
-  loaded console has been reported as unstable. It has never been measured: since
-  2.5.1 the daemon logs how full each memory pool is around a launch, and that
-  measurement is what the next step waits on.
+  ([#2](https://github.com/robsonbaioco/SwitchU/issues/2)). Measured on a console
+  in 2.5.2: the System pool, shared by every sysmodule on the card, sits at 221
+  of its 232 MB with about ten megabytes free, while the pool the menu itself
+  runs in has hundreds free. So this is not something the menu can fix by using
+  less; what is in SwitchU's hands is the daemon, which reserves twelve of those
+  megabytes. Sizing that down is the next step, and 2.5.3 logs what it actually
+  uses so it can be done from a real figure rather than a guess.
 - **A title with no name of its own shows its title id.** Some releases --
   downgraded builds in particular -- carry no usable name, and neither the
   console nor the artwork lookup can produce one. Rename the game from its

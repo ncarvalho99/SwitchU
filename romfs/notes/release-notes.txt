@@ -1,35 +1,21 @@
 
-Launching a game
-- Choosing a game could leave the launch animation frozen for about thirty seconds, and returning to a suspended game was slow the same way. The play time refresh asked about every installed title, and the handoff to a game waits for background work. It now asks only about the title just played and any with no figure yet, and it stops when a game is starting.
+Returning to the menu
+- Coming back with HOME is a quarter of a second quicker: the recently-played widget's total play time was being read from the system while the menu was created, for a figure that is never drawn. It reads the cache instead.
+- The steps of the menu's creation are timed in the log now, so the rest of that wait can be measured rather than guessed at.
 
-Icons
-- After "reload games and shortcuts" the grid came back with the right play time badges and the wrong pictures, until the sort mode was changed and back.
+Reading names and icons
+- The daemon announced itself after every title it cached, and each announcement made the menu rebuild its whole grid -- about once a second, for minutes, during a full rebuild. Announcements are held while there is still work queued.
 
-Reloading
-- "Reload games and shortcuts" is fast again: it asks only for what the catalogue is missing. Rebuilding every name and icon, which takes minutes, is now its own action.
-
-Renaming
-- Rename a game from its dossier. The name holds everywhere, and becomes the artwork search term for titles with no name of their own.
-
-Other
-- A port's dossier shows its play time again.
-- System settings can save the logs so they can be copied with the console running.
-- The daemon's log has real timestamps instead of 1970 dates.
+Logs
+- The daemon's log had 1970 dates on every line and in the names of its archived copies. It reads the console's clock properly now, and keeps trying until the clock is set.
 --pt-BR--
 
-Abrir um jogo
-- Escolher um jogo podia deixar a animação de lançamento congelada por cerca de trinta segundos, e voltar a um jogo suspenso demorava do mesmo jeito. A atualização de tempo jogado perguntava sobre todos os títulos instalados, e a entrega do console ao jogo espera o trabalho em segundo plano. Agora ela pergunta só sobre o título recém-jogado e os que ainda não têm valor, e é interrompida quando um jogo está iniciando.
+Voltar ao menu
+- Voltar pelo HOME ficou um quarto de segundo mais rápido: o tempo total do widget de jogo recente era lido do sistema enquanto o menu era criado, para um número que nunca é exibido. Agora ele lê do cache.
+- As etapas da criação do menu passam a ser cronometradas no log, para o resto dessa espera ser medido em vez de chutado.
 
-Ícones
-- Depois de "recarregar jogos e atalhos" a grade voltava com os tempos de jogo certos e as imagens erradas, até trocar a ordenação e voltar.
+Leitura de nomes e ícones
+- O daemon se anunciava a cada título que colocava em cache, e cada aviso fazia o menu reconstruir a grade inteira — cerca de uma vez por segundo, durante minutos, numa reconstrução completa. Os avisos agora são segurados enquanto há fila.
 
-Recarregar
-- "Recarregar jogos e atalhos" voltou a ser rápido: busca só o que falta no catálogo. Reconstruir todos os nomes e ícones, que leva minutos, virou uma ação separada.
-
-Renomear
-- Renomeie um jogo pelo painel dele. O nome vale em todo lugar e vira o termo de busca de capas para títulos sem nome próprio.
-
-Outros
-- O painel de um port volta a mostrar o tempo jogado.
-- As configurações de Sistema podem salvar os logs para cópia com o console ligado.
-- O log do daemon tem hora real em vez de datas de 1970.
+Logs
+- O log do daemon tinha datas de 1970 em todas as linhas e nos nomes das cópias arquivadas. Agora ele lê o relógio do console corretamente e continua tentando até o relógio estar ajustado.

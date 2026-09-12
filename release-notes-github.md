@@ -1,63 +1,39 @@
-# SwitchU 2.5.2
+# SwitchU 2.5.3
 
-Everything here came from one console's logs, photos and a video. A launch that froze for half a minute, wrong icons after a catalogue reload, a game with no name, and logs that could not be copied off the card.
+Returning to the menu with HOME is quicker, the grid stops rebuilding itself over and over while names and icons are being read, and the daemon's log finally carries real dates. All of it measured on a console, from the logs 2.5.2 made collectable.
 
 ## English
 
-### A launch that froze for thirty seconds
+### Returning to the menu
 
-- Choosing a game left the launch animation stopped mid-expansion for about thirty seconds before the console handed over, and returning to a suspended game was slow the same way. The play time refresh -- added in 2.5.0 for the most-played view -- asked the system about every installed title, and each answer costs about a quarter of a second: 29 seconds on a console with 117 games, measured in its own log. The menu waits for its background work before giving the console to a game, so a launch during those seconds waited for the rest of the batch.
-- It now asks only about titles that can have changed: the one just played, and any with no figure recorded yet. After the first run that is one query instead of a hundred and seventeen. The batch can also be stopped where it stands when a game is starting, so even a first run cannot hold a launch.
+- Coming back with HOME takes about two seconds, and the console's own traces say where they go: 75 ms for the daemon to react, 628 ms for the system to start the menu process, 829 ms creating the menu, 251 ms to the first frame. A quarter of that last part was ours and recent: 2.5.1 had started asking the system for the recently-played widget's total play time while the menu was being created -- a figure that is stored and never drawn. It reads the cache instead.
+- The rest of the menu's creation is now timed in the log, so the next round can say which step holds the remaining half second instead of guessing at it.
 
-### Wrong icons after "reload games and shortcuts"
+### Reading names and icons
 
-- The grid came back with the right play time badges and the wrong pictures, and stayed that way until the sort mode was changed and back. The reload replaced the grid's model with the sorted one without telling the icon loader, so every icon kept resolving to whatever title used to sit at its position. Only the hand-made order matched, which is why any sort showed it.
+- The daemon announced itself after every single title it cached, and each announcement makes the menu reload its app list and rebuild the whole grid. Rebuilding names and icons on a full console therefore spent minutes tearing the grid down and building it again about once a second. Announcements are held back while there is still a queue.
 
-### Reloading is fast again
+### The daemon's log
 
-- "Reload games and shortcuts" cleared every cached name and icon and read them from the titles again -- about a second each, so roughly six minutes on a full console, with the grid on loading spinners the whole time. To pick up one new shortcut, which is what it is normally used for. It now asks only for what the catalogue is missing, and the expensive half moved to its own action, **Rebuild names and icons**, which says what it costs.
-
-### Renaming a game
-
-- **Rename**, in a game's dossier. Some titles have no name to give: a release downgraded to an older build can carry none at all, leaving the grid showing its title id. The chosen name holds in the grid, the title pill, the A-Z order, folders and the single-row view, and becomes the artwork search term when the title has no name of its own -- which is what lets SteamGridDB find it. An empty field restores the original.
-
-### Play time in the dossier
-
-- A game marked as a port carries two extra actions, which left room for two fact rows, and play time was the row dropped: its dossier showed none while the grid badge showed 37 hours. Mods gives up its row first now.
-
-### Logs
-
-- **Save logs for copying**, in System settings. Both logs are held open while the console runs, so copying them over MTP failed with "resource already in use" -- the two files worth asking for were the two that could not be read without rebooting first. This closes them and leaves copies nothing holds open.
-- Every line in the daemon's log carried a 1970 date, and so did the names of its archived copies, which made them impossible to tell apart or to line up against the menu's log. The daemon was opening the application clock instead of the system one, so every read failed and the log fell back to counting from boot.
+- Every line was dated 1970, and so were the names of the archived copies, which made them impossible to tell apart or to line up against the menu's log. libnx reads the clock once at startup and counts from there; the daemon has its own startup path and never did that read. It does now, and retries until the console's clock is actually set -- a system process starts before that happens.
+- The memory snapshot also records how much of the daemon's heap is really in use. What it holds is what it reserved, which never changes; on a console whose System memory pool has ten megabytes free, against the twelve this daemon reserves, the real figure is what makes it safe to reserve less.
 
 ---
 
 ## Português
 
-Tudo aqui saiu dos logs, fotos e um vídeo de um console. Um lançamento que congelava por meio minuto, ícones errados depois de recarregar o catálogo, um jogo sem nome e logs que não dava para copiar do cartão.
+Voltar ao menu pelo HOME ficou mais rápido, a grade para de se reconstruir repetidamente enquanto nomes e ícones são lidos, e o log do daemon finalmente tem datas reais. Tudo medido num console, a partir dos logs que a 2.5.2 tornou coletáveis.
 
-### Um lançamento que congelava por trinta segundos
+### Voltar ao menu
 
-- Escolher um jogo deixava a animação de lançamento parada no meio por cerca de trinta segundos antes de o console passar o controle, e voltar a um jogo suspenso demorava do mesmo jeito. A atualização de tempo jogado — adicionada na 2.5.0 para a ordenação por mais jogados — perguntava ao sistema sobre todos os títulos instalados, e cada resposta custa cerca de um quarto de segundo: 29 segundos num console com 117 jogos, medidos no próprio log dele. O menu espera o trabalho em segundo plano terminar antes de entregar o console ao jogo, então um lançamento durante esses segundos ficava esperando o resto do lote.
-- Agora ele pergunta só sobre o que pode ter mudado: o título recém-jogado e os que ainda não têm valor registrado. Depois da primeira vez, é uma consulta em vez de cento e dezessete. O lote também pode ser interrompido quando um jogo está iniciando, então nem a primeira execução segura um lançamento.
+- Voltar pelo HOME leva cerca de dois segundos, e os registros do próprio console dizem onde eles vão: 75 ms para o daemon reagir, 628 ms para o sistema iniciar o processo do menu, 829 ms criando o menu e 251 ms até o primeiro quadro. Um quarto dessa última parte era nosso e recente: a 2.5.1 passou a perguntar ao sistema o tempo total do widget de jogo recente enquanto o menu era criado — um número que é guardado e nunca exibido. Agora ele lê do cache.
+- O restante da criação do menu passa a ser cronometrado no log, para a próxima rodada dizer qual etapa segura o meio segundo que falta, em vez de chutarmos.
 
-### Ícones errados depois de "recarregar jogos e atalhos"
+### Leitura de nomes e ícones
 
-- A grade voltava com os tempos de jogo certos e as imagens erradas, e ficava assim até trocar a ordenação e voltar. O recarregamento substituía o modelo da grade pelo ordenado sem avisar o carregador de ícones, então cada ícone continuava resolvendo para o título que ocupava aquela posição antes. Só a ordem pessoal coincidia, por isso qualquer ordenação revelava o problema.
+- O daemon se anunciava a cada título que colocava em cache, e cada aviso faz o menu recarregar a lista de aplicativos e reconstruir a grade inteira. Reconstruir nomes e ícones num console cheio passava minutos derrubando e remontando a grade cerca de uma vez por segundo. Os avisos agora são segurados enquanto ainda há fila.
 
-### Recarregar voltou a ser rápido
+### O log do daemon
 
-- "Recarregar jogos e atalhos" apagava todos os nomes e ícones em cache e lia tudo de novo dos títulos — cerca de um segundo cada, ou seja, uns seis minutos num console cheio, com a grade carregando o tempo todo. Para reconhecer um atalho novo, que é o uso normal. Agora ele busca só o que falta no catálogo, e a parte cara virou uma ação separada, **Reconstruir nomes e ícones**, que avisa quanto custa.
-
-### Renomear um jogo
-
-- **Renomear**, no painel do jogo. Alguns títulos não têm nome para informar: uma versão rebaixada pode não trazer nenhum, deixando a grade com o title id. O nome escolhido vale na grade, na legenda, na ordem A-Z, nas pastas e na linha única, e vira o termo de busca de capas quando o título não tem nome próprio — que é o que permite ao SteamGridDB encontrá-lo. Campo vazio restaura o original.
-
-### Tempo jogado no painel
-
-- Um jogo marcado como port ganha duas ações a mais, o que deixava espaço para duas linhas de fatos, e a descartada era o tempo jogado: o painel não mostrava nada enquanto a etiqueta na grade mostrava 37 horas. Agora "Mods" cede a vez primeiro.
-
-### Logs
-
-- **Salvar logs para cópia**, nas configurações de Sistema. Os dois logs ficam abertos enquanto o console roda, então copiá-los por MTP falhava com "resource already in use" — os dois arquivos que alguém pediria eram justamente os que não dava para ler sem reiniciar antes. A ação fecha os dois e deixa cópias que ninguém mantém abertas.
-- Todas as linhas do log do daemon traziam data de 1970, e os nomes das cópias arquivadas também, o que tornava impossível distingui-las ou cruzá-las com o log do menu. O daemon abria o relógio de aplicativo em vez do de sistema, então toda leitura falhava e o log caía na contagem desde o boot.
+- Todas as linhas tinham data de 1970, e os nomes das cópias arquivadas também, o que tornava impossível distingui-las ou cruzá-las com o log do menu. A libnx lê o relógio uma vez, no início, e conta a partir dali; o daemon tem seu próprio início e nunca fazia essa leitura. Agora faz, e repete até o console realmente ter o relógio ajustado — um processo de sistema sobe antes disso.
+- O registro de memória também passa a anotar quanto do heap do daemon está de fato em uso. O que ele ocupa é o que reservou, e isso nunca muda; num console cujo pool System tem dez megabytes livres, contra os doze que este daemon reserva, o número real é o que permite reservar menos com segurança.
