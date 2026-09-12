@@ -280,7 +280,10 @@ void AppListLoader::fetchApps(std::vector<PendingApp>& output, bool prefetchIcon
         if (switchu::control_cache::readMeta(tid, meta)) {
             PendingApp a;
             a.id      = tidBuf;
-            a.title   = meta.name;
+            // A cached entry can carry no name: the control data had none to
+            // give. The id stands in for it here rather than in the cache file,
+            // so the real name is still picked up once it can be read.
+            a.title   = meta.name[0] != '\0' ? meta.name : tidBuf;
             a.englishTitle = meta.english_name;
             a.titleId = tid;
             a.viewFlags = vf;

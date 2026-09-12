@@ -100,6 +100,14 @@ inline bool isValidUtf8(const char* value, size_t capacity) {
     return terminated;
 }
 
+// The hex title id was once written into the name field when a NACP carried no
+// usable one, which made a placeholder indistinguishable from a real name: the
+// file then satisfied every "is it cached?" test and the title kept its id as
+// its name forever, in the grid and in the artwork lookup alike. Nothing writes
+// it any more, and readMeta() treats one that is already on a card as absent so
+// the name is asked for again.
+inline bool nameIsTitleIdPlaceholder(const char* name, uint64_t titleId);
+
 inline std::string metaPath(uint64_t titleId) {
     return std::string(kCacheDir) + "/" + formatTitleId(titleId) + ".meta";
 }
@@ -115,6 +123,12 @@ inline void ensureDirectory() {
     std::filesystem::create_directory("sdmc:/config/SwitchU", ec);
     ec.clear();
     std::filesystem::create_directory(kCacheDir, ec);
+}
+
+inline bool nameIsTitleIdPlaceholder(const char* name, uint64_t titleId) {
+    if (!name || name[0] == '\0')
+        return false;
+    return formatTitleId(titleId) == name;
 }
 
 inline bool readMeta(uint64_t titleId, Meta& out) {
@@ -134,6 +148,11 @@ inline bool readMeta(uint64_t titleId, Meta& out) {
     meta.english_name[sizeof(meta.english_name) - 1] = '\0';
     meta.publisher[sizeof(meta.publisher) - 1] = '\0';
     if (!isValidUtf8(meta.name, sizeof(meta.name)))
+        return false;
+    // Written by a version that stored the id as the name. Reported as a title
+    // showing "01007EF00011E000" on the grid after a downgrade, which no
+    // catalogue reload could clear: the reload rewrote the same placeholder.
+    if (nameIsTitleIdPlaceholder(meta.name, titleId))
         return false;
     if (meta.english_name[0] != '\0'
         && !isValidUtf8(meta.english_name, sizeof(meta.english_name)))
@@ -269,11 +288,12 @@ inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControl
                    englishEntry->name, sizeof(englishEntry->name));
     }
 
-    if (meta.name[0] == '\0') {
-        const std::string fallback = formatTitleId(titleId);
-        copyString(meta.name, sizeof(meta.name), fallback.c_str(), fallback.size());
-    }
-    if (meta.english_name[0] == '\0')
+    // A name that could not be read stays empty. It used to become the hex
+    // title id here, which is the whole reason a title could be stuck with its
+    // id as its name: everything downstream, the artwork search included, then
+    // had a "name" and never asked again. The display fallback belongs to
+    // whoever draws the grid, not to the file that outlives the boot.
+    if (meta.english_name[0] == '\0' && meta.name[0] != '\0')
         copyString(meta.english_name, sizeof(meta.english_name),
                    meta.name, sizeof(meta.name));
 
@@ -291,11 +311,22 @@ inline bool writeMeta(const Meta& meta) {
     return static_cast<bool>(file);
 }
 
-inline bool writeFromControlData(uint64_t titleId, const NsApplicationControlData& controlData,
-                                 size_t controlSize) {
+enum class CacheOutcome {
+    Named,        // a real name was read; everything is cached
+    Unnamed,      // the control data carried no usable name
+    WriteFailed,  // the card refused one of the two files
+};
+
+// Caching an unnamed title is still worth doing: the startup-user policy and
+// the save-data sizes come from the same NACP, and the icon usually decodes
+// even when no language entry has a name. The caller decides whether to look
+// for a name somewhere else before settling for this.
+inline CacheOutcome writeFromControlData(uint64_t titleId,
+                                         const NsApplicationControlData& controlData,
+                                         size_t controlSize) {
     Meta meta{};
     if (!fillMetaFromControlData(titleId, controlData, meta))
-        return false;
+        return CacheOutcome::WriteFailed;
 
     const bool metaOk = writeMeta(meta);
     bool iconOk = true;
@@ -303,7 +334,9 @@ inline bool writeFromControlData(uint64_t titleId, const NsApplicationControlDat
         const size_t iconSize = controlSize - sizeof(NacpStruct);
         iconOk = writeIcon(titleId, controlData.icon, iconSize);
     }
-    return metaOk && iconOk;
+    if (!metaOk || !iconOk)
+        return CacheOutcome::WriteFailed;
+    return meta.name[0] != '\0' ? CacheOutcome::Named : CacheOutcome::Unnamed;
 }
 
 }

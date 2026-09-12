@@ -2306,34 +2306,73 @@ static void controlCacheThreadFunc(void* arg) {
             continue;
         }
 
-        size_t controlSize = 0;
-        const uint64_t startTick = armGetSystemTick();
-        Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
-                                                titleId,
-                                                controlData,
-                                                sizeof(*controlData),
-                                                &controlSize);
-        const uint64_t elapsedMs = armTicksToNs(armGetSystemTick() - startTick) / 1'000'000ULL;
-        if (R_SUCCEEDED(rc) && controlSize >= sizeof(NacpStruct)) {
-            const bool ok = switchu::control_cache::writeFromControlData(
+        // Storage is what official software asks for, and it answers from the
+        // system's own control cache when that has an entry. A title downgraded
+        // to an older build was reported stuck with no name at all, which is
+        // what a stale or empty entry there looks like -- so the other two
+        // sources are tried before giving up on the name. StorageOnly ignores
+        // that cache and reads the installed content; CacheOnly is the last
+        // resort, and can still hold the name the title had before.
+        static constexpr NsApplicationControlSource kSources[] = {
+            NsApplicationControlSource_Storage,
+            NsApplicationControlSource_StorageOnly,
+            NsApplicationControlSource_CacheOnly,
+        };
+
+        bool named = false;
+        bool cached = false;
+        for (const NsApplicationControlSource source : kSources) {
+            size_t controlSize = 0;
+            const uint64_t startTick = armGetSystemTick();
+            const Result rc = nsGetApplicationControlData(source,
+                                                          titleId,
+                                                          controlData,
+                                                          sizeof(*controlData),
+                                                          &controlSize);
+            const uint64_t elapsedMs =
+                armTicksToNs(armGetSystemTick() - startTick) / 1'000'000ULL;
+            if (R_FAILED(rc) || controlSize < sizeof(NacpStruct)) {
+                switchu::FileLog::log(
+                    "[control-cache] GetControlData FAIL title=0x%016lX source=%d rc=0x%X size=%zu elapsed=%lums",
+                    titleId,
+                    static_cast<int>(source),
+                    rc,
+                    controlSize,
+                    static_cast<unsigned long>(elapsedMs));
+                continue;
+            }
+
+            const auto outcome = switchu::control_cache::writeFromControlData(
                 titleId,
                 *controlData,
                 controlSize);
-            switchu::FileLog::log("[control-cache] cached 0x%016lX size=%zu elapsed=%lums ok=%d",
-                                  titleId,
-                                  controlSize,
-                                  static_cast<unsigned long>(elapsedMs),
-                                  ok ? 1 : 0);
-            if (ok) {
-                g_controlCacheRefreshPending.store(true);
-                g_controlCacheRefreshDelay.store(60);
-            }
-        } else {
-            switchu::FileLog::log("[control-cache] GetControlData FAIL title=0x%016lX rc=0x%X size=%zu elapsed=%lums",
-                                  titleId,
-                                  rc,
-                                  controlSize,
-                                  static_cast<unsigned long>(elapsedMs));
+            named = outcome == switchu::control_cache::CacheOutcome::Named;
+            cached = cached || named ||
+                     outcome == switchu::control_cache::CacheOutcome::Unnamed;
+            switchu::FileLog::log(
+                "[control-cache] cached 0x%016lX source=%d size=%zu elapsed=%lums named=%d written=%d",
+                titleId,
+                static_cast<int>(source),
+                controlSize,
+                static_cast<unsigned long>(elapsedMs),
+                named ? 1 : 0,
+                cached ? 1 : 0);
+            if (named)
+                break;
+        }
+
+        if (cached) {
+            // An unnamed entry is kept as it is: the grid falls back to the id
+            // for the label, and the title is not asked for again every time the
+            // catalogue is rebuilt. Reload games and shortcuts forgets it and
+            // starts this over, which is the way back once the content that
+            // carries the name is installed again.
+            g_controlCacheRefreshPending.store(true);
+            g_controlCacheRefreshDelay.store(60);
+        }
+        if (!named) {
+            switchu::FileLog::log("[control-cache] no name for 0x%016lX from any source",
+                                  titleId);
         }
 
         delete controlData;
