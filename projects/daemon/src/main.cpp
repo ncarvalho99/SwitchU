@@ -1466,6 +1466,7 @@ static void handleMenuCommand() {
         const auto args = reader.pop<smi::PrepareAppArgs>();
         AccountUid uid{};
         std::memcpy(&uid, args.user_uid, sizeof(uid));
+        switchu::daemon::mem::snapshot("prepare-app");
         daemon::app::prepare(args.title_id, uid, args.request_send_tick,
                              commandReceiveTick);
         break;
