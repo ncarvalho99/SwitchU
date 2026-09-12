@@ -37,7 +37,8 @@ std::optional<std::uint64_t> query(std::uint64_t titleId) {
 }
 
 std::vector<std::pair<std::uint64_t, std::uint64_t>> queryAll(
-    const std::vector<std::uint64_t>& titleIds) {
+    const std::vector<std::uint64_t>& titleIds,
+    const std::atomic<bool>* cancelled) {
     std::vector<std::pair<std::uint64_t, std::uint64_t>> result;
 #ifdef SWITCHU_MENU
     if (titleIds.empty())
@@ -50,7 +51,13 @@ std::vector<std::pair<std::uint64_t, std::uint64_t>> queryAll(
     }
     result.reserve(titleIds.size());
     int failed = 0;
+    const std::uint64_t startTick = armGetSystemTick();
+    bool stopped = false;
     for (const std::uint64_t titleId : titleIds) {
+        if (cancelled && cancelled->load()) {
+            stopped = true;
+            break;
+        }
         if (titleId == 0)
             continue;
         PdmPlayStatistics stats{};
@@ -64,8 +71,11 @@ std::vector<std::pair<std::uint64_t, std::uint64_t>> queryAll(
         result.emplace_back(titleId, stats.playtime);
     }
     pdmqryExit();
-    DebugLog::log("[playtime] batch queried=%zu answered=%zu failed=%d",
-                  titleIds.size(), result.size(), failed);
+    const std::uint64_t elapsedMs =
+        armTicksToNs(armGetSystemTick() - startTick) / 1000000ULL;
+    DebugLog::log("[playtime] batch queried=%zu answered=%zu failed=%d stopped=%d in %llums",
+                  titleIds.size(), result.size(), failed, stopped ? 1 : 0,
+                  static_cast<unsigned long long>(elapsedMs));
 #else
     (void)titleIds;
 #endif

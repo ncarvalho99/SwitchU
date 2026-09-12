@@ -557,6 +557,12 @@ void WiiUMenuApp::onDestroy() {
     // after Theme Shop/Gallery activity could therefore tear down a runtime
     // while one of those workers was still using it.  Drain while every owner
     // is still alive; normal launch animation time already absorbs this wait.
+    // The play time batch is the one worker that can be seconds long, and the
+    // player is already looking at a launch animation that cannot finish until
+    // this drain does. Whatever it has read is kept; the rest is asked for the
+    // next time the menu comes up.
+    if (m_playtimeRefresh)
+        m_playtimeRefresh->cancelled.store(true);
     const uint64_t workerDrainStartTick = armGetSystemTick();
     m_threadPool.waitForIdle();
     const uint64_t workerDrainUs =
@@ -1152,17 +1158,32 @@ void WiiUMenuApp::pollPlaytimeRefresh() {
         return;
     m_playtimeRefreshQueued = false;
 
+    // Only what can have changed. A title's play time moves when it is played,
+    // and the menu is recreated after every session, so the title just played
+    // plus anything with no figure yet is the whole set -- usually one query
+    // instead of a hundred and seventeen. Asking for all of them cost 29
+    // seconds on a console with that many, measured in its own log, and the
+    // handoff to a game waits for this pool: launching or resuming during those
+    // seconds left the launch animation frozen on screen for as long as the
+    // batch had left to run.
     std::vector<std::uint64_t> titleIds;
     titleIds.reserve(m_allApps.size());
-    for (const auto& app : m_allApps)
-        if (app.isApplication() && app.titleId != 0)
+    const std::uint64_t justPlayed = m_launcher.suspendedTitleId() != 0
+        ? m_launcher.suspendedTitleId() : m_config.lastPageTitleId;
+    for (const auto& app : m_allApps) {
+        if (!app.isApplication() || app.titleId == 0)
+            continue;
+        if (app.titleId == justPlayed || !m_config.hasPlaytime(app.titleId))
             titleIds.push_back(app.titleId);
+    }
+    if (titleIds.empty())
+        return;
 
     auto state = std::make_shared<PlaytimeRefreshState>();
     m_playtimeRefresh = state;
     m_playtimeFuture = m_threadPool.submit(
         [state, titleIds = std::move(titleIds)]() {
-            state->playtime = switchu::menu::playtime::queryAll(titleIds);
+            state->playtime = switchu::menu::playtime::queryAll(titleIds, &state->cancelled);
         });
 #endif
 }

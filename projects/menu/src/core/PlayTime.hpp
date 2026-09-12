@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -19,8 +20,15 @@ std::optional<std::uint64_t> query(std::uint64_t titleId);
 // Blocks for one IPC round trip per title, so it belongs on a worker thread.
 // A title whose query fails is logged and left out rather than failing the
 // batch; the caller keeps whatever it knew about it before.
+//
+// Each query costs roughly a quarter of a second on hardware, so a full
+// catalogue is half a minute of work. The menu drains its thread pool before
+// handing the console to a game, which means a batch still running is time the
+// player spends looking at a frozen launch animation -- so the caller passes a
+// flag it can raise to stop the batch where it stands.
 std::vector<std::pair<std::uint64_t, std::uint64_t>> queryAll(
-    const std::vector<std::uint64_t>& titleIds);
+    const std::vector<std::uint64_t>& titleIds,
+    const std::atomic<bool>* cancelled = nullptr);
 
 // "12 h 5 min", or "40 min" under an hour. Empty for zero.
 std::string format(std::uint64_t nanoseconds);

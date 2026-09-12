@@ -90,18 +90,25 @@ struct AppConfig {
             if (e.first == titleId) return e.second;
         return 0;
     }
+    // Whether pdm was ever asked about this title. A title nobody has played
+    // answers zero, and zero is stored, so that it is not asked again on every
+    // boot for the rest of the console's life -- which is the difference
+    // between one query and a hundred at every menu start.
+    bool hasPlaytime(std::uint64_t titleId) const {
+        for (const auto& e : playtime)
+            if (e.first == titleId) return true;
+        return false;
+    }
     // Whether the stored value changed.
     bool setPlaytime(std::uint64_t titleId, std::uint64_t nanoseconds) {
-        for (auto it = playtime.begin(); it != playtime.end(); ++it) {
-            if (it->first != titleId) continue;
-            if (it->second == nanoseconds) return false;
-            if (nanoseconds == 0) playtime.erase(it);
-            else it->second = nanoseconds;
+        for (auto& e : playtime) {
+            if (e.first != titleId) continue;
+            if (e.second == nanoseconds) return false;
+            e.second = nanoseconds;
             return true;
         }
-        if (nanoseconds == 0) return false;
         playtime.emplace_back(titleId, nanoseconds);
-        return true;
+        return nanoseconds != 0;
     }
 
     // When each title was last opened, by title id. The record ns keeps is

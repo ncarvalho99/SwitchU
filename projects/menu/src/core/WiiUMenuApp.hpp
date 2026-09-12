@@ -505,6 +505,9 @@ private:
     // ready. The pool hands back only std::future<void>.
     struct PlaytimeRefreshState {
         std::vector<std::pair<std::uint64_t, std::uint64_t>> playtime;
+        // Raised when the console is about to be handed to a game: the batch
+        // stops where it is rather than making the player wait for it.
+        std::atomic<bool> cancelled{false};
     };
     std::shared_ptr<PlaytimeRefreshState> m_playtimeRefresh;
     std::future<void>    m_playtimeFuture;

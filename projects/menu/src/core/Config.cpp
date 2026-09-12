@@ -104,8 +104,9 @@ bool AppConfig::load() {
     if (auto it = j.find("playtime"); it != j.end() && it->is_object()) {
         for (auto& [k, v] : it->items()) {
             if (!v.is_number_unsigned()) continue;
+            // Zero is kept: it means "asked, never played", which is what stops
+            // the title being asked about again at every boot.
             const std::uint64_t ns = v.get<std::uint64_t>();
-            if (ns == 0) continue;
             playtime.emplace_back(std::strtoull(k.c_str(), nullptr, 16), ns);
         }
     }
