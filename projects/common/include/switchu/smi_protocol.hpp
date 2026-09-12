@@ -73,6 +73,11 @@ enum class SystemMessage : uint32_t {
     // copying it over MTP with the console running fails with 2002-0007,
     // "resource already in use", which is how diagnostics kept getting stuck.
     RotateLogs            = 44,
+    // Forgets every cached name and icon and reads them from the titles again.
+    // Expensive on purpose -- about a second per installed title -- so it is a
+    // separate, explicit action from RefreshCatalog, which only picks up what
+    // the catalogue is missing.
+    RebuildControlCache   = 45,
 #ifdef SWITCHU_TERMINATION_QUEUE_TEST
     // Diagnostic-only commands. Production builds neither expose nor handle
     // these IDs, so lifecycle fault injection cannot alter normal timing.

@@ -148,6 +148,11 @@ Result AppletLauncher::rotateLogs() {
     return rc;
 }
 
+Result AppletLauncher::rebuildControlCache() {
+    DebugLog::log("[launcher] requesting control cache rebuild");
+    return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RebuildControlCache);
+}
+
 Result AppletLauncher::prepareApplication(uint64_t titleId, AccountUid uid,
                                           switchu::smi::LaunchTransitionTrace& trace) {
     const Result rc = switchu::menu::smi_cmd::prepareApplication(titleId, uid, trace);
@@ -296,6 +301,7 @@ void AppletLauncher::launchApplication(uint64_t, AccountUid,
                                        switchu::smi::LaunchTransitionTrace) {}
 Result AppletLauncher::refreshCatalog()                { return 0; }
 Result AppletLauncher::rotateLogs()                    { return 0; }
+Result AppletLauncher::rebuildControlCache()           { return 0; }
 void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace) {}
 void AppletLauncher::terminateApplication()    {}
 void AppletLauncher::checkRunningApplication() {}

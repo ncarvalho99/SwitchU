@@ -39,6 +39,9 @@ public:
     // Closes both logs and starts fresh ones, so the finished files can be
     // copied off the card while the console is running.
     Result rotateLogs();
+    // Forgets every cached name and icon. About a second per installed title,
+    // so it is offered separately from the ordinary catalogue refresh.
+    Result rebuildControlCache();
 
     Result prepareApplication(uint64_t titleId, AccountUid uid,
                               switchu::smi::LaunchTransitionTrace& trace);

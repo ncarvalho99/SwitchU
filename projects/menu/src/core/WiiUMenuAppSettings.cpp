@@ -949,6 +949,22 @@ void WiiUMenuApp::createThemeShop() {
         m_refreshQueued = true;
         m_deferredRefreshFrames = std::max(m_deferredRefreshFrames, 3);
     });
+    // The slow half, now that the ordinary reload no longer pays for it: every
+    // name and icon is read from the titles again, about a second each.
+    m_themeShop->onRebuildControlCache([this]() {
+        const Result rc = m_launcher.rebuildControlCache();
+        DebugLog::log("[catalog] control cache rebuild requested rc=0x%X", rc);
+        auto& i18n = nxui::I18n::instance();
+        if (m_settings) {
+            m_settings->requestToast(R_SUCCEEDED(rc)
+                ? i18n.tr("settings.display.rebuild_names_done",
+                          "Reading names and icons again. This takes a few minutes.")
+                : i18n.tr("settings.display.reload_grid_failed", "Could not ask for a reload."),
+                4.0f);
+        }
+        m_refreshQueued = true;
+        m_deferredRefreshFrames = std::max(m_deferredRefreshFrames, 3);
+    });
     m_themeShop->onThemeShopApply([this](const std::string& presetId) {
         DebugLog::log("[theme-apply] request from Theme Shop: preset=%s", presetId.c_str());
         ThemePreset* preset = findPresetPtr(presetId);

@@ -46,6 +46,14 @@ extern "C" {
     u32 __nx_applet_type = AppletType_SystemApplet;
     u32 __nx_fs_num_sessions = 3;
 
+    // time:s, the clock a system process is meant to use. Left at the default,
+    // timeInitialize() opens time:u -- the application one -- and every clock
+    // read from this process failed, so gettimeofday fell back to the tick
+    // counter: the whole daemon log, and the names of its archived copies,
+    // carried 1970 dates for as long as the console stayed up. The menu has
+    // always set this (to time:a) and has always had real timestamps.
+    TimeServiceType __nx_time_service_type = TimeServiceType_System;
+
     size_t __nx_heap_size = 0x800000;
 }
 
@@ -1698,18 +1706,33 @@ static void handleMenuCommand() {
     }
 
     case smi::SystemMessage::RefreshCatalog: {
-        // Everything goes, not just what looks new. This is the answer to a
-        // shortcut that reused an id and therefore looks unchanged: the player
-        // is telling us the cache is wrong, and they are the ones who can see
-        // it. The worker refetches what the catalogue still needs.
+        // Only what the catalogue is missing. Reading control data costs about
+        // 0.9 s per title -- measured over 547 reads on a 117-title console,
+        // median 899 ms -- so clearing the cache first made this take about six
+        // minutes, during which the grid sits on loading spinners. Picking up a
+        // newly installed title, which is what this is normally used for, needs
+        // none of that work. RebuildControlCache below is the one that forgets.
+        switchu::FileLog::log("[control-cache] refresh on request (%d titles tracked)",
+                              (int)g_lastRecordCount);
+        bool catalogChanged = false;
+        rebuildAppCatalog("refresh-request", &catalogChanged);
+        if (daemon::menu_la::isActive())
+            pushNotification(smi::MenuMessage::AppRecordsChanged);
+        break;
+    }
+
+    case smi::SystemMessage::RebuildControlCache: {
+        // The cache is wrong rather than incomplete: a shortcut that reused an
+        // id, or a title whose name could not be read when it was first seen.
+        // The player is the one who can see that, so they ask for it.
         for (s32 i = 0; i < g_lastRecordCount && i < kMaxTrackedApplicationRecords; ++i) {
             if (g_lastRecordTids[i] != 0)
                 switchu::control_cache::forget(g_lastRecordTids[i]);
         }
         switchu::FileLog::log("[control-cache] cleared on request (%d titles)",
                               (int)g_lastRecordCount);
-        bool catalogChanged = false;
-        rebuildAppCatalog("refresh-request", &catalogChanged);
+        bool rebuiltChanged = false;
+        rebuildAppCatalog("rebuild-request", &rebuiltChanged);
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
         break;

@@ -148,11 +148,29 @@ ThemeShopScreen::Tab themeshop::tabs::OptionsTab::build(ThemeShopScreen& screen)
         SettingItem it;
         it.label = i18n.tr("settings.display.reload_grid", "Reload games and shortcuts");
         it.description = i18n.tr("settings.display.reload_grid_desc",
-                                 "Reads the installed titles again and discards the cached names "
-                                 "and icons. Use it after creating or deleting a shortcut.");
+                                 "Reads the installed titles again. Use it after creating or "
+                                 "deleting a shortcut.");
         it.type = ItemType::Action;
         it.onChange = [&screen](SettingItem&) {
             if (screen.m_reloadCatalogCb) screen.m_reloadCatalogCb();
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    // The expensive half of what "reload" used to do, on its own item. Reading
+    // a title's control data costs about a second, so a hundred-title console
+    // spends minutes on this -- worth it when a name or an icon is actually
+    // wrong, and pure waste when a shortcut was merely added.
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.display.rebuild_names",
+                           "Rebuild names and icons");
+        it.description = i18n.tr("settings.display.rebuild_names_desc",
+                                 "Discards every cached name and icon and reads them from the "
+                                 "titles again. Takes a few minutes on a full console.");
+        it.type = ItemType::Action;
+        it.onChange = [&screen](SettingItem&) {
+            if (screen.m_rebuildControlCacheCb) screen.m_rebuildControlCacheCb();
         };
         t.items.push_back(std::move(it));
     }
