@@ -68,7 +68,7 @@ bool GpuDevice::initialize() {
     for (int i = 0; i < NUM_FB; ++i) {
         dataSize += VTX_BUF_SIZE + 256;
         dataSize += IDX_BUF_SIZE + 256;
-        dataSize += VS_UBO_SIZE + 256;
+        dataSize += VS_UBO_SIZE * VS_UBO_RING + 256;
         dataSize += FS_UBO_SIZE * FS_UBO_RING + 256;
     }
     dataSize += MAX_TEXTURES * sizeof(DkImageDescriptor) + DK_IMAGE_DESCRIPTOR_ALIGNMENT;
@@ -79,7 +79,7 @@ bool GpuDevice::initialize() {
     for (int i = 0; i < NUM_FB; ++i) {
         m_vtxOff[i]   = m_dataPool.alloc(VTX_BUF_SIZE, 256);
         m_idxOff[i]   = m_dataPool.alloc(IDX_BUF_SIZE, 256);
-        m_vsUboOff[i] = m_dataPool.alloc(VS_UBO_SIZE, DK_UNIFORM_BUF_ALIGNMENT);
+        m_vsUboOff[i] = m_dataPool.alloc(VS_UBO_SIZE * VS_UBO_RING, DK_UNIFORM_BUF_ALIGNMENT);
         m_fsUboOff[i] = m_dataPool.alloc(FS_UBO_SIZE * FS_UBO_RING, DK_UNIFORM_BUF_ALIGNMENT);
     }
     m_imgDescOff = m_dataPool.alloc(MAX_TEXTURES * sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT);
@@ -164,6 +164,34 @@ void GpuDevice::createOffscreenTargets() {
         m_offImages[i].initialize(layouts[i], m_offPool.block, off);
         off += layouts[i].getSize();
     }
+
+    // Freshly mapped VRAM holds whatever the previous process left in it. These
+    // targets are sampled by descriptor slot, and not every consumer writes one
+    // before reading it in the same frame: FolderBackdrop draws OFF_SETTINGS
+    // gated only on its own fade alpha, so before the first folder capture ever
+    // runs it samples uninitialised memory. That is the boot-time-only garbage —
+    // once a capture has written a target the stale contents are gone, which is
+    // why the artifacts were never reproducible after the first interaction and
+    // why two previous fixes aimed at shape geometry could not land.
+    //
+    // Zero them once, here, before m_offscreenReady lets anything sample them.
+    // This is init-time and runs exactly once, so it costs nothing per frame.
+    auto& cmd = m_cmdbuf[0];
+    cmd.clear();
+    cmd.addMemory(m_cmdPool[0].block, 0, CMD_BUF_SIZE);
+    for (int i = 0; i < NUM_OFFSCREEN; ++i) {
+        const uint32_t w = (uint32_t)offscreenWidth(i);
+        const uint32_t h = (uint32_t)offscreenHeight(i);
+        dk::ImageView target{m_offImages[i]};
+        cmd.bindRenderTargets(&target);
+        cmd.setViewports(0, DkViewport{0.f, 0.f, (float)w, (float)h, 0.f, 1.f});
+        cmd.setScissors(0, DkScissor{0, 0, w, h});
+        cmd.clearColor(0, DkColorMask_RGBA, 0.f, 0.f, 0.f, 0.f);
+    }
+    cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+    m_queue.submitCommands(cmd.finishList());
+    m_queue.waitIdle();
+
     m_offscreenReady = true;
 }
 

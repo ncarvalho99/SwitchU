@@ -71,6 +71,8 @@ public:
 private:
     void populateMiis();
     void triggerRandomSpeechBubble();
+    MiiFigure* nearestVisibleMii() const;
+    bool interactWithNearestVisibleMii();
     void interactWithMii(MiiFigure* mii);
     void drawPlazaFloor(nxui::Renderer& ren) const;
     void drawHeader(nxui::Renderer& ren) const;

@@ -84,6 +84,16 @@ public:
     // A ring of slots lets consecutive draws use distinct memory. 512 covers
     // the busiest measured frame (137 draws) with room to spare, at 128 KB.
     static constexpr int FS_UBO_RING    = 512;
+    // The projection matrix has exactly the same hazard and never got the same
+    // treatment. updateProjection() and bindRenderTarget() both memcpy a
+    // different ortho matrix into one 256-byte allocation, while the frame's
+    // command list is not submitted until endFrame — so the last CPU write of
+    // the frame silently applied to every draw already recorded in it. It stays
+    // invisible only because the blur passes use a clip-space vertex shader
+    // that ignores projection; any offscreen pass that did use it would have
+    // rendered the whole frame through the wrong matrix. A small ring removes
+    // the aliasing: render-target switches per frame are few.
+    static constexpr int VS_UBO_RING    = 32;
     static constexpr int CMD_BUF_SIZE   = 256 * 1024;
     static constexpr int CODE_POOL_SIZE = 256 * 1024;
 
@@ -151,6 +161,23 @@ public:
         return m_dataPool.gpuAddr(m_fsUboOff[frame] + idx * FS_UBO_SIZE);
     }
     void resetFsUboRing(int frame) { m_fsUboRingPos[frame] = 0; }
+
+    // Same contract as the fragment ring above, for the projection matrix.
+    // Returns the CPU and GPU address of a slot no recorded draw is still
+    // pointing at, so a mid-frame projection change cannot rewrite the matrix
+    // an earlier draw in the same frame was recorded with.
+    uint32_t nextVsUboSlot(int frame) {
+        const uint32_t idx = m_vsUboRingPos[frame];
+        m_vsUboRingPos[frame] = (idx + 1u) % VS_UBO_RING;
+        return idx;
+    }
+    DkGpuAddr vsUboGpuAddrAt(int frame, uint32_t idx) const {
+        return m_dataPool.gpuAddr(m_vsUboOff[frame] + idx * VS_UBO_SIZE);
+    }
+    void* vsUboCpuAddrAt(int frame, uint32_t idx) const {
+        return m_dataPool.cpuAddr(m_vsUboOff[frame] + idx * VS_UBO_SIZE);
+    }
+    void resetVsUboRing(int frame) { m_vsUboRingPos[frame] = 0; }
 
     struct ImageAlloc {
         dk::MemBlock block;
@@ -321,6 +348,7 @@ private:
     uint32_t m_vsUboOff[NUM_FB] {};
     uint32_t m_fsUboOff[NUM_FB] {};
     uint32_t m_fsUboRingPos[NUM_FB] {};
+    uint32_t m_vsUboRingPos[NUM_FB] {};
     uint32_t m_imgDescOff = 0;
     uint32_t m_samDescOff = 0;
 

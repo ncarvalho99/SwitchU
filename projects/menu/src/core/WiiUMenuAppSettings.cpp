@@ -919,9 +919,48 @@ void WiiUMenuApp::refreshPlazaCommunities() {
     std::vector<warawara::WaraWaraPlazaScreen::GameCommunityEntry> entries;
     entries.reserve(10);
 
+    // The streamer is indexed by the current display model, not by m_allApps:
+    // folders/widgets and user layout order can make those vectors diverge.
+    // Build an explicit title -> display-index map, then pump one Plaza title
+    // per update. onPageChanged() uploads at most two completed decodes and
+    // schedules a bounded worker queue; one round-robin call avoids ten
+    // successive cache-window evictions in a single frame.
+    const auto* gridIcons = m_grid ? &m_grid->allIcons() : nullptr;
+    std::unordered_map<std::uint64_t, int> displayIndexByTitle;
+    displayIndexByTitle.reserve(static_cast<std::size_t>(std::max(0, m_model.count())));
+    for (int i = 0; i < m_model.count(); ++i) {
+        const auto& displayEntry = m_model.at(i);
+        if (displayEntry.isApplication() && displayEntry.titleId != 0)
+            displayIndexByTitle.emplace(displayEntry.titleId, i);
+    }
+
+    int pumpDisplayIndex = -1;
+    if (m_grid) {
+        const int communityCount = std::min(10, static_cast<int>(m_allApps.size()));
+        for (int offset = 0; offset < communityCount; ++offset) {
+            const int appPos = (m_plazaIconPumpIndex + offset) % communityCount;
+            const auto& candidate = m_allApps[static_cast<std::size_t>(appPos)];
+            const auto found = displayIndexByTitle.find(candidate.titleId);
+            if (found != displayIndexByTitle.end()) {
+                pumpDisplayIndex = found->second;
+                m_plazaIconPumpIndex = (appPos + 1) % communityCount;
+                break;
+            }
+        }
+        if (pumpDisplayIndex >= 0) {
+            m_iconStreamer.onPageChanged(pumpDisplayIndex, 1,
+                                         this->app().gpu(), this->app().renderer(),
+                                         *gridIcons);
+        }
+    }
+
     for (const auto& app : m_allApps) {
         if (entries.size() >= 10) break;
         if (app.titleId == 0 || app.isWidget()) continue;
+
+        const auto displayFound = displayIndexByTitle.find(app.titleId);
+        const int displayIndex = displayFound == displayIndexByTitle.end()
+            ? -1 : displayFound->second;
 
         warawara::WaraWaraPlazaScreen::GameCommunityEntry entry;
         entry.titleId = app.titleId;
@@ -941,13 +980,11 @@ void WiiUMenuApp::refreshPlazaCommunities() {
             entry.subtitle = "Installed Game";
         }
 
-        if (m_grid) {
-            for (const auto& icon : m_grid->allIcons()) {
-                if (icon && icon->titleId() == app.titleId && icon->texture()) {
-                    entry.iconTexture = icon->texture();
-                    break;
-                }
-            }
+        if (gridIcons && displayIndex >= 0 &&
+            displayIndex < static_cast<int>(gridIcons->size())) {
+            const auto& icon = (*gridIcons)[static_cast<std::size_t>(displayIndex)];
+            if (icon && icon->titleId() == app.titleId)
+                entry.iconTexture = icon->texture();
         }
 
         entries.push_back(std::move(entry));
@@ -972,7 +1009,13 @@ void WiiUMenuApp::openWaraWaraPlaza() {
         refreshPlazaCommunities();
     }
     m_navigator.navigate(switchu::navigation::Route::WaraWaraPlaza);
+    m_plazaIconPumpIndex = 0;
     m_plazaScreen->open();
+    // focusRoot() also returns the Plaza while active, but dispatchInput() runs
+    // before onUpdate() and must not spend a frame repairing stale HOME focus.
+    // Bind the owner explicitly now so its registered Button A action receives
+    // the very first controller press reliably.
+    focusManager().setFocus(m_plazaScreen.get());
     if (m_screenSwapButton) {
         m_screenSwapButton->setPlazaActive(true);
     }

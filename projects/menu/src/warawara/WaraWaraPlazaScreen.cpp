@@ -11,6 +11,16 @@ WaraWaraPlazaScreen::WaraWaraPlazaScreen() {
     setFocusable(true);
     setTag("warawara_plaza_screen");
 
+    // Application::dispatchInput() sends actions to the active FocusManager
+    // before WiiUMenuApp::onUpdate() runs. Binding A here is therefore the
+    // reliable controller path: once openWaraWaraPlaza() explicitly focuses
+    // this screen, the press is consumed here and cannot depend on a parallel
+    // manual poll running later in the frame.
+    addAction(static_cast<std::uint64_t>(nxui::Button::A), [this]() {
+        if (m_active)
+            interactWithNearestVisibleMii();
+    });
+
     std::random_device rd;
     m_rng.seed(rd());
 }
@@ -258,6 +268,40 @@ void WaraWaraPlazaScreen::triggerRandomSpeechBubble() {
     }
 }
 
+MiiFigure* WaraWaraPlazaScreen::nearestVisibleMii() const {
+    const float viewCenterX = m_cameraX + 640.0f;
+    MiiFigure* bestMii = nullptr;
+    float bestDist = 1e9f;
+
+    for (const auto& mii : m_miis) {
+        const float screenX = mii->position().x - m_cameraX;
+        if (screenX < 40.0f || screenX > 1240.0f)
+            continue;
+
+        const float dx = mii->position().x - viewCenterX;
+        const float dy = mii->position().y - 480.0f;
+        float dist = dx * dx + dy * dy;
+        // Prefer a Mii without an existing bubble without making an already
+        // speaking Mii impossible to select when it is the only visible one.
+        if (mii->hasSpeechBubble())
+            dist += 400.0f * 400.0f;
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestMii = mii.get();
+        }
+    }
+    return bestMii;
+}
+
+bool WaraWaraPlazaScreen::interactWithNearestVisibleMii() {
+    if (auto* mii = nearestVisibleMii()) {
+        interactWithMii(mii);
+        return true;
+    }
+    triggerRandomSpeechBubble();
+    return !m_miis.empty();
+}
+
 void WaraWaraPlazaScreen::interactWithMii(MiiFigure* mii) {
     if (!mii) return;
 
@@ -367,44 +411,12 @@ bool WaraWaraPlazaScreen::handleInput(const nxui::Input& input, float dt) {
     const float maxCamX = std::max(0.0f, m_plazaWidth - 1280.0f);
     m_cameraTargetX = std::clamp(m_cameraTargetX, 0.0f, maxCamX);
 
-    // 4. Talk with Miis or Launch Game via A button, X button, or Y button
-    if (input.isDown(nxui::Button::A) || input.isDown(nxui::Button::X) || input.isDown(nxui::Button::Y)) {
-        if (input.isDown(nxui::Button::A) && m_focusedPedestalIndex >= 0 && m_focusedPedestalIndex < (int)m_pedestals.size()) {
-            uint64_t tid = m_pedestals[m_focusedPedestalIndex]->data().titleId;
-            if (m_launchGameCb && tid != 0) {
-                m_launchGameCb(tid);
-                return true;
-            }
-        }
-
-        // Find the Mii closest to the screen center
-        float viewCenterX = m_cameraX + 640.0f;
-        MiiFigure* bestMii = nullptr;
-        float bestDist = 1e9f;
-
-        for (auto& mii : m_miis) {
-            float sx = mii->position().x - m_cameraX;
-            if (sx >= 40.0f && sx <= 1240.0f) {
-                float dx = mii->position().x - viewCenterX;
-                float dy = mii->position().y - 480.0f;
-                float dist = dx * dx + dy * dy;
-                if (mii->hasSpeechBubble()) {
-                    dist += 400.0f * 400.0f;
-                }
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    bestMii = mii.get();
-                }
-            }
-        }
-
-        if (bestMii) {
-            interactWithMii(bestMii);
-            return true;
-        } else {
-            triggerRandomSpeechBubble();
-            return true;
-        }
+    // 4. X/Y remain optional talk shortcuts. Button A is deliberately absent:
+    // it is dispatched once through this focused widget's registered action
+    // before onUpdate(), avoiding the old second poll and duplicate activation.
+    if (input.isDown(nxui::Button::X) || input.isDown(nxui::Button::Y)) {
+        interactWithNearestVisibleMii();
+        return true;
     }
 
     return true;

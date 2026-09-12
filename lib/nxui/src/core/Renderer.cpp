@@ -281,6 +281,7 @@ void Renderer::beginFrame() {
     m_frameBlurPasses = 0;
     m_frameCaptures = 0;
     m_gpu.resetFsUboRing(slot);
+    m_gpu.resetVsUboRing(slot);
     m_curTexSlot = -1;
     m_texturing  = false;
     m_curShader  = ShaderProgram::Basic;
@@ -354,13 +355,17 @@ void Renderer::endFrame() {
 
 void Renderer::updateProjection() {
     int slot = m_gpu.slot();
-    auto* ubo = static_cast<uint8_t*>(m_gpu.vsUboCpuAddr(slot));
+    // A fresh ring slot per projection change: the previously recorded draws
+    // keep pointing at the matrix they were recorded with.
+    const uint32_t ring = m_gpu.nextVsUboSlot(slot);
+    auto* ubo = static_cast<uint8_t*>(m_gpu.vsUboCpuAddrAt(slot, ring));
     VsUniforms vs;
     ortho(vs.projection, (float)m_gpu.width(), (float)m_gpu.height());
     std::memcpy(ubo, &vs, sizeof(vs));
 
     auto cmd = m_gpu.cmdBuf();
-    cmd.bindUniformBuffer(DkStage_Vertex, 0, m_gpu.vsUboGpuAddr(slot), GpuDevice::VS_UBO_SIZE);
+    cmd.bindUniformBuffer(DkStage_Vertex, 0, m_gpu.vsUboGpuAddrAt(slot, ring),
+                          GpuDevice::VS_UBO_SIZE);
 }
 
 void Renderer::flush() {
@@ -441,9 +446,11 @@ void Renderer::bindRenderTarget(int offscreenIdx, float logicalW, float logicalH
     int slot = m_gpu.slot();
     VsUniforms vs;
     ortho(vs.projection, projW, projH);
-    auto* ubo = static_cast<uint8_t*>(m_gpu.vsUboCpuAddr(slot));
+    const uint32_t ring = m_gpu.nextVsUboSlot(slot);
+    auto* ubo = static_cast<uint8_t*>(m_gpu.vsUboCpuAddrAt(slot, ring));
     std::memcpy(ubo, &vs, sizeof(vs));
-    cmd.bindUniformBuffer(DkStage_Vertex, 0, m_gpu.vsUboGpuAddr(slot), GpuDevice::VS_UBO_SIZE);
+    cmd.bindUniformBuffer(DkStage_Vertex, 0, m_gpu.vsUboGpuAddrAt(slot, ring),
+                          GpuDevice::VS_UBO_SIZE);
 }
 
 void Renderer::restoreRenderTarget() {
@@ -781,7 +788,10 @@ void Renderer::addQuad(float x0, float y0, float x1, float y1,
                         float u0, float v0, float u1, float v1,
                         const Color& c)
 {
-    if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) flush();
+    // flush() advances the batch marker but does not reclaim arena space — that
+    // happens once per frame in beginFrame — so flushing here left the quad to
+    // tear anyway. Drop it whole so the triangle stream stays aligned.
+    if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) return;
     addVertex(x0, y0, u0, v0, c);
     addVertex(x1, y0, u1, v0, c);
     addVertex(x1, y1, u1, v1, c);
@@ -794,7 +804,7 @@ void Renderer::addQuadGrad(float x0, float y0, float x1, float y1,
                             float u0, float v0, float u1, float v1,
                             const Color& cTop, const Color& cBot)
 {
-    if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) flush();
+    if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) return;   // see addQuad
     addVertex(x0, y0, u0, v0, cTop);
     addVertex(x1, y0, u1, v0, cTop);
     addVertex(x1, y1, u1, v1, cBot);
@@ -915,7 +925,18 @@ void Renderer::drawCircle(const Vec2& center, float radius, const Color& c, int 
     drawRoundedMasked(box, radius, c, Rect{0.f, 0.f, 1.f, 1.f});
 }
 
+// These two emitted straight into the arena with no capacity check. addVertex
+// drops silently once it is full, so a primitive that ran out part-way left a
+// batch whose vertex count was no longer a multiple of three, and every
+// triangle after it was assembled from a shifted triple — thin black streaks
+// across the screen, which is a torn vertex stream rather than a shape bug.
+//
+// Flushing cannot help here: it only advances the batch marker, and the arena
+// is reclaimed once per frame in beginFrame. So the primitive is dropped whole
+// instead, which keeps the stream aligned and costs one shape rather than the
+// rest of the frame.
 void Renderer::drawTriangle(const Vec2& p1, const Vec2& p2, const Vec2& p3, const Color& c) {
+    if (m_vtxCount + 3 > GpuDevice::MAX_VERTICES) return;
     bindTexture(-1);
     addVertex(p1.x, p1.y, 0, 0, c);
     addVertex(p2.x, p2.y, 0, 0, c);
@@ -923,6 +944,7 @@ void Renderer::drawTriangle(const Vec2& p1, const Vec2& p2, const Vec2& p3, cons
 }
 
 void Renderer::drawLine(const Vec2& from, const Vec2& to, const Color& c, float thickness) {
+    if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) return;
     Vec2 d = (to - from).normalized();
     Vec2 n = {-d.y, d.x};
     float ht = thickness * 0.5f;

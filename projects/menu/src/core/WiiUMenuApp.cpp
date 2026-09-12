@@ -5597,6 +5597,15 @@ void WiiUMenuApp::onUpdate(float dt) {
     // full grid page. It therefore only ever scheduled the first fifteen icons,
     // and everything past them — the homebrew at the end of the line — stayed on
     // its loading spinner until the focus callback happened to reach it.
+    if (m_plazaScreen && m_plazaScreen->isActive()) {
+        // Plaza communities are populated before startup icon decodes finish.
+        // Refreshing here pumps the one-title streamer windows and publishes
+        // each completed GPU texture through setData() without rebuilding the
+        // pedestals or Miis. The call is deliberately limited to the active
+        // Plaza and ten entries; after all are loaded it is pointer-only work.
+        refreshPlazaCommunities();
+    }
+
     if (m_grid && m_deferredInitialAssetFrames == 0
         && !(m_launchAnim && m_launchAnim->isPlaying())) {
         const bool line = m_appLayoutMode == AppLayoutMode::DynamicLine;

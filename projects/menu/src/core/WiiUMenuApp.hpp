@@ -498,6 +498,7 @@ private:
     warawara::AnimalesePlayer             m_animalesePlayer;
     std::shared_ptr<warawara::WaraWaraPlazaScreen>   m_plazaScreen;
     std::shared_ptr<warawara::PlazaScreenSwapButton> m_screenSwapButton;
+    int m_plazaIconPumpIndex = 0;
     nxui::Widget* m_activityLogReturnFocus = nullptr;
 
     nxui::Texture m_gameCardTex;
