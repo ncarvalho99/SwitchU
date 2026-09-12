@@ -247,11 +247,38 @@ Raw-tick hardware traces of launch and HOME-return can be summarized with
 
 ## Known issues
 
-- Some settings are still not implemented.
-- Memory is tight with many sysmodules running. It has been reduced a good deal,
-  but launching a game on a loaded console can still be unstable.
-- A theme deleted before v1.1.0+fork.11 left its folder on the card. Those have
-  to be removed by hand once; deletions from that version on free the space.
+As of 2.5.2. Each one is tracked as an issue with what is known so far and what
+it would take to close it.
+
+- **Parts of Settings are read-only or missing**
+  ([#1](https://github.com/robsonbaioco/SwitchU/issues/1)). The timezone and the
+  console language can be seen but not changed, and the TV audio format is saved
+  without being applied until the next boot. Users, parental controls, data
+  management, system update and the connection test are not there at all. There
+  is no shortcut for them either: on a retail console the stock System Settings
+  live inside the HOME menu that SwitchU replaces, so each one has to be built
+  against its own system service.
+- **Memory is tight with many sysmodules running**
+  ([#2](https://github.com/robsonbaioco/SwitchU/issues/2)). Launching a game on a
+  loaded console has been reported as unstable. It has never been measured: since
+  2.5.1 the daemon logs how full each memory pool is around a launch, and that
+  measurement is what the next step waits on.
+- **A title with no name of its own shows its title id.** Some releases --
+  downgraded builds in particular -- carry no usable name, and neither the
+  console nor the artwork lookup can produce one. Rename the game from its
+  dossier: the name then holds everywhere, and becomes the search term that lets
+  SteamGridDB find it.
+- **Rebuilding names and icons takes minutes.** Reading a title's name and icon
+  from the console costs about a second, so a full library is a few minutes of
+  work. Only "Rebuild names and icons" pays that; the ordinary reload does not.
+- **Play time counts every profile on the console**, not only the one in use, so
+  the figure on the grid can be larger than the one the system's own play
+  activity shows for you.
+- **A theme deleted before v1.1.0+fork.11 left its folder on the card**
+  ([#3](https://github.com/robsonbaioco/SwitchU/issues/3)). That folder should
+  come back in the Installed list and delete correctly now, which is still to be
+  confirmed on a console. Folders left behind by an interrupted install are swept
+  automatically from 2.5.2 on.
 
 ## Help me
 
