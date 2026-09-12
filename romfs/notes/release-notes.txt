@@ -1,39 +1,35 @@
 
-Names
-- A game whose control data carried no usable name had its hex title id cached as the name, which nothing could tell apart from a real one afterwards: the title was never asked about again, and artwork lookups searched for the id. The placeholder is gone, caches already carrying one repair themselves, and two more control-data sources are tried before giving up.
+Launching a game
+- Choosing a game could leave the launch animation frozen for about thirty seconds, and returning to a suspended game was slow the same way. The play time refresh asked about every installed title, and the handoff to a game waits for background work. It now asks only about the title just played and any with no figure yet, and it stops when a game is starting.
 
-Settings
-- TV resolution: 720p and 1080p were swapped, and 480p can now be chosen.
-- Screen burn-in reduction wrote the auto-brightness flag instead of the burn-in one.
-- Brightness and auto-brightness are saved now, so a restart keeps them.
-- Default profile appeared twice.
-- DNS shows the servers actually in use instead of a fixed "Auto (DHCP)".
-- USB 3.0 says the change needs a restart.
-- Region is read-only rather than a selector that did nothing.
-- The console nickname can be edited.
+Icons
+- After "reload games and shortcuts" the grid came back with the right play time badges and the wrong pictures, until the sort mode was changed and back.
 
-Themes
-- Folders left behind by an interrupted install no longer appear as duplicate themes, and are swept when the menu starts.
+Reloading
+- "Reload games and shortcuts" is fast again: it asks only for what the catalogue is missing. Rebuilding every name and icon, which takes minutes, is now its own action.
 
-Under the hood
-- The daemon logs the console's memory pools around a game launch.
+Renaming
+- Rename a game from its dossier. The name holds everywhere, and becomes the artwork search term for titles with no name of their own.
+
+Other
+- A port's dossier shows its play time again.
+- System settings can save the logs so they can be copied with the console running.
+- The daemon's log has real timestamps instead of 1970 dates.
 --pt-BR--
 
-Nomes
-- Um jogo cujos dados de controle não traziam nome utilizável tinha o id em hexadecimal gravado como nome, e depois disso nada distinguia um do outro: o título nunca mais era consultado e a busca de capas procurava pelo id. O valor falso não é mais gravado, caches que já tenham um se consertam sozinhos, e mais duas fontes de dados são tentadas antes de desistir.
+Abrir um jogo
+- Escolher um jogo podia deixar a animação de lançamento congelada por cerca de trinta segundos, e voltar a um jogo suspenso demorava do mesmo jeito. A atualização de tempo jogado perguntava sobre todos os títulos instalados, e a entrega do console ao jogo espera o trabalho em segundo plano. Agora ela pergunta só sobre o título recém-jogado e os que ainda não têm valor, e é interrompida quando um jogo está iniciando.
 
-Configurações
-- Resolução da TV: 720p e 1080p estavam trocados, e agora dá para escolher 480p.
-- Redução de burn-in gravava o flag de brilho automático em vez do de burn-in.
-- Brilho e brilho automático passam a ser salvos, então sobrevivem ao reinício.
-- Perfil padrão aparecia duas vezes.
-- DNS mostra os servidores realmente em uso, em vez de um fixo "Auto (DHCP)".
-- USB 3.0 avisa que a mudança precisa de reinício.
-- Região virou somente leitura, em vez de um seletor que não fazia nada.
-- O apelido do console pode ser editado.
+Ícones
+- Depois de "recarregar jogos e atalhos" a grade voltava com os tempos de jogo certos e as imagens erradas, até trocar a ordenação e voltar.
 
-Temas
-- Pastas deixadas por uma instalação interrompida não aparecem mais como temas duplicados, e são varridas quando o menu abre.
+Recarregar
+- "Recarregar jogos e atalhos" voltou a ser rápido: busca só o que falta no catálogo. Reconstruir todos os nomes e ícones, que leva minutos, virou uma ação separada.
 
-Por baixo
-- O daemon registra os pools de memória do console ao redor do lançamento de um jogo.
+Renomear
+- Renomeie um jogo pelo painel dele. O nome vale em todo lugar e vira o termo de busca de capas para títulos sem nome próprio.
+
+Outros
+- O painel de um port volta a mostrar o tempo jogado.
+- As configurações de Sistema podem salvar os logs para cópia com o console ligado.
+- O log do daemon tem hora real em vez de datas de 1970.

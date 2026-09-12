@@ -1,61 +1,63 @@
-# SwitchU 2.5.1
+# SwitchU 2.5.2
 
-Fixes for a title stuck showing its id instead of its name, four settings that changed the wrong thing, and theme folders left behind by an interrupted install. The daemon also starts logging the console's memory pools around a game launch, which is groundwork rather than a change you will see.
+Everything here came from one console's logs, photos and a video. A launch that froze for half a minute, wrong icons after a catalogue reload, a game with no name, and logs that could not be copied off the card.
 
 ## English
 
-### A title showing its id instead of its name
+### A launch that froze for thirty seconds
 
-- A game whose control data carried no usable name had the hex title id written into the metadata cache **as its name**. Nothing could tell that apart from a real name afterwards: the daemon stopped asking for the title, and the artwork lookup searched SteamGridDB for the id, which can never match. Reported on a Zelda downgraded to an older build, where reloading games and shortcuts only wrote the same string back.
-- The placeholder is not written any more, and a cache already carrying one repairs itself on the next catalogue build -- nothing has to be deleted by hand.
-- When the usual source answers without a name, the daemon now also tries the two other control-data sources before giving up. A downgraded title can get its name back this way.
+- Choosing a game left the launch animation stopped mid-expansion for about thirty seconds before the console handed over, and returning to a suspended game was slow the same way. The play time refresh -- added in 2.5.0 for the most-played view -- asked the system about every installed title, and each answer costs about a quarter of a second: 29 seconds on a console with 117 games, measured in its own log. The menu waits for its background work before giving the console to a game, so a launch during those seconds waited for the rest of the batch.
+- It now asks only about titles that can have changed: the one just played, and any with no figure recorded yet. After the first run that is one query instead of a hundred and seventeen. The batch can also be stopped where it stands when a game is starting, so even a first run cannot hold a launch.
 
-### Settings
+### Wrong icons after "reload games and shortcuts"
 
-- **TV resolution** listed Auto, 720p, 1080p against the values the system stores as 0 Auto, 1 1080p, 2 720p, 3 480p, so choosing 720p set the console to 1080p and the other way round. The list follows the system's order now, and 480p can be chosen.
-- **Screen burn-in reduction** wrote the stored auto-brightness flag -- the setting the toggle above it already owns -- instead of the burn-in one. It writes the right flag now.
-- **Brightness** and **auto-brightness** were applied but never saved, so a restart brought the old value back.
-- **Default profile** appeared twice in the list.
-- **DNS** printed a fixed "Auto (DHCP)" and read nothing; it shows the servers the console is actually using, which matters if you set them by hand.
-- **USB 3.0** says that the change only takes effect after a restart, instead of looking like it did nothing.
-- **Region** is a read-only row now, rather than a selector that moved and changed nothing.
-- **Console nickname** can be edited, with the menu's own keyboard.
+- The grid came back with the right play time badges and the wrong pictures, and stayed that way until the sort mode was changed and back. The reload replaced the grid's model with the sorted one without telling the icon loader, so every icon kept resolving to whatever title used to sit at its position. Only the hand-made order matched, which is why any sort showed it.
 
-### Themes
+### Reloading is fast again
 
-- A theme install cut short by a crash or a power cut left its staging folders behind, and one of them still holds a theme.json -- so it came back in the list as a duplicate of the theme it was installing, with the same id. Deleting either entry then removed both from the list and one folder from the card. Those folders are skipped in the list and swept once when the menu starts.
+- "Reload games and shortcuts" cleared every cached name and icon and read them from the titles again -- about a second each, so roughly six minutes on a full console, with the grid on loading spinners the whole time. To pick up one new shortcut, which is what it is normally used for. It now asks only for what the catalogue is missing, and the expensive half moved to its own action, **Rebuild names and icons**, which says what it costs.
 
-### Under the hood
+### Renaming a game
 
-- The daemon logs the Application, Applet, System and SystemUnsafe memory pools at four points around a launch, including the instant before a game gets a process. "Launching a game on a loaded console can be unstable" has never been measured, and this is what the measurement needs.
+- **Rename**, in a game's dossier. Some titles have no name to give: a release downgraded to an older build can carry none at all, leaving the grid showing its title id. The chosen name holds in the grid, the title pill, the A-Z order, folders and the single-row view, and becomes the artwork search term when the title has no name of its own -- which is what lets SteamGridDB find it. An empty field restores the original.
+
+### Play time in the dossier
+
+- A game marked as a port carries two extra actions, which left room for two fact rows, and play time was the row dropped: its dossier showed none while the grid badge showed 37 hours. Mods gives up its row first now.
+
+### Logs
+
+- **Save logs for copying**, in System settings. Both logs are held open while the console runs, so copying them over MTP failed with "resource already in use" -- the two files worth asking for were the two that could not be read without rebooting first. This closes them and leaves copies nothing holds open.
+- Every line in the daemon's log carried a 1970 date, and so did the names of its archived copies, which made them impossible to tell apart or to line up against the menu's log. The daemon was opening the application clock instead of the system one, so every read failed and the log fell back to counting from boot.
 
 ---
 
 ## Português
 
-Correções para um jogo preso mostrando o id no lugar do nome, quatro configurações que alteravam a coisa errada e pastas de tema deixadas por uma instalação interrompida. O daemon também passa a registrar os pools de memória do console em torno do lançamento de um jogo, o que é preparação e não algo que você vê na tela.
+Tudo aqui saiu dos logs, fotos e um vídeo de um console. Um lançamento que congelava por meio minuto, ícones errados depois de recarregar o catálogo, um jogo sem nome e logs que não dava para copiar do cartão.
 
-### Um jogo mostrando o id no lugar do nome
+### Um lançamento que congelava por trinta segundos
 
-- Um jogo cujos dados de controle não traziam nome utilizável tinha o id em hexadecimal gravado no cache de metadados **como se fosse o nome**. Depois disso nada conseguia distinguir um do outro: o daemon parava de consultar aquele título, e a busca de capas procurava no SteamGridDB pelo id, o que nunca encontra nada. Relatado num Zelda rebaixado para uma versão antiga, em que recarregar jogos e atalhos só regravava a mesma string.
-- O valor falso não é mais gravado, e um cache que já tenha um se conserta sozinho na próxima reconstrução do catálogo — nada precisa ser apagado à mão.
-- Quando a fonte habitual responde sem nome, o daemon agora tenta as outras duas fontes de dados de controle antes de desistir. Um título rebaixado pode recuperar o nome assim.
+- Escolher um jogo deixava a animação de lançamento parada no meio por cerca de trinta segundos antes de o console passar o controle, e voltar a um jogo suspenso demorava do mesmo jeito. A atualização de tempo jogado — adicionada na 2.5.0 para a ordenação por mais jogados — perguntava ao sistema sobre todos os títulos instalados, e cada resposta custa cerca de um quarto de segundo: 29 segundos num console com 117 jogos, medidos no próprio log dele. O menu espera o trabalho em segundo plano terminar antes de entregar o console ao jogo, então um lançamento durante esses segundos ficava esperando o resto do lote.
+- Agora ele pergunta só sobre o que pode ter mudado: o título recém-jogado e os que ainda não têm valor registrado. Depois da primeira vez, é uma consulta em vez de cento e dezessete. O lote também pode ser interrompido quando um jogo está iniciando, então nem a primeira execução segura um lançamento.
 
-### Configurações
+### Ícones errados depois de "recarregar jogos e atalhos"
 
-- **Resolução da TV** listava Auto, 720p, 1080p contra os valores que o sistema guarda como 0 Auto, 1 1080p, 2 720p, 3 480p, então escolher 720p colocava o console em 1080p e vice-versa. A lista agora segue a ordem do sistema, e dá para escolher 480p.
-- **Redução de burn-in** gravava o flag de brilho automático — a configuração que o interruptor logo acima já controla — em vez do de burn-in. Agora grava o correto.
-- **Brilho** e **brilho automático** eram aplicados mas nunca salvos, então o reinício trazia o valor antigo de volta.
-- **Perfil padrão** aparecia duas vezes na lista.
-- **DNS** mostrava um fixo "Auto (DHCP)" sem ler nada; agora mostra os servidores realmente em uso, o que importa para quem os define à mão.
-- **USB 3.0** avisa que a mudança só vale após reiniciar, em vez de parecer que nada aconteceu.
-- **Região** virou uma linha somente leitura, em vez de um seletor que se movia e não mudava nada.
-- **Apelido do console** pode ser editado, pelo teclado do próprio menu.
+- A grade voltava com os tempos de jogo certos e as imagens erradas, e ficava assim até trocar a ordenação e voltar. O recarregamento substituía o modelo da grade pelo ordenado sem avisar o carregador de ícones, então cada ícone continuava resolvendo para o título que ocupava aquela posição antes. Só a ordem pessoal coincidia, por isso qualquer ordenação revelava o problema.
 
-### Temas
+### Recarregar voltou a ser rápido
 
-- Uma instalação de tema interrompida por travamento ou queda de energia deixava as pastas de trabalho para trás, e uma delas ainda tem um theme.json — então ela voltava na lista como uma cópia do tema que estava sendo instalado, com o mesmo id. Apagar qualquer uma das duas entradas tirava as duas da lista e só uma pasta do cartão. Essas pastas passam a ser ignoradas na lista e varridas quando o menu abre.
+- "Recarregar jogos e atalhos" apagava todos os nomes e ícones em cache e lia tudo de novo dos títulos — cerca de um segundo cada, ou seja, uns seis minutos num console cheio, com a grade carregando o tempo todo. Para reconhecer um atalho novo, que é o uso normal. Agora ele busca só o que falta no catálogo, e a parte cara virou uma ação separada, **Reconstruir nomes e ícones**, que avisa quanto custa.
 
-### Por baixo
+### Renomear um jogo
 
-- O daemon registra os pools de memória Application, Applet, System e SystemUnsafe em quatro pontos ao redor de um lançamento, incluindo o instante antes de o jogo ganhar um processo. "Abrir um jogo num console carregado pode ser instável" nunca foi medido, e é disso que a medição precisa.
+- **Renomear**, no painel do jogo. Alguns títulos não têm nome para informar: uma versão rebaixada pode não trazer nenhum, deixando a grade com o title id. O nome escolhido vale na grade, na legenda, na ordem A-Z, nas pastas e na linha única, e vira o termo de busca de capas quando o título não tem nome próprio — que é o que permite ao SteamGridDB encontrá-lo. Campo vazio restaura o original.
+
+### Tempo jogado no painel
+
+- Um jogo marcado como port ganha duas ações a mais, o que deixava espaço para duas linhas de fatos, e a descartada era o tempo jogado: o painel não mostrava nada enquanto a etiqueta na grade mostrava 37 horas. Agora "Mods" cede a vez primeiro.
+
+### Logs
+
+- **Salvar logs para cópia**, nas configurações de Sistema. Os dois logs ficam abertos enquanto o console roda, então copiá-los por MTP falhava com "resource already in use" — os dois arquivos que alguém pediria eram justamente os que não dava para ler sem reiniciar antes. A ação fecha os dois e deixa cópias que ninguém mantém abertas.
+- Todas as linhas do log do daemon traziam data de 1970, e os nomes das cópias arquivadas também, o que tornava impossível distingui-las ou cruzá-las com o log do menu. O daemon abria o relógio de aplicativo em vez do de sistema, então toda leitura falhava e o log caía na contagem desde o boot.
