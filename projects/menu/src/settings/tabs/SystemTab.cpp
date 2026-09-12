@@ -389,37 +389,6 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
-        auto profiles = listProfileOptions();
-        SettingItem it;
-        it.label = i18n.tr("settings.system.default_profile", "Default Profile");
-        it.description = i18n.tr("settings.system.default_profile_desc",
-                                 "Launch games with this profile when possible.");
-        it.type = ItemType::Selector;
-        it.options.push_back(i18n.tr("settings.system.default_profile_ask", "Ask each time"));
-        for (const auto& profile : profiles)
-            it.options.push_back(profile.name);
-
-        it.intVal = 0;
-        if (!screen.m_defaultProfileUid.empty()) {
-            for (int i = 0; i < (int)profiles.size(); ++i) {
-                if (profiles[(size_t)i].uidHex == screen.m_defaultProfileUid) {
-                    it.intVal = i + 1;
-                    break;
-                }
-            }
-        }
-
-        it.onChange = [&screen, profiles = std::move(profiles)](SettingItem& self) {
-            int idx = std::clamp(self.intVal, 0, (int)profiles.size());
-            screen.m_defaultProfileUid = idx > 0 ? profiles[(size_t)(idx - 1)].uidHex : std::string();
-            if (screen.m_defaultProfileCb)
-                screen.m_defaultProfileCb(screen.m_defaultProfileUid);
-        };
-
-        t.items.push_back(std::move(it));
-    }
-
-    {
         SettingItem it; it.label = i18n.tr("settings.system.console_language", "Console Language"); it.type = ItemType::Info;
         it.description = i18n.tr("settings.system.console_language_desc",
                                  "Read-only. Change this in Nintendo Switch System Settings.");
@@ -436,19 +405,30 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
-        SettingItem it; it.label = i18n.tr("settings.system.region", "Region"); it.type = ItemType::Selector;
-        it.options = {
-            i18n.tr("settings.system.region_japan", "Japan"),
-            i18n.tr("settings.system.region_usa", "USA"),
-            i18n.tr("settings.system.region_europe", "Europe"),
-            i18n.tr("settings.system.region_australia", "Australia"),
-            i18n.tr("settings.system.region_hong_kong", "Hong Kong"),
-            i18n.tr("settings.system.region_taiwan", "Taiwan"),
-            i18n.tr("settings.system.region_south_korea", "South Korea")
+        // Read-only, and honestly so: this was a selector with no handler, so
+        // the region appeared to change and nothing happened. The region a
+        // console was sold as decides what the eShop and the system updater
+        // will serve it, and writing it from here is not a setting this menu
+        // should offer behind a d-pad press.
+        SettingItem it; it.label = i18n.tr("settings.system.region", "Region"); it.type = ItemType::Info;
+        it.description = i18n.tr("settings.system.region_desc",
+                                 "Read-only. Change this in Nintendo Switch System Settings.");
+        const char* names[] = {
+            "settings.system.region_japan",     "settings.system.region_usa",
+            "settings.system.region_europe",    "settings.system.region_australia",
+            "settings.system.region_hong_kong", "settings.system.region_taiwan",
+            "settings.system.region_south_korea",
+        };
+        const char* fallbacks[] = {
+            "Japan", "USA", "Europe", "Australia", "Hong Kong", "Taiwan", "South Korea",
         };
         SetRegion reg = SetRegion_JPN;
-        if (R_SUCCEEDED(setGetRegionCode(&reg)))
-            it.intVal = (int)reg;
+        if (R_SUCCEEDED(setGetRegionCode(&reg))
+            && (int)reg >= 0 && (int)reg < (int)(sizeof(names) / sizeof(names[0]))) {
+            it.infoText = i18n.tr(names[(int)reg], fallbacks[(int)reg]);
+        } else {
+            it.infoText = i18n.tr("common.na", "N/A");
+        }
         t.items.push_back(std::move(it));
     }
 
