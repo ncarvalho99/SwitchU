@@ -552,12 +552,17 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
     const float factsAvailable = rail.bottom() - actionsBottom - kFactGap;
     const int factCount = std::clamp((int)std::floor(factsAvailable / kFactRowH), 0, 3);
     const float factsTop = actionsBottom + kFactGap;
+    // Play time comes before mods. A port carries two extra actions, which
+    // leaves room for two facts, and the row dropped was the play time --
+    // reported as a port whose dossier showed no play time at all while the
+    // grid badge showed 37 hours. "Mods: none detected" is the one worth
+    // losing of the two.
     if (factCount >= 1)
         railFact(factsTop, i18n.tr("dialog.details_version", "Version"), m_displayVersion);
     if (factCount >= 2)
-        railFact(factsTop + kFactRowH, i18n.tr("dialog.details_mods", "Mods"), m_modSummary);
+        railFact(factsTop + kFactRowH, i18n.tr("dialog.details_playtime", "Play time"), m_playTime);
     if (factCount >= 3)
-        railFact(factsTop + 2.f * kFactRowH, i18n.tr("dialog.details_playtime", "Play time"), m_playTime);
+        railFact(factsTop + 2.f * kFactRowH, i18n.tr("dialog.details_mods", "Mods"), m_modSummary);
 
     const nxui::Rect main = {panel.x + 292.f, panel.y + 10.f, panel.width - 312.f, panel.height - 20.f};
     const std::string title = m_snapshot.title.empty() ? m_title : m_snapshot.title;

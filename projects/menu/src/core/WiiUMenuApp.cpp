@@ -5471,6 +5471,26 @@ void WiiUMenuApp::finalizeRefresh() {
     // gaps on both sides. buildGrid() composes through here for the same reason.
     m_model = buildRootFolderModel();
 
+    // The loader seeded the streamer from its own model -- the raw slot
+    // arrangement -- and the line above replaced that model with the composed
+    // one. Without reconciling, the streamer's title table stays indexed
+    // against the old order and every icon loads the artwork of whatever title
+    // used to sit at its index: reported after "reload games and shortcuts" as
+    // a grid where the play time badges were right and the pictures belonged to
+    // other games, until the sort mode was changed and back. Any sort mode
+    // shows it, because only the hand-made order matches the loader's.
+    // buildGrid() and applyDisplayModel() have always done this; this path did
+    // not.
+    {
+        std::vector<std::uint64_t> titleIds;
+        titleIds.reserve(static_cast<std::size_t>(std::max(0, m_model.count())));
+        for (int i = 0; i < m_model.count(); ++i) {
+            const auto& entry = m_model.at(i);
+            titleIds.push_back(entry.isApplication() ? entry.titleId : 0);
+        }
+        m_iconStreamer.reconcileTitleIds(titleIds);
+    }
+
     std::vector<std::shared_ptr<GlossyIcon>> icons;
     for (int i = 0; i < m_model.count(); ++i) {
         auto icon = makeIcon(m_model.at(i));
