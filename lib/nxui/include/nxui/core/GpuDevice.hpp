@@ -148,6 +148,16 @@ public:
     uint64_t lastSubmitToPresentNs() const { return m_lastSubmitToPresentNs; }
     uint64_t lastFrameCpuNs()        const { return m_lastFrameCpuNs; }
 
+    // Result of the dual-readback self-test performed by takeFrameDump: the
+    // same framebuffer image is copied into two buffers back to back in one
+    // command list, and the buffers are compared byte for byte. Zero mismatches
+    // means the readback path is reproducible and the captured pixels are what
+    // the GPU image holds. Non-zero means the capture itself is unstable, and
+    // any attenuation measured from these dumps is suspect.
+    uint32_t lastDumpMismatchBytes() const { return m_lastDumpMismatchBytes; }
+    uint32_t lastDumpFirstMismatch() const { return m_lastDumpFirstMismatch; }
+    uint32_t lastDumpMaxDelta()      const { return m_lastDumpMaxDelta; }
+
     int  width()  const { return FB_WIDTH; }
     int  height() const { return FB_HEIGHT; }
 
@@ -347,7 +357,7 @@ private:
     GpuPool m_dataPool;
     GpuPool m_imagePool;
     GpuPool m_uploadStagingPool[UPLOAD_SLOT_COUNT];
-    dk::UniqueMemBlock m_frameDumpBuffer;
+    dk::UniqueMemBlock m_frameDumpBuffers[2];
 
     // Normal icons, glyphs, and BC1 frames share a fixed arena per slot. A
     // larger upload owns one temporary block until the slot fence signals.
@@ -401,6 +411,11 @@ private:
     uint64_t m_lastPresentIntervalNs = 0;
     uint64_t m_lastSubmitToPresentNs = 0;
     uint64_t m_lastFrameCpuNs = 0;
+
+    // Dual-readback self-test results. See lastDumpMismatchBytes().
+    uint32_t m_lastDumpMismatchBytes = 0;
+    uint32_t m_lastDumpFirstMismatch = UINT32_MAX;
+    uint32_t m_lastDumpMaxDelta = 0;
     uint32_t m_frameUploads = 0;
     uint32_t m_lastFrameUploads = 0;
     uint32_t m_frameUploadBatches = 0;

@@ -1188,6 +1188,22 @@ std::string Renderer::formatDrawJournal() const {
                   m_gpu.lastFenceWaitNs() / 1e6);
     out += line;
 
+    // Dual-readback self-test. The same GPU image was copied twice, back to
+    // back, into separate buffers. Nothing downstream of presentation can write
+    // into that image, so if these two reads disagree the capture path is the
+    // unstable element and every attenuation figure measured from these dumps
+    // must be re-read in that light.
+    std::snprintf(line, sizeof(line),
+                  "readback: mismatched_bytes=%u first_at=%d max_delta=%u %s\n",
+                  m_gpu.lastDumpMismatchBytes(),
+                  m_gpu.lastDumpFirstMismatch() == UINT32_MAX
+                      ? -1 : (int)m_gpu.lastDumpFirstMismatch(),
+                  m_gpu.lastDumpMaxDelta(),
+                  m_gpu.lastDumpMismatchBytes() == 0
+                      ? "(stable: captured pixels are what the GPU image holds)"
+                      : "(UNSTABLE: capture path differs between two reads)");
+    out += line;
+
     // The verdict line is computed here rather than on the PC, because the
     // question it answers is binary and the on-device record is the only place
     // where the answer is not a reconstruction. A "dimming draw" is a
