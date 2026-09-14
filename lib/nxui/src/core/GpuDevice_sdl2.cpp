@@ -57,4 +57,13 @@ void GpuDevice::beginBulkTeardown() {
     m_bulkTeardown = true;
 }
 
+bool GpuDevice::requestFrameDump() {
+    return false;
+}
+
+bool GpuDevice::takeFrameDump(std::vector<std::uint8_t>& rgba) {
+    (void)rgba;
+    return false;
+}
+
 } // namespace nxui

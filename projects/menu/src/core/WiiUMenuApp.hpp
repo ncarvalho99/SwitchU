@@ -361,6 +361,8 @@ private:
     void wireGlobalActions();
     void toggleAccessibilitySpeech();
     bool handleAccessibilityToggleCombo();
+    bool handleFrameDumpShortcut();
+    void syncFrameDumpCapture();
     void handleSortShortcutRelease(float dt);
     // Longer than a deliberate tap, far shorter than the hold used to reach
     // Sphaira, so the two gestures never get confused for one another.
@@ -761,6 +763,10 @@ private:
     bool m_hintPanelInitialized = false;
     bool m_hintCapsulesInitialized = false;
     bool m_accessibilityToggleComboHeld = false;
+    bool m_frameDumpShortcutHeld = false;
+    int  m_frameDumpRemaining = 0;
+    int  m_frameDumpIndex = 0;
+    std::string m_frameDumpBatchDir;
     // Set while R is held so a release only sorts when the press began here,
     // and not when R was already down on the way back from another screen.
     update::UpdateClient m_updateClient;

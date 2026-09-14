@@ -35,8 +35,19 @@ bool GpuDevice::initialize() {
     m_lastFrameUploadBatches = 0;
     m_frameUploadWaitNs = 0;
     m_lastFrameUploadWaitNs = 0;
+    m_frameDumpArmed = false;
+    m_frameDumpPending = false;
     m_dev   = dk::DeviceMaker{}.setCbDebug(deviceDebug).create();
     m_queue = dk::QueueMaker{m_dev}.setFlags(DkQueueFlags_Graphics).create();
+
+    constexpr uint32_t frameDumpSize = FB_WIDTH * FB_HEIGHT * 4u;
+    m_frameDumpBuffer = dk::MemBlockMaker{m_dev, frameDumpSize}
+        .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached)
+        .create();
+    if (!m_frameDumpBuffer) {
+        std::fprintf(stderr, "[GpuDevice] frame-dump buffer allocation failed (%u bytes)\n",
+                     frameDumpSize);
+    }
 
     for (int i = 0; i < NUM_FB; ++i) {
         m_cmdPool[i].create(m_dev, CMD_BUF_SIZE, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached);
@@ -244,6 +255,19 @@ void GpuDevice::endFrame() {
     // no device-wide idle is needed here.
     submitUploadBatch();
 
+    if (m_frameDumpArmed && m_frameDumpBuffer) {
+        auto& cmd = m_cmdbuf[m_slot];
+        cmd.barrier(DkBarrier_Full, DkInvalidateFlags_Image);
+        cmd.copyImageToBuffer(
+            dk::ImageView{m_fbImages[m_slot]},
+            DkImageRect{0, 0, 0, (uint32_t)FB_WIDTH, (uint32_t)FB_HEIGHT, 1},
+            DkCopyBuf{m_frameDumpBuffer.getGpuAddr(), (uint32_t)(FB_WIDTH * 4u),
+                      (uint32_t)(FB_WIDTH * FB_HEIGHT * 4u)});
+        cmd.barrier(DkBarrier_Full, DkInvalidateFlags_L2Cache);
+        m_frameDumpArmed = false;
+        m_frameDumpPending = true;
+    }
+
     // Signal the fence for this slot so the NEXT time beginFrame()
     // acquires the same slot, it can wait for completion.
     m_cmdbuf[m_slot].signalFence(m_frameFences[m_slot]);
@@ -251,6 +275,26 @@ void GpuDevice::endFrame() {
     auto cmdList = m_cmdbuf[m_slot].finishList();
     m_queue.submitCommands(cmdList);
     m_queue.presentImage(m_swapchain, m_slot);
+}
+
+bool GpuDevice::requestFrameDump() {
+    if (!m_frameDumpBuffer || frameDumpBusy())
+        return false;
+    m_frameDumpArmed = true;
+    return true;
+}
+
+bool GpuDevice::takeFrameDump(std::vector<std::uint8_t>& rgba) {
+    if (!m_frameDumpPending || !m_frameDumpBuffer)
+        return false;
+
+    // endFrame submitted the copy before present. A dump is diagnostic and
+    // deliberately trades one visible hitch for an exact, fully-composed frame.
+    m_queue.waitIdle();
+    const auto* pixels = static_cast<const std::uint8_t*>(m_frameDumpBuffer.getCpuAddr());
+    rgba.assign(pixels, pixels + FB_WIDTH * FB_HEIGHT * 4u);
+    m_frameDumpPending = false;
+    return true;
 }
 
 void GpuDevice::beginUploadBatch() {
@@ -517,6 +561,9 @@ void GpuDevice::shutdown() {
     for (int i = 0; i < UPLOAD_SLOT_COUNT; ++i)
         m_uploadCmdbuf[i] = {};
     m_queue        = {};
+    m_frameDumpBuffer = {};
+    m_frameDumpArmed = false;
+    m_frameDumpPending = false;
     m_imageChunks.clear();
     m_imageMemUsed = 0;
     m_poolMemUsed  = 0;

@@ -6111,6 +6111,10 @@ void WiiUMenuApp::onUpdate(float dt) {
     }
 
     if (!lockScreenUp)
+        handleFrameDumpShortcut();
+    syncFrameDumpCapture();
+
+    if (!lockScreenUp)
         handleSortShortcutRelease(dt);
     syncUpdateCheck();
     syncUpdateDownload();

@@ -946,6 +946,64 @@ bool WiiUMenuApp::handleAccessibilityToggleCombo() {
     return true;
 }
 
+bool WiiUMenuApp::handleFrameDumpShortcut() {
+    if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
+        return false;
+    auto& input = app().input();
+    const bool combo = input.isHeld(nxui::Button::LStick) && input.isHeld(nxui::Button::RStick);
+    if (!combo) {
+        m_frameDumpShortcutHeld = false;
+        return false;
+    }
+    if (m_frameDumpShortcutHeld)
+        return true;
+    m_frameDumpShortcutHeld = true;
+
+    // Trigger a 30-frame diagnostic burst straight into sdmc:/config/SwitchU/frame_dumps/
+    char ts[32];
+    std::time_t now = std::time(nullptr);
+    std::tm tmNow{};
+    localtime_r(&now, &tmNow);
+    std::strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", &tmNow);
+
+    m_frameDumpBatchDir = fmt::format("sdmc:/config/SwitchU/frame_dumps/{}", ts);
+    std::error_code ec;
+    std::filesystem::create_directories(m_frameDumpBatchDir, ec);
+
+    m_frameDumpRemaining = 30;
+    m_frameDumpIndex = 0;
+    app().gpu().requestFrameDump();
+    m_audio.playSfx(Sfx::Activate);
+    DebugLog::log("[frame-dump] started 30-frame burst into %s (mkdir: %s)",
+                  m_frameDumpBatchDir.c_str(), ec ? ec.message().c_str() : "ok");
+    return true;
+}
+
+void WiiUMenuApp::syncFrameDumpCapture() {
+    std::vector<std::uint8_t> pixels;
+    if (!app().gpu().takeFrameDump(pixels))
+        return;
+
+    const int curIndex = m_frameDumpIndex++;
+    const std::string outPath = fmt::format("{}/frame_{:03d}.raw",
+                                            m_frameDumpBatchDir, curIndex);
+
+    std::ofstream out(outPath, std::ios::binary);
+    if (out) {
+        out.write(reinterpret_cast<const char*>(pixels.data()), pixels.size());
+        out.flush();
+    }
+    DebugLog::log("[frame-dump] saved %s (%zu bytes)", outPath.c_str(), pixels.size());
+
+    if (--m_frameDumpRemaining > 0) {
+        app().gpu().requestFrameDump();
+    } else {
+        m_audio.playSfx(Sfx::ModalHide);
+        DebugLog::log("[frame-dump] completed burst in %s", m_frameDumpBatchDir.c_str());
+    }
+}
+
+
 void WiiUMenuApp::wireGlobalActions() {
     auto& root = rootBox();
 

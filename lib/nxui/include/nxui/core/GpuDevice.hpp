@@ -104,6 +104,14 @@ public:
     void endFrame();
     void waitIdle();
 
+    // Arms a lossless diagnostic capture of the next fully-rendered frame.
+    // The GPU copies RGBA8 pixels into a CPU-visible block before present;
+    // takeFrameDump() returns them after queue completion on the following
+    // update. Only one capture can be armed or pending at a time.
+    bool requestFrameDump();
+    bool takeFrameDump(std::vector<std::uint8_t>& rgba);
+    bool frameDumpBusy() const { return m_frameDumpArmed || m_frameDumpPending; }
+
     // Application shutdown destroys a large texture graph. Waiting for the
     // same queue once per texture turns teardown into a chain of redundant
     // GPU-wide barriers. Drain it once before bulk destruction, then let each
@@ -324,6 +332,7 @@ private:
     GpuPool m_dataPool;
     GpuPool m_imagePool;
     GpuPool m_uploadStagingPool[UPLOAD_SLOT_COUNT];
+    dk::UniqueMemBlock m_frameDumpBuffer;
 
     // Normal icons, glyphs, and BC1 frames share a fixed arena per slot. A
     // larger upload owns one temporary block until the slot fence signals.
@@ -368,6 +377,8 @@ private:
     SDL_Renderer* m_sdlRenderer = nullptr;
 #endif
     int m_slot = -1;
+    bool m_frameDumpArmed = false;
+    bool m_frameDumpPending = false;
     uint32_t m_frameUploads = 0;
     uint32_t m_lastFrameUploads = 0;
     uint32_t m_frameUploadBatches = 0;
