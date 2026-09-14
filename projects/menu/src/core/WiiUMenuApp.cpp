@@ -5812,8 +5812,9 @@ void WiiUMenuApp::onUpdate(float dt) {
         const bool modsUp = m_gameMods && m_gameMods->isFullyVisible();
         const bool cheatsUp = m_gameCheats && m_gameCheats->isFullyVisible();
         const bool detailsUp = m_gameDetails && m_gameDetails->isFullyVisible();
-        const bool hideScene = (settingsUp || themeShopUp || galleryUp || modsUp || cheatsUp || detailsUp) &&
-                               app().renderer().holdOffscreenCapture();
+        const bool plazaUp = m_plazaScreen && m_plazaScreen->isFullyVisible();
+        const bool hideScene = ((settingsUp || themeShopUp || galleryUp || modsUp || cheatsUp || detailsUp) &&
+                                app().renderer().holdOffscreenCapture()) || plazaUp;
         m_probeSceneHidden = hideScene;
         // Each overlay is told only about itself: the one that is not up must
         // not start drawing the frozen backdrop as its base.

@@ -114,7 +114,7 @@ void GpuDevice::createFramebuffers() {
     dk::ImageLayout fbLayout;
     dk::ImageLayoutMaker{m_dev}
         .setFlags(DkImageFlags_UsageRender | DkImageFlags_UsagePresent |
-                  DkImageFlags_Usage2DEngine | DkImageFlags_HwCompression)
+                  DkImageFlags_Usage2DEngine)
         .setFormat(DkImageFormat_RGBA8_Unorm)
         .setDimensions(FB_WIDTH, FB_HEIGHT)
         .initialize(fbLayout);
@@ -139,7 +139,7 @@ void GpuDevice::createFramebuffers() {
 void GpuDevice::createDepthStencil() {
     dk::ImageLayout dsLayout;
     dk::ImageLayoutMaker{m_dev}
-        .setFlags(DkImageFlags_UsageRender | DkImageFlags_HwCompression)
+        .setFlags(DkImageFlags_UsageRender)
         .setFormat(DkImageFormat_S8)
         .setDimensions(FB_WIDTH, FB_HEIGHT)
         .initialize(dsLayout);

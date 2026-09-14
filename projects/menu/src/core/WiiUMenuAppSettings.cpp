@@ -934,23 +934,24 @@ void WiiUMenuApp::refreshPlazaCommunities() {
             displayIndexByTitle.emplace(displayEntry.titleId, i);
     }
 
-    int pumpDisplayIndex = -1;
-    if (m_grid) {
+    if (m_grid && m_grid->iconsPerPage() > 0 && gridIcons) {
         const int communityCount = std::min(10, static_cast<int>(m_allApps.size()));
         for (int offset = 0; offset < communityCount; ++offset) {
             const int appPos = (m_plazaIconPumpIndex + offset) % communityCount;
             const auto& candidate = m_allApps[static_cast<std::size_t>(appPos)];
             const auto found = displayIndexByTitle.find(candidate.titleId);
             if (found != displayIndexByTitle.end()) {
-                pumpDisplayIndex = found->second;
-                m_plazaIconPumpIndex = (appPos + 1) % communityCount;
-                break;
+                const int dispIdx = found->second;
+                if (dispIdx >= 0 && dispIdx < static_cast<int>(gridIcons->size()) &&
+                    (!(*gridIcons)[dispIdx] || !(*gridIcons)[dispIdx]->texture())) {
+                    const int page = dispIdx / m_grid->iconsPerPage();
+                    m_iconStreamer.onPageChanged(page, m_grid->iconsPerPage(),
+                                                 this->app().gpu(), this->app().renderer(),
+                                                 *gridIcons);
+                    m_plazaIconPumpIndex = (appPos + 1) % communityCount;
+                    break;
+                }
             }
-        }
-        if (pumpDisplayIndex >= 0) {
-            m_iconStreamer.onPageChanged(pumpDisplayIndex, 1,
-                                         this->app().gpu(), this->app().renderer(),
-                                         *gridIcons);
         }
     }
 
