@@ -950,7 +950,9 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
     if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
         return false;
     auto& input = app().input();
-    const bool combo = input.isHeld(nxui::Button::LStick) && input.isHeld(nxui::Button::RStick);
+    const bool combo = input.isHeld(nxui::Button::ZL) &&
+                       input.isHeld(nxui::Button::ZR) &&
+                       input.isHeld(nxui::Button::RStick);
     if (!combo) {
         m_frameDumpShortcutHeld = false;
         return false;
@@ -959,7 +961,7 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
         return true;
     m_frameDumpShortcutHeld = true;
 
-    // Trigger a 30-frame diagnostic burst straight into sdmc:/config/SwitchU/frame_dumps/
+    // Trigger a 5-frame diagnostic burst straight into sdmc:/config/SwitchU/frame_dumps/
     char ts[32];
     std::time_t now = std::time(nullptr);
     std::tm tmNow{};
@@ -970,11 +972,11 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
     std::error_code ec;
     std::filesystem::create_directories(m_frameDumpBatchDir, ec);
 
-    m_frameDumpRemaining = 30;
+    m_frameDumpRemaining = 5;
     m_frameDumpIndex = 0;
     app().gpu().requestFrameDump();
     m_audio.playSfx(Sfx::Activate);
-    DebugLog::log("[frame-dump] started 30-frame burst into %s (mkdir: %s)",
+    DebugLog::log("[frame-dump] started 5-frame burst into %s (mkdir: %s)",
                   m_frameDumpBatchDir.c_str(), ec ? ec.message().c_str() : "ok");
     return true;
 }
@@ -988,12 +990,15 @@ void WiiUMenuApp::syncFrameDumpCapture() {
     const std::string outPath = fmt::format("{}/frame_{:03d}.raw",
                                             m_frameDumpBatchDir, curIndex);
 
-    std::ofstream out(outPath, std::ios::binary);
-    if (out) {
-        out.write(reinterpret_cast<const char*>(pixels.data()), pixels.size());
-        out.flush();
-    }
-    DebugLog::log("[frame-dump] saved %s (%zu bytes)", outPath.c_str(), pixels.size());
+    // Offload writing to the background thread pool so the render loop doesn't stall on SD card I/O
+    m_threadPool.submit([outPath, data = std::move(pixels)]() {
+        std::ofstream out(outPath, std::ios::binary);
+        if (out) {
+            out.write(reinterpret_cast<const char*>(data.data()), data.size());
+            out.flush();
+        }
+        DebugLog::log("[frame-dump] saved %s (%zu bytes)", outPath.c_str(), data.size());
+    });
 
     if (--m_frameDumpRemaining > 0) {
         app().gpu().requestFrameDump();
@@ -1055,6 +1060,8 @@ void WiiUMenuApp::wireGlobalActions() {
 
     root.addAction(static_cast<uint64_t>(nxui::Button::RStick), [this]() {
         if (m_editMode) return;
+        if (app().input().isHeld(nxui::Button::ZL) && app().input().isHeld(nxui::Button::ZR))
+            return;
         if ((m_dialog && m_dialog->isActive()) ||
             (m_quickSettings && m_quickSettings->isActive()) ||
             (m_contextMenu && m_contextMenu->isActive()) ||
