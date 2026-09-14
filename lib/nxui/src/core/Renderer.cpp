@@ -1173,6 +1173,21 @@ std::string Renderer::formatDrawJournal() const {
                   m_journalBackbufferClear.b, m_journalBackbufferClear.a);
     out += line;
 
+    // Timing of the frame this journal describes, sampled at its present.
+    // present_interval is the gap since the previous present: at 60 Hz a frame
+    // that met its deadline sits near 16.67ms, and the dump cadence of one
+    // capture every third frame adds a known hitch on capture frames only.
+    // acquire/fence separate waiting on the display from waiting on the GPU.
+    std::snprintf(line, sizeof(line),
+                  "timing: present_interval=%.3fms submit_to_present=%.3fms "
+                  "frame_cpu=%.3fms acquire=%.3fms fence=%.3fms\n",
+                  m_gpu.lastPresentIntervalNs() / 1e6,
+                  m_gpu.lastSubmitToPresentNs() / 1e6,
+                  m_gpu.lastFrameCpuNs() / 1e6,
+                  m_gpu.lastAcquireNs() / 1e6,
+                  m_gpu.lastFenceWaitNs() / 1e6);
+    out += line;
+
     // The verdict line is computed here rather than on the PC, because the
     // question it answers is binary and the on-device record is the only place
     // where the answer is not a reconstruction. A "dimming draw" is a
@@ -1180,11 +1195,33 @@ std::string Renderer::formatDrawJournal() const {
     // (or an exact half of it), whose colour is dark, and whose alpha is
     // partial — the only combination that multiplies the existing image by a
     // constant instead of replacing it.
+    //
+    // The first version of this test scanned only Primitive entries, which
+    // drawRect emits. The Plaza screen never calls drawRect: its captures
+    // recorded zero Primitive entries, so the verdict read "0" for every frame
+    // whether or not a dimmer existed. A zero that cannot become non-zero is
+    // not evidence. Batch entries are scanned too, so any submitted geometry
+    // covering the framebuffer is tested regardless of which caller emitted it.
+    //
+    // Batch bounds are read from the vertex arena, which lives in
+    // DkMemBlockFlags_CpuUncached memory and has been observed to read back
+    // with a corrupted exponent byte (values near 1e19). Those entries are
+    // skipped rather than counted, since their geometry cannot be trusted; the
+    // skipped count is reported so a frame full of them cannot masquerade as a
+    // clean negative.
     int suspects = 0;
+    int unreadable = 0;
     for (const auto& e : m_journal) {
-        if (e.kind != JournalKind::Primitive || e.target != -1) continue;
+        const bool isDraw = (e.kind == JournalKind::Primitive ||
+                             e.kind == JournalKind::Batch);
+        if (!isDraw || e.target != -1) continue;
         const float w = e.x1 - e.x0;
         const float h = e.y1 - e.y0;
+        if (!(std::fabs(e.x0) < 1e6f && std::fabs(e.y0) < 1e6f &&
+              w >= 0.f && w < 1e6f && h >= 0.f && h < 1e6f)) {
+            ++unreadable;
+            continue;
+        }
         const bool fullHeight = h >= (float)m_gpu.height() * 0.95f;
         const bool wideEnough = w >= (float)m_gpu.width() * 0.45f;
         // maxRGB/maxA make the test conservative for a batched draw: it is
@@ -1197,10 +1234,11 @@ std::string Renderer::formatDrawJournal() const {
         if (fullHeight && wideEnough && dark && partial) ++suspects;
     }
     std::snprintf(line, sizeof(line),
-                  "verdict: fullscreen_dark_partial_alpha_draws=%d  %s\n",
-                  suspects,
+                  "verdict: fullscreen_dark_partial_alpha_draws=%d "
+                  "unreadable_bounds=%d %s\n",
+                  suspects, unreadable,
                   m_journalDropped == 0
-                      ? "(0 => no CPU-recorded drawRect dimmer in this frame)"
+                      ? "(0 => no submitted dimmer covered the framebuffer)"
                       : "(INCONCLUSIVE: journal truncated)");
     out += line;
 

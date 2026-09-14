@@ -133,6 +133,21 @@ public:
     uint32_t lastFrameUploadBatches() const { return m_lastFrameUploadBatches; }
     uint64_t lastFrameUploadWaitNs()  const { return m_lastFrameUploadWaitNs; }
 
+    // Presentation timing, in nanoseconds, for the frame just submitted.
+    //
+    // The Plaza artifact attenuates a contiguous band of scanlines from row 0
+    // to a cut row that differs per occurrence, with the band holding *current*
+    // frame content multiplied by a scalar. That rules out both a submitted
+    // dimming draw and stale buffer content, and points at what happens between
+    // submission and scanout. These counters make the presentation interval
+    // observable so a frame that missed its deadline can be told apart from one
+    // that met it: a tear caused by present racing scanout must correlate with
+    // an anomalous interval, and an artifact that appears at a perfectly normal
+    // interval cannot be blamed on present timing.
+    uint64_t lastPresentIntervalNs() const { return m_lastPresentIntervalNs; }
+    uint64_t lastSubmitToPresentNs() const { return m_lastSubmitToPresentNs; }
+    uint64_t lastFrameCpuNs()        const { return m_lastFrameCpuNs; }
+
     int  width()  const { return FB_WIDTH; }
     int  height() const { return FB_HEIGHT; }
 
@@ -379,6 +394,13 @@ private:
     int m_slot = -1;
     bool m_frameDumpArmed = false;
     bool m_frameDumpPending = false;
+
+    // Presentation timing. See lastPresentIntervalNs().
+    uint64_t m_prevPresentTick = 0;
+    uint64_t m_frameBeginTick = 0;
+    uint64_t m_lastPresentIntervalNs = 0;
+    uint64_t m_lastSubmitToPresentNs = 0;
+    uint64_t m_lastFrameCpuNs = 0;
     uint32_t m_frameUploads = 0;
     uint32_t m_lastFrameUploads = 0;
     uint32_t m_frameUploadBatches = 0;

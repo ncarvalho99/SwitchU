@@ -1041,6 +1041,31 @@ def half_ratio(cur, ref, x0, x1):
     return med, coherent
 
 
+def scan_band(cur, prev, nxt):
+    """Locate a contiguous run of attenuated scanlines, if one exists.
+
+    Measured captures show the artifact is not always fullscreen: it covers a
+    run of rows starting at row 0 and ending at a cut row that differs per
+    occurrence (720, 266 and 25 rows were observed in one capture). A
+    whole-frame or half-frame median therefore reports 1.0000 and hides it.
+    Comparing row by row against a pixel-stable reference exposes the band and
+    its boundary, which is the measurement that distinguishes a scanout-side
+    tear from a submitted darkening draw.
+    """
+    static = (np.all(np.abs(prev - nxt) < 2, axis=2) & (prev.mean(2) > 40))
+    ratios = np.full(cur.shape[0], np.nan)
+    for y in range(cur.shape[0]):
+        m = static[y]
+        if m.sum() < 60:
+            continue
+        ratios[y] = np.median(cur[y][m].ravel() /
+                              np.maximum(prev[y][m].ravel(), 1e-6))
+    hit = np.nonzero((ratios < 0.95) & ~np.isnan(ratios))[0]
+    if hit.size < 3:
+        return None
+    return int(hit.min()), int(hit.max()), float(np.median(ratios[hit]))
+
+
 if np is not None and len(frames) >= 3:
     h, w = frames[0][1].shape[:2]
     mid = w // 2
@@ -1064,23 +1089,30 @@ if np is not None and len(frames) >= 3:
                 row.append((name, (rp + rn) / 2.0, min(cp, cn)))
             else:
                 row.append((name, None, None))
-        if any(r[1] is not None for r in row):
-            flagged.append((base, row))
+        band = scan_band(cur, prev, nxt)
+        if any(r[1] is not None for r in row) or band:
+            flagged.append((base, row, band))
 
     if not flagged:
         print('no attenuated frames in this capture.')
-    for base, row in flagged:
+    for base, row, band in flagged:
         parts = []
         for name, ratio, coherent in row:
             parts.append(f'{name}=clean' if ratio is None
                          else f'{name}=x{ratio:.4f}(coherent {coherent:.1%})')
         print(f'{base}: ' + '  '.join(parts))
+        if band:
+            first, last, ratio = band
+            span = last - first + 1
+            kind = 'WHOLE FRAME' if span >= 719 else f'BAND rows {first}..{last}'
+            print(f'    {kind}  x{ratio:.4f}  ({span}/720 rows)')
         jp = f'{base}.journal.txt'
         if os.path.exists(jp):
             with open(jp, 'r', errors='replace') as jf:
                 lines = jf.read().splitlines()
-            head = [l for l in lines[:2]]
-            print('    ' + ' | '.join(head))
+            head = [l for l in lines[:3]]
+            for hl in head:
+                print('    ' + hl)
             if lines and 'dropped=0' not in lines[0]:
                 print('    INCONCLUSIVE: journal truncated; zero verdict is not evidence')
             # Any backbuffer draw with a partial alpha. The journal's verdict

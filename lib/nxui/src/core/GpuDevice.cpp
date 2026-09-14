@@ -246,6 +246,7 @@ int GpuDevice::beginFrame() {
     // tracking — following the deko3d sample framework pattern).
     m_cmdbuf[m_slot].clear();
     m_cmdbuf[m_slot].addMemory(m_cmdPool[m_slot].block, 0, CMD_BUF_SIZE);
+    m_frameBeginTick = tDone;
     return m_slot;
 }
 
@@ -273,8 +274,16 @@ void GpuDevice::endFrame() {
     m_cmdbuf[m_slot].signalFence(m_frameFences[m_slot]);
 
     auto cmdList = m_cmdbuf[m_slot].finishList();
+    const uint64_t tSubmit = armGetSystemTick();
     m_queue.submitCommands(cmdList);
     m_queue.presentImage(m_swapchain, m_slot);
+    const uint64_t tPresent = armGetSystemTick();
+
+    m_lastSubmitToPresentNs = armTicksToNs(tPresent - tSubmit);
+    m_lastFrameCpuNs = m_frameBeginTick ? armTicksToNs(tPresent - m_frameBeginTick) : 0;
+    m_lastPresentIntervalNs =
+        m_prevPresentTick ? armTicksToNs(tPresent - m_prevPresentTick) : 0;
+    m_prevPresentTick = tPresent;
 }
 
 bool GpuDevice::requestFrameDump() {
