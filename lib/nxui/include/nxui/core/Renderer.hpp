@@ -142,7 +142,7 @@ public:
     // predicted branch per draw and allocates nothing: the backing store is
     // reserved once in the constructor.
     enum class JournalKind : uint16_t {
-        Primitive = 0, Batch, Clear, BindTarget, RestoreTarget,
+        Primitive = 0, Batch, Dimmer, Clear, BindTarget, RestoreTarget,
         ClipPush, ClipPop, Capture, BlurPass, Present,
     };
 
@@ -316,6 +316,7 @@ private:
     uint64_t m_frameSerial = 0;
     int      m_journalTarget = -1;             // current render target
     Rect     m_journalScissor {0.f, 0.f, 0.f, 0.f};
+    uint32_t m_journalNonQuadBatches = 0;
     bool     m_journalBackbufferClearSeen = false;
     Color    m_journalBackbufferClear {0.f, 0.f, 0.f, 0.f};
     uint32_t m_journalDropped = 0;             // entries past the cap

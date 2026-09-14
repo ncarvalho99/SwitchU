@@ -388,6 +388,7 @@ void Renderer::journalReset() {
     m_journalTarget = -1;
     m_journalScissor = {0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()};
     m_journalBackbufferClearSeen = false;
+    m_journalNonQuadBatches = 0;
     m_journalBackbufferClear = {0.f, 0.f, 0.f, 0.f};
 }
 
@@ -443,6 +444,64 @@ void Renderer::flush() {
             e.minA = std::min(e.minA, v.a); e.maxA = std::max(e.maxA, v.a);
             e.minU = std::min(e.minU, v.u); e.maxU = std::max(e.maxU, v.u);
             e.minV = std::min(e.minV, v.v); e.maxV = std::max(e.maxV, v.v);
+        }
+
+        // Scan the batch one six-vertex quad at a time, and record any single
+        // quad that could itself dim the framebuffer.
+        //
+        // The whole-batch min/max above cannot answer that question, and
+        // believing it could was an error in entries 122, 124 and 128. A
+        // fullscreen black quad at alpha 0.2 batched together with thirteen
+        // opaque quads yields maxRGB = 1.0 and maxA = 1.0 for the batch, so a
+        // test requiring *every* vertex to be dark and translucent rejects it.
+        // Frame 073's journal contains exactly that shape: v=84, colour range
+        // 0.000..1.000, alpha range 0.200..1.000 — and 1 - 0.200 = 0.800 is the
+        // measured attenuation. Per-quad scanning closes that hole.
+        //
+        // Only whole quads are examined; a batch whose vertex count is not a
+        // multiple of six also contains triangles or line segments, which
+        // cannot cover the framebuffer on their own and are counted separately
+        // rather than ignored silently.
+        if (m_journalTarget == -1 && batchVerts >= 6) {
+            const float fbW = (float)m_gpu.width();
+            const float fbH = (float)m_gpu.height();
+            for (uint32_t q = 0; q + 6 <= batchVerts; q += 6) {
+                const Vertex2D* v = &m_vtxBase[m_vtxBatchStart + q];
+                float qx0 = v[0].x, qy0 = v[0].y, qx1 = v[0].x, qy1 = v[0].y;
+                float mr = v[0].r, mg = v[0].g, mb = v[0].b;
+                float minA = v[0].a, maxA = v[0].a;
+                for (int k = 1; k < 6; ++k) {
+                    qx0 = std::min(qx0, v[k].x); qx1 = std::max(qx1, v[k].x);
+                    qy0 = std::min(qy0, v[k].y); qy1 = std::max(qy1, v[k].y);
+                    mr = std::max(mr, v[k].r);
+                    mg = std::max(mg, v[k].g);
+                    mb = std::max(mb, v[k].b);
+                    minA = std::min(minA, v[k].a);
+                    maxA = std::max(maxA, v[k].a);
+                }
+                const float qw = qx1 - qx0, qh = qy1 - qy0;
+                if (!(std::fabs(qx0) < 1e6f && std::fabs(qy0) < 1e6f &&
+                      qw < 1e6f && qh < 1e6f)) continue;
+                // Cover the visible framebuffer in both axes, be dark at every
+                // corner, and be partially transparent at every corner.
+                if (qx0 > 0.5f || qy0 > 0.5f || qx1 < fbW - 0.5f || qy1 < fbH - 0.5f)
+                    continue;
+                if ((mr + mg + mb) > 0.35f) continue;
+                if (!(minA > 0.004f && maxA < 0.999f)) continue;
+                DrawJournalEntry d;
+                d.kind    = JournalKind::Dimmer;
+                d.shader  = e.shader;
+                d.target  = e.target;
+                d.texSlot = e.texSlot;
+                d.verts   = 6;
+                d.x0 = qx0; d.y0 = qy0; d.x1 = qx1; d.y1 = qy1;
+                d.minR = d.maxR = mr; d.minG = d.maxG = mg; d.minB = d.maxB = mb;
+                d.minA = minA; d.maxA = maxA;
+                d.sx = m_journalScissor.x;     d.sy = m_journalScissor.y;
+                d.sw = m_journalScissor.width; d.sh = m_journalScissor.height;
+                journalPush(d);
+            }
+            if (batchVerts % 6u != 0u) ++m_journalNonQuadBatches;
         }
         e.x0 = minX; e.y0 = minY; e.x1 = maxX; e.y1 = maxY;
         e.sx = m_journalScissor.x;     e.sy = m_journalScissor.y;
@@ -1149,7 +1208,7 @@ void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,
 
 std::string Renderer::formatDrawJournal() const {
     static const char* kKindName[] = {
-        "PRIMITIVE", "BATCH", "CLEAR", "BIND-TGT", "RESTORE-TGT",
+        "PRIMITIVE", "BATCH", "DIMMER", "CLEAR", "BIND-TGT", "RESTORE-TGT",
         "CLIP-PUSH", "CLIP-POP", "CAPTURE", "BLUR", "PRESENT",
     };
     static const char* kShaderName[] = {
@@ -1225,44 +1284,41 @@ std::string Renderer::formatDrawJournal() const {
     // skipped rather than counted, since their geometry cannot be trusted; the
     // skipped count is reported so a frame full of them cannot masquerade as a
     // clean negative.
+    // The per-quad scan in flush() already applied the geometry and colour
+    // tests to each individual quad, so the verdict is a count of what it
+    // found. Whole-batch ranges are no longer consulted for this decision:
+    // batching mixes quads, and a batch summary cannot represent any single
+    // one of them.
     int suspects = 0;
     int unreadable = 0;
     for (const auto& e : m_journal) {
-        const bool isDraw = (e.kind == JournalKind::Primitive ||
-                             e.kind == JournalKind::Batch);
-        if (!isDraw || e.target != -1) continue;
+        if (e.kind == JournalKind::Dimmer) { ++suspects; continue; }
+        if (e.kind != JournalKind::Batch || e.target != -1) continue;
         const float w = e.x1 - e.x0;
         const float h = e.y1 - e.y0;
         if (!(std::fabs(e.x0) < 1e6f && std::fabs(e.y0) < 1e6f &&
-              w >= 0.f && w < 1e6f && h >= 0.f && h < 1e6f)) {
+              w >= 0.f && w < 1e6f && h >= 0.f && h < 1e6f))
             ++unreadable;
-            continue;
-        }
-        const bool fullHeight = h >= (float)m_gpu.height() * 0.95f;
-        const bool wideEnough = w >= (float)m_gpu.width() * 0.45f;
-        // maxRGB/maxA make the test conservative for a batched draw: it is
-        // only called a dimmer when *every* vertex in the whole batch is dark
-        // and partially transparent. That avoids labelling an unrelated batch
-        // from its first vertex, while retaining the exact alpha range needed
-        // to match a measured attenuation.
-        const bool dark    = (e.maxR + e.maxG + e.maxB) <= 0.35f;
-        const bool partial = e.minA > 0.004f && e.maxA < 0.999f;
-        if (fullHeight && wideEnough && dark && partial) ++suspects;
     }
+    const bool trustworthy = (m_journalDropped == 0 && unreadable == 0 &&
+                              m_journalNonQuadBatches == 0);
     std::snprintf(line, sizeof(line),
-                  "verdict: fullscreen_dark_partial_alpha_draws=%d "
-                  "unreadable_bounds=%d %s\n",
-                  suspects, unreadable,
-                  m_journalDropped == 0
-                      ? "(0 => no submitted dimmer covered the framebuffer)"
-                      : "(INCONCLUSIVE: journal truncated)");
+                  "verdict: dimmer_quads=%d unreadable_batches=%d "
+                  "non_quad_batches=%u %s\n",
+                  suspects, unreadable, m_journalNonQuadBatches,
+                  suspects > 0
+                      ? "(a submitted quad covers the framebuffer and dims it)"
+                      : (trustworthy
+                             ? "(0 => no submitted quad could have dimmed it)"
+                             : "(INCONCLUSIVE: some geometry was untestable)"));
     out += line;
 
     for (size_t i = 0; i < m_journal.size(); ++i) {
         const auto& e = m_journal[i];
         const char* kind = ((size_t)e.kind < std::size(kKindName))
                          ? kKindName[(size_t)e.kind] : "?";
-        if (e.kind == JournalKind::Primitive || e.kind == JournalKind::Batch) {
+        if (e.kind == JournalKind::Primitive || e.kind == JournalKind::Batch ||
+            e.kind == JournalKind::Dimmer) {
             const char* sh = ((size_t)e.shader < std::size(kShaderName))
                            ? kShaderName[e.shader] : "?";
             // Attenuation is what this draw would multiply the destination by

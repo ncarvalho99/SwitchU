@@ -1119,6 +1119,9 @@ if np is not None and len(frames) >= 3:
             # applies the stricter geometry + all-vertices-dark test; printing
             # these lines preserves the raw candidates for manual inspection.
             for l in lines:
+                if 'DIMMER' in l:
+                    print('    DIMMER ' + l.strip())
+            for l in lines:
                 if 'PRIMITIVE' in l and 'attenRange=' in l and ' tgt=-1 ' in l:
                     try:
                         hi = float(l.split('attenRange=')[1].split()[0].split('..')[1])
@@ -1128,9 +1131,9 @@ if np is not None and len(frames) >= 3:
                         print('    CANDIDATE ' + l.strip())
         else:
             print('    (no journal for this frame)')
-    print('\nIf a flagged frame reports fullscreen_dark_partial_alpha_draws=0')
-    print('with dropped=0, no drawRect scrim produced it. Inspect the BATCH')
-    print('shader/texture/UV plus target/scissor/slot for remaining mechanisms.')
+    print('\nverdict dimmer_quads>0 names the exact quad that dims the frame.')
+    print('A 0 verdict only counts when unreadable_batches and non_quad_batches')
+    print('are also 0; otherwise some geometry could not be tested at all.')
 elif np is None:
     print('install numpy for automatic attenuation analysis')
 
