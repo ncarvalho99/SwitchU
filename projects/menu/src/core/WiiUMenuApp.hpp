@@ -764,8 +764,10 @@ private:
     bool m_hintCapsulesInitialized = false;
     bool m_accessibilityToggleComboHeld = false;
     bool m_frameDumpShortcutHeld = false;
+    bool m_frameDumpActive = false;
     int  m_frameDumpRemaining = 0;
     int  m_frameDumpIndex = 0;
+    int  m_frameDumpCounter = 0;
     std::string m_frameDumpBatchDir;
     // Set while R is held so a release only sorts when the press began here,
     // and not when R was already down on the way back from another screen.

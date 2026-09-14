@@ -1,5 +1,6 @@
 #include "WiiUMenuApp.hpp"
 #include <fmt/format.h>
+#include <zlib.h>
 #include "widgets/GlossyIcon.hpp"
 #include "DebugLog.hpp"
 #include "NsService.hpp"
@@ -961,7 +962,16 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
         return true;
     m_frameDumpShortcutHeld = true;
 
-    // Trigger a 5-frame diagnostic burst straight into sdmc:/config/SwitchU/frame_dumps/
+    // Toggle: if recording is already active, stop early
+    if (m_frameDumpActive) {
+        m_frameDumpActive = false;
+        m_frameDumpRemaining = 0;
+        m_audio.playSfx(Sfx::ModalHide);
+        DebugLog::log("[frame-dump] stopped early by user (captured %d frames)", m_frameDumpIndex);
+        return true;
+    }
+
+    // Start 10-second diagnostic recording (200 frames @ 20 FPS, 1 frame every 3 vsyncs)
     char ts[32];
     std::time_t now = std::time(nullptr);
     std::tm tmNow{};
@@ -972,39 +982,94 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
     std::error_code ec;
     std::filesystem::create_directories(m_frameDumpBatchDir, ec);
 
-    m_frameDumpRemaining = 5;
+    // Drop helper Python script into the directory for 1-click PC extraction to PNG/MP4
+    std::ofstream py(m_frameDumpBatchDir + "/extract_frames.py");
+    if (py) {
+        py << "import os, glob, struct, zlib\n"
+              "try:\n"
+              "    from PIL import Image\n"
+              "except ImportError:\n"
+              "    Image = None\n"
+              "zraws = sorted(glob.glob('frame_*.zraw'))\n"
+              "print(f'Extracting {len(zraws)} frames...')\n"
+              "for zf in zraws:\n"
+              "    with open(zf, 'rb') as f:\n"
+              "        data = f.read()\n"
+              "    if len(data) < 16 or data[:4] != b'ZRAW':\n"
+              "        continue\n"
+              "    magic, w, h, raw_sz = struct.unpack('<4sIII', data[:16])\n"
+              "    raw = zlib.decompress(data[16:])\n"
+              "    base = os.path.splitext(zf)[0]\n"
+              "    if Image:\n"
+              "        img = Image.frombytes('RGBA', (w, h), raw)\n"
+              "        img.save(f'{base}.png')\n"
+              "print('Done extracting PNGs!')\n"
+              "if os.system('ffmpeg -version') == 0:\n"
+              "    os.system('ffmpeg -y -framerate 20 -i frame_%03d.png -c:v libx264 -pix_fmt yuv420p clip.mp4')\n"
+              "    print('Created clip.mp4 successfully!')\n";
+        py.flush();
+    }
+
+    m_frameDumpActive = true;
+    m_frameDumpRemaining = 200; // 200 frames @ 20 FPS = 10.0 seconds
     m_frameDumpIndex = 0;
+    m_frameDumpCounter = 0;
     app().gpu().requestFrameDump();
     m_audio.playSfx(Sfx::Activate);
-    DebugLog::log("[frame-dump] started 5-frame burst into %s (mkdir: %s)",
+    DebugLog::log("[frame-dump] started 10-second recording (200 frames @ 20 FPS) into %s (mkdir: %s)",
                   m_frameDumpBatchDir.c_str(), ec ? ec.message().c_str() : "ok");
     return true;
 }
 
 void WiiUMenuApp::syncFrameDumpCapture() {
-    std::vector<std::uint8_t> pixels;
-    if (!app().gpu().takeFrameDump(pixels))
+    if (!m_frameDumpActive)
         return;
 
-    const int curIndex = m_frameDumpIndex++;
-    const std::string outPath = fmt::format("{}/frame_{:03d}.raw",
-                                            m_frameDumpBatchDir, curIndex);
+    std::vector<std::uint8_t> pixels;
+    if (app().gpu().takeFrameDump(pixels)) {
+        const int curIndex = m_frameDumpIndex++;
+        const std::string outPath = fmt::format("{}/frame_{:03d}.zraw",
+                                                m_frameDumpBatchDir, curIndex);
 
-    // Offload writing to the background thread pool so the render loop doesn't stall on SD card I/O
-    m_threadPool.submit([outPath, data = std::move(pixels)]() {
-        std::ofstream out(outPath, std::ios::binary);
-        if (out) {
-            out.write(reinterpret_cast<const char*>(data.data()), data.size());
-            out.flush();
+        // Offload lossless zlib compression and writing to the background thread pool
+        m_threadPool.submit([outPath, data = std::move(pixels)]() {
+            uLongf compBound = compressBound(static_cast<uLong>(data.size()));
+            std::vector<std::uint8_t> compBuf(16 + compBound);
+            std::memcpy(compBuf.data(), "ZRAW", 4);
+            const uint32_t w = 1280;
+            const uint32_t h = 720;
+            const uint32_t rawSize = static_cast<uint32_t>(data.size());
+            std::memcpy(compBuf.data() + 4, &w, 4);
+            std::memcpy(compBuf.data() + 8, &h, 4);
+            std::memcpy(compBuf.data() + 12, &rawSize, 4);
+
+            uLongf destLen = compBound;
+            if (compress2(compBuf.data() + 16, &destLen, data.data(), data.size(), 1) == Z_OK) {
+                std::ofstream out(outPath, std::ios::binary);
+                if (out) {
+                    out.write(reinterpret_cast<const char*>(compBuf.data()), 16 + destLen);
+                    out.flush();
+                }
+            }
+        });
+
+        --m_frameDumpRemaining;
+        if (m_frameDumpRemaining <= 0) {
+            m_frameDumpActive = false;
+            m_audio.playSfx(Sfx::ModalHide);
+            DebugLog::log("[frame-dump] completed 10-second recording in %s (200 frames)",
+                          m_frameDumpBatchDir.c_str());
+            return;
         }
-        DebugLog::log("[frame-dump] saved %s (%zu bytes)", outPath.c_str(), data.size());
-    });
+    }
 
-    if (--m_frameDumpRemaining > 0) {
-        app().gpu().requestFrameDump();
-    } else {
-        m_audio.playSfx(Sfx::ModalHide);
-        DebugLog::log("[frame-dump] completed burst in %s", m_frameDumpBatchDir.c_str());
+    // Schedule next frame according to cadence (every 3 vsync frames = 20 FPS)
+    if (m_frameDumpActive && !app().gpu().frameDumpBusy()) {
+        ++m_frameDumpCounter;
+        if (m_frameDumpCounter >= 3) {
+            m_frameDumpCounter = 0;
+            app().gpu().requestFrameDump();
+        }
     }
 }
 
