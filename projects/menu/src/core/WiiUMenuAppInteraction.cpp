@@ -966,6 +966,7 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
     if (m_frameDumpActive) {
         m_frameDumpActive = false;
         m_frameDumpRemaining = 0;
+        app().renderer().setDrawJournalEnabled(false);
         m_audio.playSfx(Sfx::ModalHide);
         DebugLog::log("[frame-dump] stopped early by user (captured %d frames)", m_frameDumpIndex);
         return true;
@@ -982,31 +983,125 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
     std::error_code ec;
     std::filesystem::create_directories(m_frameDumpBatchDir, ec);
 
-    // Drop helper Python script into the directory for 1-click PC extraction to PNG/MP4
+    // Drop helper Python script into the directory for 1-click PC extraction and
+    // automatic artifact analysis. Finding the glitched frames by eye is what
+    // made previous rounds slow and subjective: the attenuation is an exact
+    // constant multiply, so it can be detected numerically and matched against
+    // the frame's own recorded command list without anyone judging a thumbnail.
     std::ofstream py(m_frameDumpBatchDir + "/extract_frames.py");
     if (py) {
-        py << "import os, glob, struct, zlib\n"
-              "try:\n"
-              "    from PIL import Image\n"
-              "except ImportError:\n"
-              "    Image = None\n"
-              "zraws = sorted(glob.glob('frame_*.zraw'))\n"
-              "print(f'Extracting {len(zraws)} frames...')\n"
-              "for zf in zraws:\n"
-              "    with open(zf, 'rb') as f:\n"
-              "        data = f.read()\n"
-              "    if len(data) < 16 or data[:4] != b'ZRAW':\n"
-              "        continue\n"
-              "    magic, w, h, raw_sz = struct.unpack('<4sIII', data[:16])\n"
-              "    raw = zlib.decompress(data[16:])\n"
-              "    base = os.path.splitext(zf)[0]\n"
-              "    if Image:\n"
-              "        img = Image.frombytes('RGBA', (w, h), raw)\n"
-              "        img.save(f'{base}.png')\n"
-              "print('Done extracting PNGs!')\n"
-              "if os.system('ffmpeg -version') == 0:\n"
-              "    os.system('ffmpeg -y -framerate 20 -i frame_%03d.png -c:v libx264 -pix_fmt yuv420p clip.mp4')\n"
-              "    print('Created clip.mp4 successfully!')\n";
+        py << R"PY(import os, glob, struct, zlib
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+zraws = sorted(glob.glob('frame_*.zraw'))
+print(f'Extracting {len(zraws)} frames...')
+
+frames = []
+for zf in zraws:
+    with open(zf, 'rb') as f:
+        data = f.read()
+    if len(data) < 16 or data[:4] != b'ZRAW':
+        continue
+    magic, w, h, raw_sz = struct.unpack('<4sIII', data[:16])
+    raw = zlib.decompress(data[16:])
+    base = os.path.splitext(zf)[0]
+    if Image:
+        Image.frombytes('RGBA', (w, h), raw).save(f'{base}.png')
+    if np is not None:
+        a = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 4)[:, :, :3]
+        frames.append((base, a.astype(np.float32)))
+print('Done extracting PNGs!')
+
+
+def half_ratio(cur, ref, x0, x1):
+    """Median per-pixel ratio cur/ref over a column range, bright pixels only.
+
+    A constant multiplicative attenuation shows up as a tight median well
+    below 1.0. Dark pixels are excluded because their ratio is dominated by
+    quantisation, and moving content is rejected by the spread, not by the
+    median, so ordinary animation does not masquerade as a glitch.
+    """
+    c = cur[:, x0:x1].ravel()
+    r = ref[:, x0:x1].ravel()
+    m = r > 24.0
+    if m.sum() < 1000:
+        return None, None
+    q = c[m] / r[m]
+    return float(np.median(q)), float(np.std(q))
+
+
+if np is not None and len(frames) >= 3:
+    h, w = frames[0][1].shape[:2]
+    mid = w // 2
+    print('\n=== attenuation analysis ===')
+    print('a frame is flagged when its median ratio against BOTH neighbours')
+    print('sits below 0.95 with low spread: a constant multiply, not motion.\n')
+    flagged = []
+    for i in range(1, len(frames) - 1):
+        base, cur = frames[i]
+        prev, nxt = frames[i - 1][1], frames[i + 1][1]
+        row = []
+        for name, x0, x1 in (('left', 0, mid), ('right', mid, w)):
+            rp, sp = half_ratio(cur, prev, x0, x1)
+            rn, sn = half_ratio(cur, nxt, x0, x1)
+            if rp is None or rn is None:
+                row.append((name, None, None))
+                continue
+            # Both comparisons must agree, otherwise this is a scene change.
+            if rp < 0.95 and rn < 0.95 and sp < 0.15 and sn < 0.15:
+                row.append((name, (rp + rn) / 2.0, max(sp, sn)))
+            else:
+                row.append((name, None, None))
+        if any(r[1] is not None for r in row):
+            flagged.append((base, row))
+
+    if not flagged:
+        print('no attenuated frames in this capture.')
+    for base, row in flagged:
+        parts = []
+        for name, ratio, spread in row:
+            parts.append(f'{name}=clean' if ratio is None
+                         else f'{name}=x{ratio:.4f}(sd {spread:.3f})')
+        print(f'{base}: ' + '  '.join(parts))
+        jp = f'{base}.journal.txt'
+        if os.path.exists(jp):
+            with open(jp, 'r', errors='replace') as jf:
+                lines = jf.read().splitlines()
+            head = [l for l in lines[:2]]
+            print('    ' + ' | '.join(head))
+            if lines and 'dropped=0' not in lines[0]:
+                print('    INCONCLUSIVE: journal truncated; zero verdict is not evidence')
+            # Any backbuffer draw with a partial alpha. The journal's verdict
+            # applies the stricter geometry + all-vertices-dark test; printing
+            # these lines preserves the raw candidates for manual inspection.
+            for l in lines:
+                if 'PRIMITIVE' in l and 'attenRange=' in l and ' tgt=-1 ' in l:
+                    try:
+                        hi = float(l.split('attenRange=')[1].split()[0].split('..')[1])
+                    except (IndexError, ValueError):
+                        continue
+                    if hi < 0.99:
+                        print('    CANDIDATE ' + l.strip())
+        else:
+            print('    (no journal for this frame)')
+    print('\nIf a flagged frame reports fullscreen_dark_partial_alpha_draws=0')
+    print('with dropped=0, no drawRect scrim produced it. Inspect the BATCH')
+    print('shader/texture/UV plus target/scissor/slot for remaining mechanisms.')
+elif np is None:
+    print('install numpy for automatic attenuation analysis')
+
+if os.system('ffmpeg -version') == 0:
+    os.system('ffmpeg -y -framerate 20 -i frame_%03d.png -c:v libx264 -pix_fmt yuv420p clip.mp4')
+    print('Created clip.mp4 successfully!')
+)PY";
         py.flush();
     }
 
@@ -1014,6 +1109,10 @@ bool WiiUMenuApp::handleFrameDumpShortcut() {
     m_frameDumpRemaining = 200; // 200 frames @ 20 FPS = 10.0 seconds
     m_frameDumpIndex = 0;
     m_frameDumpCounter = 0;
+    // Record every frame, not just the captured ones: a frame is only known to
+    // be glitched after its pixels are examined on PC, and by then the chance
+    // to have journalled it is gone.
+    app().renderer().setDrawJournalEnabled(true);
     app().gpu().requestFrameDump();
     m_audio.playSfx(Sfx::Activate);
     DebugLog::log("[frame-dump] started 10-second recording (200 frames @ 20 FPS) into %s (mkdir: %s)",
@@ -1030,6 +1129,22 @@ void WiiUMenuApp::syncFrameDumpCapture() {
         const int curIndex = m_frameDumpIndex++;
         const std::string outPath = fmt::format("{}/frame_{:03d}.zraw",
                                                 m_frameDumpBatchDir, curIndex);
+
+        // The journal still describes the frame whose pixels were just taken:
+        // the dump's copy was recorded in that frame's endFrame, and the next
+        // beginFrame (which would reset the journal) has not run yet. Writing
+        // it here therefore pairs frame_NNN.zraw with frame_NNN.journal.txt by
+        // construction rather than by timing luck.
+        auto journal = app().renderer().formatDrawJournal();
+        const std::string journalPath = fmt::format("{}/frame_{:03d}.journal.txt",
+                                                    m_frameDumpBatchDir, curIndex);
+        m_threadPool.submit([journalPath, journal = std::move(journal)]() {
+            std::ofstream out(journalPath, std::ios::binary);
+            if (out) {
+                out.write(journal.data(), (std::streamsize)journal.size());
+                out.flush();
+            }
+        });
 
         // Offload lossless zlib compression and writing to the background thread pool
         m_threadPool.submit([outPath, data = std::move(pixels)]() {
@@ -1056,6 +1171,7 @@ void WiiUMenuApp::syncFrameDumpCapture() {
         --m_frameDumpRemaining;
         if (m_frameDumpRemaining <= 0) {
             m_frameDumpActive = false;
+            app().renderer().setDrawJournalEnabled(false);
             m_audio.playSfx(Sfx::ModalHide);
             DebugLog::log("[frame-dump] completed 10-second recording in %s (200 frames)",
                           m_frameDumpBatchDir.c_str());

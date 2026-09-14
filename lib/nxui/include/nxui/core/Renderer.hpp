@@ -119,6 +119,62 @@ public:
     // show a stale scene.
     void setHoldOffscreenCapture(bool hold) { m_holdOffscreenCapture = hold; }
     bool holdOffscreenCapture() const       { return m_holdOffscreenCapture; }
+
+    // --- Diagnostic draw journal -------------------------------------------
+    //
+    // The Plaza dimming artifact reproduces losslessly in the native GPU
+    // framebuffer dump: whole frames (or the exact right half, split at
+    // x = 640.0) come back multiplied by a constant factor with every pixel of
+    // UI geometry still intact. A likely author is a CPU-recorded dimming draw
+    // (a fullscreen translucent black quad from a scrim/fade path); alternatives
+    // include a textured/computed draw or a GPU state/synchronisation hazard.
+    // Reading the code cannot tell which path executed in a glitched frame.
+    //
+    // The journal records what the CPU actually submitted for the frame the
+    // dump captured, so the dumped pixels can be read against their own
+    // command list instead of against a hypothesis. If a glitched frame's
+    // journal contains a fullscreen dark drawRect, that caller-level path is
+    // identified. If it does not, that specific mechanism is excluded for the
+    // frame; textured/computed draws and unobserved GPU state remain possible,
+    // while recorded scissor, target, clear and swapchain slot narrow them.
+    //
+    // Recording is off unless a dump is running, so the normal path pays one
+    // predicted branch per draw and allocates nothing: the backing store is
+    // reserved once in the constructor.
+    enum class JournalKind : uint16_t {
+        Primitive = 0, Batch, Clear, BindTarget, RestoreTarget,
+        ClipPush, ClipPop, Capture, BlurPass, Present,
+    };
+
+    struct DrawJournalEntry {
+        JournalKind kind = JournalKind::Primitive;
+        uint16_t shader  = 0;
+        int16_t  target  = -1;      // -1 = backbuffer, else offscreen index
+        int16_t  texSlot = -1;
+        uint32_t verts   = 0;
+        float    x0 = 0.f, y0 = 0.f, x1 = 0.f, y1 = 0.f;   // batch bounds
+        float    minR = 0.f, maxR = 0.f;
+        float    minG = 0.f, maxG = 0.f;
+        float    minB = 0.f, maxB = 0.f;
+        float    minA = 0.f, maxA = 0.f;                    // all-vertex ranges
+        float    minU = 0.f, maxU = 0.f;
+        float    minV = 0.f, maxV = 0.f;                    // sampled UV range
+        float    sx = 0.f, sy = 0.f, sw = 0.f, sh = 0.f;   // scissor in effect
+    };
+
+    void setDrawJournalEnabled(bool on) { m_journalEnabled = on; }
+    bool drawJournalEnabled() const     { return m_journalEnabled; }
+
+    // Monotonic frame counter, incremented by beginFrame. Written into the
+    // journal header so a dumped frame can be proven to line up with the
+    // journal that claims to describe it, rather than assumed to.
+    uint64_t frameSerial() const { return m_frameSerial; }
+
+    // Human-readable dump of the journal as it stands. Called after
+    // takeFrameDump() and before the next beginFrame(), it describes exactly
+    // the frame whose pixels were just retrieved.
+    std::string formatDrawJournal() const;
+
     void endFrame();
 
     // 2D drawing
@@ -248,6 +304,26 @@ private:
     uint32_t m_lastFrameBlurPasses = 0;
     uint32_t m_lastFrameCaptures = 0;
     bool     m_holdOffscreenCapture = false;
+
+    // Diagnostic draw journal. See setDrawJournalEnabled.
+    // Measured Plaza frames stay well below this even with one record per
+    // drawRect plus one per submitted batch. The cap is deliberately generous
+    // because truncating before a late overlay would make a zero verdict
+    // inconclusive; if it is ever exceeded the header says `dropped=N` and the
+    // analyser must not treat that frame as negative evidence.
+    static constexpr size_t kJournalCap = 2048;
+    bool     m_journalEnabled = false;
+    uint64_t m_frameSerial = 0;
+    int      m_journalTarget = -1;             // current render target
+    Rect     m_journalScissor {0.f, 0.f, 0.f, 0.f};
+    bool     m_journalBackbufferClearSeen = false;
+    Color    m_journalBackbufferClear {0.f, 0.f, 0.f, 0.f};
+    uint32_t m_journalDropped = 0;             // entries past the cap
+    std::vector<DrawJournalEntry> m_journal;
+
+    void journalReset();
+    void journalPush(const DrawJournalEntry& e);
+    void journalEvent(JournalKind kind, const Color& c = Color{0.f, 0.f, 0.f, 0.f});
 
     void addVertex(float x, float y, float u, float v, const Color& c);
     void addQuad(float x0, float y0, float x1, float y1,

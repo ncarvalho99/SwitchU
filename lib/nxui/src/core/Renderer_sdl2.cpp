@@ -17,6 +17,17 @@ Renderer::Renderer(GpuDevice& gpu) : m_gpu(gpu) {
 
 Renderer::~Renderer() {}
 
+// The draw journal exists to explain artifacts in the deko3d command stream.
+// The SDL2 backend records no command list of its own, so these are stubs that
+// keep the shared header's interface linkable rather than a parallel feature.
+void Renderer::journalReset() {}
+void Renderer::journalPush(const DrawJournalEntry&) {}
+void Renderer::journalEvent(JournalKind, const Color&) {}
+
+std::string Renderer::formatDrawJournal() const {
+    return "draw journal unavailable: SDL2 backend records no command list\n";
+}
+
 bool Renderer::initialize() {
     std::printf("[Renderer-SDL2] Init complete (no shaders)\n");
     return true;

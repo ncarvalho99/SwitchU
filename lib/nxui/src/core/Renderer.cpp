@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cmath>
 #include <fstream>
+#include <iterator>
 
 namespace nxui {
 
@@ -21,6 +22,10 @@ static void ortho(float* m, float w, float h) {
 
 Renderer::Renderer(GpuDevice& gpu) : m_gpu(gpu) {
     m_clipStack.reserve(8);
+    // Reserved once, here, so that recording a frame never allocates: an
+    // allocation inside the render loop would perturb the very timing the
+    // journal exists to observe.
+    m_journal.reserve(kJournalCap);
     resetLiquidGlassSettings();
 }
 Renderer::~Renderer() {}
@@ -291,6 +296,8 @@ void Renderer::beginFrame() {
     m_boundTexSlot = kTexSlotUnset;
     m_vtxBufferBound = false;
     m_clipStack.clear();
+    ++m_frameSerial;
+    if (m_journalEnabled) journalReset();
     // Normally the capture cannot outlive a frame: the framebuffer it copies is
     // redrawn every frame. An overlay that knows nothing behind it has changed
     // can hold it, which skips a 1280x720 to 640x360 blit and two full pipeline
@@ -312,6 +319,13 @@ void Renderer::beginFrame() {
 
     cmd.clearColor(0, DkColorMask_RGBA, 0.05f, 0.08f, 0.15f, 1.f);
     cmd.clearDepthStencil(false, 0.f, 0xFF, 0);
+    if (m_journalEnabled) {
+        m_journalTarget = -1;
+        m_journalScissor = {0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()};
+        m_journalBackbufferClearSeen = true;
+        m_journalBackbufferClear = {0.05f, 0.08f, 0.15f, 1.f};
+        journalEvent(JournalKind::Clear, m_journalBackbufferClear);
+    }
 
     int idx = (int)ShaderProgram::Basic;
     cmd.bindShaders(DkStageFlag_GraphicsMask, {&m_vertShaders[idx], &m_fragShaders[idx]});
@@ -368,10 +382,73 @@ void Renderer::updateProjection() {
                           GpuDevice::VS_UBO_SIZE);
 }
 
+void Renderer::journalReset() {
+    m_journal.clear();
+    m_journalDropped = 0;
+    m_journalTarget = -1;
+    m_journalScissor = {0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()};
+    m_journalBackbufferClearSeen = false;
+    m_journalBackbufferClear = {0.f, 0.f, 0.f, 0.f};
+}
+
+void Renderer::journalPush(const DrawJournalEntry& e) {
+    // Past the cap the journal stops recording rather than reallocating, and
+    // counts what it dropped. A truncated journal is still evidence as long as
+    // it is honest about being truncated; a journal that reallocated mid-frame
+    // would have changed the frame it was measuring.
+    if (m_journal.size() >= kJournalCap) { ++m_journalDropped; return; }
+    m_journal.push_back(e);
+}
+
+void Renderer::journalEvent(JournalKind kind, const Color& c) {
+    DrawJournalEntry e;
+    e.kind   = kind;
+    e.target = (int16_t)m_journalTarget;
+    e.minR = e.maxR = c.r; e.minG = e.maxG = c.g;
+    e.minB = e.maxB = c.b; e.minA = e.maxA = c.a;
+    e.sx = m_journalScissor.x;     e.sy = m_journalScissor.y;
+    e.sw = m_journalScissor.width; e.sh = m_journalScissor.height;
+    journalPush(e);
+}
+
 void Renderer::flush() {
     uint32_t batchVerts = m_vtxCount - m_vtxBatchStart;
     if (batchVerts == 0) return;
     ++m_frameDrawCalls;
+
+    // Record the batch before it is submitted. The bounds come from the
+    // vertices actually in the arena, not from the caller's rect, so a draw
+    // that reached the GPU with different geometry than its caller intended
+    // still shows up here as what the GPU will receive.
+    if (m_journalEnabled) {
+        DrawJournalEntry e;
+        e.kind    = JournalKind::Batch;
+        e.shader  = (uint16_t)m_curShader;
+        e.target  = (int16_t)m_journalTarget;
+        e.texSlot = (int16_t)((m_texturing && m_curTexSlot >= 0) ? m_curTexSlot : WHITE_TEX_SLOT);
+        e.verts   = batchVerts;
+
+        const Vertex2D& v0 = m_vtxBase[m_vtxBatchStart];
+        float minX = v0.x, minY = v0.y, maxX = v0.x, maxY = v0.y;
+        e.minR = e.maxR = v0.r; e.minG = e.maxG = v0.g;
+        e.minB = e.maxB = v0.b; e.minA = e.maxA = v0.a;
+        e.minU = e.maxU = v0.u; e.minV = e.maxV = v0.v;
+        for (uint32_t i = 1; i < batchVerts; ++i) {
+            const Vertex2D& v = m_vtxBase[m_vtxBatchStart + i];
+            minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+            minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
+            e.minR = std::min(e.minR, v.r); e.maxR = std::max(e.maxR, v.r);
+            e.minG = std::min(e.minG, v.g); e.maxG = std::max(e.maxG, v.g);
+            e.minB = std::min(e.minB, v.b); e.maxB = std::max(e.maxB, v.b);
+            e.minA = std::min(e.minA, v.a); e.maxA = std::max(e.maxA, v.a);
+            e.minU = std::min(e.minU, v.u); e.maxU = std::max(e.maxU, v.u);
+            e.minV = std::min(e.minV, v.v); e.maxV = std::max(e.maxV, v.v);
+        }
+        e.x0 = minX; e.y0 = minY; e.x1 = maxX; e.y1 = maxY;
+        e.sx = m_journalScissor.x;     e.sy = m_journalScissor.y;
+        e.sw = m_journalScissor.width; e.sh = m_journalScissor.height;
+        journalPush(e);
+    }
 
     auto cmd = m_gpu.cmdBuf();
     int slot = m_gpu.slot();
@@ -436,6 +513,11 @@ void Renderer::bindRenderTarget(int offscreenIdx, float logicalW, float logicalH
     const uint32_t offH = (uint32_t)GpuDevice::offscreenHeight(offscreenIdx);
     cmd.setViewports(0, DkViewport{0.f, 0.f, (float)offW, (float)offH, 0.f, 1.f});
     cmd.setScissors(0, DkScissor{0, 0, offW, offH});
+    if (m_journalEnabled) {
+        m_journalTarget = offscreenIdx;
+        m_journalScissor = {0.f, 0.f, (float)offW, (float)offH};
+        journalEvent(JournalKind::BindTarget);
+    }
 
     // Zero means "address it in its own pixels", which is what the blur passes
     // want. A caller drawing a screen-space layer passes the screen size, and
@@ -471,6 +553,14 @@ void Renderer::restoreRenderTarget() {
                                      (uint32_t)std::max(0.f, r.width), (uint32_t)std::max(0.f, r.height)});
     }
 
+    if (m_journalEnabled) {
+        m_journalTarget = -1;
+        m_journalScissor = m_clipStack.empty()
+            ? Rect{0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()}
+            : m_clipStack.back();
+        journalEvent(JournalKind::RestoreTarget);
+    }
+
     updateProjection();
 }
 
@@ -481,6 +571,7 @@ void Renderer::captureToOffscreen(bool reuseIfValid) {
 
     flush();
     ++m_frameCaptures;
+    if (m_journalEnabled) journalEvent(JournalKind::Capture);
     auto cmd = m_gpu.cmdBuf();
     int slot = m_gpu.slot();
 
@@ -706,6 +797,7 @@ void Renderer::applyBlurBetween(int a, int b, float radius, int passes) {
     }
 
     m_frameBlurPasses += passes * 2;
+    if (m_journalEnabled) journalEvent(JournalKind::BlurPass);
 
     const float offW = (float)GpuDevice::offscreenWidth(a);
     const float offH = (float)GpuDevice::offscreenHeight(a);
@@ -814,6 +906,25 @@ void Renderer::addQuadGrad(float x0, float y0, float x1, float y1,
 }
 
 void Renderer::drawRect(const Rect& r, const Color& c) {
+    // Record at the primitive boundary as well as at flush(). Batching can put
+    // a fullscreen scrim and unrelated widgets into one GPU draw; a batch-only
+    // record would then show their union and colour range but not prove that a
+    // standalone dimming primitive actually existed. This entry preserves the
+    // caller's exact rect and colour while Batch preserves what reached the GPU.
+    if (m_journalEnabled) {
+        DrawJournalEntry e;
+        e.kind = JournalKind::Primitive;
+        e.shader = (uint16_t)m_curShader;
+        e.target = (int16_t)m_journalTarget;
+        e.texSlot = WHITE_TEX_SLOT;
+        e.verts = 6;
+        e.x0 = r.x; e.y0 = r.y; e.x1 = r.right(); e.y1 = r.bottom();
+        e.minR = e.maxR = c.r; e.minG = e.maxG = c.g;
+        e.minB = e.maxB = c.b; e.minA = e.maxA = c.a;
+        e.sx = m_journalScissor.x;     e.sy = m_journalScissor.y;
+        e.sw = m_journalScissor.width; e.sh = m_journalScissor.height;
+        journalPush(e);
+    }
     bindTexture(-1);
     addQuad(r.x, r.y, r.right(), r.bottom(), 0, 0, 1, 1, c);
 }
@@ -1036,6 +1147,98 @@ void Renderer::drawText(const std::string& text, const Vec2& pos, Font* font,
     font->draw(*this, text, pos, color, scale);
 }
 
+std::string Renderer::formatDrawJournal() const {
+    static const char* kKindName[] = {
+        "PRIMITIVE", "BATCH", "CLEAR", "BIND-TGT", "RESTORE-TGT",
+        "CLIP-PUSH", "CLIP-POP", "CAPTURE", "BLUR", "PRESENT",
+    };
+    static const char* kShaderName[] = {
+        "Basic", "Backdrop", "BlurH", "BlurV", "Wave", "LiquidGlass", "Gradient",
+    };
+
+    std::string out;
+    out.reserve(m_journal.size() * 128 + 512);
+
+    char line[320];
+    // The swapchain slot is recorded because a double-buffer hazard would bind
+    // the artifact to one slot's parity. Across a 200-frame capture, glitches
+    // landing on a single slot value is evidence no still image can give.
+    std::snprintf(line, sizeof(line),
+                  "frame_serial=%llu slot=%d entries=%zu dropped=%u fb=%dx%d "
+                  "backbuffer_clear=%s rgba=(%.3f,%.3f,%.3f,%.3f)\n",
+                  (unsigned long long)m_frameSerial, m_gpu.slot(), m_journal.size(),
+                  m_journalDropped, m_gpu.width(), m_gpu.height(),
+                  m_journalBackbufferClearSeen ? "yes" : "NO",
+                  m_journalBackbufferClear.r, m_journalBackbufferClear.g,
+                  m_journalBackbufferClear.b, m_journalBackbufferClear.a);
+    out += line;
+
+    // The verdict line is computed here rather than on the PC, because the
+    // question it answers is binary and the on-device record is the only place
+    // where the answer is not a reconstruction. A "dimming draw" is a
+    // backbuffer draw whose geometry covers essentially the whole framebuffer
+    // (or an exact half of it), whose colour is dark, and whose alpha is
+    // partial — the only combination that multiplies the existing image by a
+    // constant instead of replacing it.
+    int suspects = 0;
+    for (const auto& e : m_journal) {
+        if (e.kind != JournalKind::Primitive || e.target != -1) continue;
+        const float w = e.x1 - e.x0;
+        const float h = e.y1 - e.y0;
+        const bool fullHeight = h >= (float)m_gpu.height() * 0.95f;
+        const bool wideEnough = w >= (float)m_gpu.width() * 0.45f;
+        // maxRGB/maxA make the test conservative for a batched draw: it is
+        // only called a dimmer when *every* vertex in the whole batch is dark
+        // and partially transparent. That avoids labelling an unrelated batch
+        // from its first vertex, while retaining the exact alpha range needed
+        // to match a measured attenuation.
+        const bool dark    = (e.maxR + e.maxG + e.maxB) <= 0.35f;
+        const bool partial = e.minA > 0.004f && e.maxA < 0.999f;
+        if (fullHeight && wideEnough && dark && partial) ++suspects;
+    }
+    std::snprintf(line, sizeof(line),
+                  "verdict: fullscreen_dark_partial_alpha_draws=%d  %s\n",
+                  suspects,
+                  m_journalDropped == 0
+                      ? "(0 => no CPU-recorded drawRect dimmer in this frame)"
+                      : "(INCONCLUSIVE: journal truncated)");
+    out += line;
+
+    for (size_t i = 0; i < m_journal.size(); ++i) {
+        const auto& e = m_journal[i];
+        const char* kind = ((size_t)e.kind < std::size(kKindName))
+                         ? kKindName[(size_t)e.kind] : "?";
+        if (e.kind == JournalKind::Primitive || e.kind == JournalKind::Batch) {
+            const char* sh = ((size_t)e.shader < std::size(kShaderName))
+                           ? kShaderName[e.shader] : "?";
+            // Attenuation is what this draw would multiply the destination by
+            // under the frame's SrcAlpha/InvSrcAlpha blend, for a black source.
+            // Printing it makes the comparison against the measured 0.8000 /
+            // 0.6091 / 0.4711 ratios direct rather than mental arithmetic.
+            std::snprintf(line, sizeof(line),
+                "%03zu %-11s tgt=%-3d sh=%-11s v=%-4u rect=[%.1f,%.1f %.1fx%.1f] "
+                "rgbaRange=(%.3f..%.3f,%.3f..%.3f,%.3f..%.3f,%.3f..%.3f) "
+                "attenRange=%.4f..%.4f tex=%d uv=[%.3f..%.3f,%.3f..%.3f] "
+                "scissor=[%.0f,%.0f %.0fx%.0f]\n",
+                i, kind, (int)e.target, sh, e.verts,
+                e.x0, e.y0, e.x1 - e.x0, e.y1 - e.y0,
+                e.minR, e.maxR, e.minG, e.maxG, e.minB, e.maxB,
+                e.minA, e.maxA, 1.f - e.maxA, 1.f - e.minA, (int)e.texSlot,
+                e.minU, e.maxU, e.minV, e.maxV,
+                e.sx, e.sy, e.sw, e.sh);
+        } else {
+            std::snprintf(line, sizeof(line),
+                "%03zu %-11s tgt=%-3d rgba=(%.3f,%.3f,%.3f,%.3f) "
+                "scissor=[%.0f,%.0f %.0fx%.0f]\n",
+                i, kind, (int)e.target,
+                e.minR, e.minG, e.minB, e.minA,
+                e.sx, e.sy, e.sw, e.sh);
+        }
+        out += line;
+    }
+    return out;
+}
+
 void Renderer::pushClipRect(const Rect& r) {
     flush();
     Rect clip = r;
@@ -1051,6 +1254,10 @@ void Renderer::pushClipRect(const Rect& r) {
     m_gpu.cmdBuf().setScissors(0, DkScissor{
         (uint32_t)std::max(0.f, clip.x), (uint32_t)std::max(0.f, clip.y),
         (uint32_t)std::max(0.f, clip.width), (uint32_t)std::max(0.f, clip.height)});
+    if (m_journalEnabled) {
+        m_journalScissor = clip;
+        journalEvent(JournalKind::ClipPush);
+    }
 }
 
 void Renderer::popClipRect() {
@@ -1064,6 +1271,12 @@ void Renderer::popClipRect() {
         m_gpu.cmdBuf().setScissors(0, DkScissor{
             (uint32_t)std::max(0.f, r.x), (uint32_t)std::max(0.f, r.y),
             (uint32_t)std::max(0.f, r.width), (uint32_t)std::max(0.f, r.height)});
+    }
+    if (m_journalEnabled) {
+        m_journalScissor = m_clipStack.empty()
+            ? Rect{0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()}
+            : m_clipStack.back();
+        journalEvent(JournalKind::ClipPop);
     }
 }
 
