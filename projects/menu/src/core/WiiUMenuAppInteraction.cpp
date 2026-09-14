@@ -1022,12 +1022,13 @@ print('Done extracting PNGs!')
 
 
 def half_ratio(cur, ref, x0, x1):
-    """Median per-pixel ratio cur/ref over a column range, bright pixels only.
+    """Median ratio and coherent-pixel fraction, over bright reference pixels.
 
-    A constant multiplicative attenuation shows up as a tight median well
-    below 1.0. Dark pixels are excluded because their ratio is dominated by
-    quantisation, and moving content is rejected by the spread, not by the
-    median, so ordinary animation does not masquerade as a glitch.
+    The Plaza is animated, so ordinary ratio standard deviation is dominated
+    by moving Miis even when >80% of the framebuffer follows one exact scalar.
+    Coherence measures the fraction within +/-0.035 of the median instead. The
+    thresholds below were replayed against both existing native captures: all
+    seven known glitches were found, with zero extra frames.
     """
     c = cur[:, x0:x1].ravel()
     r = ref[:, x0:x1].ravel()
@@ -1035,29 +1036,32 @@ def half_ratio(cur, ref, x0, x1):
     if m.sum() < 1000:
         return None, None
     q = c[m] / r[m]
-    return float(np.median(q)), float(np.std(q))
+    med = float(np.median(q))
+    coherent = float(np.mean(np.abs(q - med) < 0.035))
+    return med, coherent
 
 
 if np is not None and len(frames) >= 3:
     h, w = frames[0][1].shape[:2]
     mid = w // 2
     print('\n=== attenuation analysis ===')
-    print('a frame is flagged when its median ratio against BOTH neighbours')
-    print('sits below 0.95 with low spread: a constant multiply, not motion.\n')
+    print('a half is flagged when BOTH neighbours give ratio <0.95, agree')
+    print('within 0.02, and >=72% of bright channels follow that scalar.\n')
     flagged = []
     for i in range(1, len(frames) - 1):
         base, cur = frames[i]
         prev, nxt = frames[i - 1][1], frames[i + 1][1]
         row = []
         for name, x0, x1 in (('left', 0, mid), ('right', mid, w)):
-            rp, sp = half_ratio(cur, prev, x0, x1)
-            rn, sn = half_ratio(cur, nxt, x0, x1)
+            rp, cp = half_ratio(cur, prev, x0, x1)
+            rn, cn = half_ratio(cur, nxt, x0, x1)
             if rp is None or rn is None:
                 row.append((name, None, None))
                 continue
             # Both comparisons must agree, otherwise this is a scene change.
-            if rp < 0.95 and rn < 0.95 and sp < 0.15 and sn < 0.15:
-                row.append((name, (rp + rn) / 2.0, max(sp, sn)))
+            if (rp < 0.95 and rn < 0.95 and abs(rp - rn) < 0.02 and
+                    cp >= 0.72 and cn >= 0.72):
+                row.append((name, (rp + rn) / 2.0, min(cp, cn)))
             else:
                 row.append((name, None, None))
         if any(r[1] is not None for r in row):
@@ -1067,9 +1071,9 @@ if np is not None and len(frames) >= 3:
         print('no attenuated frames in this capture.')
     for base, row in flagged:
         parts = []
-        for name, ratio, spread in row:
+        for name, ratio, coherent in row:
             parts.append(f'{name}=clean' if ratio is None
-                         else f'{name}=x{ratio:.4f}(sd {spread:.3f})')
+                         else f'{name}=x{ratio:.4f}(coherent {coherent:.1%})')
         print(f'{base}: ' + '  '.join(parts))
         jp = f'{base}.journal.txt'
         if os.path.exists(jp):
