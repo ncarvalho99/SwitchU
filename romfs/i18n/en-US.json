@@ -182,7 +182,8 @@
     "sort_favorites": "Favorites",
     "favorite": "Favorite",
     "options": "Options",
-    "switch_layout": "Switch view"
+    "switch_layout": "Switch view",
+    "sort_playtime": "Most played"
   },
   "settings": {
     "tabs": {
@@ -253,7 +254,24 @@
       "ntp_sync_success": "Clock synchronized via Internet.",
       "ntp_syncing": "Synchronizing clock via Internet...",
       "time_change_failed": "The date and time setting could not be changed.",
-      "year": "Year"
+      "year": "Year",
+      "console_nickname_guide": "Enter a name for this console",
+      "console_nickname_desc": "The name other consoles and apps see.",
+      "save_logs": "Save logs for copying",
+      "save_logs_desc": "Closes the current logs so they can be copied from config/SwitchU.",
+      "save_logs_done": "Logs saved. Copy menu-*.log and daemon-*.log from config/SwitchU.",
+      "save_logs_failed": "The menu log was saved; the daemon did not answer.",
+      "usb30_restart": "USB 3.0 changes take effect after a restart.",
+      "memory_section": "Sysmodules and Memory",
+      "system_pool": "System Memory Pool",
+      "system_pool_desc": "Shared by every sysmodule on the card and by the services a game needs to start.",
+      "system_pool_free": "Free in the Pool",
+      "system_pool_low": "Very little is left. If games fail to start, turn off the sysmodules you do not use.",
+      "system_pool_fw21": "From firmware 21 on, AtmosphÃ¨re can add only 7 MB to this pool.",
+      "sysmodules": "Sysmodules Started at Boot",
+      "sysmodules_desc": "Each one runs from boot and takes its memory from the pool above.",
+      "sysmodules_none": "None",
+      "region_desc": "Read-only. Change this in Nintendo Switch System Settings."
     },
     "accessibility": {
       "voice": "Voice Guidance",
@@ -287,7 +305,8 @@
       "hdmi_rgb_range": "HDMI RGB Range",
       "hdmi_rgb_range_desc": "Full for PC monitors, Limited for most TVs.",
       "full": "Full",
-      "limited": "Limited"
+      "limited": "Limited",
+      "res_480p": "480p"
     },
     "display": {
       "brightness": "Brightness",
@@ -314,7 +333,10 @@
       "reload_grid_done": "Reading the installed titles again...",
       "reload_grid_failed": "Could not ask for a reload.",
       "ui_wireframe": "UI Wireframe",
-      "ui_wireframe_desc": "Show outlines of all Box widgets for layout debugging."
+      "ui_wireframe_desc": "Show outlines of all Box widgets for layout debugging.",
+      "rebuild_names": "Rebuild names and icons",
+      "rebuild_names_desc": "Discards every cached name and icon and reads them from the titles again. Takes a few minutes on a full console.",
+      "rebuild_names_done": "Reading names and icons again. This takes a few minutes."
     },
     "internet": {
       "wifi_ssid": "WiFi Network",
@@ -497,7 +519,8 @@
       "check_updates_running": "Checking for updates...",
       "fork_maintainer": "Fork maintained by",
       "upstream_source": "Source code (upstream)",
-      "upstream_source_value": "github.com/PoloNX/SwitchU"
+      "upstream_source_value": "github.com/PoloNX/SwitchU",
+      "based_on_fork": "Based on the fork by"
     }
   },
   "userselect": {
@@ -989,7 +1012,9 @@
     "delete_software_done": "The software was deleted.",
     "delete_software_failed": "The software could not be deleted.",
     "delete_software_files": "These folders on the SD card will be removed too:",
-    "non_game_options_body_folder": "Homebrew and ports have no game details, artwork or mods to manage. They can be filed into a folder or removed."
+    "non_game_options_body_folder": "Homebrew and ports have no game details, artwork or mods to manage. They can be filed into a folder or removed.",
+    "details_rename": "Rename",
+    "details_rename_guide": "Enter a name. Leave it empty to use the original."
   },
   "platform_picker": {
     "title": "Original Platform",

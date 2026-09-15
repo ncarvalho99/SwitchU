@@ -108,4 +108,8 @@ struct ThemePreset {
     static std::vector<ThemePreset> loadInstalledPackages();
 
     static bool saveUserPresets(const std::vector<ThemePreset>& presets);
+
+    // Removes the folders a theme install leaves behind when it is interrupted.
+    // Returns how many went. Never touches an installed theme.
+    static int sweepInstallLeftovers();
 };

@@ -182,7 +182,8 @@
     "sort_favorites": "Favorieten",
     "favorite": "Favoriet",
     "options": "Opties",
-    "switch_layout": "Weergave wisselen"
+    "switch_layout": "Weergave wisselen",
+    "sort_playtime": "Meest gespeeld"
   },
   "settings": {
     "tabs": {
@@ -247,7 +248,24 @@
       "minute": "Minuut",
       "month": "Maand",
       "time_change_failed": "De datum- en tijdinstelling kon niet worden gewijzigd.",
-      "year": "Jaar"
+      "year": "Jaar",
+      "console_nickname_guide": "Voer een naam in voor deze console",
+      "console_nickname_desc": "De naam die andere consoles en apps zien.",
+      "save_logs": "Logboeken opslaan om te kopiëren",
+      "save_logs_desc": "Sluit de huidige logboeken zodat ze uit config/SwitchU gekopieerd kunnen worden.",
+      "save_logs_done": "Logboeken opgeslagen. Kopieer menu-*.log en daemon-*.log uit config/SwitchU.",
+      "save_logs_failed": "Het menulogboek is opgeslagen; de daemon antwoordde niet.",
+      "usb30_restart": "USB 3.0-wijzigingen werken pas na een herstart.",
+      "memory_section": "Sysmodules en geheugen",
+      "system_pool": "Systeemgeheugenpool",
+      "system_pool_desc": "Gedeeld door alle sysmodules op de kaart en door de diensten die een game nodig heeft om te starten.",
+      "system_pool_free": "Vrij in de pool",
+      "system_pool_low": "Er is heel weinig over. Starten games niet, schakel dan sysmodules uit die je niet gebruikt.",
+      "system_pool_fw21": "Vanaf firmware 21 kan Atmosphère maar 7 MB aan deze pool toevoegen.",
+      "sysmodules": "Sysmodules gestart bij opstarten",
+      "sysmodules_desc": "Elk draait vanaf het opstarten en gebruikt geheugen uit de pool hierboven.",
+      "sysmodules_none": "Geen",
+      "region_desc": "Alleen-lezen. Wijzig dit in de Nintendo Switch-systeeminstellingen."
     },
     "accessibility": {
       "voice": "Spraak",
@@ -281,7 +299,8 @@
       "hdmi_rgb_range": "HDMI RGB-bereik",
       "hdmi_rgb_range_desc": "Volledig voor PC-monitoren, Beperkt voor de meeste TV's.",
       "full": "Volledig",
-      "limited": "Beperkt"
+      "limited": "Beperkt",
+      "res_480p": "480p"
     },
     "display": {
       "brightness": "Helderheid",
@@ -308,7 +327,10 @@
       "reload_grid_done": "Geïnstalleerde titels worden opnieuw gelezen...",
       "reload_grid_failed": "Kon geen herlading aanvragen.",
       "ui_wireframe": "UI-draadframe",
-      "ui_wireframe_desc": "Toon omlijningen van alle Box-widgets voor lay-outdebugging."
+      "ui_wireframe_desc": "Toon omlijningen van alle Box-widgets voor lay-outdebugging.",
+      "rebuild_names": "Namen en pictogrammen opnieuw opbouwen",
+      "rebuild_names_desc": "Verwijdert alle namen en pictogrammen uit de cache en leest ze opnieuw uit de titels. Duurt enkele minuten op een volle console.",
+      "rebuild_names_done": "Namen en pictogrammen worden opnieuw gelezen. Dit duurt enkele minuten."
     },
     "internet": {
       "wifi_ssid": "WiFi-netwerk",
@@ -491,7 +513,8 @@
       "check_updates_running": "Controleren op updates...",
       "fork_maintainer": "Fork onderhouden door",
       "upstream_source": "Broncode (origineel)",
-      "upstream_source_value": "github.com/PoloNX/SwitchU"
+      "upstream_source_value": "github.com/PoloNX/SwitchU",
+      "based_on_fork": "Gebaseerd op de fork van"
     }
   },
   "userselect": {
@@ -983,7 +1006,9 @@
     "delete_software_done": "De software is verwijderd.",
     "delete_software_failed": "De software kon niet worden verwijderd.",
     "delete_software_files": "Deze mappen op de SD-kaart worden ook verwijderd:",
-    "non_game_options_body_folder": "Homebrew en ports hebben geen spelgegevens, artwork of mods om te beheren. Ze kunnen in een map worden opgeslagen of verwijderd."
+    "non_game_options_body_folder": "Homebrew en ports hebben geen spelgegevens, artwork of mods om te beheren. Ze kunnen in een map worden opgeslagen of verwijderd.",
+    "details_rename": "Hernoemen",
+    "details_rename_guide": "Voer een naam in. Laat leeg voor de originele naam."
   },
   "platform_picker": {
     "title": "Oorspronkelijk platform",

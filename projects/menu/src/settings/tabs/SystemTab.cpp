@@ -4,12 +4,110 @@
 #include "services/NtpClient.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
+#include <fmt/format.h>
+#include <nlohmann/json.hpp>
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstdlib>
+#include <dirent.h>
+#include <fstream>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 namespace {
+
+struct SystemPoolUsage {
+    u64 total = 0;
+    u64 used = 0;
+};
+
+bool querySystemPool(SystemPoolUsage& out) {
+    // An svc outside the process's capability list is not an error return, it
+    // is a crash. menu.json grants 0x6F; the homebrew build runs under
+    // whatever its host title allows, so ask first.
+    if (!envIsSyscallHinted(0x6F))
+        return false;
+    return R_SUCCEEDED(svcGetSystemInfo(&out.total, SystemInfoType_TotalPhysicalMemorySize,
+                                        INVALID_HANDLE, PhysicalMemorySystemInfo_System))
+        && R_SUCCEEDED(svcGetSystemInfo(&out.used, SystemInfoType_UsedPhysicalMemorySize,
+                                        INVALID_HANDLE, PhysicalMemorySystemInfo_System))
+        && out.total > 0 && out.used <= out.total;
+}
+
+// Below this the warning shows. The console that measured 10 MB free in 2.5.2
+// was the one where launches were unstable.
+constexpr u64 kLowSystemPoolMb = 16;
+
+struct BootSysmodule {
+    std::string titleId;
+    std::string name;
+};
+
+// Games, their updates and add-ons live from here up. A modded library has a
+// folder per game in atmosphere/contents and none of them can be a boot2
+// sysmodule, so they are skipped on the name alone instead of costing two
+// stat calls each on the card.
+constexpr u64 kFirstApplicationId = 0x0100000000010000ULL;
+constexpr u64 kLastApplicationId  = 0x01FFFFFFFFFFFFFFULL;
+
+bool pathExists(const std::string& path) {
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0;
+}
+
+// What Atmosphère starts at boot: a program in atmosphere/contents with
+// flags/boot2.flag. The name comes from toolbox.json, the file most sysmodules
+// ship for overlay managers; without one the title id is all there is.
+std::vector<BootSysmodule> listBootSysmodules() {
+    std::vector<BootSysmodule> out;
+    DIR* dir = opendir("sdmc:/atmosphere/contents");
+    if (!dir)
+        return out;
+
+    while (const dirent* entry = readdir(dir)) {
+        std::string id = entry->d_name;
+        if (id.size() != 16)
+            continue;
+        char* end = nullptr;
+        const u64 tid = std::strtoull(id.c_str(), &end, 16);
+        if (end != id.c_str() + id.size())
+            continue;
+        if (tid >= kFirstApplicationId && tid <= kLastApplicationId)
+            continue;
+
+        const std::string base = "sdmc:/atmosphere/contents/" + id;
+        if (!pathExists(base + "/flags/boot2.flag"))
+            continue;
+        if (!pathExists(base + "/exefs.nsp") && !pathExists(base + "/exefs"))
+            continue;
+
+        BootSysmodule module;
+        for (char& c : id)
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        module.titleId = std::move(id);
+        std::ifstream toolbox(base + "/toolbox.json");
+        if (toolbox.is_open()) {
+            const auto json = nlohmann::json::parse(toolbox, nullptr, false);
+            if (json.is_object()) {
+                const auto name = json.find("name");
+                if (name != json.end() && name->is_string())
+                    module.name = name->get<std::string>();
+            }
+        }
+        out.push_back(std::move(module));
+    }
+    closedir(dir);
+
+    // Named ones first, alphabetically; bare title ids after them.
+    std::sort(out.begin(), out.end(), [](const BootSysmodule& a, const BootSysmodule& b) {
+        if (a.name.empty() != b.name.empty())
+            return !a.name.empty();
+        return a.name.empty() ? a.titleId < b.titleId : a.name < b.name;
+    });
+    return out;
+}
 
 std::string uidToHex(const AccountUid& uid) {
     char buf[33] = {};
@@ -85,11 +183,11 @@ bool setManualDateTime(
     args.hour = static_cast<uint32_t>(value.hour);
     args.minute = static_cast<uint32_t>(value.minute);
     const Result rc = switchu::menu::smi_cmd::setManualDateTime(args);
-    if (R_SUCCEEDED(rc)) {
-        screen.requestToast(nxui::I18n::instance().tr(
-            "settings.system.manual_time_saved", "Date and time updated."));
+    // Queued is not applied. The daemon answers with TimeSettingApplied once
+    // it has set the clocks and read the time back, and that answer is what
+    // says "updated" or not.
+    if (R_SUCCEEDED(rc))
         return true;
-    }
     screen.requestToast(nxui::I18n::instance().tr(
         "settings.system.time_change_failed",
         "The date and time setting could not be changed."));
@@ -174,12 +272,19 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
+        // Editable, like the stock menu has it. It was a read-only row, which
+        // is a strange thing for a name the owner chooses.
         SetSysDeviceNickName nick{};
-        SettingItem it; it.label = i18n.tr("settings.system.console_nickname", "Console Nickname"); it.type = ItemType::Info;
+        SettingItem it; it.label = i18n.tr("settings.system.console_nickname", "Console Nickname"); it.type = ItemType::Action;
+        it.description = i18n.tr("settings.system.console_nickname_desc",
+                                 "The name other consoles and apps see.");
         if (R_SUCCEEDED(setsysGetDeviceNickname(&nick)))
             it.infoText = nick.nickname;
         else
             it.infoText = i18n.tr("common.na", "N/A");
+        it.onChange = [&screen](SettingItem& /* self */) {
+            if (screen.m_consoleNicknameCb) screen.m_consoleNicknameCb();
+        };
         t.items.push_back(std::move(it));
     }
 
@@ -228,12 +333,11 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
                 screen.requestToast(nxui::I18n::instance().tr(
                     "settings.system.ntp_syncing",
                     "Synchronizing clock via Internet..."));
+                // Only the failure is said here: ok means the network time
+                // arrived and was handed to the daemon. Whether the clock
+                // took it comes back as TimeSettingApplied.
                 switchu::services::NtpClient::syncAsync([&screen](bool ok, uint64_t) {
-                    if (ok) {
-                        screen.requestToast(nxui::I18n::instance().tr(
-                            "settings.system.ntp_sync_success",
-                            "Clock synchronized via Internet."));
-                    } else {
+                    if (!ok) {
                         screen.requestToast(nxui::I18n::instance().tr(
                             "settings.system.ntp_sync_failed",
                             "Could not synchronize clock. Check connection."));
@@ -257,11 +361,7 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
                 "settings.system.ntp_syncing",
                 "Synchronizing clock via Internet..."));
             switchu::services::NtpClient::syncAsync([&screen](bool ok, uint64_t) {
-                if (ok) {
-                    screen.requestToast(nxui::I18n::instance().tr(
-                        "settings.system.ntp_sync_success",
-                        "Clock synchronized via Internet."));
-                } else {
+                if (!ok) {
                     screen.requestToast(nxui::I18n::instance().tr(
                         "settings.system.ntp_sync_failed",
                         "Could not synchronize clock. Check connection."));
@@ -326,8 +426,28 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
         setsysGetUsb30EnableFlag(&val);
         it.boolVal = val;
         it.anim01 = val ? 1.f : 0.f;
-        it.onChange = [](SettingItem& self) {
+        it.onChange = [&screen, &i18n](SettingItem& self) {
             setsysSetUsb30EnableFlag(self.boolVal);
+            // The flag is read when the USB stack comes up, so the toggle does
+            // nothing visible until the console restarts. Saying so beats a
+            // switch that appears to have worked and did not.
+            screen.requestToast(i18n.tr("settings.system.usb30_restart",
+                                        "USB 3.0 changes take effect after a restart."),
+                                3.0f);
+        };
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        // Both logs are held open while the console runs, so copying them over
+        // MTP fails with "resource already in use". This closes them, which
+        // leaves finished copies on the card that anything can read.
+        SettingItem it; it.label = i18n.tr("settings.system.save_logs", "Save logs for copying");
+        it.type = ItemType::Action;
+        it.description = i18n.tr("settings.system.save_logs_desc",
+                                 "Closes the current logs so they can be copied from config/SwitchU.");
+        it.onChange = [&screen](SettingItem& /* self */) {
+            if (screen.m_rotateLogsCb) screen.m_rotateLogsCb();
         };
         t.items.push_back(std::move(it));
     }
@@ -389,37 +509,6 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
-        auto profiles = listProfileOptions();
-        SettingItem it;
-        it.label = i18n.tr("settings.system.default_profile", "Default Profile");
-        it.description = i18n.tr("settings.system.default_profile_desc",
-                                 "Launch games with this profile when possible.");
-        it.type = ItemType::Selector;
-        it.options.push_back(i18n.tr("settings.system.default_profile_ask", "Ask each time"));
-        for (const auto& profile : profiles)
-            it.options.push_back(profile.name);
-
-        it.intVal = 0;
-        if (!screen.m_defaultProfileUid.empty()) {
-            for (int i = 0; i < (int)profiles.size(); ++i) {
-                if (profiles[(size_t)i].uidHex == screen.m_defaultProfileUid) {
-                    it.intVal = i + 1;
-                    break;
-                }
-            }
-        }
-
-        it.onChange = [&screen, profiles = std::move(profiles)](SettingItem& self) {
-            int idx = std::clamp(self.intVal, 0, (int)profiles.size());
-            screen.m_defaultProfileUid = idx > 0 ? profiles[(size_t)(idx - 1)].uidHex : std::string();
-            if (screen.m_defaultProfileCb)
-                screen.m_defaultProfileCb(screen.m_defaultProfileUid);
-        };
-
-        t.items.push_back(std::move(it));
-    }
-
-    {
         SettingItem it; it.label = i18n.tr("settings.system.console_language", "Console Language"); it.type = ItemType::Info;
         it.description = i18n.tr("settings.system.console_language_desc",
                                  "Read-only. Change this in Nintendo Switch System Settings.");
@@ -436,19 +525,30 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
     }
 
     {
-        SettingItem it; it.label = i18n.tr("settings.system.region", "Region"); it.type = ItemType::Selector;
-        it.options = {
-            i18n.tr("settings.system.region_japan", "Japan"),
-            i18n.tr("settings.system.region_usa", "USA"),
-            i18n.tr("settings.system.region_europe", "Europe"),
-            i18n.tr("settings.system.region_australia", "Australia"),
-            i18n.tr("settings.system.region_hong_kong", "Hong Kong"),
-            i18n.tr("settings.system.region_taiwan", "Taiwan"),
-            i18n.tr("settings.system.region_south_korea", "South Korea")
+        // Read-only, and honestly so: this was a selector with no handler, so
+        // the region appeared to change and nothing happened. The region a
+        // console was sold as decides what the eShop and the system updater
+        // will serve it, and writing it from here is not a setting this menu
+        // should offer behind a d-pad press.
+        SettingItem it; it.label = i18n.tr("settings.system.region", "Region"); it.type = ItemType::Info;
+        it.description = i18n.tr("settings.system.region_desc",
+                                 "Read-only. Change this in Nintendo Switch System Settings.");
+        const char* names[] = {
+            "settings.system.region_japan",     "settings.system.region_usa",
+            "settings.system.region_europe",    "settings.system.region_australia",
+            "settings.system.region_hong_kong", "settings.system.region_taiwan",
+            "settings.system.region_south_korea",
+        };
+        const char* fallbacks[] = {
+            "Japan", "USA", "Europe", "Australia", "Hong Kong", "Taiwan", "South Korea",
         };
         SetRegion reg = SetRegion_JPN;
-        if (R_SUCCEEDED(setGetRegionCode(&reg)))
-            it.intVal = (int)reg;
+        if (R_SUCCEEDED(setGetRegionCode(&reg))
+            && (int)reg >= 0 && (int)reg < (int)(sizeof(names) / sizeof(names[0]))) {
+            it.infoText = i18n.tr(names[(int)reg], fallbacks[(int)reg]);
+        } else {
+            it.infoText = i18n.tr("common.na", "N/A");
+        }
         t.items.push_back(std::move(it));
     }
 
@@ -474,6 +574,75 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
             setsysSetConsoleInformationUploadFlag(self.boolVal);
         };
         t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.system.memory_section", "Sysmodules and Memory");
+        it.type = ItemType::Section;
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        // The pool that runs out on a loaded console. Measured in 2.5.2 at 221
+        // of 232 MB, with every sysmodule on the card drawing from it alongside
+        // the services a game needs to start. Nothing showed it, so a game
+        // failing to launch read as a menu bug rather than a card running too
+        // much.
+        SystemPoolUsage pool;
+        const bool poolOk = querySystemPool(pool);
+        const u64 totalMb = pool.total >> 20;
+        const u64 usedMb = pool.used >> 20;
+        const u64 freeMb = (pool.total - pool.used) >> 20;
+
+        SettingItem bar;
+        bar.label = i18n.tr("settings.system.system_pool", "System Memory Pool");
+        bar.type = ItemType::Progress;
+        bar.description = i18n.tr("settings.system.system_pool_desc",
+                                  "Shared by every sysmodule on the card and by the services a game needs to start.");
+        if (poolOk && freeMb < kLowSystemPoolMb) {
+            bar.description += " " + i18n.tr("settings.system.system_pool_low",
+                                             "Very little is left. If games fail to start, turn off the sysmodules you do not use.");
+        }
+        // Atmosphère moved 40 MB into this pool on older firmware and can move
+        // 7 MB from 21.0.0 on, which is why the same card can be stable before
+        // a system update and not after it.
+        if (hosversionAtLeast(21, 0, 0)) {
+            bar.description += " " + i18n.tr("settings.system.system_pool_fw21",
+                                             "From firmware 21 on, Atmosphère can add only 7 MB to this pool.");
+        }
+        bar.floatVal = poolOk ? float((double)pool.used / (double)pool.total) : 0.f;
+        bar.anim01 = bar.floatVal;
+        bar.infoText = poolOk ? fmt::format("{} / {} MB", usedMb, totalMb)
+                              : i18n.tr("common.na", "N/A");
+        t.items.push_back(std::move(bar));
+
+        SettingItem freeRow;
+        freeRow.label = i18n.tr("settings.system.system_pool_free", "Free in the Pool");
+        freeRow.type = ItemType::Info;
+        freeRow.infoText = poolOk ? fmt::format("{} MB", freeMb) : i18n.tr("common.na", "N/A");
+        t.items.push_back(std::move(freeRow));
+    }
+
+    {
+        const auto modules = listBootSysmodules();
+
+        SettingItem head;
+        head.label = i18n.tr("settings.system.sysmodules", "Sysmodules Started at Boot");
+        head.type = ItemType::Info;
+        head.description = i18n.tr("settings.system.sysmodules_desc",
+                                   "Each one runs from boot and takes its memory from the pool above.");
+        head.infoText = modules.empty() ? i18n.tr("settings.system.sysmodules_none", "None")
+                                        : std::to_string(modules.size());
+        t.items.push_back(std::move(head));
+
+        for (const auto& module : modules) {
+            SettingItem row;
+            row.type = ItemType::Info;
+            row.label = module.name.empty() ? module.titleId : module.name;
+            row.infoText = module.name.empty() ? std::string() : module.titleId;
+            t.items.push_back(std::move(row));
+        }
     }
 
     return t;

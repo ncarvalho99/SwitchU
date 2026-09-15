@@ -3,6 +3,18 @@
 #include <switch.h>
 #include <algorithm>
 
+namespace {
+// libnx documents SetSysTvSettings::flags as "bitmask with TvFlag" without
+// declaring the enum. Bit 3 is PreventsScreenBurnIn, per switchbrew's Settings
+// services page; bits 0-2 are Allows4k, Allows3d and AllowsCec.
+//
+// This toggle used to write bit 0 of SetSysBacklightSettings::auto_brightness_flags,
+// which is the stored auto-brightness flag -- the setting the toggle directly
+// above it already owns. Turning burn-in reduction on quietly changed
+// auto-brightness instead, and burn-in reduction itself was never touched.
+constexpr u32 kTvFlagPreventsScreenBurnIn = 1u << 3;
+} // namespace
+
 SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
     using Tab = SettingsScreen::Tab;
     using SettingItem = SettingsScreen::SettingItem;
@@ -19,6 +31,10 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         it.anim01 = std::clamp(val, 0.f, 1.f);
         it.onChange = [](SettingItem& self) {
             lblSetCurrentBrightnessSetting(self.floatVal);
+            // lbl holds the new value for the running session only. Without
+            // this the slider moved, the panel dimmed, and the console came
+            // back from a reboot at the old brightness.
+            lblSaveCurrentSetting();
         };
         t.items.push_back(std::move(it));
     }
@@ -41,6 +57,7 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
                 lblEnableAutoBrightnessControl();
             else
                 lblDisableAutoBrightnessControl();
+            lblSaveCurrentSetting();
         };
         t.items.push_back(std::move(it));
     }
@@ -49,19 +66,19 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
         SettingItem it; it.label = i18n.tr("settings.display.burn_in", "Screen Burn-In Reduction"); it.type = ItemType::Toggle;
         it.description = i18n.tr("settings.display.burn_in_desc", "Reduce screen burn-in during long usage.");
         bool val = false;
-        SetSysBacklightSettings bl{};
-        if (R_SUCCEEDED(setsysGetBacklightSettings(&bl)))
-            val = (bl.auto_brightness_flags & 1) != 0;
+        SetSysTvSettings tv{};
+        if (R_SUCCEEDED(setsysGetTvSettings(&tv)))
+            val = (tv.flags & kTvFlagPreventsScreenBurnIn) != 0;
         it.boolVal = val;
         it.anim01 = val ? 1.f : 0.f;
         it.onChange = [](SettingItem& self) {
-            SetSysBacklightSettings bl{};
-            if (R_SUCCEEDED(setsysGetBacklightSettings(&bl))) {
+            SetSysTvSettings tv{};
+            if (R_SUCCEEDED(setsysGetTvSettings(&tv))) {
                 if (self.boolVal)
-                    bl.auto_brightness_flags |= 1;
+                    tv.flags |= kTvFlagPreventsScreenBurnIn;
                 else
-                    bl.auto_brightness_flags &= ~1u;
-                setsysSetBacklightSettings(&bl);
+                    tv.flags &= ~kTvFlagPreventsScreenBurnIn;
+                setsysSetTvSettings(&tv);
             }
         };
         t.items.push_back(std::move(it));
@@ -70,14 +87,19 @@ SettingsScreen::Tab settings::tabs::DisplayTab::build(SettingsScreen& screen) {
     {
         SettingItem it; it.label = i18n.tr("settings.audio.tv_resolution", "TV Resolution"); it.type = ItemType::Selector;
         it.description = i18n.tr("settings.audio.tv_resolution_desc", "Adjust HDMI resolution. Auto uses recommended value.");
+        // In the order the system stores them: 0 Auto, 1 1080p, 2 720p, 3 480p.
+        // The list used to read Auto, 720p, 1080p against those same indices,
+        // so choosing 720p set the console to 1080p and the other way round,
+        // and 480p could not be chosen at all.
         it.options = {
             i18n.tr("common.auto", "Auto"),
+            i18n.tr("settings.audio.res_1080p", "1080p"),
             i18n.tr("settings.audio.res_720p", "720p"),
-            i18n.tr("settings.audio.res_1080p", "1080p")
+            i18n.tr("settings.audio.res_480p", "480p")
         };
         SetSysTvSettings tv{};
         if (R_SUCCEEDED(setsysGetTvSettings(&tv)))
-            it.intVal = std::clamp((int)tv.tv_resolution, 0, 2);
+            it.intVal = std::clamp((int)tv.tv_resolution, 0, 3);
         it.onChange = [](SettingItem& self) {
             SetSysTvSettings tv{};
             if (R_SUCCEEDED(setsysGetTvSettings(&tv))) {

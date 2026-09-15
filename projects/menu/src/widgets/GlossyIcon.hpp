@@ -35,6 +35,8 @@ public:
 
     void setSuspended(bool s)     { m_suspended = s; }
     bool isSuspended() const      { return m_suspended; }
+    void setPlaytimeBadge(std::string text) { m_playtimeBadge = std::move(text); }
+    const std::string& playtimeBadge() const { return m_playtimeBadge; }
 
     void setIsGameCard(bool gc)     { m_isGameCard = gc; }
     bool isGameCard() const         { return m_isGameCard; }
@@ -187,4 +189,5 @@ private:
     nxui::Texture* m_widgetGameIcon = nullptr;
     std::uint64_t m_widgetGameTitleId = 0;
     SidebarAnimation m_widgetAnimation;
+    std::string   m_playtimeBadge;
 };

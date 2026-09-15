@@ -1,6 +1,7 @@
 #include "WiiUMenuApp.hpp"
 #include <cctype>
 #include <switchu/sd_commit.hpp>
+#include "core/PlayTime.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "widgets/FolderPalette.hpp"
 #include "themeshop/ThemeHttp.hpp"
@@ -35,21 +36,6 @@ extern "C" size_t g_switchuHeapSize;
 #include <system_error>
 
 namespace {
-
-#ifdef SWITCHU_MENU
-std::optional<std::uint64_t> queryApplicationPlaytimeSeconds(std::uint64_t titleId) {
-    if (titleId == 0) return std::nullopt;
-    PdmApplicationPlayStatistics statistics{};
-    s32 total = 0;
-    const u64 applicationId = titleId;
-    const Result result = appletQueryApplicationPlayStatistics(
-        &statistics, &applicationId, 1, &total);
-    if (R_FAILED(result) || total <= 0 || statistics.application_id != titleId)
-        return std::nullopt;
-    constexpr std::uint64_t kNanosecondsPerSecond = 1000000000ULL;
-    return statistics.playtime / kNanosecondsPerSecond;
-}
-#endif
 
 static constexpr const char* kLayoutPath = "sdmc:/config/SwitchU/layout.json";
 static constexpr int kMinHomePages = 8;
@@ -355,6 +341,10 @@ bool WiiUMenuApp::onCreate() {
     m_appLayoutMode = m_config.appLayoutMode;
     applyGlassSharpness(m_config.glassSharpness);
     loadMenuLayout();
+    // The menu is recreated on every return from a game, so this is also the
+    // moment the session just played has to reach the grid. The first frame
+    // sorts from the cache saved at launch; pdm is asked once the grid is up.
+    m_playtimeRefreshQueued = m_config.sortMode == 4;
     if (!m_folderStore.load())
         DebugLog::log("[folders] store unavailable; continuing with an empty folder list");
     if (!m_widgetStore.load())
@@ -554,6 +544,10 @@ void WiiUMenuApp::onDestroy() {
 #endif
 
     if (m_audioFuture.valid()) m_audioFuture.get();
+#ifdef SWITCHU_MENU
+    if (m_playtimeRefresh)
+        m_playtimeRefresh->cancelled.store(true);
+#endif
 
     // Theme Shop, Gallery, metadata, icon, and artwork work all shares this
     // pool.  The old order stopped libcurl/Bluetooth first and relied on the
@@ -778,10 +772,11 @@ void WiiUMenuApp::reflowHomeGrid() {
         byId.emplace(entry.titleId, entry);
     }
 
-    // Recent must start from the personal arrangement. When there is no play
-    // history yet, falling back to A-Z made it visually indistinguishable
-    // from the preceding mode and made R appear broken.
-    if (m_config.sortMode == 2 && !m_layoutSlots.empty()) {
+    // Recent, Favorites, and Most played start from the personal arrangement.
+    // When the metric ties, falling back to A-Z makes the view visually
+    // indistinguishable from another mode and makes R appear broken.
+    if ((m_config.sortMode == 2 || m_config.sortMode == 3 || m_config.sortMode == 4) &&
+        !m_layoutSlots.empty()) {
         std::vector<uint64_t> customOrder;
         std::unordered_set<uint64_t> seen;
         customOrder.reserve(appOrder.size());
@@ -803,6 +798,20 @@ void WiiUMenuApp::reflowHomeGrid() {
     if (m_config.sortMode != 0) {
         std::stable_sort(appOrder.begin(), appOrder.end(),
                   [&](uint64_t a, uint64_t b) {
+            if (m_config.sortMode == 4) {
+                const auto playedA = m_config.playtimeOf(a);
+                const auto playedB = m_config.playtimeOf(b);
+                // Never-played titles sort last rather than first, and equal
+                // durations retain the owner's personal arrangement.
+                if (playedA != playedB) return playedA > playedB;
+                return false;
+            }
+            if (m_config.sortMode == 3) {
+                const bool favA = m_config.isFavorite(a);
+                const bool favB = m_config.isFavorite(b);
+                if (favA != favB) return favA > favB;
+                return false;
+            }
             if (m_config.sortMode == 2) {
                 const auto ta = m_config.lastOpenedAt(a);
                 const auto tb = m_config.lastOpenedAt(b);
@@ -1052,6 +1061,7 @@ std::string WiiUMenuApp::sortModeLabel() const {
         case 1:  return i18n.tr("hint.sort_alpha", "A-Z");
         case 2:  return i18n.tr("hint.sort_recent", "Recent");
         case 3:  return i18n.tr("hint.sort_favorites", "Favorites");
+        case 4:  return i18n.tr("hint.sort_playtime", "Most played");
         default: return i18n.tr("hint.sort_custom", "My order");
     }
 }
@@ -1059,7 +1069,7 @@ std::string WiiUMenuApp::sortModeLabel() const {
 void WiiUMenuApp::cycleSortMode() {
 #ifdef SWITCHU_MENU
     if (m_editMode) return;
-    m_config.sortMode = (m_config.sortMode + 1) % 4;
+    m_config.sortMode = (m_config.sortMode + 1) % AppConfig::kSortModeCount;
     m_config.save();
     switchu::commitSdCard("sort mode");
     DebugLog::log("[menu] sort mode -> %d", m_config.sortMode);
@@ -1069,7 +1079,142 @@ void WiiUMenuApp::cycleSortMode() {
     // the owner actually arranged.
     m_audio.playSfx(Sfx::Navigate);
     reflowHomeGrid();
+    // Most played sorts from the cache straight away, so R answers at once,
+    // and asks pdm again behind it. The cache is only as fresh as the last
+    // time this mode was in use; pollPlaytimeRefresh() re-sorts if pdm
+    // disagrees with it.
+    if (m_config.sortMode == 4)
+        requestPlaytimeRefresh("sort mode");
 #endif
+}
+
+void WiiUMenuApp::requestPlaytimeRefresh(const char* reason) {
+#ifdef SWITCHU_MENU
+    // Started by the next pollPlaytimeRefresh(), from onUpdate, rather than
+    // here: callers are in the middle of a rebuild or a notification pass.
+    DebugLog::log("[playtime] refresh requested (%s)", reason);
+    m_playtimeRefreshQueued = true;
+#else
+    (void)reason;
+#endif
+}
+
+void WiiUMenuApp::pollPlaytimeRefresh() {
+#ifdef SWITCHU_MENU
+    if (m_playtimeFuture.valid()) {
+        if (m_playtimeFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+            return;
+        auto state = std::move(m_playtimeRefresh);
+        bool failed = false;
+        try {
+            m_playtimeFuture.get();
+        } catch (...) {
+            // The pool refusing work during shutdown; the cache stays as it was.
+            failed = true;
+        }
+        int changed = 0;
+        if (!failed && state) {
+            for (const auto& [titleId, nanoseconds] : state->playtime)
+                changed += m_config.setPlaytime(titleId, nanoseconds) ? 1 : 0;
+        }
+        DebugLog::log("[playtime] refresh done titles=%zu changed=%d",
+                      state ? state->playtime.size() : static_cast<std::size_t>(0), changed);
+        // Nothing is saved here. Every launch writes the config before the
+        // handoff, and that write carries this cache with it; a write of its
+        // own would be one more SD commit for a copy pdm can always rebuild.
+        if (changed > 0 && m_config.sortMode == 4)
+            m_playtimeResortPending = true;
+    }
+
+    if (m_playtimeResortPending && m_grid) {
+        if (m_config.sortMode != 4) {
+            m_playtimeResortPending = false;
+        } else if (m_openFolderId != 0) {
+            // A folder keeps its own order. closeFolder() recomposes the root,
+            // and that reads the cache just updated.
+            m_playtimeResortPending = false;
+            applyPlaytimeBadges();
+        } else if (focusRoot() == &rootBox() && !m_editMode &&
+                   !(m_launchAnim && m_launchAnim->isPlaying())) {
+            // Held back while anything else owns input: a rebuild moves focus
+            // to the grid and frees every icon, and edit mode and the launch
+            // animation both hold on to one.
+            m_playtimeResortPending = false;
+            GridModel model = buildRootFolderModel();
+            bool sameOrder = model.count() == m_model.count();
+            for (int i = 0; sameOrder && i < model.count(); ++i)
+                sameOrder = model.at(i).titleId == m_model.at(i).titleId;
+            if (sameOrder) {
+                applyPlaytimeBadges();
+            } else {
+                std::uint64_t focused = 0;
+                if (auto* current = m_grid->focusManager().current();
+                    current && current->tag() == "glossy_icon")
+                    focused = static_cast<GlossyIcon*>(current)->titleId();
+                applyDisplayModel(std::move(model), focused, false);
+                if (m_layoutDirty) saveMenuLayout();
+            }
+            DebugLog::log("[playtime] grid %s", sameOrder ? "badges updated" : "re-sorted");
+        }
+    }
+
+    if (!m_playtimeRefreshQueued)
+        return;
+    // Only once the catalogue is in and the first page has had its uploads:
+    // the batch holds one of the pool's two workers for a round trip per title,
+    // and the icons on screen come first.
+    if (!m_grid || m_allApps.empty() || m_asyncRefreshPending ||
+        m_deferredInitialAssetFrames > 0)
+        return;
+    m_playtimeRefreshQueued = false;
+
+    // Only what can have changed. A title's play time moves when it is played,
+    // and the menu is recreated after every session, so the title just played
+    // plus anything with no figure yet is the whole set -- usually one query
+    // instead of a hundred and seventeen. Asking for all of them cost 29
+    // seconds on a console with that many, measured in its own log, and the
+    // handoff to a game waits for this pool: launching or resuming during those
+    // seconds left the launch animation frozen on screen for as long as the
+    // batch had left to run.
+    std::vector<std::uint64_t> titleIds;
+    titleIds.reserve(m_allApps.size());
+    const std::uint64_t justPlayed = m_launcher.suspendedTitleId() != 0
+        ? m_launcher.suspendedTitleId() : m_config.lastPageTitleId;
+    for (const auto& app : m_allApps) {
+        if (!app.isApplication() || app.titleId == 0)
+            continue;
+        if (app.titleId == justPlayed || !m_config.hasPlaytime(app.titleId))
+            titleIds.push_back(app.titleId);
+    }
+    if (titleIds.empty())
+        return;
+
+    auto state = std::make_shared<PlaytimeRefreshState>();
+    m_playtimeRefresh = state;
+    m_playtimeFuture = m_threadPool.submit(
+        [state, titleIds = std::move(titleIds)]() {
+            state->playtime = switchu::menu::playtime::queryAll(titleIds, &state->cancelled);
+        });
+#endif
+}
+
+std::string WiiUMenuApp::playtimeBadgeFor(const AppEntry& entry) const {
+    // Only in the view the number orders. Everywhere else it would be clutter
+    // on every icon, answering a question nobody asked of that view.
+    if (m_config.sortMode != 4 || !entry.isApplication())
+        return {};
+    return switchu::menu::playtime::formatCompact(m_config.playtimeOf(entry.titleId));
+}
+
+void WiiUMenuApp::applyPlaytimeBadges() {
+    if (!m_grid)
+        return;
+    const auto& icons = m_grid->allIcons();
+    for (int i = 0; i < m_model.count() && i < static_cast<int>(icons.size()); ++i) {
+        if (icons[static_cast<std::size_t>(i)])
+            icons[static_cast<std::size_t>(i)]->setPlaytimeBadge(
+                playtimeBadgeFor(m_model.at(i)));
+    }
 }
 
 #if 0 // Replaced by the 1.2.0 folder/widget-aware implementation below.
@@ -1696,6 +1841,22 @@ void WiiUMenuApp::applyMenuLayoutToPending(std::vector<PendingApp>& apps) {
 }
 
 void WiiUMenuApp::composeRootPending(std::vector<PendingApp>& apps) {
+    // The one place a chosen name is applied. Everything downstream -- the grid
+    // label, the title pill, the A-Z order, folders, the dossier, the widgets --
+    // reads these entries, so applying it once here keeps the name from
+    // disagreeing with itself in one of them.
+    for (auto& pending : apps) {
+        if (pending.titleId == 0 || !m_config.hasCustomTitle(pending.titleId))
+            continue;
+        const std::string chosen = m_config.customTitle(pending.titleId, pending.title);
+        // The artwork lookup searches englishTitle, and a title with no usable
+        // name of its own carries the hex id there too -- which never matches
+        // anything. A name the owner typed is a better search term than that.
+        if (pending.englishTitle.empty() || pending.englishTitle == pending.title)
+            pending.englishTitle = chosen;
+        pending.title = chosen;
+    }
+
     const int cols = std::clamp(m_config.gridColumns, 3, 8);
     const int rows = std::clamp(m_config.gridRows, 2, 5);
     const int perPage = std::max(1, cols * rows);
@@ -2048,6 +2209,14 @@ GridModel WiiUMenuApp::buildRootFolderModel() {
         const int mode = m_config.sortMode;
         std::stable_sort(apps.begin(), apps.end(),
                          [&](std::uint64_t a, std::uint64_t b) {
+            if (mode == 4) {
+                const auto playedA = m_config.playtimeOf(a);
+                const auto playedB = m_config.playtimeOf(b);
+                // Never-played entries sort last rather than first as a zero
+                // duration would; ties retain the owner's personal order.
+                if (playedA != playedB) return playedA > playedB;
+                return false;
+            }
             if (mode == 3) {
                 const bool favA = m_config.isFavorite(a);
                 const bool favB = m_config.isFavorite(b);
@@ -2336,6 +2505,7 @@ void WiiUMenuApp::applyDisplayModel(GridModel model, std::uint64_t focusId, bool
     m_iconStreamer.setRingMode(m_appLayoutMode == AppLayoutMode::DynamicLine);
     m_grid->setup(std::move(icons), columns, rows, metrics.cellW, metrics.cellH,
                   metrics.padX, metrics.padY);
+    applyPlaytimeBadges();
     wireFocusCallback();
     m_grid->onEdgePage([this](int dir) { flipPageFromEdge(dir); });
     m_grid->onPageSwitched([this]() {
@@ -2643,9 +2813,9 @@ void WiiUMenuApp::refreshRecentActivityDuration() {
     m_widgetStore.updateRecentDuration(
         static_cast<std::int64_t>(std::time(nullptr)));
 #ifdef SWITCHU_MENU
-    if (const auto total = queryApplicationPlaytimeSeconds(
+    if (const auto total = switchu::menu::playtime::query(
             m_widgetStore.recentActivity().titleId))
-        m_widgetStore.setTotalSeconds(*total);
+        m_widgetStore.setTotalSeconds(*total / 1000000000ULL);
 #endif
 }
 
@@ -4280,6 +4450,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
     icon->setGameCardTexture(&m_gameCardTex);
     icon->setNotLaunchable(!entry.isLaunchable());
     icon->setFavorite(entry.isFavorite);
+    icon->setPlaytimeBadge(playtimeBadgeFor(entry));
     icon->setGridSpan(entry.widgetColumns, entry.widgetRows);
     if (entry.widgetColumns > 1 && entry.widgetRows == 1 &&
         m_appLayoutMode == AppLayoutMode::Grid) {
@@ -6101,6 +6272,7 @@ void WiiUMenuApp::onUpdate(float dt) {
     if (m_asyncRefreshPending && m_appLoader.isReady()) {
         finalizeRefresh();
     }
+    pollPlaytimeRefresh();
 #endif
 
     bool debugTouchBlocked = false;

@@ -506,6 +506,41 @@ void WiiUMenuApp::createSettings() {
     m_settings->onSteamGridDbApiKeyRequest([this]() {
         editSteamGridDbApiKey();
     });
+    m_settings->onRotateLogsRequest([this]() {
+        auto& i18n = nxui::I18n::instance();
+        const Result rc = m_launcher.rotateLogs();
+        switchu::commitSdCard("log rotation");
+        if (m_settings) {
+            m_settings->requestToast(
+                R_SUCCEEDED(rc)
+                    ? i18n.tr("settings.system.save_logs_done",
+                              "Logs saved. Copy menu-*.log and daemon-*.log from config/SwitchU.")
+                    : i18n.tr("settings.system.save_logs_failed",
+                              "The menu log was saved; the daemon did not answer."),
+                4.5f);
+        }
+    });
+    m_settings->onConsoleNicknameRequest([this]() {
+        auto& i18n = nxui::I18n::instance();
+        SetSysDeviceNickName current{};
+        setsysGetDeviceNickname(&current);
+        requestTextEntry(
+            i18n.tr("settings.system.console_nickname", "Console Nickname"),
+            i18n.tr("settings.system.console_nickname_guide", "Enter a name for this console"),
+            current.nickname, 32, false,
+            [this](const std::string& value) {
+                const std::string trimmed = trimWhitespace(value);
+                if (trimmed.empty())
+                    return;
+                SetSysDeviceNickName nickname{};
+                std::snprintf(nickname.nickname, sizeof(nickname.nickname), "%s",
+                              trimmed.c_str());
+                const Result rc = setsysSetDeviceNickname(&nickname);
+                DebugLog::log("[settings] console nickname rc=0x%X", rc);
+                if (R_SUCCEEDED(rc) && m_settings)
+                    m_settings->rebuildCurrentTab();
+            });
+    });
     m_settings->onSteamGridDbScrapeRequest([this]() {
         startSteamGridDbScrape();
     });
@@ -1394,6 +1429,22 @@ void WiiUMenuApp::createThemeShop() {
         m_refreshQueued = true;
         m_deferredRefreshFrames = std::max(m_deferredRefreshFrames, 3);
     });
+    // The slow half, now that the ordinary reload no longer pays for it: every
+    // name and icon is read from the titles again, about a second each.
+    m_themeShop->onRebuildControlCache([this]() {
+        const Result rc = m_launcher.rebuildControlCache();
+        DebugLog::log("[catalog] control cache rebuild requested rc=0x%X", rc);
+        auto& i18n = nxui::I18n::instance();
+        if (m_settings) {
+            m_settings->requestToast(R_SUCCEEDED(rc)
+                ? i18n.tr("settings.display.rebuild_names_done",
+                          "Reading names and icons again. This takes a few minutes.")
+                : i18n.tr("settings.display.reload_grid_failed", "Could not ask for a reload."),
+                4.0f);
+        }
+        m_refreshQueued = true;
+        m_deferredRefreshFrames = std::max(m_deferredRefreshFrames, 3);
+    });
     m_themeShop->onThemeShopApply([this](const std::string& presetId) {
         DebugLog::log("[theme-apply] request from Theme Shop: preset=%s", presetId.c_str());
         ThemePreset* preset = findPresetPtr(presetId);
@@ -1596,6 +1647,45 @@ void WiiUMenuApp::createGameDetails() {
                 m_config.save();
                 if (m_gameDetails && m_gameDetails->titleId() == titleId)
                     m_gameDetails->updateSearchTitle(trimmed);
+            });
+    });
+    m_gameDetails->onRename([this]() {
+        if (!m_gameDetails) return;
+        const std::uint64_t titleId = m_gameDetails->titleId();
+        auto& i18n = nxui::I18n::instance();
+        requestTextEntry(
+            i18n.tr("dialog.details_rename", "Rename"),
+            i18n.tr("dialog.details_rename_guide",
+                    "Enter a name. Leave it empty to use the original."),
+            m_gameDetails->title(), 128, false,
+            [this, titleId](const std::string& value) {
+                // An empty field restores the original title reported by the
+                // catalogue. Preserve it before changing the visible entry so
+                // the restoration does not simply reapply the custom name.
+                const std::string original = [&]() {
+                    for (const auto& app : m_allApps) {
+                        if (app.titleId != titleId) continue;
+                        return app.title;
+                    }
+                    return std::string{};
+                }();
+                const std::string custom = trimWhitespace(value);
+                m_config.setCustomTitle(titleId, custom);
+                m_config.save();
+                switchu::commitSdCard("custom title");
+                for (auto& app : m_allApps) {
+                    if (app.titleId != titleId) continue;
+                    app.title = m_config.customTitle(titleId, original);
+                    break;
+                }
+                if (m_gameDetails && m_gameDetails->titleId() == titleId)
+                    m_gameDetails->updateTitle(m_config.customTitle(titleId, original));
+                // The entry above is what the grid, the sort and the folders
+                // are built from, so recomposing is enough -- and instant.
+                // Re-reading the catalogue would cost a full control-data pass
+                // over every installed title for one renamed game.
+                if (m_grid && m_openFolderId == 0)
+                    applyDisplayModel(buildRootFolderModel(), titleId, false);
             });
     });
     m_gameDetails->onToggleFavorite([this]() {

@@ -3,6 +3,7 @@
 #include <switch.h>
 #include <switchu/control_cache.hpp>
 #include <switchu/file_log.hpp>
+#include "mem_probe.hpp"
 #include <cstring>
 
 namespace switchu::daemon::app {
@@ -661,6 +662,9 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
         return kPreflightEdgeSyntheticCreateFailure;
     }
 #endif
+    // The pools as they stand the instant before the game gets a process. This
+    // is the moment a console loaded with sysmodules is reported to fail at.
+    switchu::daemon::mem::snapshot("before-create-app");
     Result rc = appletCreateApplication(&g_app, title_id);
     if (timing)
         timing->createEndTick = armGetSystemTick();
@@ -728,6 +732,7 @@ inline Result launch(uint64_t title_id, AccountUid uid, LaunchTiming* timing = n
         return rc;
     }
     switchu::FileLog::log("[app] Start ok");
+    switchu::daemon::mem::snapshot("game-started");
 
     if (timing)
         timing->foregroundStartTick = armGetSystemTick();

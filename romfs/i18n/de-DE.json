@@ -182,7 +182,8 @@
     "sort_favorites": "Favoriten",
     "favorite": "Favorit",
     "options": "Optionen",
-    "switch_layout": "Ansicht wechseln"
+    "switch_layout": "Ansicht wechseln",
+    "sort_playtime": "Meistgespielt"
   },
   "settings": {
     "tabs": {
@@ -247,7 +248,24 @@
       "minute": "Minute",
       "month": "Monat",
       "time_change_failed": "Die Datums- und Uhrzeiteinstellung konnte nicht geändert werden.",
-      "year": "Jahr"
+      "year": "Jahr",
+      "console_nickname_guide": "Gib dieser Konsole einen Namen",
+      "console_nickname_desc": "Der Name, den andere Konsolen und Apps sehen.",
+      "save_logs": "Protokolle zum Kopieren sichern",
+      "save_logs_desc": "SchlieÃŸt die aktuellen Protokolle, damit sie aus config/SwitchU kopiert werden kÃ¶nnen.",
+      "save_logs_done": "Protokolle gesichert. Kopiere menu-*.log und daemon-*.log aus config/SwitchU.",
+      "save_logs_failed": "Das MenÃ¼-Protokoll wurde gesichert; der Daemon antwortete nicht.",
+      "usb30_restart": "USB-3.0-Ã„nderungen gelten erst nach einem Neustart.",
+      "memory_section": "Sysmodule und Speicher",
+      "system_pool": "System-Speicherpool",
+      "system_pool_desc": "Wird von allen Sysmodulen auf der Karte und von den Diensten geteilt, die ein Spiel zum Starten braucht.",
+      "system_pool_free": "Frei im Pool",
+      "system_pool_low": "Es ist sehr wenig Ã¼brig. Wenn Spiele nicht starten, deaktiviere Sysmodule, die du nicht nutzt.",
+      "system_pool_fw21": "Ab Firmware 21 kann AtmosphÃ¨re diesem Pool nur noch 7 MB hinzufÃ¼gen.",
+      "sysmodules": "Beim Start geladene Sysmodule",
+      "sysmodules_desc": "Jedes lÃ¤uft ab dem Start und nutzt Speicher aus dem Pool oben.",
+      "sysmodules_none": "Keine",
+      "region_desc": "Nur Anzeige. Ã„ndere dies in den Nintendo Switch Systemeinstellungen."
     },
     "accessibility": {
       "voice": "Sprachausgabe",
@@ -281,7 +299,8 @@
       "hdmi_rgb_range": "RGB-Spektrum (TV)",
       "hdmi_rgb_range_desc": "Volles Spektrum für PC-Monitore, Begrenztes Spektrum für die meisten Fernseher.",
       "full": "Volles Spektrum",
-      "limited": "Begrenztes Spektrum"
+      "limited": "Begrenztes Spektrum",
+      "res_480p": "480p"
     },
     "display": {
       "brightness": "Helligkeit",
@@ -308,7 +327,10 @@
       "reload_grid_done": "Installierte Titel werden erneut gelesen...",
       "reload_grid_failed": "Neuladen konnte nicht angefordert werden.",
       "ui_wireframe": "UI-Drahtgitter",
-      "ui_wireframe_desc": "Zeigt Umrisse aller Box-Widgets zur Layout-Fehlersuche an."
+      "ui_wireframe_desc": "Zeigt Umrisse aller Box-Widgets zur Layout-Fehlersuche an.",
+      "rebuild_names": "Namen und Symbole neu aufbauen",
+      "rebuild_names_desc": "Verwirft alle zwischengespeicherten Namen und Symbole und liest sie erneut aus den Titeln. Dauert auf einer vollen Konsole einige Minuten.",
+      "rebuild_names_done": "Namen und Symbole werden neu gelesen. Das dauert einige Minuten."
     },
     "internet": {
       "wifi_ssid": "WLAN-Netzwerk",
@@ -491,7 +513,8 @@
       "check_updates_running": "Suche nach Updates...",
       "fork_maintainer": "Fork gepflegt von",
       "upstream_source": "Quellcode (Original)",
-      "upstream_source_value": "github.com/PoloNX/SwitchU"
+      "upstream_source_value": "github.com/PoloNX/SwitchU",
+      "based_on_fork": "Basiert auf dem Fork von"
     }
   },
   "userselect": {
@@ -983,7 +1006,9 @@
     "delete_software_done": "Die Software wurde gelöscht.",
     "delete_software_failed": "Die Software konnte nicht gelöscht werden.",
     "delete_software_files": "Diese Ordner auf der SD-Karte werden ebenfalls entfernt:",
-    "non_game_options_body_folder": "Homebrew und Ports haben keine Spieldetails, Artworks oder Mods zum Verwalten. Sie können in einen Ordner abgelegt oder entfernt werden."
+    "non_game_options_body_folder": "Homebrew und Ports haben keine Spieldetails, Artworks oder Mods zum Verwalten. Sie können in einen Ordner abgelegt oder entfernt werden.",
+    "details_rename": "Umbenennen",
+    "details_rename_guide": "Gib einen Namen ein. Leer lassen fÃ¼r den Originalnamen."
   },
   "platform_picker": {
     "title": "Ursprüngliche Plattform",

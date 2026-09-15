@@ -182,7 +182,8 @@
     "sort_favorites": "Favoris",
     "favorite": "Favori",
     "options": "Options",
-    "switch_layout": "Changer l'affichage"
+    "switch_layout": "Changer l'affichage",
+    "sort_playtime": "Plus joués"
   },
   "settings": {
     "tabs": {
@@ -247,7 +248,24 @@
       "minute": "Minute",
       "month": "Mois",
       "time_change_failed": "Impossible de modifier la date et l'heure.",
-      "year": "Année"
+      "year": "Année",
+      "console_nickname_guide": "Saisis un nom pour cette console",
+      "console_nickname_desc": "Le nom que voient les autres consoles et applications.",
+      "save_logs": "Enregistrer les journaux",
+      "save_logs_desc": "Ferme les journaux actuels pour pouvoir les copier depuis config/SwitchU.",
+      "save_logs_done": "Journaux enregistrés. Copie menu-*.log et daemon-*.log depuis config/SwitchU.",
+      "save_logs_failed": "Le journal du menu a été enregistré ; le daemon n'a pas répondu.",
+      "usb30_restart": "Les changements USB 3.0 prennent effet après un redémarrage.",
+      "memory_section": "Sysmodules et mémoire",
+      "system_pool": "Pool de mémoire système",
+      "system_pool_desc": "Partagé par tous les sysmodules de la carte et par les services dont un jeu a besoin pour démarrer.",
+      "system_pool_free": "Libre dans le pool",
+      "system_pool_low": "Il reste très peu. Si les jeux ne démarrent pas, désactivez les sysmodules que vous n'utilisez pas.",
+      "system_pool_fw21": "À partir du firmware 21, Atmosphère ne peut ajouter que 7 Mo à ce pool.",
+      "sysmodules": "Sysmodules lancés au démarrage",
+      "sysmodules_desc": "Chacun tourne dès le démarrage et prend sa mémoire dans le pool ci-dessus.",
+      "sysmodules_none": "Aucun",
+      "region_desc": "Lecture seule. Modifiez-le dans les paramètres de la Nintendo Switch."
     },
     "accessibility": {
       "voice": "Lecture vocale",
@@ -281,7 +299,8 @@
       "hdmi_rgb_range": "Plage RGB HDMI",
       "hdmi_rgb_range_desc": "Full pour moniteur PC, Limited pour la plupart des TV.",
       "full": "Complet",
-      "limited": "Limité"
+      "limited": "Limité",
+      "res_480p": "480p"
     },
     "display": {
       "brightness": "Luminosité",
@@ -308,7 +327,10 @@
       "reload_grid_done": "Relecture des titres installés...",
       "reload_grid_failed": "Impossible de demander le rechargement.",
       "ui_wireframe": "Filaire de l'interface",
-      "ui_wireframe_desc": "Affiche les contours de tous les widgets Box pour déboguer la mise en page."
+      "ui_wireframe_desc": "Affiche les contours de tous les widgets Box pour déboguer la mise en page.",
+      "rebuild_names": "Reconstruire noms et icônes",
+      "rebuild_names_desc": "Supprime tous les noms et icônes en cache et les relit depuis les titres. Prend quelques minutes sur une console pleine.",
+      "rebuild_names_done": "Relecture des noms et icônes. Cela prend quelques minutes."
     },
     "internet": {
       "wifi_ssid": "Réseau WiFi",
@@ -491,7 +513,8 @@
       "check_updates_running": "Recherche de mises à jour...",
       "fork_maintainer": "Fork maintenu par",
       "upstream_source": "Code source (original)",
-      "upstream_source_value": "github.com/PoloNX/SwitchU"
+      "upstream_source_value": "github.com/PoloNX/SwitchU",
+      "based_on_fork": "Basé sur le fork de"
     }
   },
   "userselect": {
@@ -983,7 +1006,9 @@
     "delete_software_done": "Le logiciel a été supprimé.",
     "delete_software_failed": "Impossible de supprimer le logiciel.",
     "delete_software_files": "Ces dossiers de la carte SD seront aussi supprimés :",
-    "non_game_options_body_folder": "Les homebrews et ports n'ont pas de détails de jeu, d'illustrations ni de mods à gérer. Ils peuvent être classés dans un dossier ou supprimés."
+    "non_game_options_body_folder": "Les homebrews et ports n'ont pas de détails de jeu, d'illustrations ni de mods à gérer. Ils peuvent être classés dans un dossier ou supprimés.",
+    "details_rename": "Renommer",
+    "details_rename_guide": "Saisis un nom. Laisse vide pour utiliser l'original."
   },
   "platform_picker": {
     "title": "Plateforme d'origine",

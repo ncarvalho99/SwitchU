@@ -1,5 +1,6 @@
 #include "AppletLauncher.hpp"
 #include "core/DebugLog.hpp"
+#include <switchu/file_log.hpp>
 #ifdef SWITCHU_MENU
 #include "smi_commands.hpp"
 #include <switchu/smi_protocol.hpp>
@@ -133,6 +134,24 @@ Result AppletLauncher::requestSelfUninstall() {
 Result AppletLauncher::refreshCatalog() {
     DebugLog::log("[launcher] requesting catalog refresh");
     return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RefreshCatalog);
+}
+
+Result AppletLauncher::rotateLogs() {
+    DebugLog::log("[launcher] rotating logs on request");
+    // The menu holds menu.log open for as long as it runs, and the daemon does
+    // the same with daemon.log, so neither can be copied over MTP while the
+    // console is up. Both are rotated: this process closes and reopens its own,
+    // and the daemon is asked to do the same with its.
+    switchu::FileLog::flush();
+    switchu::FileLog::open("menu");
+    const Result rc = switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RotateLogs);
+    DebugLog::log("[launcher] log rotation rc=0x%X", rc);
+    return rc;
+}
+
+Result AppletLauncher::rebuildControlCache() {
+    DebugLog::log("[launcher] requesting control cache rebuild");
+    return switchu::menu::smi_cmd::sendSimple(switchu::smi::SystemMessage::RebuildControlCache);
 }
 
 Result AppletLauncher::prepareApplication(uint64_t titleId, AccountUid uid,
@@ -271,12 +290,19 @@ void AppletLauncher::launchUserPage(AccountUid) {}
 void AppletLauncher::enterSleep()              {}
 void AppletLauncher::shutdown()                {}
 void AppletLauncher::reboot()                  {}
-Result AppletLauncher::requestSelfUninstall()  { return 0; }
+// No daemon to hand the removal to. A failure, not a pretend success: the
+// caller then reports that nothing was changed instead of waiting for a
+// restart that will never come.
+Result AppletLauncher::requestSelfUninstall()  {
+    return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+}
 Result AppletLauncher::prepareApplication(uint64_t, AccountUid,
                                           switchu::smi::LaunchTransitionTrace&) { return 0; }
 void AppletLauncher::launchApplication(uint64_t, AccountUid,
                                        switchu::smi::LaunchTransitionTrace) {}
-Result AppletLauncher::refreshCatalog()                { return 0; }
+Result AppletLauncher::refreshCatalog()        { return 0; }
+Result AppletLauncher::rotateLogs()            { return 0; }
+Result AppletLauncher::rebuildControlCache()   { return 0; }
 void AppletLauncher::resumeApplication(switchu::smi::LaunchTransitionTrace) {}
 void AppletLauncher::terminateApplication()    {}
 void AppletLauncher::checkRunningApplication() {}

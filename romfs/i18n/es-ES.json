@@ -182,7 +182,8 @@
     "sort_favorites": "Favoritos",
     "favorite": "Favorito",
     "options": "Opciones",
-    "switch_layout": "Cambiar vista"
+    "switch_layout": "Cambiar vista",
+    "sort_playtime": "Más jugados"
   },
   "settings": {
     "tabs": {
@@ -247,7 +248,24 @@
       "minute": "Minuto",
       "month": "Mes",
       "time_change_failed": "No se pudo cambiar la fecha y hora.",
-      "year": "Año"
+      "year": "Año",
+      "console_nickname_guide": "Escribe un nombre para esta consola",
+      "console_nickname_desc": "El nombre que ven otras consolas y aplicaciones.",
+      "save_logs": "Guardar registros para copiar",
+      "save_logs_desc": "Cierra los registros actuales para poder copiarlos desde config/SwitchU.",
+      "save_logs_done": "Registros guardados. Copia menu-*.log y daemon-*.log de config/SwitchU.",
+      "save_logs_failed": "Se guardó el registro del menú; el daemon no respondió.",
+      "usb30_restart": "Los cambios de USB 3.0 se aplican tras reiniciar.",
+      "memory_section": "Sysmodules y memoria",
+      "system_pool": "Pool de memoria del sistema",
+      "system_pool_desc": "Lo comparten todos los sysmodules de la tarjeta y los servicios que un juego necesita para iniciarse.",
+      "system_pool_free": "Libre en el pool",
+      "system_pool_low": "Queda muy poco. Si los juegos no se inician, desactiva los sysmodules que no uses.",
+      "system_pool_fw21": "Desde el firmware 21, Atmosphère solo puede añadir 7 MB a este pool.",
+      "sysmodules": "Sysmodules iniciados al arrancar",
+      "sysmodules_desc": "Cada uno se ejecuta desde el arranque y usa memoria del pool de arriba.",
+      "sysmodules_none": "Ninguno",
+      "region_desc": "Solo lectura. Cámbialo en los Ajustes de Nintendo Switch."
     },
     "accessibility": {
       "voice": "Lectura de voz",
@@ -281,7 +299,8 @@
       "hdmi_rgb_range": "Rango RGB HDMI",
       "hdmi_rgb_range_desc": "Completo para monitores de PC, Limitado para la mayoría de TVs.",
       "full": "Completo",
-      "limited": "Limitado"
+      "limited": "Limitado",
+      "res_480p": "480p"
     },
     "display": {
       "brightness": "Brillo",
@@ -308,7 +327,10 @@
       "reload_grid_done": "Releyendo los títulos instalados...",
       "reload_grid_failed": "No se pudo pedir la recarga.",
       "ui_wireframe": "Wireframe de interfaz",
-      "ui_wireframe_desc": "Muestra los contornos de todos los widgets Box para depurar el diseño."
+      "ui_wireframe_desc": "Muestra los contornos de todos los widgets Box para depurar el diseño.",
+      "rebuild_names": "Reconstruir nombres e iconos",
+      "rebuild_names_desc": "Descarta todos los nombres e iconos en caché y los lee de nuevo. Tarda unos minutos en una consola llena.",
+      "rebuild_names_done": "Leyendo nombres e iconos de nuevo. Tarda unos minutos."
     },
     "internet": {
       "wifi_ssid": "Red WiFi",
@@ -491,7 +513,8 @@
       "check_updates_running": "Buscando actualizaciones...",
       "fork_maintainer": "Fork mantenido por",
       "upstream_source": "Código fuente (original)",
-      "upstream_source_value": "github.com/PoloNX/SwitchU"
+      "upstream_source_value": "github.com/PoloNX/SwitchU",
+      "based_on_fork": "Basado en el fork de"
     }
   },
   "userselect": {
@@ -983,7 +1006,9 @@
     "delete_software_done": "El software se ha eliminado.",
     "delete_software_failed": "No se pudo eliminar el software.",
     "delete_software_files": "Estas carpetas de la tarjeta SD también se eliminarán:",
-    "non_game_options_body_folder": "Los homebrews y ports no tienen detalles, ilustraciones ni mods que gestionar. Se pueden archivar en una carpeta o eliminar."
+    "non_game_options_body_folder": "Los homebrews y ports no tienen detalles, ilustraciones ni mods que gestionar. Se pueden archivar en una carpeta o eliminar.",
+    "details_rename": "Renombrar",
+    "details_rename_guide": "Escribe un nombre. Déjalo vacío para usar el original."
   },
   "platform_picker": {
     "title": "Plataforma original",

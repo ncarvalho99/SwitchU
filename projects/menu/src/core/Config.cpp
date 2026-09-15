@@ -100,6 +100,16 @@ bool AppConfig::load() {
                                     v.get<std::uint64_t>());
         }
     }
+    playtime.clear();
+    if (auto it = j.find("playtime"); it != j.end() && it->is_object()) {
+        for (auto& [k, v] : it->items()) {
+            if (!v.is_number_unsigned()) continue;
+            // Zero is kept: it means "asked, never played", which is what stops
+            // the title being asked about again at every boot.
+            const std::uint64_t ns = v.get<std::uint64_t>();
+            playtime.emplace_back(std::strtoull(k.c_str(), nullptr, 16), ns);
+        }
+    }
     gamePortPlatforms.clear();
     if (auto it = j.find("gamePorts"); it != j.end() && it->is_object()) {
         for (auto& [k, v] : it->items()) {
@@ -116,6 +126,15 @@ bool AppConfig::load() {
             const std::string title = v.get<std::string>();
             if (title.empty()) continue;
             gamePortSearchTitles.emplace_back(std::strtoull(k.c_str(), nullptr, 16), title);
+        }
+    }
+    customTitles.clear();
+    if (auto it = j.find("customTitles"); it != j.end() && it->is_object()) {
+        for (auto& [k, v] : it->items()) {
+            if (!v.is_string()) continue;
+            const std::string title = v.get<std::string>();
+            if (title.empty()) continue;
+            customTitles.emplace_back(std::strtoull(k.c_str(), nullptr, 16), title);
         }
     }
     favoriteTitleIds.clear();
@@ -137,6 +156,7 @@ bool AppConfig::load() {
     if (sfxVolume   > 1.f) sfxVolume   = 1.f;
     gridColumns = std::clamp(gridColumns, 3, 8);
     gridRows = std::clamp(gridRows, 2, 5);
+    if (sortMode < 0 || sortMode >= kSortModeCount) sortMode = 0;
     if (actionHintStyle != "panel" && actionHintStyle != "capsules")
         actionHintStyle = "capsules";
     if (uiLanguageOverride.empty()) uiLanguageOverride = "auto";
@@ -194,6 +214,15 @@ bool AppConfig::save() const {
         j["lastOpened"] = std::move(opened);
     }
     {
+        nlohmann::json played = nlohmann::json::object();
+        char key[17];
+        for (const auto& e : playtime) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)e.first);
+            played[key] = e.second;
+        }
+        j["playtime"] = std::move(played);
+    }
+    {
         nlohmann::json ports = nlohmann::json::object();
         char key[17];
         for (const auto& port : gamePortPlatforms) {
@@ -210,6 +239,15 @@ bool AppConfig::save() const {
             searchTitles[key] = entry.second;
         }
         j["gamePortSearchTitles"] = std::move(searchTitles);
+    }
+    {
+        nlohmann::json titles = nlohmann::json::object();
+        char key[17];
+        for (const auto& entry : customTitles) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)entry.first);
+            titles[key] = entry.second;
+        }
+        j["customTitles"] = std::move(titles);
     }
     {
         nlohmann::json favorites = nlohmann::json::array();

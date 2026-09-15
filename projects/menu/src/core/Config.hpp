@@ -72,8 +72,47 @@ struct AppConfig {
 
     // 0 = the arrangement the owner made by hand, which stays the default:
     // somebody who dragged their icons into an order did not do that to have
-    // it thrown away. 1 = A to Z. 2 = most recently opened first.
+    // it thrown away. 1 = A to Z. 2 = most recently opened first. 3 = most
+    // played first, by the play time the system records (see playtime below).
     int sortMode = 0;
+    // Existing mode 3 is Favorites; the fork's Most played mode extends it as
+    // mode 4 rather than renumbering persisted user preferences.
+    static constexpr int kSortModeCount = 5;
+
+    // Total play time per title id, in nanoseconds, as pdm last reported it.
+    // A cache, not a record of our own: pdm is the authority and is re-read
+    // off the UI thread whenever the menu comes up in sort mode 3 or enters
+    // it. Kept on disk only so the grid can open in the right order before
+    // that query answers -- the menu is recreated on every return from a game,
+    // so an in-memory copy would start empty every time. Titles never played
+    // are not stored.
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> playtime;
+
+    std::uint64_t playtimeOf(std::uint64_t titleId) const {
+        for (const auto& e : playtime)
+            if (e.first == titleId) return e.second;
+        return 0;
+    }
+    // Whether pdm was ever asked about this title. A title nobody has played
+    // answers zero, and zero is stored, so that it is not asked again on every
+    // boot for the rest of the console's life -- which is the difference
+    // between one query and a hundred at every menu start.
+    bool hasPlaytime(std::uint64_t titleId) const {
+        for (const auto& e : playtime)
+            if (e.first == titleId) return true;
+        return false;
+    }
+    // Whether the stored value changed.
+    bool setPlaytime(std::uint64_t titleId, std::uint64_t nanoseconds) {
+        for (auto& e : playtime) {
+            if (e.first != titleId) continue;
+            if (e.second == nanoseconds) return false;
+            e.second = nanoseconds;
+            return true;
+        }
+        playtime.emplace_back(titleId, nanoseconds);
+        return true;
+    }
 
     // When each title was last opened, by title id. The record ns keeps is
     // last_updated -- when it was installed or patched -- which is not the
@@ -102,6 +141,32 @@ struct AppConfig {
     // player replace only the string sent to the metadata lookup, without
     // touching what the icon displays on the grid.
     std::vector<std::pair<std::uint64_t, std::string>> gamePortSearchTitles;
+    // A name chosen by the owner, which wins over the one the console reports.
+    // Some titles have no usable name to report at all -- a downgraded release
+    // whose content carries no NACP name leaves the grid showing the title id
+    // -- and others are simply named something nobody would choose.
+    std::vector<std::pair<std::uint64_t, std::string>> customTitles;
+
+    std::string customTitle(std::uint64_t titleId, const std::string& fallback) const {
+        for (const auto& entry : customTitles)
+            if (entry.first == titleId) return entry.second;
+        return fallback;
+    }
+    bool hasCustomTitle(std::uint64_t titleId) const {
+        for (const auto& entry : customTitles)
+            if (entry.first == titleId) return true;
+        return false;
+    }
+    void setCustomTitle(std::uint64_t titleId, const std::string& title) {
+        for (auto it = customTitles.begin(); it != customTitles.end(); ++it) {
+            if (it->first != titleId) continue;
+            if (title.empty()) customTitles.erase(it);
+            else it->second = title;
+            return;
+        }
+        if (!title.empty())
+            customTitles.emplace_back(titleId, title);
+    }
     bool isGamePort(std::uint64_t titleId) const {
         for (const auto& port : gamePortPlatforms)
             if (port.first == titleId) return true;

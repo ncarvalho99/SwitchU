@@ -3,6 +3,7 @@
 #include <switchu/smi_helpers.hpp>
 #include <switchu/file_log.hpp>
 #include "ecs.hpp"
+#include "mem_probe.hpp"
 #include <switch.h>
 #include <cstdio>
 #include <cstring>
@@ -50,6 +51,7 @@ inline Result create() {
     switchu::FileLog::log("[menu_la] create begin active=%d holderActive=%d",
                           g_active ? 1 : 0,
                           (g_active && appletHolderActive(&g_holder)) ? 1 : 0);
+    switchu::daemon::mem::snapshot("before-create-menu");
     Result rc = appletCreateLibraryApplet(&g_holder,
         kMenuAppletId, LibAppletMode_AllForeground);
     if (R_FAILED(rc)) {

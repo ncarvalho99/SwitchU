@@ -6,7 +6,6 @@
 // sd_commit is outside the guard: saveApplicationSizeCache() is compiled in
 // both variants even though only the menu one populates it.
 #include <switchu/sd_commit.hpp>
-#include <switchu/title_footprint.hpp>
 #ifdef SWITCHU_MENU
 #include <switchu/control_cache.hpp>
 #endif
@@ -510,20 +509,17 @@ SettingsScreen::Tab settings::tabs::StorageTab::build(SettingsScreen& screen) {
             i18n.tr("settings.storage.uninstall_confirm_title", "Uninstall Game"),
             message,
             {
-                { i18n.tr("button.delete", "Delete"), [app, &screen, &i18n]() {
-                    Result rc = switchu::menu::ensureNsService("settings-delete");
-                    if (R_SUCCEEDED(rc))
-                        rc = nsDeleteApplicationCompletely(app.titleId);
-                    if (R_SUCCEEDED(rc)) {
-                        switchu::titles::removeSdFootprint(app.titleId);
-                        screen.requestToast(i18n.tr("settings.storage.uninstall_success", "Uninstalled successfully."), 2.8f);
-                        screen.rebuildCurrentTab();
-                    } else {
-                        screen.requestDialog(
-                            i18n.tr("settings.storage.uninstall_failed_title", "Uninstall Failed"),
-                            i18n.tr("settings.storage.uninstall_failed", "Failed to uninstall the selected title."),
-                            {{ i18n.tr("button.ok", "OK"), []() {} }});
-                    }
+                { i18n.tr("button.delete", "Delete"), [app, &screen]() {
+                    // The same path as deleting from a game's own panel. This
+                    // tab had its own copy that ran on the UI thread: the menu
+                    // froze with no progress for as long as ns and the card
+                    // sweep took, and a title that only lived on the card was
+                    // reported as a failure even when its files were gone.
+                    // startSoftwareDeletion() runs on the pool, shows the
+                    // progress dialog, drops the title from its folder, and
+                    // rebuilds this tab when it finishes.
+                    if (screen.m_softwareDeleteCb)
+                        screen.m_softwareDeleteCb(app.titleId, app.title);
                 } },
                 { i18n.tr("button.cancel", "Cancel"), []() {} }
             });

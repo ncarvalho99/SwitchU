@@ -1,4 +1,5 @@
 #include "ThemePreset.hpp"
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -8,6 +9,8 @@
 #include <algorithm>
 #include <cctype>
 #include <system_error>
+#include <switchu/fs_remove.hpp>
+#include "DebugLog.hpp"
 
 namespace {
 
@@ -739,6 +742,21 @@ const std::vector<ThemePreset>& ThemePreset::builtInPresets() {
 static constexpr const char* kUserPresetsPath = "sdmc:/config/SwitchU/theme_presets.ini";
 static constexpr const char* kInstalledThemesDir = "sdmc:/config/SwitchU/themes";
 
+// The three names ThemePackageInstaller works under: the staging folder, the
+// archive it downloads into it, and the copy of the previous version it keeps
+// until the new one is in place.
+bool isThemeInstallLeftover(const std::string& dirName) {
+    static constexpr const char* kSuffixes[] = {".installing", ".installing.part", ".previous"};
+    for (const char* suffix : kSuffixes) {
+        const std::size_t length = std::strlen(suffix);
+        if (dirName.size() > length &&
+            dirName.compare(dirName.size() - length, length, suffix) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::vector<ThemePreset> ThemePreset::loadUserPresets() {
     std::vector<ThemePreset> result;
     std::ifstream f(kUserPresetsPath);
@@ -814,6 +832,13 @@ std::vector<ThemePreset> ThemePreset::loadInstalledPackages() {
         }
 
         std::string dirName = entry.path().filename().string();
+        // Work the installer leaves behind while it runs, and would clean up if
+        // it finished. One that survives a crash or a power cut still holds a
+        // theme.json, so it was listed as a second copy of the same theme --
+        // with the same package id, which made deleting either of them remove
+        // both from the list and only one from the card.
+        if (isThemeInstallLeftover(dirName))
+            continue;
         std::string installDir = entry.path().string();
 
         std::string manifestPath = installDir + "/theme.json";
@@ -869,4 +894,31 @@ bool ThemePreset::saveUserPresets(const std::vector<ThemePreset>& presets) {
     }
 
     return static_cast<bool>(f);
+}
+
+int ThemePreset::sweepInstallLeftovers() {
+    // Only the installer's own working names, and only as whole suffixes: a
+    // theme is free to be called anything, and nothing here may touch a folder
+    // a player still has a theme in. Folders with no theme.json are left alone
+    // too -- a hand-installed theme with broken JSON looks exactly like one,
+    // and removing it would be the delete-without-asking this project already
+    // got burned by once.
+    std::error_code ec;
+    int removed = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(kInstalledThemesDir, ec)) {
+        if (ec)
+            break;
+        const std::string name = entry.path().filename().string();
+        if (!isThemeInstallLeftover(name))
+            continue;
+        std::string failedPath;
+        if (switchu::removeRecursive(entry.path().string(), &failedPath)) {
+            ++removed;
+            DebugLog::log("[themes] removed install leftover %s", name.c_str());
+        } else {
+            DebugLog::log("[themes] could not remove leftover %s (%s)",
+                          name.c_str(), failedPath.c_str());
+        }
+    }
+    return removed;
 }

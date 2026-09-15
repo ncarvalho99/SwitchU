@@ -7,7 +7,14 @@ package("libsdl")
 
     on_fetch(function(package)
         local package_name = "switch-sdl2-2.28.5-3-any.pkg.tar.zst"
-        local package_url = "https://wii.leseratte10.de/devkitPro/switch/sdl2/" .. package_name
+        local package_urls = {
+            "https://wii.leseratte10.de/devkitPro/switch/sdl2/" .. package_name,
+            -- The Wayback Machine's copy of the same file, for when the mirror
+            -- is down: it answered 502 for the whole site and stopped every
+            -- build at configure. The checksum below is what makes a second
+            -- source acceptable; it is verified whichever one answered.
+            "https://web.archive.org/web/2025id_/https://wii.leseratte10.de/devkitPro/switch/sdl2/" .. package_name
+        }
         local package_sha256 = "b554bde32201f32f93a5be1a6561cf2abb9fd7755e00ebbce8a692b89cf0646e"
         local root = path.join(os.projectdir(), "build", "sdl2-audout")
         local package_path = path.join(root, package_name)
@@ -18,7 +25,19 @@ package("libsdl")
         os.mkdir(root)
         if not os.isfile(package_path) then
             cprint("${color.build.target}downloading${clear} SDL2 audout")
-            os.execv("curl", {"-fL", package_url, "-o", package_path})
+            local downloaded = false
+            for _, package_url in ipairs(package_urls) do
+                downloaded = try { function ()
+                    os.execv("curl", {"-fL", "--retry", "2", package_url, "-o", package_path})
+                    return true
+                end }
+                if downloaded then break end
+                os.tryrm(package_path)
+                cprint("${color.warning}SDL2 audout unavailable from %s", package_url)
+            end
+            if not downloaded then
+                raise("could not download " .. package_name)
+            end
         end
         if hash.sha256(package_path) ~= package_sha256 then
             raise("unexpected checksum for " .. package_name)

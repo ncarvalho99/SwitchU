@@ -21,6 +21,17 @@ enum class MenuMessage : uint32_t {
     GameCardMountFailure  =  8,
     AppViewFlagsUpdate    =  9,
     BatteryStatusChanged  = 10,
+    // The answer to a clock command. Those commands go out as storage with no
+    // reply, so the menu used to say "Date and time updated." as soon as the
+    // command was queued, before the daemon had run it or knew whether it had
+    // worked. app_id carries a TimeSettingKind, payload the Result.
+    TimeSettingApplied    = 11,
+};
+
+enum class TimeSettingKind : uint64_t {
+    ManualDateTime = 1,
+    InternetSync   = 2,
+    NetworkTime    = 3,
 };
 
 enum class SystemMessage : uint32_t {
@@ -68,6 +79,16 @@ enum class SystemMessage : uint32_t {
     // Sent after the first real menu frame has been submitted. MenuReady
     // measures construction; this measures the first usable visual frame.
     MenuFirstFrame        = 43,
+    // Closes the daemon's log and starts a new one, so the finished file can be
+    // copied off the card. Nothing can read it while the daemon holds it open:
+    // copying it over MTP with the console running fails with 2002-0007,
+    // "resource already in use", which is how diagnostics kept getting stuck.
+    RotateLogs            = 44,
+    // Forgets every cached name and icon and reads them from the titles again.
+    // Expensive on purpose -- about a second per installed title -- so it is a
+    // separate, explicit action from RefreshCatalog, which only picks up what
+    // the catalogue is missing.
+    RebuildControlCache   = 45,
 #ifdef SWITCHU_TERMINATION_QUEUE_TEST
     // Diagnostic-only commands. Production builds neither expose nor handle
     // these IDs, so lifecycle fault injection cannot alter normal timing.

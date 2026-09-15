@@ -432,51 +432,42 @@ bool GameDetailsScreen::handleCustomNavRight() {
     return true;
 }
 
-std::vector<std::string> GameDetailsScreen::actionLabels() const {
+// The labels and what they do, built together. They used to be two lists kept
+// in step by hand -- a vector of strings and a switch on the index -- where the
+// port branch already made the same index mean two different things, and any
+// new action had to be inserted into both in the same place.
+std::vector<GameDetailsScreen::RailAction> GameDetailsScreen::railActions() const {
     auto& i18n = nxui::I18n::instance();
-    std::vector<std::string> actions = {
-        i18n.tr("dialog.icon_options_gallery", "Gallery"),
-        i18n.tr("dialog.customize_active_art", "Active artwork"),
-        i18n.tr("dialog.customize_restore_default", "Restore default"),
-        i18n.tr("dialog.details_manage_mods", "Manage mods"),
-        i18n.tr("dialog.details_cheats", "Cheats"),
-    };
+    std::vector<RailAction> actions;
+    actions.push_back({i18n.tr("dialog.icon_options_gallery", "Gallery"), m_openGalleryCb});
+    actions.push_back({i18n.tr("dialog.customize_active_art", "Active artwork"), m_showArtworkCb});
+    actions.push_back({i18n.tr("dialog.customize_restore_default", "Restore default"), m_restoreArtworkCb});
+    actions.push_back({i18n.tr("dialog.details_manage_mods", "Manage mods"), m_manageModsCb});
+    actions.push_back({i18n.tr("dialog.details_cheats", "Cheats"), m_cheatsCb});
+    actions.push_back({i18n.tr("dialog.details_rename", "Rename"), m_renameCb});
     if (m_isGamePort) {
-        actions.push_back(i18n.tr("dialog.edit_search_title", "Edit search title"));
-        actions.push_back(i18n.tr("dialog.unmark_port", "Unmark port"));
-    } else if (!isNativeApplicationId(m_titleId)) {
-        actions.push_back(i18n.tr("dialog.mark_as_game_port", "Mark as game port"));
+        actions.push_back({i18n.tr("dialog.edit_search_title", "Edit search title"), m_editSearchTitleCb});
+        actions.push_back({i18n.tr("dialog.unmark_port", "Unmark port"), m_removeGamePortCb});
+    } else {
+        actions.push_back({i18n.tr("dialog.mark_as_game_port", "Mark as game port"), m_markAsGamePortCb});
     }
-    actions.push_back(i18n.tr("dialog.icon_options_delete", "Delete software"));
+    actions.push_back({i18n.tr("dialog.icon_options_delete", "Delete software"), m_deleteSoftwareCb});
     return actions;
 }
 
+std::vector<std::string> GameDetailsScreen::actionLabels() const {
+    std::vector<std::string> labels;
+    for (const auto& action : railActions())
+        labels.push_back(action.label);
+    return labels;
+}
+
 void GameDetailsScreen::activateAction() {
-    const auto actions = actionLabels();
+    const auto actions = railActions();
     if (m_selectedAction < 0 || (std::size_t)m_selectedAction >= actions.size())
         return;
-    const std::string& label = actions[m_selectedAction];
-    auto& i18n = nxui::I18n::instance();
-
-    if (label == i18n.tr("dialog.icon_options_gallery", "Gallery")) {
-        if (m_openGalleryCb) m_openGalleryCb();
-    } else if (label == i18n.tr("dialog.customize_active_art", "Active artwork")) {
-        if (m_showArtworkCb) m_showArtworkCb();
-    } else if (label == i18n.tr("dialog.customize_restore_default", "Restore default")) {
-        if (m_restoreArtworkCb) m_restoreArtworkCb();
-    } else if (label == i18n.tr("dialog.details_manage_mods", "Manage mods")) {
-        if (m_manageModsCb) m_manageModsCb();
-    } else if (label == i18n.tr("dialog.details_cheats", "Cheats")) {
-        if (m_cheatsCb) m_cheatsCb();
-    } else if (label == i18n.tr("dialog.edit_search_title", "Edit search title")) {
-        if (m_editSearchTitleCb) m_editSearchTitleCb();
-    } else if (label == i18n.tr("dialog.unmark_port", "Unmark port")) {
-        if (m_removeGamePortCb) m_removeGamePortCb();
-    } else if (label == i18n.tr("dialog.mark_as_game_port", "Mark as game port")) {
-        if (m_markAsGamePortCb) m_markAsGamePortCb();
-    } else if (label == i18n.tr("dialog.icon_options_delete", "Delete software")) {
-        if (m_deleteSoftwareCb) m_deleteSoftwareCb();
-    }
+    if (actions[(std::size_t)m_selectedAction].callback)
+        actions[(std::size_t)m_selectedAction].callback();
 }
 
 std::string GameDetailsScreen::onlineStatusMessage() const {
@@ -571,12 +562,17 @@ void GameDetailsScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&
     const float factsAvailable = rail.bottom() - actionsBottom - kFactGap;
     const int factCount = std::clamp((int)std::floor(factsAvailable / kFactRowH), 0, 3);
     const float factsTop = actionsBottom + kFactGap;
+    // Play time comes before mods. A port carries two extra actions, which
+    // leaves room for two facts, and the row dropped was the play time --
+    // reported as a port whose dossier showed no play time at all while the
+    // grid badge showed 37 hours. "Mods: none detected" is the one worth
+    // losing of the two.
     if (factCount >= 1)
         railFact(factsTop, i18n.tr("dialog.details_version", "Version"), m_displayVersion);
     if (factCount >= 2)
-        railFact(factsTop + kFactRowH, i18n.tr("dialog.details_mods", "Mods"), m_modSummary);
+        railFact(factsTop + kFactRowH, i18n.tr("dialog.details_playtime", "Play time"), m_playTime);
     if (factCount >= 3)
-        railFact(factsTop + 2.f * kFactRowH, i18n.tr("dialog.details_playtime", "Play time"), m_playTime);
+        railFact(factsTop + 2.f * kFactRowH, i18n.tr("dialog.details_mods", "Mods"), m_modSummary);
 
     const nxui::Rect main = {panel.x + 292.f, panel.y + 10.f, panel.width - 312.f, panel.height - 20.f};
     const std::string title = m_snapshot.title.empty() ? m_title : m_snapshot.title;

@@ -92,11 +92,20 @@ SettingsScreen::Tab settings::tabs::InternetTab::build(SettingsScreen& screen) {
     t.name = i18n.tr("settings.tabs.internet", "Internet");
 
     u32 ip = 0;
+    u32 primaryDns = 0;
+    u32 secondaryDns = 0;
     std::string ssid;
     bool nifmOk = R_SUCCEEDED(nifmInitialize(NifmServiceType_User));
     DebugLog::log("[internet] nifmInit: %s", nifmOk ? "OK" : "FAIL");
     if (nifmOk) {
         nifmGetCurrentIpAddress(&ip);
+
+        // The DNS row used to be the fixed string "Auto (DHCP)", which was not
+        // read from anything: a console with servers set by hand -- 90DNS, say,
+        // which this scene does use -- still read as automatic.
+        u32 mask = 0;
+        u32 gateway = 0;
+        nifmGetCurrentIpConfigInfo(&ip, &mask, &gateway, &primaryDns, &secondaryDns);
 
         NifmNetworkProfileData prof{};
         if (R_SUCCEEDED(nifmGetCurrentNetworkProfile(&prof))) {
@@ -225,7 +234,15 @@ SettingsScreen::Tab settings::tabs::InternetTab::build(SettingsScreen& screen) {
 
     {
         SettingItem it; it.label = i18n.tr("settings.internet.dns", "DNS"); it.type = ItemType::Info;
-        it.infoText = i18n.tr("settings.internet.dns_auto", "Auto (DHCP)");
+        if (nifmOk && primaryDns != 0) {
+            it.infoText = settings_ipToString(primaryDns);
+            if (secondaryDns != 0)
+                it.infoText += " / " + settings_ipToString(secondaryDns);
+        } else if (nifmOk && ip != 0) {
+            it.infoText = i18n.tr("settings.internet.dns_auto", "Auto (DHCP)");
+        } else {
+            it.infoText = i18n.tr("settings.internet.not_connected", "Not connected");
+        }
         t.items.push_back(std::move(it));
     }
 

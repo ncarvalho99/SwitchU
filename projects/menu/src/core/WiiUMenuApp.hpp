@@ -126,10 +126,17 @@ private:
     void applyGlassSharpness(float sharpness);
     // The + menu on a focused icon: what the stock home menu offers, minus
     // the entries that would need a daemon round trip to answer.
-    // Cycles hand-made order, A-Z, most recently opened. The hint bar shows
-    // which one is in force rather than just naming the button.
+    // Cycles hand-made order, A-Z, most recently opened, most played. The hint
+    // bar shows which one is in force rather than just naming the button.
     void cycleSortMode();
     std::string sortModeLabel() const;
+    // Play time for sort mode 4 and its badge. pdm is asked on the thread pool,
+    // in one batch; the sort comparator and the icons only ever read the cache
+    // in m_config.playtime, never pdm itself.
+    void requestPlaytimeRefresh(const char* reason);
+    void pollPlaytimeRefresh();
+    std::string playtimeBadgeFor(const AppEntry& entry) const;
+    void applyPlaytimeBadges();
     void showIconOptions();
     // Homebrew, forwarders and ports: the dossier has nothing to show for them,
     // so + offers the single action that applies.
@@ -535,6 +542,18 @@ private:
     // is what losing a race with an in-flight write looks like.
     std::future<void>    m_configSaveFuture;
     std::future<void>    m_themeDeleteFuture;
+    // Written by the worker, read on the main thread once m_playtimeFuture is
+    // ready. The pool hands back only std::future<void>.
+    struct PlaytimeRefreshState {
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> playtime;
+        // Raised when the console is about to be handed to a game: the batch
+        // stops where it is rather than making the player wait for it.
+        std::atomic<bool> cancelled{false};
+    };
+    std::shared_ptr<PlaytimeRefreshState> m_playtimeRefresh;
+    std::future<void>    m_playtimeFuture;
+    bool                 m_playtimeRefreshQueued = false;
+    bool                 m_playtimeResortPending = false;
     bool                 m_audioStarted = false;
     bool                 m_musicFadeActive = false;
 #ifdef SWITCHU_MENU

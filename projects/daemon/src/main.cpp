@@ -15,6 +15,7 @@
 #include "menu_launcher.hpp"
 #include "library_applet_runner.hpp"
 #include "system_action_queue.hpp"
+#include <ctime>
 #include <cstdio>
 #include <cstring>
 #include <atomic>
@@ -42,9 +43,25 @@ static bool g_psmReady = false;
 static bool g_lblReady = false;
 static bool g_hidReady = false;
 
+// libnx reads the clock exactly once, in __libnx_init_time(), and derives every
+// later timestamp from the tick counter since then. The default __appInit calls
+// it; this daemon has its own and never did, so the sample stayed at zero and
+// every line it ever logged was dated 1970 plus the console's uptime -- which
+// also went into the names of its archived logs. Not declared in any libnx
+// header, so it is declared here.
+extern "C" void __libnx_init_time(void);
+
 extern "C" {
     u32 __nx_applet_type = AppletType_SystemApplet;
     u32 __nx_fs_num_sessions = 3;
+
+    // time:s, the clock a system process is meant to use. Left at the default,
+    // timeInitialize() opens time:u -- the application one -- and every clock
+    // read from this process failed, so gettimeofday fell back to the tick
+    // counter: the whole daemon log, and the names of its archived copies,
+    // carried 1970 dates for as long as the console stayed up. The menu has
+    // always set this (to time:a) and has always had real timestamps.
+    TimeServiceType __nx_time_service_type = TimeServiceType_System;
 
     size_t __nx_heap_size = 0x800000;
 }
@@ -78,6 +95,8 @@ extern "C" void __appInit(void) {
     g_timeReady = R_SUCCEEDED(rc);
     if (R_FAILED(rc))
         svcOutputDebugString("[SwitchU-daemon] timeInitialize FAIL", 37);
+    if (g_timeReady)
+        __libnx_init_time();
 
     rc = setsysInitialize();
     g_setsysReady = R_SUCCEEDED(rc);
@@ -365,6 +384,11 @@ static void enqueueControlCacheTitles(const std::vector<uint64_t>& titleIds) {
             g_controlCacheQueue.push_back(titleId);
         }
     }
+}
+
+static std::size_t controlCacheQueueSize() {
+    std::lock_guard<std::mutex> lock(g_controlCacheQueueMutex);
+    return g_controlCacheQueue.size();
 }
 
 static bool popControlCacheTitle(uint64_t& outTitleId) {
@@ -677,6 +701,17 @@ static Result applySystemTime(u64 targetTimestamp, bool isInternetSync) {
 
     if (R_FAILED(localRc) && R_FAILED(userRc) && R_FAILED(netRc)) {
         return localRc != 0 ? localRc : (userRc != 0 ? userRc : netRc);
+    }
+    // The menu now reports this result to the player, so success has to mean
+    // the clock the home screen shows reads the new time, not merely that one
+    // of the three clocks accepted it. A couple of minutes of slack covers the
+    // time spent getting here.
+    constexpr u64 kClockSlackSeconds = 120;
+    if (R_SUCCEEDED(readRc)) {
+        const u64 drift = actual > targetTimestamp ? actual - targetTimestamp
+                                                   : targetTimestamp - actual;
+        if (drift > kClockSlackSeconds)
+            return MAKERESULT(Module_Libnx, 909);
     }
     return 0;
 }
@@ -1466,6 +1501,7 @@ static void handleMenuCommand() {
         const auto args = reader.pop<smi::PrepareAppArgs>();
         AccountUid uid{};
         std::memcpy(&uid, args.user_uid, sizeof(uid));
+        switchu::daemon::mem::snapshot("prepare-app");
         daemon::app::prepare(args.title_id, uid, args.request_send_tick,
                              commandReceiveTick);
         break;
@@ -1589,6 +1625,17 @@ static void handleMenuCommand() {
         switchu::FileLog::log("[smi] queued user creator launch (actions=%zu)", g_actionQueue.size());
         break;
 
+    case smi::SystemMessage::RotateLogs:
+        // open() closes the current file, renames it to daemon-<timestamp>.log
+        // and starts a fresh one. The renamed copy is held by nobody, so it can
+        // be read over MTP with the console still running.
+        switchu::FileLog::log("[smi] rotating log on request");
+        switchu::FileLog::flush();
+        switchu::FileLog::open("daemon");
+        fsdevCommitDevice("sdmc");
+        switchu::FileLog::log("[smi] log rotated");
+        break;
+
     case smi::SystemMessage::LaunchNetConnect:
         {
             Action action{};
@@ -1660,6 +1707,9 @@ static void handleMenuCommand() {
         const auto args = reader.pop<smi::ManualDateTimeArgs>();
         const Result rc = setManualDateTime(args);
         switchu::FileLog::log("[settings-time] manual date/time rc=0x%X", rc);
+        pushNotification(smi::MenuMessage::TimeSettingApplied,
+                         static_cast<uint64_t>(smi::TimeSettingKind::ManualDateTime),
+                         static_cast<uint32_t>(rc));
         break;
     }
 
@@ -1669,6 +1719,9 @@ static void handleMenuCommand() {
         switchu::FileLog::log(
             "[settings-time] Internet synchronization enabled=%d rc=0x%X",
             args.enabled ? 1 : 0, rc);
+        pushNotification(smi::MenuMessage::TimeSettingApplied,
+                         static_cast<uint64_t>(smi::TimeSettingKind::InternetSync),
+                         static_cast<uint32_t>(rc));
         break;
     }
 
@@ -1678,6 +1731,9 @@ static void handleMenuCommand() {
         switchu::FileLog::log(
             "[settings-time] SetPosixTime posix=%llu internet=%d rc=0x%X",
             (unsigned long long)args.timestamp, args.is_internet_sync ? 1 : 0, rc);
+        pushNotification(smi::MenuMessage::TimeSettingApplied,
+                         static_cast<uint64_t>(smi::TimeSettingKind::NetworkTime),
+                         static_cast<uint32_t>(rc));
         break;
     }
 
@@ -1686,18 +1742,33 @@ static void handleMenuCommand() {
     }
 
     case smi::SystemMessage::RefreshCatalog: {
-        // Everything goes, not just what looks new. This is the answer to a
-        // shortcut that reused an id and therefore looks unchanged: the player
-        // is telling us the cache is wrong, and they are the ones who can see
-        // it. The worker refetches what the catalogue still needs.
+        // Only what the catalogue is missing. Reading control data costs about
+        // 0.9 s per title -- measured over 547 reads on a 117-title console,
+        // median 899 ms -- so clearing the cache first made this take about six
+        // minutes, during which the grid sits on loading spinners. Picking up a
+        // newly installed title, which is what this is normally used for, needs
+        // none of that work. RebuildControlCache below is the one that forgets.
+        switchu::FileLog::log("[control-cache] refresh on request (%d titles tracked)",
+                              (int)g_lastRecordCount);
+        bool catalogChanged = false;
+        rebuildAppCatalog("refresh-request", &catalogChanged);
+        if (daemon::menu_la::isActive())
+            pushNotification(smi::MenuMessage::AppRecordsChanged);
+        break;
+    }
+
+    case smi::SystemMessage::RebuildControlCache: {
+        // The cache is wrong rather than incomplete: a shortcut that reused an
+        // id, or a title whose name could not be read when it was first seen.
+        // The player is the one who can see that, so they ask for it.
         for (s32 i = 0; i < g_lastRecordCount && i < kMaxTrackedApplicationRecords; ++i) {
             if (g_lastRecordTids[i] != 0)
                 switchu::control_cache::forget(g_lastRecordTids[i]);
         }
         switchu::FileLog::log("[control-cache] cleared on request (%d titles)",
                               (int)g_lastRecordCount);
-        bool catalogChanged = false;
-        rebuildAppCatalog("refresh-request", &catalogChanged);
+        bool rebuiltChanged = false;
+        rebuildAppCatalog("rebuild-request", &rebuiltChanged);
         if (daemon::menu_la::isActive())
             pushNotification(smi::MenuMessage::AppRecordsChanged);
         break;
@@ -2306,34 +2377,78 @@ static void controlCacheThreadFunc(void* arg) {
             continue;
         }
 
-        size_t controlSize = 0;
-        const uint64_t startTick = armGetSystemTick();
-        Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
-                                                titleId,
-                                                controlData,
-                                                sizeof(*controlData),
-                                                &controlSize);
-        const uint64_t elapsedMs = armTicksToNs(armGetSystemTick() - startTick) / 1'000'000ULL;
-        if (R_SUCCEEDED(rc) && controlSize >= sizeof(NacpStruct)) {
-            const bool ok = switchu::control_cache::writeFromControlData(
+        // Storage is what official software asks for, and it answers from the
+        // system's own control cache when that has an entry. A title downgraded
+        // to an older build was reported stuck with no name at all, which is
+        // what a stale or empty entry there looks like -- so the other two
+        // sources are tried before giving up on the name. StorageOnly ignores
+        // that cache and reads the installed content; CacheOnly is the last
+        // resort, and can still hold the name the title had before.
+        static constexpr NsApplicationControlSource kSources[] = {
+            NsApplicationControlSource_Storage,
+            NsApplicationControlSource_StorageOnly,
+            NsApplicationControlSource_CacheOnly,
+        };
+
+        bool named = false;
+        bool cached = false;
+        for (const NsApplicationControlSource source : kSources) {
+            size_t controlSize = 0;
+            const uint64_t startTick = armGetSystemTick();
+            const Result rc = nsGetApplicationControlData(source,
+                                                          titleId,
+                                                          controlData,
+                                                          sizeof(*controlData),
+                                                          &controlSize);
+            const uint64_t elapsedMs =
+                armTicksToNs(armGetSystemTick() - startTick) / 1'000'000ULL;
+            if (R_FAILED(rc) || controlSize < sizeof(NacpStruct)) {
+                switchu::FileLog::log(
+                    "[control-cache] GetControlData FAIL title=0x%016lX source=%d rc=0x%X size=%zu elapsed=%lums",
+                    titleId,
+                    static_cast<int>(source),
+                    rc,
+                    controlSize,
+                    static_cast<unsigned long>(elapsedMs));
+                continue;
+            }
+
+            const auto outcome = switchu::control_cache::writeFromControlData(
                 titleId,
                 *controlData,
                 controlSize);
-            switchu::FileLog::log("[control-cache] cached 0x%016lX size=%zu elapsed=%lums ok=%d",
-                                  titleId,
-                                  controlSize,
-                                  static_cast<unsigned long>(elapsedMs),
-                                  ok ? 1 : 0);
-            if (ok) {
-                g_controlCacheRefreshPending.store(true);
-                g_controlCacheRefreshDelay.store(60);
-            }
-        } else {
-            switchu::FileLog::log("[control-cache] GetControlData FAIL title=0x%016lX rc=0x%X size=%zu elapsed=%lums",
-                                  titleId,
-                                  rc,
-                                  controlSize,
-                                  static_cast<unsigned long>(elapsedMs));
+            named = outcome == switchu::control_cache::CacheOutcome::Named;
+            cached = cached || named ||
+                     outcome == switchu::control_cache::CacheOutcome::Unnamed;
+            switchu::FileLog::log(
+                "[control-cache] cached 0x%016lX source=%d size=%zu elapsed=%lums named=%d written=%d",
+                titleId,
+                static_cast<int>(source),
+                controlSize,
+                static_cast<unsigned long>(elapsedMs),
+                named ? 1 : 0,
+                cached ? 1 : 0);
+            if (named)
+                break;
+        }
+
+        if (cached) {
+            // An unnamed entry is kept as it is: the grid falls back to the id
+            // for the label, and the title is not asked for again every time the
+            // catalogue is rebuilt. Reload games and shortcuts forgets it and
+            // starts this over, which is the way back once the content that
+            // carries the name is installed again.
+            //
+            // Each notification makes the menu rebuild its entire grid, so while
+            // there is still a queue the next one is held back: a full rebuild
+            // was telling the menu about once a second for minutes, and the grid
+            // spent that time being torn down and built again.
+            g_controlCacheRefreshPending.store(true);
+            g_controlCacheRefreshDelay.store(controlCacheQueueSize() > 0 ? 800 : 60);
+        }
+        if (!named) {
+            switchu::FileLog::log("[control-cache] no name for 0x%016lX from any source",
+                                  titleId);
         }
 
         delete controlData;
@@ -2371,6 +2486,23 @@ static void stopControlCacheWorker() {
     threadWaitForExit(&g_controlCacheThread);
     threadClose(&g_controlCacheThread);
     g_controlCacheStarted = false;
+}
+
+// The system clock is not necessarily set when a sysmodule starts at boot, and
+// libnx only samples it once. One failed sample would date the whole session
+// from 1970, so the sample is retried from the main loop until it looks like a
+// real date -- after which this costs one comparison per iteration.
+static bool g_wallClockReady = false;
+static void ensureWallClock() {
+    if (g_wallClockReady || !g_timeReady)
+        return;
+    __libnx_init_time();
+    const std::time_t now = std::time(nullptr);
+    std::tm calendar{};
+    if (::localtime_r(&now, &calendar) && calendar.tm_year + 1900 >= 2020) {
+        g_wallClockReady = true;
+        switchu::FileLog::log("[daemon] wall clock available");
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -2430,6 +2562,7 @@ int main(int argc, char* argv[]) {
             svcSleepThread(50'000'000ULL);
             continue;
         }
+        ensureWallClock();
         mainLoop();
         // The daemon never closes its log, so drain the write buffer on a timer.
         switchu::FileLog::flushIfStale();
