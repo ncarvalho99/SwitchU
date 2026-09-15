@@ -324,6 +324,42 @@ private:
     std::vector<VtxShadow> m_vtxShadow;
     uint32_t m_journalNonQuadBatches = 0;
     uint32_t m_journalUnshadowed = 0;
+
+    // First few vertices that arrive at addVertex already non-finite or wildly
+    // out of range, captured as raw bits together with the state that produced
+    // them. See addVertex for why this is recorded at the entry point.
+    struct BadVertex {
+        uint32_t xBits = 0, yBits = 0;
+        uint32_t vtxIndex = 0, batchStart = 0;
+        uint16_t site = 0, shader = 0;
+        float radius = 0.f, thickness = 0.f;
+        float centreX = 0.f, centreY = 0.f;
+        float halfX = 0.f, halfY = 0.f;
+        float a = 0.f;
+    };
+    static constexpr uint32_t kBadVertexSamples = 8;
+    BadVertex m_journalBadVertex[kBadVertexSamples] {};
+    uint32_t  m_journalBadSamples = 0;
+    uint32_t  m_journalBadVertices = 0;
+
+    // Identifies which emission helper is currently adding vertices, so a bad
+    // coordinate can be attributed to a caller rather than guessed at.
+    enum class EmitSite : uint16_t {
+        None = 0, Quad, QuadGrad, RoundedMasked, RoundedOutline,
+        Circle, Triangle, Line, Text, Offscreen, Glass, Blur,
+    };
+    EmitSite m_emitSite = EmitSite::None;
+
+    // Sets the emission site for the duration of one helper and restores the
+    // previous value, so nested helpers report the innermost one.
+    struct EmitSiteScope {
+        Renderer& r;
+        EmitSite  prev;
+        EmitSiteScope(Renderer& rr, EmitSite s) : r(rr), prev(rr.m_emitSite) {
+            r.m_emitSite = s;
+        }
+        ~EmitSiteScope() { r.m_emitSite = prev; }
+    };
     bool     m_journalBackbufferClearSeen = false;
     Color    m_journalBackbufferClear {0.f, 0.f, 0.f, 0.f};
     uint32_t m_journalDropped = 0;             // entries past the cap

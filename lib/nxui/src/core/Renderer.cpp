@@ -391,6 +391,8 @@ void Renderer::journalReset() {
     m_journalBackbufferClearSeen = false;
     m_journalNonQuadBatches = 0;
     m_journalUnshadowed = 0;
+    m_journalBadVertices = 0;
+    m_journalBadSamples = 0;
     m_journalBackbufferClear = {0.f, 0.f, 0.f, 0.f};
 }
 
@@ -936,21 +938,48 @@ void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
         return;
     }
     // Shadow the geometry the journal needs, in normal cached memory, at the
-    // moment it is written.
+    // moment it is written, and check the incoming coordinate here.
     //
-    // m_vtxBase points into a DkMemBlockFlags_CpuUncached block. Reading it
-    // back produced values near 1e19 whose mantissa was intact but whose
-    // exponent byte was wrong, for 40-54 batches per frame — roughly a fifth of
-    // every frame. That is a property of re-reading write-combined uncached
-    // memory, not of the geometry: the same values render correctly. Those
-    // unreadable bounds are what forced the per-quad verdict to report
-    // INCONCLUSIVE on every frame of capture 20260915_073314, including all
-    // three glitched ones. Capturing at write time removes the re-read
-    // entirely.
-    if (m_journalEnabled && m_vtxCount < kVtxShadowCap) {
-        auto& s = m_vtxShadow[m_vtxCount];
-        s.x = x; s.y = y;
-        s.r = c.r; s.g = c.g; s.b = c.b; s.a = c.a;
+    // Shadowing was added to remove a suspected uncached-readback artifact.
+    // It did not: 40-47 batches per frame still carry bounds near 1e19 even
+    // though both the write and the read now happen in an ordinary vector, so
+    // the value is already wrong when it arrives. The bit patterns decode to
+    // plausible screen coordinates under a different exponent byte
+    // (0xDF43EB6C -> 195.920, 0x5FC3EB6C -> 391.839) and differ from a sane
+    // exponent by the same mask in both cases (0xDF^0xC3 == 0x5F^0x43 == 0x1C).
+    //
+    // This records the offending value at its entry point, together with the
+    // shape state and emission site active at the time, so the caller that
+    // produces it can be named instead of inferred. It matters because the
+    // affected batches are the ones carrying alpha 0.200, and 1 - 0.200 is the
+    // attenuation measured in the artifact.
+    if (m_journalEnabled) {
+        if (m_vtxCount < kVtxShadowCap) {
+            auto& s = m_vtxShadow[m_vtxCount];
+            s.x = x; s.y = y;
+            s.r = c.r; s.g = c.g; s.b = c.b; s.a = c.a;
+        }
+        const bool sane = std::isfinite(x) && std::isfinite(y) &&
+                          std::fabs(x) < 1e5f && std::fabs(y) < 1e5f;
+        if (!sane) {
+            ++m_journalBadVertices;
+            if (m_journalBadSamples < kBadVertexSamples) {
+                auto& b = m_journalBadVertex[m_journalBadSamples++];
+                std::memcpy(&b.xBits, &x, 4);
+                std::memcpy(&b.yBits, &y, 4);
+                b.vtxIndex   = m_vtxCount;
+                b.batchStart = m_vtxBatchStart;
+                b.site       = (uint16_t)m_emitSite;
+                b.shader     = (uint16_t)m_curShader;
+                b.radius     = m_shapeRadius;
+                b.thickness  = m_shapeThickness;
+                b.centreX    = m_shapeCentre.x;
+                b.centreY    = m_shapeCentre.y;
+                b.halfX      = m_shapeHalf.x;
+                b.halfY      = m_shapeHalf.y;
+                b.a          = c.a;
+            }
+        }
     }
     auto& vtx  = m_vtxBase[m_vtxCount++];
     if (m_vtxCount > m_peakVtxCount) m_peakVtxCount = m_vtxCount;
@@ -970,6 +999,7 @@ void Renderer::addQuad(float x0, float y0, float x1, float y1,
     // happens once per frame in beginFrame — so flushing here left the quad to
     // tear anyway. Drop it whole so the triangle stream stays aligned.
     if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) return;
+    const EmitSiteScope site{*this, EmitSite::Quad};
     addVertex(x0, y0, u0, v0, c);
     addVertex(x1, y0, u1, v0, c);
     addVertex(x1, y1, u1, v1, c);
@@ -983,6 +1013,7 @@ void Renderer::addQuadGrad(float x0, float y0, float x1, float y1,
                             const Color& cTop, const Color& cBot)
 {
     if (m_vtxCount + 6 > GpuDevice::MAX_VERTICES) return;   // see addQuad
+    const EmitSiteScope site{*this, EmitSite::QuadGrad};
     addVertex(x0, y0, u0, v0, cTop);
     addVertex(x1, y0, u1, v0, cTop);
     addVertex(x1, y1, u1, v1, cBot);
@@ -1070,6 +1101,7 @@ void Renderer::drawRoundedRectOutline(const Rect& r, const Color& c, float radiu
     }
 
     beginShape(r, rad, t);
+    const EmitSiteScope site{*this, EmitSite::RoundedOutline};
 
     const float x0 = r.x - 1.f, y0 = r.y - 1.f;
     const float x1 = r.right() + 1.f, y1 = r.bottom() + 1.f;
@@ -1135,6 +1167,7 @@ void Renderer::drawCircle(const Vec2& center, float radius, const Color& c, int 
 void Renderer::drawTriangle(const Vec2& p1, const Vec2& p2, const Vec2& p3, const Color& c) {
     if (m_vtxCount + 3 > GpuDevice::MAX_VERTICES) return;
     bindTexture(-1);
+    const EmitSiteScope site{*this, EmitSite::Triangle};
     addVertex(p1.x, p1.y, 0, 0, c);
     addVertex(p2.x, p2.y, 0, 0, c);
     addVertex(p3.x, p3.y, 0, 0, c);
@@ -1148,6 +1181,7 @@ void Renderer::drawLine(const Vec2& from, const Vec2& to, const Color& c, float 
     Vec2 a = from + n * ht, b = from - n * ht;
     Vec2 cc = to + n * ht,  dd = to - n * ht;
     bindTexture(-1);
+    const EmitSiteScope site{*this, EmitSite::Line};
     addVertex(a.x, a.y, 0, 0, c);
     addVertex(b.x, b.y, 0, 0, c);
     addVertex(cc.x, cc.y, 0, 0, c);
@@ -1189,6 +1223,7 @@ void Renderer::endShape() {
 void Renderer::drawRoundedMasked(const Rect& dest, float radius, const Color& c,
                                  const Rect& uv, float thickness) {
     beginShape(dest, radius, thickness);
+    const EmitSiteScope site{*this, EmitSite::RoundedMasked};
     addQuad(dest.x, dest.y, dest.right(), dest.bottom(),
             uv.x, uv.y, uv.right(), uv.bottom(), c);
     endShape();
@@ -1341,6 +1376,37 @@ std::string Renderer::formatDrawJournal() const {
                              ? "(0 => no submitted quad could have dimmed it)"
                              : "(INCONCLUSIVE: some geometry was untestable)"));
     out += line;
+
+    // Vertices that were already invalid when they reached addVertex, reported
+    // with the raw bits and the state that produced them. The mantissa is
+    // printed re-exponented to 0x43 so the plausible original coordinate is
+    // visible next to the corrupted value.
+    static const char* kSiteName[] = {
+        "none", "quad", "quadGrad", "roundedMasked", "roundedOutline",
+        "circle", "triangle", "line", "text", "offscreen", "glass", "blur",
+    };
+    std::snprintf(line, sizeof(line),
+                  "badverts: total=%u sampled=%u\n",
+                  m_journalBadVertices, m_journalBadSamples);
+    out += line;
+    for (uint32_t i = 0; i < m_journalBadSamples; ++i) {
+        const auto& b = m_journalBadVertex[i];
+        const uint32_t rx = (0x43u << 24) | (b.xBits & 0x00FFFFFFu);
+        const uint32_t ry = (0x43u << 24) | (b.yBits & 0x00FFFFFFu);
+        float fx, fy;
+        std::memcpy(&fx, &rx, 4);
+        std::memcpy(&fy, &ry, 4);
+        const char* site = ((size_t)b.site < std::size(kSiteName))
+                         ? kSiteName[b.site] : "?";
+        std::snprintf(line, sizeof(line),
+            "  bad[%u] site=%-14s shader=%u vtx=%u batchStart=%u alpha=%.3f\n"
+            "        xbits=0x%08X ybits=0x%08X remantissa=(%.3f,%.3f)\n"
+            "        shape centre=(%.1f,%.1f) half=(%.1f,%.1f) rad=%.2f thick=%.2f\n",
+            i, site, b.shader, b.vtxIndex, b.batchStart, b.a,
+            b.xBits, b.yBits, fx, fy,
+            b.centreX, b.centreY, b.halfX, b.halfY, b.radius, b.thickness);
+        out += line;
+    }
 
     for (size_t i = 0; i < m_journal.size(); ++i) {
         const auto& e = m_journal[i];
