@@ -197,6 +197,24 @@ public:
         m_sceneAmbient = ambient; m_sceneShapes = shapes;
     }
 
+    // Free-form probe line, for a widget to report its own state at the moment
+    // it emits something the journal flagged.
+    //
+    // The corrupted geometry is now pinned to MiiFigure's floor shadow, and
+    // every corrupted value is a small constant scaled by exactly 2^64. What
+    // the journal cannot see is which input produced it: the renderer only
+    // receives the finished coordinates. The widget writes its own inputs here
+    // so the faulty variable is named rather than inferred. Lines are dropped
+    // once the per-frame budget is reached, and the drop is reported.
+    void addProbe(const char* text) {
+        if (!m_journalEnabled || !text) return;
+        if (m_probes.size() >= kProbeCap) { ++m_probesDropped; return; }
+        m_probes.emplace_back(text);
+    }
+    bool probeBudgetLeft() const {
+        return m_journalEnabled && m_probes.size() < kProbeCap;
+    }
+
     // Monotonic frame counter, incremented by beginFrame. Written into the
     // journal header so a dumped frame can be proven to line up with the
     // journal that claims to describe it, rather than assumed to.
@@ -386,6 +404,10 @@ private:
 
     uint32_t m_sceneMiis = 0, m_scenePedestals = 0, m_sceneBubbles = 0;
     uint32_t m_sceneAmbient = 0, m_sceneShapes = 0;
+
+    static constexpr size_t kProbeCap = 24;
+    std::vector<std::string> m_probes;
+    uint32_t m_probesDropped = 0;
 
     // Sets the emission site for the duration of one helper and restores the
     // previous value, so nested helpers report the innermost one.

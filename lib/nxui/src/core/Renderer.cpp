@@ -393,6 +393,8 @@ void Renderer::journalReset() {
     m_journalUnshadowed = 0;
     m_journalBadVertices = 0;
     m_journalBadSamples = 0;
+    m_probes.clear();
+    m_probesDropped = 0;
     m_journalBackbufferClear = {0.f, 0.f, 0.f, 0.f};
 }
 
@@ -1406,6 +1408,17 @@ std::string Renderer::formatDrawJournal() const {
                   "badverts: total=%u sampled=%u\n",
                   m_journalBadVertices, m_journalBadSamples);
     out += line;
+
+    if (!m_probes.empty() || m_probesDropped) {
+        std::snprintf(line, sizeof(line), "probes: %zu dropped=%u\n",
+                      m_probes.size(), m_probesDropped);
+        out += line;
+        for (const auto& p : m_probes) {
+            out += "  ";
+            out += p;
+            out += '\n';
+        }
+    }
     for (uint32_t i = 0; i < m_journalBadSamples; ++i) {
         const auto& b = m_journalBadVertex[i];
         const uint32_t rx = (0x43u << 24) | (b.xBits & 0x00FFFFFFu);

@@ -2,6 +2,9 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace warawara {
 
@@ -272,6 +275,35 @@ void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallF
     const float wScale = 0.85f + (m_data.build / 128.0f) * 0.30f;
     const float hScale = 0.85f + (m_data.height / 128.0f) * 0.30f;
 
+    // Probe at function entry, before any arithmetic, so a bad member is caught
+    // as it stands rather than after it has propagated. setScale clamps to a
+    // minimum of 0.1 and every caller passes a value near 1.0, so an m_scale
+    // outside a generous window means the object's state was damaged after
+    // construction rather than configured badly.
+    if (ren.probeBudgetLeft()) {
+        const bool badState =
+            !std::isfinite(m_scale) || m_scale < 0.01f || m_scale > 16.f ||
+            !std::isfinite(m_pos.x) || !std::isfinite(m_pos.y) ||
+            std::fabs(m_pos.x) > 1e5f || std::fabs(m_pos.y) > 1e5f ||
+            !std::isfinite(m_animTime) || !std::isfinite(m_walkPhase);
+        if (badState) {
+            std::uint32_t sb = 0;
+            const float sv = m_scale;
+            std::memcpy(&sb, &sv, 4);
+            char buf[256];
+            std::snprintf(buf, sizeof(buf),
+                "mii.entry state=%d scale=%.6g(0x%08X) pos=(%.6g,%.6g) "
+                "target=(%.6g,%.6g) animTime=%.6g walkPhase=%.6g "
+                "build=%u height=%u",
+                (int)m_state, (double)m_scale, sb,
+                (double)m_pos.x, (double)m_pos.y,
+                (double)m_targetPos.x, (double)m_targetPos.y,
+                (double)m_animTime, (double)m_walkPhase,
+                (unsigned)m_data.build, (unsigned)m_data.height);
+            ren.addProbe(buf);
+        }
+    }
+
     const float headR = 19.5f * effScale;
     const float torsoW = 20.0f * wScale * effScale;
     const float torsoH = 22.0f * hScale * effScale;
@@ -327,6 +359,47 @@ void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallF
         currentShadowW,
         currentShadowH
     };
+
+    // Probe: this draw is the one whose vertices reach addVertex scaled by
+    // exactly 2^64. The renderer only sees finished coordinates, so it cannot
+    // say which input is wrong. Report the inputs here, at the moment the
+    // offending rect is built, and only when the rect is already out of range,
+    // so a healthy frame costs one comparison per Mii.
+    //
+    // Every recorded value divides by 2^64 to a clean constant (0.850, 0.225,
+    // 0.275, 0.175, 0.050), and 0.850 is exactly wScale/hScale when build and
+    // height are zero. Printing the raw bits of the scale inputs alongside the
+    // computed extents distinguishes "a bad input was supplied" from "a correct
+    // input was transformed on the way through".
+    if (ren.probeBudgetLeft()) {
+        const bool outOfRange =
+            !(std::isfinite(shadowRect.x) && std::isfinite(shadowRect.y) &&
+              std::isfinite(shadowRect.width) && std::isfinite(shadowRect.height)) ||
+            std::fabs(shadowRect.x) > 1e5f || std::fabs(shadowRect.y) > 1e5f ||
+            std::fabs(shadowRect.width) > 1e5f || std::fabs(shadowRect.height) > 1e5f;
+        if (outOfRange) {
+            std::uint32_t sb = 0, wb = 0, hb = 0, pb = 0;
+            const float scaleV = m_scale, wV = wScale, hV = hScale, posV = m_pos.x;
+            std::memcpy(&sb, &scaleV, 4);
+            std::memcpy(&wb, &wV, 4);
+            std::memcpy(&hb, &hV, 4);
+            std::memcpy(&pb, &posV, 4);
+            char buf[320];
+            std::snprintf(buf, sizeof(buf),
+                "mii.shadow state=%d scale=%.6g(0x%08X) build=%u height=%u "
+                "wScale=%.6g(0x%08X) hScale=%.6g(0x%08X) "
+                "pos=(%.4g[0x%08X],%.4g) shadowWH=(%.6g,%.6g) "
+                "jumpOff=%.6g jumpScale=%.6g alpha=%.4g",
+                (int)m_state, (double)m_scale, sb,
+                (unsigned)m_data.build, (unsigned)m_data.height,
+                (double)wScale, wb, (double)hScale, hb,
+                (double)m_pos.x, pb, (double)m_pos.y,
+                (double)currentShadowW, (double)currentShadowH,
+                (double)jumpOffset, (double)jumpScale, (double)shadowAlpha);
+            ren.addProbe(buf);
+        }
+    }
+
     ren.drawRoundedRect(shadowRect, nxui::Color(0.0f, 0.0f, 0.0f, shadowAlpha), currentShadowH * 0.5f);
 
     // 2. Feet (Shoes)
