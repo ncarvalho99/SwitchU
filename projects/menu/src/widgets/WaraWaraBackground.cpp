@@ -815,14 +815,25 @@ void WaraWaraBackground::renderLayer(nxui::Renderer& ren, bool intoOffscreen) {
         }
     }
 
-    for (const auto& s : m_shapes)
-        drawShapeWithSymmetry(ren, s);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "bg.shapes"};
+        for (const auto& s : m_shapes)
+            drawShapeWithSymmetry(ren, s);
+    }
 
     if (m_ambientMiisEnabled && !m_ambientMiis.empty()) {
+        const nxui::Renderer::DrawTagScope tag{ren, "bg.ambientMii"};
         for (const auto& mii : m_ambientMiis) {
             mii->render(ren, m_ambientFont, m_ambientSmallFont);
         }
     }
+
+    // The background owns the shape field and the ambient Miis, so it reports
+    // those two counts; the Plaza screen reports its own population and does
+    // not overwrite them.
+    if (ren.drawJournalEnabled())
+        ren.setBackgroundCounts((uint32_t)m_ambientMiis.size(),
+                                (uint32_t)m_shapes.size());
 
     ren.flush();
 }

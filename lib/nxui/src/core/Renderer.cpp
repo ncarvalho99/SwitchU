@@ -970,6 +970,7 @@ void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
                 b.vtxIndex   = m_vtxCount;
                 b.batchStart = m_vtxBatchStart;
                 b.site       = (uint16_t)m_emitSite;
+                b.tag        = m_drawTag;
                 b.shader     = (uint16_t)m_curShader;
                 b.radius     = m_shapeRadius;
                 b.thickness  = m_shapeThickness;
@@ -1385,6 +1386,22 @@ std::string Renderer::formatDrawJournal() const {
         "none", "quad", "quadGrad", "roundedMasked", "roundedOutline",
         "circle", "triangle", "line", "text", "offscreen", "glass", "blur",
     };
+    // Scene population and submitted work for this frame. The artifact becomes
+    // more frequent the longer Plaza runs, so something accumulates; these make
+    // "something" measurable per frame instead of inferred. Draw counts come
+    // from the previous frame's totals, which is what the existing counters
+    // expose, and the scene counts are whatever the owning screen last
+    // reported.
+    std::snprintf(line, sizeof(line),
+                  "scene: miis=%u pedestals=%u bubbles=%u ambient=%u shapes=%u "
+                  "draws=%u binds=%u verts=%u blurs=%u captures=%u\n",
+                  m_sceneMiis, m_scenePedestals, m_sceneBubbles,
+                  m_sceneAmbient, m_sceneShapes,
+                  m_lastFrameDrawCalls, m_lastFramePipelineBinds,
+                  m_lastFrameVertices, m_lastFrameBlurPasses,
+                  m_lastFrameCaptures);
+    out += line;
+
     std::snprintf(line, sizeof(line),
                   "badverts: total=%u sampled=%u\n",
                   m_journalBadVertices, m_journalBadSamples);
@@ -1399,10 +1416,11 @@ std::string Renderer::formatDrawJournal() const {
         const char* site = ((size_t)b.site < std::size(kSiteName))
                          ? kSiteName[b.site] : "?";
         std::snprintf(line, sizeof(line),
-            "  bad[%u] site=%-14s shader=%u vtx=%u batchStart=%u alpha=%.3f\n"
+            "  bad[%u] tag=%-22s site=%-14s shader=%u vtx=%u batchStart=%u alpha=%.3f\n"
             "        xbits=0x%08X ybits=0x%08X remantissa=(%.3f,%.3f)\n"
             "        shape centre=(%.1f,%.1f) half=(%.1f,%.1f) rad=%.2f thick=%.2f\n",
-            i, site, b.shader, b.vtxIndex, b.batchStart, b.a,
+            i, (b.tag && *b.tag) ? b.tag : "(untagged)", site,
+            b.shader, b.vtxIndex, b.batchStart, b.a,
             b.xBits, b.yBits, fx, fy,
             b.centreX, b.centreY, b.halfX, b.halfY, b.radius, b.thickness);
         out += line;

@@ -543,44 +543,74 @@ void WaraWaraPlazaScreen::drawHeader(nxui::Renderer& ren) const {
 void WaraWaraPlazaScreen::render(nxui::Renderer& ren) {
     if (m_fadeAlpha <= 0.001f) return;
 
+    // Report what the scene currently holds. The dimming artifact grows more
+    // frequent the longer Plaza stays open, so the population has to be visible
+    // per frame for "something accumulates" to be checked rather than assumed.
+    // Speech bubbles are counted from the Miis that currently own one.
+    if (ren.drawJournalEnabled()) {
+        uint32_t bubbles = 0;
+        for (const auto& mii : m_miis)
+            if (mii && mii->hasSpeechBubble()) ++bubbles;
+        ren.setPlazaCounts((uint32_t)m_miis.size(),
+                           (uint32_t)m_pedestals.size(), bubbles);
+    }
+
     // 1. Draw Plaza Sky & Floor
-    drawPlazaFloor(ren);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.floor"};
+        drawPlazaFloor(ren);
+    }
 
     // 2. Render Depth-Sorted Scene
     // Depth sorting strategy for authentic perspective:
     // a. Back row pedestals (Y = 320.0f)
-    for (size_t i = 0; i < m_pedestals.size() && i < 5; ++i) {
-        m_pedestals[i]->render(ren, m_fontNormal, m_fontSmall, m_cameraX);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.pedestal.back"};
+        for (size_t i = 0; i < m_pedestals.size() && i < 5; ++i) {
+            m_pedestals[i]->render(ren, m_fontNormal, m_fontSmall, m_cameraX);
+        }
     }
 
     // b. Miis located in the upper depth tier (Y < 420.0f)
-    for (const auto& mii : m_miis) {
-        if (mii->position().y < 420.0f) {
-            // Temporarily apply camera offset for rendering
-            nxui::Vec2 origPos = mii->position();
-            mii->setPosition({origPos.x - m_cameraX, origPos.y});
-            mii->render(ren, m_fontNormal, m_fontSmall);
-            mii->setPosition(origPos);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.mii.far"};
+        for (const auto& mii : m_miis) {
+            if (mii->position().y < 420.0f) {
+                // Temporarily apply camera offset for rendering
+                nxui::Vec2 origPos = mii->position();
+                mii->setPosition({origPos.x - m_cameraX, origPos.y});
+                mii->render(ren, m_fontNormal, m_fontSmall);
+                mii->setPosition(origPos);
+            }
         }
     }
 
     // c. Front row pedestals (Y = 510.0f)
-    for (size_t i = 5; i < m_pedestals.size(); ++i) {
-        m_pedestals[i]->render(ren, m_fontNormal, m_fontSmall, m_cameraX);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.pedestal.front"};
+        for (size_t i = 5; i < m_pedestals.size(); ++i) {
+            m_pedestals[i]->render(ren, m_fontNormal, m_fontSmall, m_cameraX);
+        }
     }
 
     // d. Miis located in the lower depth tier (Y >= 420.0f)
-    for (const auto& mii : m_miis) {
-        if (mii->position().y >= 420.0f) {
-            nxui::Vec2 origPos = mii->position();
-            mii->setPosition({origPos.x - m_cameraX, origPos.y});
-            mii->render(ren, m_fontNormal, m_fontSmall);
-            mii->setPosition(origPos);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.mii.near"};
+        for (const auto& mii : m_miis) {
+            if (mii->position().y >= 420.0f) {
+                nxui::Vec2 origPos = mii->position();
+                mii->setPosition({origPos.x - m_cameraX, origPos.y});
+                mii->render(ren, m_fontNormal, m_fontSmall);
+                mii->setPosition(origPos);
+            }
         }
     }
 
     // 3. Header & Navigation UI
-    drawHeader(ren);
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.header"};
+        drawHeader(ren);
+    }
 }
 
 } // namespace warawara

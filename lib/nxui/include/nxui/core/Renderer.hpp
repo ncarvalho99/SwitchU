@@ -165,6 +165,38 @@ public:
     void setDrawJournalEnabled(bool on) { m_journalEnabled = on; }
     bool drawJournalEnabled() const     { return m_journalEnabled; }
 
+    // Names the widget currently drawing, so a corrupted vertex can be blamed
+    // on a caller rather than on the geometry helper it happened to pass
+    // through. Every sample recorded so far reported `site=quad`, which
+    // identifies addQuad and no further. The tag is a borrowed string literal,
+    // not a copy: callers pass a compile-time constant that outlives the frame.
+    void setDrawTag(const char* tag) { m_drawTag = tag ? tag : ""; }
+    const char* drawTag() const      { return m_drawTag; }
+
+    // Scoped form, so an early return cannot leave a stale tag behind.
+    struct DrawTagScope {
+        Renderer&   r;
+        const char* prev;
+        DrawTagScope(Renderer& rr, const char* t) : r(rr), prev(rr.m_drawTag) {
+            r.setDrawTag(t);
+        }
+        ~DrawTagScope() { r.m_drawTag = prev; }
+    };
+
+    // Per-frame scene population, reported by the screen that owns it. The
+    // artifact grows more frequent the longer Plaza runs, so whatever
+    // accumulates has to be measurable per frame to be identified.
+    void setPlazaCounts(uint32_t miis, uint32_t pedestals, uint32_t bubbles) {
+        m_sceneMiis = miis; m_scenePedestals = pedestals;
+        m_sceneBubbles = bubbles;
+    }
+
+    // The background layer owns the shape field and ambient Miis; the Plaza
+    // screen owns the rest. Split so neither clears the other's counts.
+    void setBackgroundCounts(uint32_t ambient, uint32_t shapes) {
+        m_sceneAmbient = ambient; m_sceneShapes = shapes;
+    }
+
     // Monotonic frame counter, incremented by beginFrame. Written into the
     // journal header so a dumped frame can be proven to line up with the
     // journal that claims to describe it, rather than assumed to.
@@ -332,6 +364,7 @@ private:
         uint32_t xBits = 0, yBits = 0;
         uint32_t vtxIndex = 0, batchStart = 0;
         uint16_t site = 0, shader = 0;
+        const char* tag = "";
         float radius = 0.f, thickness = 0.f;
         float centreX = 0.f, centreY = 0.f;
         float halfX = 0.f, halfY = 0.f;
@@ -349,6 +382,10 @@ private:
         Circle, Triangle, Line, Text, Offscreen, Glass, Blur,
     };
     EmitSite m_emitSite = EmitSite::None;
+    const char* m_drawTag = "";
+
+    uint32_t m_sceneMiis = 0, m_scenePedestals = 0, m_sceneBubbles = 0;
+    uint32_t m_sceneAmbient = 0, m_sceneShapes = 0;
 
     // Sets the emission site for the duration of one helper and restores the
     // previous value, so nested helpers report the innermost one.
