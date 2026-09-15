@@ -6183,6 +6183,35 @@ void WiiUMenuApp::onUpdate(float dt) {
                 }
                 break;
             }
+            case switchu::smi::MenuMessage::TimeSettingApplied: {
+                const auto kind = static_cast<switchu::smi::TimeSettingKind>(notif.app_id);
+                const Result rc = static_cast<Result>(notif.payload);
+                DebugLog::log("[settings-time] daemon answered kind=%llu rc=0x%X",
+                              static_cast<unsigned long long>(notif.app_id), rc);
+                // The editor already invalidated the clock when it closed, but
+                // that was before the daemon had set anything.
+                if (R_SUCCEEDED(rc))
+                    m_clockService.invalidate();
+                if (!m_settings || !m_settings->isActive())
+                    break;
+                auto& i18n = nxui::I18n::instance();
+                if (R_FAILED(rc)) {
+                    m_settings->requestToast(i18n.tr(
+                        "settings.system.time_change_failed",
+                        "The date and time setting could not be changed."));
+                    // The toggle moved when it was pressed. setsys holds what
+                    // actually happened, and a rebuild reads it back.
+                    if (kind == switchu::smi::TimeSettingKind::InternetSync)
+                        m_settings->rebuildCurrentTab();
+                } else if (kind == switchu::smi::TimeSettingKind::ManualDateTime) {
+                    m_settings->requestToast(i18n.tr(
+                        "settings.system.manual_time_saved", "Date and time updated."));
+                } else if (kind == switchu::smi::TimeSettingKind::NetworkTime) {
+                    m_settings->requestToast(i18n.tr(
+                        "settings.system.ntp_sync_success", "Clock synchronized via Internet."));
+                }
+                break;
+            }
             case switchu::smi::MenuMessage::BatteryStatusChanged: {
                 const uint32_t percent = switchu::smi::batteryPayloadPercentage(notif.payload);
                 const bool charging = switchu::smi::batteryPayloadCharging(notif.payload);

@@ -21,6 +21,17 @@ enum class MenuMessage : uint32_t {
     GameCardMountFailure  =  8,
     AppViewFlagsUpdate    =  9,
     BatteryStatusChanged  = 10,
+    // The answer to a clock command. Those commands go out as storage with no
+    // reply, so the menu used to say "Date and time updated." as soon as the
+    // command was queued, before the daemon had run it or knew whether it had
+    // worked. app_id carries a TimeSettingKind, payload the Result.
+    TimeSettingApplied    = 11,
+};
+
+enum class TimeSettingKind : uint64_t {
+    ManualDateTime = 1,
+    InternetSync   = 2,
+    NetworkTime    = 3,
 };
 
 enum class SystemMessage : uint32_t {

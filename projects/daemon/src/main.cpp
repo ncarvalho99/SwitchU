@@ -702,6 +702,17 @@ static Result applySystemTime(u64 targetTimestamp, bool isInternetSync) {
     if (R_FAILED(localRc) && R_FAILED(userRc) && R_FAILED(netRc)) {
         return localRc != 0 ? localRc : (userRc != 0 ? userRc : netRc);
     }
+    // The menu now reports this result to the player, so success has to mean
+    // the clock the home screen shows reads the new time, not merely that one
+    // of the three clocks accepted it. A couple of minutes of slack covers the
+    // time spent getting here.
+    constexpr u64 kClockSlackSeconds = 120;
+    if (R_SUCCEEDED(readRc)) {
+        const u64 drift = actual > targetTimestamp ? actual - targetTimestamp
+                                                   : targetTimestamp - actual;
+        if (drift > kClockSlackSeconds)
+            return MAKERESULT(Module_Libnx, 909);
+    }
     return 0;
 }
 
@@ -1696,6 +1707,9 @@ static void handleMenuCommand() {
         const auto args = reader.pop<smi::ManualDateTimeArgs>();
         const Result rc = setManualDateTime(args);
         switchu::FileLog::log("[settings-time] manual date/time rc=0x%X", rc);
+        pushNotification(smi::MenuMessage::TimeSettingApplied,
+                         static_cast<uint64_t>(smi::TimeSettingKind::ManualDateTime),
+                         static_cast<uint32_t>(rc));
         break;
     }
 
@@ -1705,6 +1719,9 @@ static void handleMenuCommand() {
         switchu::FileLog::log(
             "[settings-time] Internet synchronization enabled=%d rc=0x%X",
             args.enabled ? 1 : 0, rc);
+        pushNotification(smi::MenuMessage::TimeSettingApplied,
+                         static_cast<uint64_t>(smi::TimeSettingKind::InternetSync),
+                         static_cast<uint32_t>(rc));
         break;
     }
 
@@ -1714,6 +1731,9 @@ static void handleMenuCommand() {
         switchu::FileLog::log(
             "[settings-time] SetPosixTime posix=%llu internet=%d rc=0x%X",
             (unsigned long long)args.timestamp, args.is_internet_sync ? 1 : 0, rc);
+        pushNotification(smi::MenuMessage::TimeSettingApplied,
+                         static_cast<uint64_t>(smi::TimeSettingKind::NetworkTime),
+                         static_cast<uint32_t>(rc));
         break;
     }
 

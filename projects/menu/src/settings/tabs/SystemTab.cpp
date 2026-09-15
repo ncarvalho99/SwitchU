@@ -183,11 +183,11 @@ bool setManualDateTime(
     args.hour = static_cast<uint32_t>(value.hour);
     args.minute = static_cast<uint32_t>(value.minute);
     const Result rc = switchu::menu::smi_cmd::setManualDateTime(args);
-    if (R_SUCCEEDED(rc)) {
-        screen.requestToast(nxui::I18n::instance().tr(
-            "settings.system.manual_time_saved", "Date and time updated."));
+    // Queued is not applied. The daemon answers with TimeSettingApplied once
+    // it has set the clocks and read the time back, and that answer is what
+    // says "updated" or not.
+    if (R_SUCCEEDED(rc))
         return true;
-    }
     screen.requestToast(nxui::I18n::instance().tr(
         "settings.system.time_change_failed",
         "The date and time setting could not be changed."));
@@ -333,12 +333,11 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
                 screen.requestToast(nxui::I18n::instance().tr(
                     "settings.system.ntp_syncing",
                     "Synchronizing clock via Internet..."));
+                // Only the failure is said here: ok means the network time
+                // arrived and was handed to the daemon. Whether the clock
+                // took it comes back as TimeSettingApplied.
                 switchu::services::NtpClient::syncAsync([&screen](bool ok, uint64_t) {
-                    if (ok) {
-                        screen.requestToast(nxui::I18n::instance().tr(
-                            "settings.system.ntp_sync_success",
-                            "Clock synchronized via Internet."));
-                    } else {
+                    if (!ok) {
                         screen.requestToast(nxui::I18n::instance().tr(
                             "settings.system.ntp_sync_failed",
                             "Could not synchronize clock. Check connection."));
@@ -362,11 +361,7 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
                 "settings.system.ntp_syncing",
                 "Synchronizing clock via Internet..."));
             switchu::services::NtpClient::syncAsync([&screen](bool ok, uint64_t) {
-                if (ok) {
-                    screen.requestToast(nxui::I18n::instance().tr(
-                        "settings.system.ntp_sync_success",
-                        "Clock synchronized via Internet."));
-                } else {
+                if (!ok) {
                     screen.requestToast(nxui::I18n::instance().tr(
                         "settings.system.ntp_sync_failed",
                         "Could not synchronize clock. Check connection."));
