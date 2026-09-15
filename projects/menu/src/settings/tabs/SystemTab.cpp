@@ -4,12 +4,110 @@
 #include "services/NtpClient.hpp"
 #include <nxui/core/I18n.hpp>
 #include <switch.h>
+#include <fmt/format.h>
+#include <nlohmann/json.hpp>
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstdlib>
+#include <dirent.h>
+#include <fstream>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 namespace {
+
+struct SystemPoolUsage {
+    u64 total = 0;
+    u64 used = 0;
+};
+
+bool querySystemPool(SystemPoolUsage& out) {
+    // An svc outside the process's capability list is not an error return, it
+    // is a crash. menu.json grants 0x6F; the homebrew build runs under
+    // whatever its host title allows, so ask first.
+    if (!envIsSyscallHinted(0x6F))
+        return false;
+    return R_SUCCEEDED(svcGetSystemInfo(&out.total, SystemInfoType_TotalPhysicalMemorySize,
+                                        INVALID_HANDLE, PhysicalMemorySystemInfo_System))
+        && R_SUCCEEDED(svcGetSystemInfo(&out.used, SystemInfoType_UsedPhysicalMemorySize,
+                                        INVALID_HANDLE, PhysicalMemorySystemInfo_System))
+        && out.total > 0 && out.used <= out.total;
+}
+
+// Below this the warning shows. The console that measured 10 MB free in 2.5.2
+// was the one where launches were unstable.
+constexpr u64 kLowSystemPoolMb = 16;
+
+struct BootSysmodule {
+    std::string titleId;
+    std::string name;
+};
+
+// Games, their updates and add-ons live from here up. A modded library has a
+// folder per game in atmosphere/contents and none of them can be a boot2
+// sysmodule, so they are skipped on the name alone instead of costing two
+// stat calls each on the card.
+constexpr u64 kFirstApplicationId = 0x0100000000010000ULL;
+constexpr u64 kLastApplicationId  = 0x01FFFFFFFFFFFFFFULL;
+
+bool pathExists(const std::string& path) {
+    struct stat st{};
+    return stat(path.c_str(), &st) == 0;
+}
+
+// What Atmosphère starts at boot: a program in atmosphere/contents with
+// flags/boot2.flag. The name comes from toolbox.json, the file most sysmodules
+// ship for overlay managers; without one the title id is all there is.
+std::vector<BootSysmodule> listBootSysmodules() {
+    std::vector<BootSysmodule> out;
+    DIR* dir = opendir("sdmc:/atmosphere/contents");
+    if (!dir)
+        return out;
+
+    while (const dirent* entry = readdir(dir)) {
+        std::string id = entry->d_name;
+        if (id.size() != 16)
+            continue;
+        char* end = nullptr;
+        const u64 tid = std::strtoull(id.c_str(), &end, 16);
+        if (end != id.c_str() + id.size())
+            continue;
+        if (tid >= kFirstApplicationId && tid <= kLastApplicationId)
+            continue;
+
+        const std::string base = "sdmc:/atmosphere/contents/" + id;
+        if (!pathExists(base + "/flags/boot2.flag"))
+            continue;
+        if (!pathExists(base + "/exefs.nsp") && !pathExists(base + "/exefs"))
+            continue;
+
+        BootSysmodule module;
+        for (char& c : id)
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        module.titleId = std::move(id);
+        std::ifstream toolbox(base + "/toolbox.json");
+        if (toolbox.is_open()) {
+            const auto json = nlohmann::json::parse(toolbox, nullptr, false);
+            if (json.is_object()) {
+                const auto name = json.find("name");
+                if (name != json.end() && name->is_string())
+                    module.name = name->get<std::string>();
+            }
+        }
+        out.push_back(std::move(module));
+    }
+    closedir(dir);
+
+    // Named ones first, alphabetically; bare title ids after them.
+    std::sort(out.begin(), out.end(), [](const BootSysmodule& a, const BootSysmodule& b) {
+        if (a.name.empty() != b.name.empty())
+            return !a.name.empty();
+        return a.name.empty() ? a.titleId < b.titleId : a.name < b.name;
+    });
+    return out;
+}
 
 std::string uidToHex(const AccountUid& uid) {
     char buf[33] = {};
@@ -481,6 +579,75 @@ SettingsScreen::Tab settings::tabs::SystemTab::build(SettingsScreen& screen) {
             setsysSetConsoleInformationUploadFlag(self.boolVal);
         };
         t.items.push_back(std::move(it));
+    }
+
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.system.memory_section", "Sysmodules and Memory");
+        it.type = ItemType::Section;
+        t.items.push_back(std::move(it));
+    }
+
+    {
+        // The pool that runs out on a loaded console. Measured in 2.5.2 at 221
+        // of 232 MB, with every sysmodule on the card drawing from it alongside
+        // the services a game needs to start. Nothing showed it, so a game
+        // failing to launch read as a menu bug rather than a card running too
+        // much.
+        SystemPoolUsage pool;
+        const bool poolOk = querySystemPool(pool);
+        const u64 totalMb = pool.total >> 20;
+        const u64 usedMb = pool.used >> 20;
+        const u64 freeMb = (pool.total - pool.used) >> 20;
+
+        SettingItem bar;
+        bar.label = i18n.tr("settings.system.system_pool", "System Memory Pool");
+        bar.type = ItemType::Progress;
+        bar.description = i18n.tr("settings.system.system_pool_desc",
+                                  "Shared by every sysmodule on the card and by the services a game needs to start.");
+        if (poolOk && freeMb < kLowSystemPoolMb) {
+            bar.description += " " + i18n.tr("settings.system.system_pool_low",
+                                             "Very little is left. If games fail to start, turn off the sysmodules you do not use.");
+        }
+        // Atmosphère moved 40 MB into this pool on older firmware and can move
+        // 7 MB from 21.0.0 on, which is why the same card can be stable before
+        // a system update and not after it.
+        if (hosversionAtLeast(21, 0, 0)) {
+            bar.description += " " + i18n.tr("settings.system.system_pool_fw21",
+                                             "From firmware 21 on, Atmosphère can add only 7 MB to this pool.");
+        }
+        bar.floatVal = poolOk ? float((double)pool.used / (double)pool.total) : 0.f;
+        bar.anim01 = bar.floatVal;
+        bar.infoText = poolOk ? fmt::format("{} / {} MB", usedMb, totalMb)
+                              : i18n.tr("common.na", "N/A");
+        t.items.push_back(std::move(bar));
+
+        SettingItem freeRow;
+        freeRow.label = i18n.tr("settings.system.system_pool_free", "Free in the Pool");
+        freeRow.type = ItemType::Info;
+        freeRow.infoText = poolOk ? fmt::format("{} MB", freeMb) : i18n.tr("common.na", "N/A");
+        t.items.push_back(std::move(freeRow));
+    }
+
+    {
+        const auto modules = listBootSysmodules();
+
+        SettingItem head;
+        head.label = i18n.tr("settings.system.sysmodules", "Sysmodules Started at Boot");
+        head.type = ItemType::Info;
+        head.description = i18n.tr("settings.system.sysmodules_desc",
+                                   "Each one runs from boot and takes its memory from the pool above.");
+        head.infoText = modules.empty() ? i18n.tr("settings.system.sysmodules_none", "None")
+                                        : std::to_string(modules.size());
+        t.items.push_back(std::move(head));
+
+        for (const auto& module : modules) {
+            SettingItem row;
+            row.type = ItemType::Info;
+            row.label = module.name.empty() ? module.titleId : module.name;
+            row.infoText = module.name.empty() ? std::string() : module.titleId;
+            t.items.push_back(std::move(row));
+        }
     }
 
     return t;

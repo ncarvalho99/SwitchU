@@ -90,6 +90,7 @@
                 "svcCreateSharedMemory": "0x50",
                 "svcMapTransferMemory": "0x51",
                 "svcUnmapTransferMemory": "0x52",
+                "svcGetSystemInfo": "0x6F",
                 "svcConnectToPort": "0x72",
                 "svcCallSecureMonitor": "0x7F"
             }
