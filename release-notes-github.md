@@ -1,39 +1,39 @@
-# SwitchU 2.5.3
+# SwitchU 2.5.4
 
-Returning to the menu with HOME is quicker, the grid stops rebuilding itself over and over while names and icons are being read, and the daemon's log finally carries real dates. All of it measured on a console, from the logs 2.5.2 made collectable.
+Settings now show where a loaded console's memory goes, uninstalling from the Storage tab stops freezing the menu, and the clock says it changed only once it has.
 
 ## English
 
-### Returning to the menu
+### Memory and sysmodules
 
-- Coming back with HOME takes about two seconds, and the console's own traces say where they go: 75 ms for the daemon to react, 628 ms for the system to start the menu process, 829 ms creating the menu, 251 ms to the first frame. A quarter of that last part was ours and recent: 2.5.1 had started asking the system for the recently-played widget's total play time while the menu was being created -- a figure that is stored and never drawn. It reads the cache instead.
-- The rest of the menu's creation is now timed in the log, so the next round can say which step holds the remaining half second instead of guessing at it.
+- The System tab ends with a new section: how full the System memory pool is, how much is free, and the sysmodules Atmosphère starts at boot, named from their toolbox.json when they ship one. 2.5.2's logs showed that pool at 221 of 232 MB on the console where launches were unstable; every sysmodule on the card draws from it, alongside the services a game needs to start, and nothing on the console showed it.
+- Below 16 MB free, the section says to turn off the sysmodules you do not use. On firmware 21 and later it also says why the same card can be stable before a system update and not after it: Atmosphère can add only 7 MB to this pool there, against 40 MB before.
 
-### Reading names and icons
+### Uninstalling from the Storage tab
 
-- The daemon announced itself after every single title it cached, and each announcement makes the menu reload its app list and rebuild the whole grid. Rebuilding names and icons on a full console therefore spent minutes tearing the grid down and building it again about once a second. Announcements are held back while there is still a queue.
+- It had its own copy of the delete, running on the menu's main thread: the menu froze with no progress until it finished, a title that only lived on the card was reported as a failure even after its files were gone, and the title stayed filed in its folder. It now goes through the same path as deleting from a game's own panel, with the progress bar.
 
-### The daemon's log
+### Date and time
 
-- Every line was dated 1970, and so were the names of the archived copies, which made them impossible to tell apart or to line up against the menu's log. libnx reads the clock once at startup and counts from there; the daemon has its own startup path and never did that read. It does now, and retries until the console's clock is actually set -- a system process starts before that happens.
-- The memory snapshot also records how much of the daemon's heap is really in use. What it holds is what it reserved, which never changes; on a console whose System memory pool has ten megabytes free, against the twelve this daemon reserves, the real figure is what makes it safe to reserve less.
+- "Date and time updated." and "Clock synchronized via Internet." appeared as soon as the command was sent, before the daemon had applied it or knew whether it worked. The daemon now answers, and the message waits for that answer. A failure shows the error, and the Internet sync toggle goes back to the state the console actually holds.
+- Success also means the clock reads the time that was asked for, within two minutes. Before, it was enough for one of the console's three clocks to accept it.
 
 ---
 
 ## Português
 
-Voltar ao menu pelo HOME ficou mais rápido, a grade para de se reconstruir repetidamente enquanto nomes e ícones são lidos, e o log do daemon finalmente tem datas reais. Tudo medido num console, a partir dos logs que a 2.5.2 tornou coletáveis.
+As configurações agora mostram para onde vai a memória de um console carregado, desinstalar pela aba Armazenamento deixa de travar o menu, e o relógio só diz que mudou depois de mudar.
 
-### Voltar ao menu
+### Memória e sysmodules
 
-- Voltar pelo HOME leva cerca de dois segundos, e os registros do próprio console dizem onde eles vão: 75 ms para o daemon reagir, 628 ms para o sistema iniciar o processo do menu, 829 ms criando o menu e 251 ms até o primeiro quadro. Um quarto dessa última parte era nosso e recente: a 2.5.1 passou a perguntar ao sistema o tempo total do widget de jogo recente enquanto o menu era criado — um número que é guardado e nunca exibido. Agora ele lê do cache.
-- O restante da criação do menu passa a ser cronometrado no log, para a próxima rodada dizer qual etapa segura o meio segundo que falta, em vez de chutarmos.
+- A aba Sistema termina com uma seção nova: quanto do pool de memória System está ocupado, quanto está livre e quais sysmodules o Atmosphère inicia no boot, com o nome do toolbox.json quando existe. Os logs da 2.5.2 mostraram esse pool em 221 de 232 MB no console onde a abertura de jogos era instável; todo sysmodule do cartão usa esse pool, junto com os serviços de que um jogo precisa para iniciar, e nada no console mostrava isso.
+- Com menos de 16 MB livres, a seção sugere desativar os sysmodules que você não usa. No firmware 21 em diante, ela também explica por que o mesmo cartão pode ser estável antes de uma atualização do sistema e não depois: ali o Atmosphère só consegue acrescentar 7 MB a esse pool, contra 40 MB antes.
 
-### Leitura de nomes e ícones
+### Desinstalar pela aba Armazenamento
 
-- O daemon se anunciava a cada título que colocava em cache, e cada aviso faz o menu recarregar a lista de aplicativos e reconstruir a grade inteira. Reconstruir nomes e ícones num console cheio passava minutos derrubando e remontando a grade cerca de uma vez por segundo. Os avisos agora são segurados enquanto ainda há fila.
+- A aba tinha a própria cópia da exclusão, rodando na linha principal do menu: o menu travava sem progresso até terminar, um título que só existia no cartão era dado como falha mesmo depois de os arquivos sumirem, e o título continuava na pasta onde estava. Agora usa o mesmo caminho da exclusão pelo painel do jogo, com barra de progresso.
 
-### O log do daemon
+### Data e hora
 
-- Todas as linhas tinham data de 1970, e os nomes das cópias arquivadas também, o que tornava impossível distingui-las ou cruzá-las com o log do menu. A libnx lê o relógio uma vez, no início, e conta a partir dali; o daemon tem seu próprio início e nunca fazia essa leitura. Agora faz, e repete até o console realmente ter o relógio ajustado — um processo de sistema sobe antes disso.
-- O registro de memória também passa a anotar quanto do heap do daemon está de fato em uso. O que ele ocupa é o que reservou, e isso nunca muda; num console cujo pool System tem dez megabytes livres, contra os doze que este daemon reserva, o número real é o que permite reservar menos com segurança.
+- "Data e hora atualizadas." e "Relógio sincronizado pela Internet." apareciam assim que o comando era enviado, antes de o daemon aplicar ou saber se tinha funcionado. Agora o daemon responde, e a mensagem espera essa resposta. Uma falha mostra o erro, e o botão de sincronização pela Internet volta ao estado que o console realmente tem.
+- Sucesso também passa a significar que o relógio marca a hora pedida, com tolerância de dois minutos. Antes bastava um dos três relógios do console aceitar.

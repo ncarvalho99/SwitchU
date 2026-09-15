@@ -1,21 +1,21 @@
 
-Returning to the menu
-- Coming back with HOME is a quarter of a second quicker: the recently-played widget's total play time was being read from the system while the menu was created, for a figure that is never drawn. It reads the cache instead.
-- The steps of the menu's creation are timed in the log now, so the rest of that wait can be measured rather than guessed at.
+Memory and sysmodules
+- The System tab ends with a new section: how full the System memory pool is, how much is free, and the sysmodules started at boot. That pool is what runs out on a loaded console, and it is shared by every sysmodule and by what a game needs to start.
+- Below 16 MB free it suggests turning off sysmodules you do not use. On firmware 21 and later it explains that Atmosphère can add only 7 MB to this pool.
 
-Reading names and icons
-- The daemon announced itself after every title it cached, and each announcement made the menu rebuild its whole grid -- about once a second, for minutes, during a full rebuild. Announcements are held while there is still work queued.
+Uninstalling from the Storage tab
+- It no longer freezes the menu: it runs the same delete as a game's own panel, with the progress bar, and also takes the title out of its folder.
 
-Logs
-- The daemon's log had 1970 dates on every line and in the names of its archived copies. It reads the console's clock properly now, and keeps trying until the clock is set.
+Date and time
+- "Date and time updated." waits for the daemon to confirm the clock actually changed. A failure shows the error, and the Internet sync toggle goes back to its real state.
 --pt-BR--
 
-Voltar ao menu
-- Voltar pelo HOME ficou um quarto de segundo mais rápido: o tempo total do widget de jogo recente era lido do sistema enquanto o menu era criado, para um número que nunca é exibido. Agora ele lê do cache.
-- As etapas da criação do menu passam a ser cronometradas no log, para o resto dessa espera ser medido em vez de chutado.
+Memória e sysmodules
+- A aba Sistema termina com uma seção nova: quanto do pool de memória System está ocupado, quanto está livre e os sysmodules iniciados no boot. Esse pool é o que falta num console carregado, e é dividido por todos os sysmodules e pelo que um jogo precisa para iniciar.
+- Com menos de 16 MB livres, sugere desativar os sysmodules que você não usa. No firmware 21 em diante, explica que o Atmosphère só consegue acrescentar 7 MB a esse pool.
 
-Leitura de nomes e ícones
-- O daemon se anunciava a cada título que colocava em cache, e cada aviso fazia o menu reconstruir a grade inteira — cerca de uma vez por segundo, durante minutos, numa reconstrução completa. Os avisos agora são segurados enquanto há fila.
+Desinstalar pela aba Armazenamento
+- Deixou de travar o menu: usa a mesma exclusão do painel do jogo, com barra de progresso, e também tira o título da pasta onde estava.
 
-Logs
-- O log do daemon tinha datas de 1970 em todas as linhas e nos nomes das cópias arquivadas. Agora ele lê o relógio do console corretamente e continua tentando até o relógio estar ajustado.
+Data e hora
+- "Data e hora atualizadas." espera o daemon confirmar que o relógio mudou de fato. Uma falha mostra o erro, e o botão de sincronização pela Internet volta ao estado real.

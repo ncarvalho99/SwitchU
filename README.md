@@ -247,7 +247,7 @@ Raw-tick hardware traces of launch and HOME-return can be summarized with
 
 ## Known issues
 
-As of 2.5.3. Each one is tracked as an issue with what is known so far and what
+As of 2.5.4. Each one is tracked as an issue with what is known so far and what
 it would take to close it.
 
 - **Parts of Settings are read-only or missing**
@@ -265,7 +265,9 @@ it would take to close it.
   runs in has hundreds free. So this is not something the menu can fix by using
   less; what is in SwitchU's hands is the daemon, which reserves twelve of those
   megabytes. Sizing that down is the next step, and 2.5.3 logs what it actually
-  uses so it can be done from a real figure rather than a guess.
+  uses so it can be done from a real figure rather than a guess. Meanwhile the
+  System tab shows that pool's free space and the sysmodules started at boot,
+  which is the place to look when a game fails to start.
 - **A title with no name of its own shows its title id.** Some releases --
   downgraded builds in particular -- carry no usable name, and neither the
   console nor the artwork lookup can produce one. Rename the game from its
