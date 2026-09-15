@@ -65,8 +65,11 @@ public:
 
     void onLaunchGame(std::function<void(std::uint64_t)> cb) { m_launchGameCb = std::move(cb); }
     void onClose(std::function<void()> cb) { m_closeCb = std::move(cb); }
+    void onNavigateSfx(std::function<void()> cb) { m_navigateSfxCb = std::move(cb); }
+    void onActivateSfx(std::function<void()> cb) { m_activateSfxCb = std::move(cb); }
 
     float cameraX() const { return m_cameraX; }
+    float zoom() const { return m_zoom; }
 
 private:
     void populateMiis();
@@ -76,23 +79,34 @@ private:
     void interactWithMii(MiiFigure* mii);
     void drawPlazaFloor(nxui::Renderer& ren) const;
     void drawHeader(nxui::Renderer& ren) const;
+    void drawHandCursor(nxui::Renderer& ren) const;
+    void updateHandSelection();
+    void moveHandToPedestal(int index, bool playSfx);
+    int findDirectionalPedestal(int fromIndex, const nxui::Vec2& direction) const;
+    void activateHandTarget();
+    nxui::Vec2 worldToScreen(const nxui::Vec2& world) const;
 
     bool m_active = false;
     float m_fadeAlpha = 0.0f;
     float m_time = 0.0f;
 
-    // Camera panning
+    // Camera and selection. The installed-title communities fit around one
+    // elliptical plaza, while zoom moves from overview to a closer browsing
+    // view without requiring a second screen.
     float m_cameraX = 0.0f;
     float m_cameraTargetX = 0.0f;
-    float m_plazaWidth = 2100.0f;
-    float m_lastTouchX = 0.0f;
+    float m_plazaWidth = 1280.0f;
+    float m_zoom = 1.0f;
+    float m_zoomTarget = 1.0f;
     bool m_isDraggingTouch = false;
 
-    // Pedestals & Miis
+    // Pedestals, Miis, and Wii U-style hand pointer.
     std::vector<std::unique_ptr<PlazaPedestal>> m_pedestals;
     std::vector<std::unique_ptr<MiiFigure>> m_miis;
     int m_focusedPedestalIndex = -1;
     MiiFigure* m_focusedMii = nullptr;
+    nxui::Vec2 m_handPos{640.0f, 360.0f};
+    float m_handPulse = 0.0f;
 
     // Speech bubble scheduler
     float m_speechBubbleTimer = 3.0f;
@@ -109,6 +123,8 @@ private:
     std::mt19937 m_rng;
     std::function<void(std::uint64_t)> m_launchGameCb;
     std::function<void()> m_closeCb;
+    std::function<void()> m_navigateSfxCb;
+    std::function<void()> m_activateSfxCb;
 };
 
 } // namespace warawara

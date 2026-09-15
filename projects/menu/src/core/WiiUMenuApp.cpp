@@ -6481,8 +6481,9 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         return hints;
 
     if (m_plazaScreen && m_plazaScreen->isActive()) {
-        add(dpadGlyph(), i18n.tr("plaza.pan", "Pan Plaza"));
-        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select / Talk"));
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Move Hand"));
+        add(buttonGlyph(nxui::Button::ZL) + buttonGlyph(nxui::Button::ZR), "Zoom");
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Open Game"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Return"));
         return hints;
     }

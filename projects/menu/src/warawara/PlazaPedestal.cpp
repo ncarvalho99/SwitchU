@@ -1,4 +1,4 @@
-#include "PlazaPedestal.hpp"
+﻿#include "PlazaPedestal.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -62,11 +62,14 @@ void PlazaPedestal::update(float dt) {
 void PlazaPedestal::render(nxui::Renderer& ren,
                            nxui::Font* font,
                            nxui::Font* smallFont,
-                           float cameraOffsetX) const {
-    const float sx = m_pos.x - cameraOffsetX;
-    const float sy = m_pos.y;
+                           float cameraOffsetX,
+                           float viewZoom,
+                           const nxui::Vec2& viewCenter) const {
+    const float sx = viewCenter.x + (m_pos.x - cameraOffsetX - viewCenter.x) * viewZoom;
+    const float sy = viewCenter.y + (m_pos.y - viewCenter.y) * viewZoom;
 
-    const float effR = m_baseRadius * m_scale;
+    const float objectScale = m_scale * viewZoom;
+    const float effR = m_baseRadius * objectScale;
 
     // Viewport culling (screen 1280x720)
     if (sx < -effR * 2.0f || sx > 1280.0f + effR * 2.0f) {
@@ -74,7 +77,7 @@ void PlazaPedestal::render(nxui::Renderer& ren,
     }
 
     // 1. Soft Floor Drop-Shadow (elliptical shadow on plaza floor)
-    const float shadowW = (effR + 18.0f * m_scale) * 2.0f;
+    const float shadowW = (effR + 18.0f * objectScale) * 2.0f;
     const float shadowH = effR * 0.72f;
     nxui::Rect shadowRect{sx - shadowW * 0.5f, sy - shadowH * 0.25f, shadowW, shadowH};
     ren.drawRoundedRect(shadowRect, nxui::Color(0.04f, 0.07f, 0.14f, 0.32f), shadowH * 0.5f);
@@ -86,9 +89,9 @@ void PlazaPedestal::render(nxui::Renderer& ren,
     ren.drawRoundedRect(bevelRect, nxui::Color(0.70f, 0.76f, 0.84f, 0.88f), baseH * 0.5f);
 
     // 3. Pedestal Top Disc Surface
-    const float topW = (effR - 4.0f * m_scale) * 2.0f;
-    const float topH = (effR - 4.0f * m_scale) * 0.58f;
-    nxui::Rect topRect{sx - topW * 0.5f, sy - topH * 0.42f - 6.0f * m_scale, topW, topH};
+    const float topW = (effR - 4.0f * objectScale) * 2.0f;
+    const float topH = (effR - 4.0f * objectScale) * 0.58f;
+    nxui::Rect topRect{sx - topW * 0.5f, sy - topH * 0.42f - 6.0f * objectScale, topW, topH};
     ren.drawRoundedRect(topRect, nxui::Color(0.92f, 0.95f, 0.98f, 0.96f), topH * 0.5f);
 
     // 4. Perimeter LED Glowing Ring
@@ -97,13 +100,13 @@ void PlazaPedestal::render(nxui::Renderer& ren,
         ? nxui::Color(1.0f, 0.84f, 0.22f, 0.85f + 0.15f * pulse)
         : nxui::Color(0.22f, 0.68f, 0.98f, 0.65f + 0.20f * pulse);
 
-    ren.drawRoundedRectOutline(topRect, ringCol, topH * 0.5f, m_focused ? (3.0f * m_scale) : (1.8f * m_scale));
+    ren.drawRoundedRectOutline(topRect, ringCol, topH * 0.5f, m_focused ? (3.0f * objectScale) : (1.8f * objectScale));
 
     // 5. Floating Game Icon (with sinusoidal bobbing elevation)
-    const float bobOffset = std::sin(m_animTimer * 2.0f + m_phase) * (4.5f * m_scale);
-    const float iconSize = 72.0f * m_scale;
+    const float bobOffset = std::sin(m_animTimer * 2.0f + m_phase) * (4.5f * objectScale);
+    const float iconSize = 72.0f * objectScale;
     const float iconCX = sx;
-    const float iconCY = sy - (54.0f * m_scale) + bobOffset;
+    const float iconCY = sy - (54.0f * objectScale) + bobOffset;
     nxui::Rect iconRect{iconCX - iconSize * 0.5f, iconCY - iconSize * 0.5f, iconSize, iconSize};
 
     // Soft drop shadow cast by the floating icon onto the pedestal platform
@@ -111,12 +114,12 @@ void PlazaPedestal::render(nxui::Renderer& ren,
         iconCX - iconSize * 0.40f,
         topRect.y + topRect.height * 0.45f,
         iconSize * 0.80f,
-        12.0f * m_scale
+        12.0f * objectScale
     };
     ren.drawRoundedRect(iconShadowRect, nxui::Color(0.04f, 0.08f, 0.16f, 0.36f), iconShadowRect.height * 0.5f);
 
     // Draw game icon
-    const float iconRadius = 16.0f * m_scale;
+    const float iconRadius = 16.0f * objectScale;
     if (m_data.iconTexture) {
         ren.drawTextureRounded(m_data.iconTexture, iconRect, iconRadius);
     } else {
@@ -127,7 +130,7 @@ void PlazaPedestal::render(nxui::Renderer& ren,
         if (font && !m_data.titleName.empty()) {
             std::string initial = m_data.titleName.substr(0, 1);
             nxui::Vec2 textSize = font->measure(initial);
-            float tScale = 0.90f * m_scale;
+            float tScale = 0.90f * objectScale;
             nxui::Vec2 textPos{
                 iconCX - (textSize.x * tScale) * 0.5f,
                 iconCY - (textSize.y * tScale) * 0.5f
@@ -140,21 +143,21 @@ void PlazaPedestal::render(nxui::Renderer& ren,
     nxui::Color iconBorderCol = m_focused
         ? nxui::Color(1.0f, 0.86f, 0.25f, 0.95f)
         : nxui::Color(1.0f, 1.0f, 1.0f, 0.75f);
-    ren.drawRoundedRectOutline(iconRect, iconBorderCol, iconRadius, m_focused ? (2.8f * m_scale) : (1.4f * m_scale));
+    ren.drawRoundedRectOutline(iconRect, iconBorderCol, iconRadius, m_focused ? (2.8f * objectScale) : (1.4f * objectScale));
 
     // 6. Title Pill & Subtitle
     if (font && !m_data.titleName.empty()) {
-        const float fontScale = 0.52f * m_scale;
+        const float fontScale = 0.52f * objectScale;
         std::string displayTitle = m_data.titleName;
         if (displayTitle.length() > 22) {
             displayTitle = displayTitle.substr(0, 20) + "...";
         }
         nxui::Vec2 titleSize = font->measure(displayTitle);
 
-        float pillW = std::max(titleSize.x * fontScale + 20.0f * m_scale, 100.0f * m_scale);
-        float pillH = 22.0f * m_scale;
+        float pillW = std::max(titleSize.x * fontScale + 20.0f * objectScale, 100.0f * objectScale);
+        float pillH = 22.0f * objectScale;
         float pillX = sx - pillW * 0.5f;
-        float pillY = iconCY + iconSize * 0.5f + 6.0f * m_scale;
+        float pillY = iconCY + iconSize * 0.5f + 6.0f * objectScale;
         nxui::Rect pillRect{pillX, pillY, pillW, pillH};
 
         // Frosted glass background pill
@@ -170,33 +173,36 @@ void PlazaPedestal::render(nxui::Renderer& ren,
 
         nxui::Vec2 textPos{
             pillX + (pillW - titleSize.x * fontScale) * 0.5f,
-            pillY + (pillH - titleSize.y * fontScale) * 0.5f - 1.0f * m_scale
+            pillY + (pillH - titleSize.y * fontScale) * 0.5f - 1.0f * objectScale
         };
         ren.drawText(displayTitle, textPos, font, nxui::Color(0.96f, 0.97f, 0.99f), fontScale);
 
         // Optional subtitle below title pill
         if (smallFont && !m_data.subtitle.empty()) {
-            const float subScale = 0.44f * m_scale;
+            const float subScale = 0.44f * objectScale;
             nxui::Vec2 subSize = smallFont->measure(m_data.subtitle);
             nxui::Vec2 subPos{
                 sx - (subSize.x * subScale) * 0.5f,
-                pillY + pillH + 3.0f * m_scale
+                pillY + pillH + 3.0f * objectScale
             };
             ren.drawText(m_data.subtitle, subPos, smallFont, nxui::Color(0.24f, 0.68f, 0.98f, 0.90f), subScale);
         }
     }
 }
 
-bool PlazaPedestal::hitTest(const nxui::Vec2& screenPoint, float cameraOffsetX) const {
-    nxui::Rect b = bounds(cameraOffsetX);
+bool PlazaPedestal::hitTest(const nxui::Vec2& screenPoint, float cameraOffsetX,
+                            float viewZoom, const nxui::Vec2& viewCenter) const {
+    nxui::Rect b = bounds(cameraOffsetX, viewZoom, viewCenter);
     return b.contains(screenPoint.x, screenPoint.y);
 }
 
-nxui::Rect PlazaPedestal::bounds(float cameraOffsetX) const {
-    const float sx = m_pos.x - cameraOffsetX;
-    const float sy = m_pos.y;
-    const float effR = (m_baseRadius + 10.0f) * m_scale;
-    const float topY = sy - 95.0f * m_scale;
+nxui::Rect PlazaPedestal::bounds(float cameraOffsetX, float viewZoom,
+                                 const nxui::Vec2& viewCenter) const {
+    const float objectScale = m_scale * viewZoom;
+    const float sx = viewCenter.x + (m_pos.x - cameraOffsetX - viewCenter.x) * viewZoom;
+    const float sy = viewCenter.y + (m_pos.y - viewCenter.y) * viewZoom;
+    const float effR = (m_baseRadius + 10.0f) * objectScale;
+    const float topY = sy - 95.0f * objectScale;
     const float bottomY = sy + effR * 0.45f;
     return nxui::Rect{sx - effR, topY, effR * 2.0f, bottomY - topY};
 }

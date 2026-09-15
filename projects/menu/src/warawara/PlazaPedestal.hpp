@@ -32,10 +32,15 @@ public:
     ~PlazaPedestal() = default;
 
     void update(float dt);
-    void render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont, float cameraOffsetX = 0.0f) const;
+    void render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont,
+                float cameraOffsetX = 0.0f, float viewZoom = 1.0f,
+                const nxui::Vec2& viewCenter = {640.0f, 400.0f}) const;
 
-    bool hitTest(const nxui::Vec2& screenPoint, float cameraOffsetX = 0.0f) const;
-    nxui::Rect bounds(float cameraOffsetX = 0.0f) const;
+    bool hitTest(const nxui::Vec2& screenPoint, float cameraOffsetX = 0.0f,
+                 float viewZoom = 1.0f,
+                 const nxui::Vec2& viewCenter = {640.0f, 400.0f}) const;
+    nxui::Rect bounds(float cameraOffsetX = 0.0f, float viewZoom = 1.0f,
+                      const nxui::Vec2& viewCenter = {640.0f, 400.0f}) const;
 
     const PlazaCommunityData& data() const { return m_data; }
     void setData(const PlazaCommunityData& data) { m_data = data; }

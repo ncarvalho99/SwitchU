@@ -270,8 +270,18 @@ float MiiFigure::randomFloat(float min, float max) {
     return dist(m_rng);
 }
 
-void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont) const {
-    const float effScale = m_scale;
+void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont,
+                       float cameraOffsetX, float viewZoom,
+                       const nxui::Vec2& viewCenter) const {
+    const float effScale = m_scale * viewZoom;
+    const nxui::Vec2 renderPos{
+        viewCenter.x + (m_pos.x - cameraOffsetX - viewCenter.x) * viewZoom,
+        viewCenter.y + (m_pos.y - viewCenter.y) * viewZoom
+    };
+    // The rendering code below was originally authored around m_pos. Shadow it
+    // locally so every primitive, face texture, name pill, and speech-bubble
+    // anchor shares the exact same Plaza view transform.
+    const nxui::Vec2& m_pos = renderPos;
     const float wScale = 0.85f + (m_data.build / 128.0f) * 0.30f;
     const float hScale = 0.85f + (m_data.height / 128.0f) * 0.30f;
 
@@ -283,8 +293,8 @@ void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallF
     if (ren.probeBudgetLeft()) {
         const bool badState =
             !std::isfinite(m_scale) || m_scale < 0.01f || m_scale > 16.f ||
-            !std::isfinite(m_pos.x) || !std::isfinite(m_pos.y) ||
-            std::fabs(m_pos.x) > 1e5f || std::fabs(m_pos.y) > 1e5f ||
+            !std::isfinite(this->m_pos.x) || !std::isfinite(this->m_pos.y) ||
+            std::fabs(this->m_pos.x) > 1e5f || std::fabs(this->m_pos.y) > 1e5f ||
             !std::isfinite(m_animTime) || !std::isfinite(m_walkPhase);
         if (badState) {
             std::uint32_t sb = 0;
@@ -296,7 +306,7 @@ void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallF
                 "target=(%.6g,%.6g) animTime=%.6g walkPhase=%.6g "
                 "build=%u height=%u",
                 (int)m_state, (double)m_scale, sb,
-                (double)m_pos.x, (double)m_pos.y,
+                (double)this->m_pos.x, (double)this->m_pos.y,
                 (double)m_targetPos.x, (double)m_targetPos.y,
                 (double)m_animTime, (double)m_walkPhase,
                 (unsigned)m_data.build, (unsigned)m_data.height);

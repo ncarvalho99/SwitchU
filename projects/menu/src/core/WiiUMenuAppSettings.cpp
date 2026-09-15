@@ -897,6 +897,13 @@ void WiiUMenuApp::createWaraWaraPlaza() {
         closeWaraWaraPlaza();
     });
 
+    m_plazaScreen->onNavigateSfx([this]() {
+        m_audio.playSfx(Sfx::Navigate);
+    });
+    m_plazaScreen->onActivateSfx([this]() {
+        m_audio.playSfx(Sfx::Activate);
+    });
+
     m_plazaScreen->onLaunchGame([this](std::uint64_t titleId) {
         if (titleId == 0) return;
         for (auto& app : m_allApps) {

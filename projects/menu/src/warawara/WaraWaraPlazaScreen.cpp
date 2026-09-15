@@ -18,7 +18,7 @@ WaraWaraPlazaScreen::WaraWaraPlazaScreen() {
     // manual poll running later in the frame.
     addAction(static_cast<std::uint64_t>(nxui::Button::A), [this]() {
         if (m_active)
-            interactWithNearestVisibleMii();
+            activateHandTarget();
     });
 
     std::random_device rd;
@@ -72,7 +72,9 @@ void WaraWaraPlazaScreen::setupCommunities(const std::vector<GameCommunityEntry>
         }
         if (!alreadyExists) {
             PlazaCommunityData data;
-            data.titleId = fb.titleId;
+            // Fallback communities are presentation-only; zero prevents the
+            // hand's A action from pretending they are installed titles.
+            data.titleId = 0;
             data.titleName = fb.title;
             data.subtitle = fb.subtitle;
             data.iconTexture = nullptr;
@@ -100,33 +102,29 @@ void WaraWaraPlazaScreen::setupCommunities(const std::vector<GameCommunityEntry>
 
     m_pedestals.clear();
 
-    // 3. Position the 10 pedestals across the 2100px wide virtual plaza in two perspective depth tiers
-    // Back tier (5 pedestals): Y = 320.0f, scale = 0.88f
-    const float backX[] = {230.0f, 640.0f, 1050.0f, 1460.0f, 1870.0f};
-    // Front tier (5 pedestals): Y = 510.0f, scale = 1.06f
-    const float frontX[] = {150.0f, 560.0f, 970.0f, 1380.0f, 1790.0f};
+    // Arrange installed-title communities around one elliptical gathering
+    // plaza, matching the Wii U's radial overview instead of a rigid two-row
+    // shelf. The rear arc is smaller and the front arc larger, establishing
+    // depth while keeping all ten titles visible at the default zoom.
+    const nxui::Vec2 kPlazaCenter{640.0f, 430.0f};
+    static constexpr float kRadiusX = 475.0f;
+    static constexpr float kRadiusY = 185.0f;
+    static constexpr float kPi = 3.14159265358979323846f;
+    const size_t count = std::min<size_t>(communityList.size(), 10);
 
-    for (size_t i = 0; i < communityList.size() && i < 10; ++i) {
-        if (i < 5) {
-            // Back tier
-            auto ped = std::make_unique<PlazaPedestal>(
-                communityList[i],
-                nxui::Vec2{backX[i], 320.0f},
-                72.0f,
-                0.88f
-            );
-            m_pedestals.push_back(std::move(ped));
-        } else {
-            // Front tier
-            size_t fi = i - 5;
-            auto ped = std::make_unique<PlazaPedestal>(
-                communityList[i],
-                nxui::Vec2{frontX[fi], 510.0f},
-                82.0f,
-                1.06f
-            );
-            m_pedestals.push_back(std::move(ped));
-        }
+    for (size_t i = 0; i < count; ++i) {
+        // Start at the top and proceed clockwise. A half-slot offset for even
+        // counts avoids stacking a title directly behind the centre Miis.
+        const float phase = -kPi * 0.5f +
+            (2.0f * kPi * (static_cast<float>(i) + 0.5f)) / static_cast<float>(count);
+        const float depth = 0.5f + 0.5f * std::sin(phase);
+        const nxui::Vec2 pos{
+            kPlazaCenter.x + std::cos(phase) * kRadiusX,
+            kPlazaCenter.y + std::sin(phase) * kRadiusY
+        };
+        const float perspectiveScale = 0.76f + depth * 0.30f;
+        m_pedestals.push_back(std::make_unique<PlazaPedestal>(
+            communityList[i], pos, 68.0f, perspectiveScale));
     }
 
     populateMiis();
@@ -199,11 +197,26 @@ void WaraWaraPlazaScreen::populateMiis() {
 void WaraWaraPlazaScreen::open() {
     m_active = true;
     setVisible(true);
-    m_cameraTargetX = (m_plazaWidth - 1280.0f) * 0.5f; // Center camera on opening
-    m_cameraX = m_cameraTargetX;
+    m_cameraTargetX = 0.0f;
+    m_cameraX = 0.0f;
+    // Begin close on the welcoming Miis, then ease out to the full radial
+    // overview like the Wii U's opening presentation.
+    m_zoomTarget = 1.0f;
+    m_zoom = 1.28f;
     m_focusedPedestalIndex = -1;
     m_focusedMii = nullptr;
     m_speechBubbleTimer = 2.0f;
+
+    if (!m_pedestals.empty()) {
+        // Select the front-centre community on entry, where a viewer naturally
+        // looks after the reference intro pulls back to the overview.
+        int front = 0;
+        for (size_t i = 1; i < m_pedestals.size(); ++i) {
+            if (m_pedestals[i]->position().y > m_pedestals[front]->position().y)
+                front = static_cast<int>(i);
+        }
+        moveHandToPedestal(front, false);
+    }
 
     // Reset initial cheers for welcoming feel
     for (size_t i = 0; i < m_miis.size(); ++i) {
@@ -229,7 +242,7 @@ void WaraWaraPlazaScreen::triggerRandomSpeechBubble() {
     // Find candidate Miis visible on screen that don't already have an active bubble
     std::vector<MiiFigure*> candidates;
     for (auto& mii : m_miis) {
-        float sx = mii->position().x - m_cameraX;
+        const float sx = worldToScreen(mii->position()).x;
         if (sx >= 60.0f && sx <= 1220.0f && !mii->hasSpeechBubble()) {
             candidates.push_back(mii.get());
         }
@@ -343,10 +356,14 @@ void WaraWaraPlazaScreen::update(float dt) {
         }
     }
 
-    // Camera smoothing
-    const float maxCameraX = std::max(0.0f, m_plazaWidth - 1280.0f);
-    m_cameraTargetX = std::clamp(m_cameraTargetX, 0.0f, maxCameraX);
+    // Smooth zoom gives the Wii U-style pull-in/pull-out without a hard scene
+    // cut. The radial layout fits the viewport, so horizontal camera offset is
+    // retained only for compatibility with the existing render helpers.
+    m_zoomTarget = std::clamp(m_zoomTarget, 0.78f, 1.28f);
+    m_zoom += (m_zoomTarget - m_zoom) * std::min(1.0f, dt * 8.0f);
+    m_cameraTargetX = 0.0f;
     m_cameraX += (m_cameraTargetX - m_cameraX) * std::min(1.0f, dt * 7.5f);
+    m_handPulse += dt;
 
     // Update pedestals
     for (auto& ped : m_pedestals) {
@@ -369,62 +386,159 @@ void WaraWaraPlazaScreen::update(float dt) {
 bool WaraWaraPlazaScreen::handleInput(const nxui::Input& input, float dt) {
     if (!m_active || m_fadeAlpha < 0.2f) return false;
 
-    // 1. Controller Return: B button
     if (input.isDown(nxui::Button::B)) {
         close();
         if (m_closeCb) m_closeCb();
         return true;
     }
 
-    // 2. Camera Panning via Left Stick or Right Stick
-    const float panSpeed = 740.0f;
-    float lx = input.leftStickX();
-    if (std::abs(lx) > 0.15f) {
-        m_cameraTargetX += lx * panSpeed * dt;
-        if (m_focusedPedestalIndex >= 0) {
-            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
-            m_focusedPedestalIndex = -1;
-        }
+    // The left stick is an analogue Wii Remote-style hand pointer. D-pad
+    // navigation snaps that same hand between communities for controllers
+    // where precise pointer motion is less comfortable.
+    const float lx = input.leftStickX();
+    const float ly = input.leftStickY();
+    const float stickMagnitude = std::sqrt(lx * lx + ly * ly);
+    if (stickMagnitude > 0.16f) {
+        const float pointerSpeed = 620.0f;
+        m_handPos.x += lx * pointerSpeed * dt;
+        m_handPos.y -= ly * pointerSpeed * dt;
+        m_handPos.x = std::clamp(m_handPos.x, 26.0f, 1254.0f);
+        m_handPos.y = std::clamp(m_handPos.y, 92.0f, 684.0f);
+        updateHandSelection();
     }
 
-    float rx = input.rightStickX();
-    if (std::abs(rx) > 0.15f) {
-        m_cameraTargetX += rx * panSpeed * dt;
-        if (m_focusedPedestalIndex >= 0) {
-            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
-            m_focusedPedestalIndex = -1;
-        }
+    nxui::Vec2 navDir{0.0f, 0.0f};
+    if (input.isDown(nxui::Button::DLeft)) navDir.x = -1.0f;
+    else if (input.isDown(nxui::Button::DRight)) navDir.x = 1.0f;
+    else if (input.isDown(nxui::Button::DUp)) navDir.y = -1.0f;
+    else if (input.isDown(nxui::Button::DDown)) navDir.y = 1.0f;
+
+    if (navDir.x != 0.0f || navDir.y != 0.0f) {
+        int next = findDirectionalPedestal(m_focusedPedestalIndex, navDir);
+        if (next >= 0) moveHandToPedestal(next, true);
     }
 
-    // 3. Camera Panning via D-Pad
-    if (input.isHeld(nxui::Button::DLeft)) {
-        m_cameraTargetX -= panSpeed * 0.9f * dt;
-        if (m_focusedPedestalIndex >= 0) {
-            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
-            m_focusedPedestalIndex = -1;
-        }
-    }
-    if (input.isHeld(nxui::Button::DRight)) {
-        m_cameraTargetX += panSpeed * 0.9f * dt;
-        if (m_focusedPedestalIndex >= 0) {
-            m_pedestals[m_focusedPedestalIndex]->setFocused(false);
-            m_focusedPedestalIndex = -1;
-        }
-    }
+    // Triggers provide stepped zoom; right-stick vertical movement provides
+    // smooth zoom. Up/pull-back zooms in, down/push-forward zooms out.
+    if (input.isDown(nxui::Button::ZR)) m_zoomTarget += 0.10f;
+    if (input.isDown(nxui::Button::ZL)) m_zoomTarget -= 0.10f;
+    const float ry = input.rightStickY();
+    if (std::abs(ry) > 0.18f) m_zoomTarget += ry * 0.55f * dt;
+    m_zoomTarget = std::clamp(m_zoomTarget, 0.78f, 1.28f);
 
-    // Clamp camera within virtual plaza bounds
-    const float maxCamX = std::max(0.0f, m_plazaWidth - 1280.0f);
-    m_cameraTargetX = std::clamp(m_cameraTargetX, 0.0f, maxCamX);
-
-    // 4. X/Y remain optional talk shortcuts. Button A is deliberately absent:
-    // it is dispatched once through this focused widget's registered action
-    // before onUpdate(), avoiding the old second poll and duplicate activation.
+    // X/Y preserve the existing direct Mii talk shortcut. A is dispatched once
+    // through the focused widget's registered action and activates the hand's
+    // selected game; keeping it out of this poll avoids duplicate activation.
     if (input.isDown(nxui::Button::X) || input.isDown(nxui::Button::Y)) {
         interactWithNearestVisibleMii();
         return true;
     }
 
     return true;
+}
+
+nxui::Vec2 WaraWaraPlazaScreen::worldToScreen(const nxui::Vec2& world) const {
+    const nxui::Vec2 kViewCenter{640.0f, 400.0f};
+    return {
+        kViewCenter.x + (world.x - m_cameraX - kViewCenter.x) * m_zoom,
+        kViewCenter.y + (world.y - kViewCenter.y) * m_zoom
+    };
+}
+
+void WaraWaraPlazaScreen::moveHandToPedestal(int index, bool playSfx) {
+    if (index < 0 || index >= static_cast<int>(m_pedestals.size())) return;
+
+    const bool changed = m_focusedPedestalIndex != index;
+    m_focusedPedestalIndex = index;
+    for (size_t i = 0; i < m_pedestals.size(); ++i)
+        m_pedestals[i]->setFocused(static_cast<int>(i) == index);
+
+    const nxui::Vec2 centre = worldToScreen(m_pedestals[index]->position());
+    m_handPos = {centre.x + 14.0f, centre.y - 22.0f};
+    if (changed && playSfx && m_navigateSfxCb) m_navigateSfxCb();
+}
+
+void WaraWaraPlazaScreen::updateHandSelection() {
+    int best = -1;
+    float bestDistSq = 86.0f * 86.0f;
+    for (size_t i = 0; i < m_pedestals.size(); ++i) {
+        const nxui::Vec2 p = worldToScreen(m_pedestals[i]->position());
+        const float dx = p.x - m_handPos.x;
+        const float dy = (p.y - 24.0f) - m_handPos.y;
+        const float distSq = dx * dx + dy * dy;
+        if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            best = static_cast<int>(i);
+        }
+    }
+
+    if (best != m_focusedPedestalIndex) {
+        m_focusedPedestalIndex = best;
+        for (size_t i = 0; i < m_pedestals.size(); ++i)
+            m_pedestals[i]->setFocused(static_cast<int>(i) == best);
+        if (best >= 0 && m_navigateSfxCb) m_navigateSfxCb();
+    }
+}
+
+int WaraWaraPlazaScreen::findDirectionalPedestal(int fromIndex, const nxui::Vec2& direction) const {
+    if (m_pedestals.empty()) return -1;
+    if (fromIndex < 0 || fromIndex >= static_cast<int>(m_pedestals.size())) {
+        float best = 1e30f;
+        int index = 0;
+        for (size_t i = 0; i < m_pedestals.size(); ++i) {
+            const nxui::Vec2 p = worldToScreen(m_pedestals[i]->position());
+            const float dx = p.x - m_handPos.x;
+            const float dy = p.y - m_handPos.y;
+            const float d = dx * dx + dy * dy;
+            if (d < best) { best = d; index = static_cast<int>(i); }
+        }
+        return index;
+    }
+
+    const nxui::Vec2 origin = worldToScreen(m_pedestals[fromIndex]->position());
+    float bestScore = 1e30f;
+    int best = -1;
+    for (size_t i = 0; i < m_pedestals.size(); ++i) {
+        if (static_cast<int>(i) == fromIndex) continue;
+        const nxui::Vec2 p = worldToScreen(m_pedestals[i]->position());
+        const float dx = p.x - origin.x;
+        const float dy = p.y - origin.y;
+        const float forward = dx * direction.x + dy * direction.y;
+        if (forward <= 8.0f) continue;
+        const float side = std::abs(dx * direction.y - dy * direction.x);
+        const float score = forward + side * 2.8f;
+        if (score < bestScore) { bestScore = score; best = static_cast<int>(i); }
+    }
+    return best;
+}
+
+void WaraWaraPlazaScreen::activateHandTarget() {
+    if (m_focusedPedestalIndex >= 0 &&
+        m_focusedPedestalIndex < static_cast<int>(m_pedestals.size())) {
+        const uint64_t titleId = m_pedestals[m_focusedPedestalIndex]->data().titleId;
+        if (titleId != 0 && m_launchGameCb) {
+            if (m_activateSfxCb) m_activateSfxCb();
+            m_launchGameCb(titleId);
+            return;
+        }
+        // Presentation-only fallback communities cannot launch an application;
+        // let A talk to their gathering instead of silently doing nothing.
+        const nxui::Vec2 centre = m_pedestals[m_focusedPedestalIndex]->position();
+        MiiFigure* nearest = nullptr;
+        float nearestSq = 1e30f;
+        for (const auto& mii : m_miis) {
+            const float dx = mii->position().x - centre.x;
+            const float dy = mii->position().y - centre.y;
+            const float d = dx * dx + dy * dy;
+            if (d < nearestSq) { nearestSq = d; nearest = mii.get(); }
+        }
+        if (nearest) {
+            if (m_activateSfxCb) m_activateSfxCb();
+            interactWithMii(nearest);
+            return;
+        }
+    }
+    interactWithNearestVisibleMii();
 }
 
 bool WaraWaraPlazaScreen::handleTouch(const nxui::Input& input) {
@@ -450,30 +564,28 @@ bool WaraWaraPlazaScreen::handleTouch(const nxui::Input& input) {
             }
         }
 
-        // Check if tapping a Pedestal
+        // Check if tapping a community through the same transformed view used
+        // for rendering. First tap selects; a second tap launches.
         for (size_t i = 0; i < m_pedestals.size(); ++i) {
-            if (m_pedestals[i]->hitTest({tx, ty}, m_cameraX)) {
-                m_focusedPedestalIndex = (int)i;
-                for (size_t j = 0; j < m_pedestals.size(); ++j) {
-                    m_pedestals[j]->setFocused(j == i);
-                }
-                uint64_t tid = m_pedestals[i]->data().titleId;
-                if (m_launchGameCb && tid != 0) {
-                    m_launchGameCb(tid);
-                }
+            const nxui::Vec2 p = worldToScreen(m_pedestals[i]->position());
+            const float radius = 82.0f * m_zoom * m_pedestals[i]->scale();
+            const float dx = tx - p.x;
+            const float dy = ty - (p.y - 28.0f * m_zoom);
+            if (dx * dx + dy * dy <= radius * radius) {
+                const bool alreadySelected = m_focusedPedestalIndex == static_cast<int>(i);
+                moveHandToPedestal(static_cast<int>(i), true);
+                if (alreadySelected) activateHandTarget();
                 return true;
             }
         }
 
-        m_lastTouchX = tx;
         m_isDraggingTouch = true;
         return true;
     }
 
     if (input.isTouching() && m_isDraggingTouch) {
-        float dx = m_lastTouchX - tx;
-        m_cameraTargetX += dx * 1.15f;
-        m_lastTouchX = tx;
+        m_handPos = {tx, ty};
+        updateHandSelection();
         return true;
     }
 
@@ -545,6 +657,36 @@ void WaraWaraPlazaScreen::drawHeader(nxui::Renderer& ren) const {
     }
 }
 
+void WaraWaraPlazaScreen::drawHandCursor(nxui::Renderer& ren) const {
+    // Primitive-built Wii U-style white glove: blue shadow/outline, extended
+    // index finger, rounded palm and thumb. Keeping it procedural avoids a new
+    // texture dependency and stays crisp throughout the zoom range.
+    const float pulse = 1.0f + std::sin(m_handPulse * 4.2f) * 0.035f;
+    const nxui::Vec2 p = m_handPos;
+    const nxui::Color outline(0.05f, 0.50f, 0.88f, 0.98f * m_fadeAlpha);
+    const nxui::Color white(0.98f, 0.99f, 1.0f, m_fadeAlpha);
+    const nxui::Color shade(0.76f, 0.91f, 1.0f, m_fadeAlpha);
+
+    ren.drawRoundedRect({p.x - 8.0f * pulse, p.y - 43.0f * pulse,
+                         19.0f * pulse, 48.0f * pulse}, outline, 9.0f * pulse);
+    ren.drawRoundedRect({p.x - 11.0f * pulse, p.y - 2.0f * pulse,
+                         35.0f * pulse, 30.0f * pulse}, outline, 12.0f * pulse);
+    ren.drawRoundedRect({p.x + 15.0f * pulse, p.y + 1.0f * pulse,
+                         18.0f * pulse, 13.0f * pulse}, outline, 6.0f * pulse);
+    ren.drawTriangle({p.x + 23.0f * pulse, p.y + 7.0f * pulse},
+                     {p.x + 33.0f * pulse, p.y + 13.0f * pulse},
+                     {p.x + 20.0f * pulse, p.y + 17.0f * pulse}, outline);
+
+    ren.drawRoundedRect({p.x - 4.0f * pulse, p.y - 39.0f * pulse,
+                         11.0f * pulse, 43.0f * pulse}, white, 5.0f * pulse);
+    ren.drawRoundedRect({p.x - 7.0f * pulse, p.y + 1.0f * pulse,
+                         27.0f * pulse, 23.0f * pulse}, white, 9.0f * pulse);
+    ren.drawRoundedRect({p.x + 15.0f * pulse, p.y + 5.0f * pulse,
+                         13.0f * pulse, 7.0f * pulse}, white, 3.5f * pulse);
+    ren.drawRoundedRect({p.x - 1.0f * pulse, p.y + 18.0f * pulse,
+                         17.0f * pulse, 10.0f * pulse}, shade, 4.0f * pulse);
+}
+
 void WaraWaraPlazaScreen::render(nxui::Renderer& ren) {
     if (m_fadeAlpha <= 0.001f) return;
 
@@ -566,56 +708,42 @@ void WaraWaraPlazaScreen::render(nxui::Renderer& ren) {
         drawPlazaFloor(ren);
     }
 
-    // 2. Render Depth-Sorted Scene
-    // Depth sorting strategy for authentic perspective:
-    // a. Back row pedestals (Y = 320.0f)
-    {
-        const nxui::Renderer::DrawTagScope tag{ren, "plaza.pedestal.back"};
-        for (size_t i = 0; i < m_pedestals.size() && i < 5; ++i) {
-            m_pedestals[i]->render(ren, m_fontNormal, m_fontSmall, m_cameraX);
+    // 2. Render a unified depth-sorted radial scene. Pedestals and Miis share
+    // one Y order so a foreground community correctly occludes rear figures.
+    struct SceneItem {
+        float y;
+        bool pedestal;
+        size_t index;
+    };
+    std::vector<SceneItem> scene;
+    scene.reserve(m_pedestals.size() + m_miis.size());
+    for (size_t i = 0; i < m_pedestals.size(); ++i)
+        scene.push_back({m_pedestals[i]->position().y, true, i});
+    for (size_t i = 0; i < m_miis.size(); ++i)
+        scene.push_back({m_miis[i]->position().y, false, i});
+    std::stable_sort(scene.begin(), scene.end(), [](const SceneItem& a, const SceneItem& b) {
+        return a.y < b.y;
+    });
+
+    for (const auto& item : scene) {
+        if (item.pedestal) {
+            const nxui::Renderer::DrawTagScope tag{ren, "plaza.pedestal.radial"};
+            m_pedestals[item.index]->render(
+                ren, m_fontNormal, m_fontSmall, m_cameraX, m_zoom, {640.0f, 400.0f});
+        } else {
+            const bool far = m_miis[item.index]->position().y < 420.0f;
+            const nxui::Renderer::DrawTagScope tag{
+                ren, far ? "plaza.mii.far" : "plaza.mii.near"};
+            m_miis[item.index]->render(
+                ren, m_fontNormal, m_fontSmall, m_cameraX, m_zoom, {640.0f, 400.0f});
         }
     }
-
-    // b. Miis located in the upper depth tier (Y < 420.0f)
-    {
-        const nxui::Renderer::DrawTagScope tag{ren, "plaza.mii.far"};
-        for (const auto& mii : m_miis) {
-            if (mii->position().y < 420.0f) {
-                // Temporarily apply camera offset for rendering
-                nxui::Vec2 origPos = mii->position();
-                mii->setPosition({origPos.x - m_cameraX, origPos.y});
-                mii->render(ren, m_fontNormal, m_fontSmall);
-                mii->setPosition(origPos);
-            }
-        }
-    }
-
-    // c. Front row pedestals (Y = 510.0f)
-    {
-        const nxui::Renderer::DrawTagScope tag{ren, "plaza.pedestal.front"};
-        for (size_t i = 5; i < m_pedestals.size(); ++i) {
-            m_pedestals[i]->render(ren, m_fontNormal, m_fontSmall, m_cameraX);
-        }
-    }
-
-    // d. Miis located in the lower depth tier (Y >= 420.0f)
-    {
-        const nxui::Renderer::DrawTagScope tag{ren, "plaza.mii.near"};
-        for (const auto& mii : m_miis) {
-            if (mii->position().y >= 420.0f) {
-                nxui::Vec2 origPos = mii->position();
-                mii->setPosition({origPos.x - m_cameraX, origPos.y});
-                mii->render(ren, m_fontNormal, m_fontSmall);
-                mii->setPosition(origPos);
-            }
-        }
-    }
-
     // 3. Header & Navigation UI
     {
         const nxui::Renderer::DrawTagScope tag{ren, "plaza.header"};
         drawHeader(ren);
     }
+    drawHandCursor(ren);
 }
 
 } // namespace warawara
