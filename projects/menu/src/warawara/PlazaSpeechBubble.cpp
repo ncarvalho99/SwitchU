@@ -136,8 +136,13 @@ void PlazaSpeechBubble::updateLayout(nxui::Font* font, nxui::Font* smallFont) {
     m_tailDir = BubbleTailDirection::Down;
 
     if (bubbleY < 24.0f) {
-        bubbleY = m_anchor.y + 16.0f + floatOffset;
-        m_tailDir = BubbleTailDirection::Up;
+        if (m_anchor.y + 16.0f + bubbleHeight <= 700.0f) {
+            bubbleY = m_anchor.y + 16.0f + floatOffset;
+            m_tailDir = BubbleTailDirection::Up;
+        } else {
+            bubbleY = 24.0f;
+            m_tailDir = BubbleTailDirection::Down;
+        }
     }
 
     // Determine horizontal placement (clamped to screen boundaries with padding)
@@ -162,12 +167,12 @@ void PlazaSpeechBubble::updateLayout(nxui::Font* font, nxui::Font* smallFont) {
         float baseY = bubbleY + bubbleHeight;
         m_tailBaseLeft = {tailBaseX - 8.0f, baseY};
         m_tailBaseRight = {tailBaseX + 8.0f, baseY};
-        m_tailTip = {m_anchor.x, baseY + 10.0f};
+        m_tailTip = {tailBaseX, std::min(m_anchor.y, baseY + 12.0f)};
     } else {
         float baseY = bubbleY;
         m_tailBaseLeft = {tailBaseX - 8.0f, baseY};
         m_tailBaseRight = {tailBaseX + 8.0f, baseY};
-        m_tailTip = {m_anchor.x, baseY - 10.0f};
+        m_tailTip = {tailBaseX, std::max(m_anchor.y, baseY - 12.0f)};
     }
 
     m_layoutDirty = false;

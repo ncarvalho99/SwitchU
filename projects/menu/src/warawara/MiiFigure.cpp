@@ -556,7 +556,13 @@ void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallF
         }
     }
 
-    // 7. Speech Bubble
+    // Update speech bubble screen anchor so it tracks head position smoothly across all zoom levels
+    if (m_speechBubble.isVisible()) {
+        const_cast<PlazaSpeechBubble&>(m_speechBubble).setAnchor({headCenterX, headRect.y});
+    }
+}
+
+void MiiFigure::renderSpeechBubble(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont) const {
     if (m_speechBubble.isVisible()) {
         m_speechBubble.render(ren, font, smallFont);
     }

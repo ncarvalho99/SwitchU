@@ -502,6 +502,7 @@ private:
     std::shared_ptr<warawara::PlazaScreenSwapButton> m_screenSwapButton;
     int m_plazaIconPumpIndex = 0;
     nxui::Widget* m_activityLogReturnFocus = nullptr;
+    nxui::Widget* m_plazaReturnFocus = nullptr;
 
     nxui::Texture m_gameCardTex;
     nxui::Texture m_arrowTexLeft;

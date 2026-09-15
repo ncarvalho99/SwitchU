@@ -94,6 +94,8 @@ public:
     PlazaSpeechBubble& speechBubble() { return m_speechBubble; }
     const PlazaSpeechBubble& speechBubble() const { return m_speechBubble; }
     nxui::Vec2 headTopAnchor() const;
+    void renderSpeechBubble(nxui::Renderer& ren, nxui::Font* font = nullptr,
+                            nxui::Font* smallFont = nullptr) const;
 
     /// Facing direction.
     bool isFacingLeft() const { return m_facingLeft; }

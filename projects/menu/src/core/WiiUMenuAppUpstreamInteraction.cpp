@@ -894,6 +894,7 @@ void WiiUMenuApp::wireFocusCallback() {
 #if 0 // Local fork implementation retained.
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
+    if (m_plazaScreen && m_plazaScreen.get() == w) return false;
     if (m_steamGridDbPicker && m_steamGridDbPicker.get() == w) return w->isFocusable();
     if (m_themeShop && m_themeShop.get() == w) return w->isFocusable();
     if (m_settings && m_settings.get() == w) return w->isFocusable();
@@ -1565,6 +1566,7 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
 #if 1 // Upstream 1.2 cursor follows dynamic layout and route transitions.
 void WiiUMenuApp::updateCursor() {
     if (m_lockScreen.isLocked() ||
+        (m_plazaScreen && m_plazaScreen->isActive()) ||
         (m_gameGallery && m_gameGallery->isActive()) ||
         (m_gameMods && m_gameMods->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||

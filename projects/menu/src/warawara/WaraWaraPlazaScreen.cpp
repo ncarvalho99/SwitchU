@@ -1,4 +1,5 @@
 #include "WaraWaraPlazaScreen.hpp"
+#include "WiiUPointerHandBytes.hpp"
 #include <cmath>
 #include <algorithm>
 #include <chrono>
@@ -8,7 +9,7 @@ namespace warawara {
 WaraWaraPlazaScreen::WaraWaraPlazaScreen() {
     setRect({0.0f, 0.0f, 1280.0f, 720.0f});
     setVisible(false);
-    setFocusable(true);
+    setFocusable(false);
     setTag("warawara_plaza_screen");
 
     // Application::dispatchInput() sends actions to the active FocusManager
@@ -23,6 +24,18 @@ WaraWaraPlazaScreen::WaraWaraPlazaScreen() {
 
     std::random_device rd;
     m_rng.seed(rd());
+}
+
+void WaraWaraPlazaScreen::initGpuAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren) {
+    if (!m_handCursorTex.valid()) {
+        static constexpr const char* kSdIcon = "sdmc:/switch/SwitchU/icons/pointer_hand.png";
+        static constexpr const char* kRomfsIcon = "romfs:/icons/pointer_hand.png";
+        if (!m_handCursorTex.loadFromFile(gpu, ren, kSdIcon, 128)) {
+            if (!m_handCursorTex.loadFromFile(gpu, ren, kRomfsIcon, 128)) {
+                m_handCursorTex.loadFromMemory(gpu, ren, kWiiUPointerHandPng, sizeof(kWiiUPointerHandPng), 128);
+            }
+        }
+    }
 }
 
 void WaraWaraPlazaScreen::setupCommunities(const std::vector<GameCommunityEntry>& entries) {
@@ -430,9 +443,17 @@ void WaraWaraPlazaScreen::update(float dt) {
 bool WaraWaraPlazaScreen::handleInput(const nxui::Input& input, float dt) {
     if (!m_active || m_fadeAlpha < 0.2f) return false;
 
+    if (input.isDown(nxui::Button::A)) {
+        activateHandTarget();
+        return true;
+    }
+
     if (input.isDown(nxui::Button::B)) {
-        close();
-        if (m_closeCb) m_closeCb();
+        if (m_closeCb) {
+            m_closeCb();
+        } else {
+            close();
+        }
         return true;
     }
 
@@ -643,11 +664,23 @@ bool WaraWaraPlazaScreen::handleTouch(const nxui::Input& input) {
     float ty = input.touchY();
 
     if (input.touchDown()) {
-        // Check top right close area
+        // 1. Check top right close area
         if (tx >= 1180.0f && ty <= 70.0f) {
-            close();
-            if (m_closeCb) m_closeCb();
+            if (m_closeCb) {
+                m_closeCb();
+            } else {
+                close();
+            }
             return true;
+        }
+
+        // 2. Check if tapping an active speech bubble (e.g. "Yeah!" reaction)
+        for (auto& mii : m_miis) {
+            if (mii && mii->hasSpeechBubble() && mii->speechBubble().hitTest({tx, ty})) {
+                mii->speechBubble().giveYeah();
+                if (m_activateSfxCb) m_activateSfxCb();
+                return true;
+            }
         }
 
         // Check if tapping a community through the transformed view
@@ -764,33 +797,29 @@ void WaraWaraPlazaScreen::drawHeader(nxui::Renderer& ren) const {
 }
 
 void WaraWaraPlazaScreen::drawHandCursor(nxui::Renderer& ren) const {
-    // Primitive-built Wii U-style white glove: blue shadow/outline, extended
-    // index finger, rounded palm and thumb. Keeping it procedural avoids a new
-    // texture dependency and stays crisp throughout the zoom range.
     const float pulse = 1.0f + std::sin(m_handPulse * 4.2f) * 0.035f;
     const nxui::Vec2 p = m_handPos;
-    const nxui::Color outline(0.05f, 0.50f, 0.88f, 0.98f * m_fadeAlpha);
-    const nxui::Color white(0.98f, 0.99f, 1.0f, m_fadeAlpha);
-    const nxui::Color shade(0.76f, 0.91f, 1.0f, m_fadeAlpha);
+    // Authentic Wii U pointer hand:
+    // Aspect ratio: 104x122 (w:h ≈ 0.852). Display size: 46x54
+    const float w = 46.0f * pulse;
+    const float h = 54.0f * pulse;
+    // Hotspot is at the tip of the pointing index finger (15/104 of w, 4/122 of h)
+    const float hotX = w * (15.0f / 104.0f);
+    const float hotY = h * (4.0f / 122.0f);
+    const nxui::Rect dest{p.x - hotX, p.y - hotY, w, h};
 
-    ren.drawRoundedRect({p.x - 8.0f * pulse, p.y - 43.0f * pulse,
-                         19.0f * pulse, 48.0f * pulse}, outline, 9.0f * pulse);
-    ren.drawRoundedRect({p.x - 11.0f * pulse, p.y - 2.0f * pulse,
-                         35.0f * pulse, 30.0f * pulse}, outline, 12.0f * pulse);
-    ren.drawRoundedRect({p.x + 15.0f * pulse, p.y + 1.0f * pulse,
-                         18.0f * pulse, 13.0f * pulse}, outline, 6.0f * pulse);
-    ren.drawTriangle({p.x + 23.0f * pulse, p.y + 7.0f * pulse},
-                     {p.x + 33.0f * pulse, p.y + 13.0f * pulse},
-                     {p.x + 20.0f * pulse, p.y + 17.0f * pulse}, outline);
-
-    ren.drawRoundedRect({p.x - 4.0f * pulse, p.y - 39.0f * pulse,
-                         11.0f * pulse, 43.0f * pulse}, white, 5.0f * pulse);
-    ren.drawRoundedRect({p.x - 7.0f * pulse, p.y + 1.0f * pulse,
-                         27.0f * pulse, 23.0f * pulse}, white, 9.0f * pulse);
-    ren.drawRoundedRect({p.x + 15.0f * pulse, p.y + 5.0f * pulse,
-                         13.0f * pulse, 7.0f * pulse}, white, 3.5f * pulse);
-    ren.drawRoundedRect({p.x - 1.0f * pulse, p.y + 18.0f * pulse,
-                         17.0f * pulse, 10.0f * pulse}, shade, 4.0f * pulse);
+    if (m_handCursorTex.valid()) {
+        const nxui::Color tint(1.0f, 1.0f, 1.0f, m_fadeAlpha);
+        ren.drawTexture(&m_handCursorTex, dest, tint);
+    } else {
+        // Fallback if texture not yet loaded
+        const nxui::Color outline(0.05f, 0.50f, 0.88f, 0.98f * m_fadeAlpha);
+        const nxui::Color white(0.98f, 0.99f, 1.0f, m_fadeAlpha);
+        ren.drawRoundedRect({p.x - 6.0f * pulse, p.y - 30.0f * pulse, 12.0f * pulse, 34.0f * pulse}, outline, 6.0f * pulse);
+        ren.drawRoundedRect({p.x - 10.0f * pulse, p.y - 2.0f * pulse, 28.0f * pulse, 24.0f * pulse}, outline, 10.0f * pulse);
+        ren.drawRoundedRect({p.x - 4.0f * pulse, p.y - 28.0f * pulse, 8.0f * pulse, 30.0f * pulse}, white, 4.0f * pulse);
+        ren.drawRoundedRect({p.x - 8.0f * pulse, p.y, 24.0f * pulse, 20.0f * pulse}, white, 8.0f * pulse);
+    }
 }
 
 void WaraWaraPlazaScreen::render(nxui::Renderer& ren) {
@@ -844,7 +873,19 @@ void WaraWaraPlazaScreen::render(nxui::Renderer& ren) {
                 ren, m_fontNormal, m_fontSmall, m_cameraX, m_cameraY, m_zoom, {640.0f, 400.0f});
         }
     }
-    // 3. Header & Navigation UI
+
+    // 3. Render active speech bubbles in foreground overlay pass
+    // Rendering here ensures speech bubbles are ALWAYS on top of all Miis and pedestals.
+    {
+        const nxui::Renderer::DrawTagScope tag{ren, "plaza.speech_bubbles"};
+        for (const auto& mii : m_miis) {
+            if (mii && mii->hasSpeechBubble()) {
+                mii->renderSpeechBubble(ren, m_fontNormal, m_fontSmall);
+            }
+        }
+    }
+
+    // 4. Header & Navigation UI
     {
         const nxui::Renderer::DrawTagScope tag{ren, "plaza.header"};
         drawHeader(ren);

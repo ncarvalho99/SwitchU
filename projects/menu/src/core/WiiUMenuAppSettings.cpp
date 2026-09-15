@@ -887,6 +887,7 @@ void WiiUMenuApp::createWaraWaraPlaza() {
 
     m_plazaScreen = std::make_shared<warawara::WaraWaraPlazaScreen>();
     m_plazaScreen->setFonts(&m_fontNormal, &m_fontSmall);
+    m_plazaScreen->initGpuAssets(app().gpu(), app().renderer());
     m_plazaScreen->setServices(&m_miiAvatarManager,
                                &m_plazaDialogueEngine,
                                &m_animalesePlayer,
@@ -1029,6 +1030,10 @@ void WiiUMenuApp::openWaraWaraPlaza() {
     } else {
         refreshPlazaCommunities();
     }
+    m_plazaReturnFocus = focusManager().current();
+    if (m_cursor) {
+        m_cursor->setVisible(false);
+    }
     m_navigator.navigate(switchu::navigation::Route::WaraWaraPlaza);
     m_plazaIconPumpIndex = 0;
     m_plazaScreen->open();
@@ -1044,26 +1049,42 @@ void WiiUMenuApp::openWaraWaraPlaza() {
 }
 
 void WiiUMenuApp::closeWaraWaraPlaza() {
-    if (!m_plazaScreen || !m_plazaScreen->isActive()) return;
+    if (!m_plazaScreen) return;
+    if (!m_plazaScreen->isActive() && m_navigator.route() != switchu::navigation::Route::WaraWaraPlaza) {
+        return;
+    }
 
     m_plazaScreen->close();
+    m_plazaScreen->setVisible(false);
     m_navigator.routeDidClose(switchu::navigation::Route::WaraWaraPlaza);
     if (m_screenSwapButton) {
         m_screenSwapButton->setPlazaActive(false);
     }
     m_audio.playSfx(Sfx::ModalHide);
 
-    if (m_grid) {
-        auto* target = m_grid->focusManager().current();
-        if (target && isCurrentFocusableWidget(target)) {
-            m_suppressNextNavigateSfx = true;
-            focusManager().setFocus(target);
-        } else {
+    nxui::Widget* target = nullptr;
+    if (isCurrentFocusableWidget(m_plazaReturnFocus)) {
+        target = m_plazaReturnFocus;
+    } else if (m_grid) {
+        target = m_grid->focusManager().current();
+        if (!target || !isCurrentFocusableWidget(target)) {
             auto icons = m_grid->allIcons();
             if (!icons.empty() && icons[0]) {
-                m_suppressNextNavigateSfx = true;
-                focusManager().setFocus(icons[0].get());
+                target = icons[0].get();
             }
+        }
+    }
+    m_plazaReturnFocus = nullptr;
+
+    if (target) {
+        m_suppressNextNavigateSfx = true;
+        if (m_grid) {
+            m_grid->focusManager().setFocus(target);
+        }
+        focusManager().setFocus(target);
+        if (m_cursor) {
+            m_cursor->moveTo(target->focusRect().expanded(4.f), 0.f);
+            m_cursor->setVisible(true);
         }
     }
 }

@@ -626,6 +626,7 @@ void WiiUMenuApp::raiseOverlay(const std::shared_ptr<nxui::Widget>& overlay) {
 
 bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     if (!w) return false;
+    if (m_plazaScreen && m_plazaScreen.get() == w) return false;
     // m_dialog stayed focused-but-unchecked here: the homebrew "Mark as game
     // port" button has closeOnPress=false, so the dialog is still the current
     // focus when its handler opens the text-entry confirm step. Cancelling

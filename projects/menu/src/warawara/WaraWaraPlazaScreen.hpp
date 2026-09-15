@@ -11,6 +11,7 @@
 #include <nxui/core/Renderer.hpp>
 #include <nxui/core/Input.hpp>
 #include <nxui/core/Font.hpp>
+#include <nxui/core/Texture.hpp>
 
 #include <vector>
 #include <memory>
@@ -51,6 +52,10 @@ public:
     };
 
     void setupCommunities(const std::vector<GameCommunityEntry>& entries);
+    void initGpuAssets(nxui::GpuDevice& gpu, nxui::Renderer& ren);
+
+    bool isFocusable() const override { return false; }
+    nxui::Rect focusRect() const override { return {640.f, 360.f, 0.f, 0.f}; }
 
     void open();
     void close();
@@ -122,6 +127,7 @@ private:
     MiiFigure* m_focusedMii = nullptr;
     nxui::Vec2 m_handPos{640.0f, 360.0f};
     float m_handPulse = 0.0f;
+    nxui::Texture m_handCursorTex;
 
     // Speech bubble scheduler
     float m_speechBubbleTimer = 3.0f;
