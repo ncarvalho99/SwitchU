@@ -160,9 +160,14 @@ void WaraWaraPlazaScreen::populateMiis() {
             auto mii = std::make_unique<MiiFigure>(av);
             nxui::Vec2 slotPos = ped->getGatheringSlot(s);
 
-            // Stagger scale slightly for visual variety
+            // Stagger scale slightly for visual variety.
+            // `s` is size_t, so `(s % 3) - 1` is evaluated in unsigned
+            // arithmetic and wraps to SIZE_MAX when s == 0. Converting that to
+            // float yields exactly 2^64, which setScale's lower-bound-only
+            // clamp accepts. Compute the stagger in signed arithmetic.
             float baseScale = (ped->scale() < 1.0f) ? 0.88f : 1.02f;
-            mii->setScale(baseScale + ((s % 3) - 1) * 0.05f);
+            const int stagger = static_cast<int>(s % 3) - 1;
+            mii->setScale(baseScale + static_cast<float>(stagger) * 0.05f);
 
             // Place near slot and command them to gather
             mii->setPosition({slotPos.x + ((s % 2 == 0) ? -12.0f : 12.0f), slotPos.y + 6.0f});

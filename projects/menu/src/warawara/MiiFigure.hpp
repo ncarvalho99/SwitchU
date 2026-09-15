@@ -57,7 +57,19 @@ public:
     const nxui::Vec2& position() const { return m_pos; }
 
     /// Scale multiplier (defaults to 1.0f).
-    void setScale(float scale) { m_scale = (scale < 0.1f) ? 0.1f : scale; }
+    /// Clamped at both ends and NaN-rejected: an unbounded upper end let a
+    /// caller's unsigned-underflow (2^64) reach the renderer and emit geometry
+    /// with a +64 biased exponent. The comparison order also makes NaN fall
+    /// through to the default rather than being stored.
+    void setScale(float scale) {
+        if (!(scale >= 0.1f)) {   // false for NaN and for values below 0.1
+            m_scale = 0.1f;
+        } else if (scale > 8.0f) {
+            m_scale = 8.0f;
+        } else {
+            m_scale = scale;
+        }
+    }
     float scale() const { return m_scale; }
 
     /// State machine queries and triggers.
