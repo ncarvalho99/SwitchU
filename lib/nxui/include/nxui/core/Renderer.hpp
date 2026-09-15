@@ -316,7 +316,14 @@ private:
     uint64_t m_frameSerial = 0;
     int      m_journalTarget = -1;             // current render target
     Rect     m_journalScissor {0.f, 0.f, 0.f, 0.f};
+    // Cached-memory shadow of the vertex fields the journal inspects, written
+    // alongside each vertex so the journal never re-reads uncached GPU memory.
+    // See addVertex for why that re-read cannot be trusted.
+    struct VtxShadow { float x, y, r, g, b, a; };
+    static constexpr uint32_t kVtxShadowCap = 16384;
+    std::vector<VtxShadow> m_vtxShadow;
     uint32_t m_journalNonQuadBatches = 0;
+    uint32_t m_journalUnshadowed = 0;
     bool     m_journalBackbufferClearSeen = false;
     Color    m_journalBackbufferClear {0.f, 0.f, 0.f, 0.f};
     uint32_t m_journalDropped = 0;             // entries past the cap

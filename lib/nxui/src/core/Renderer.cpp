@@ -26,6 +26,7 @@ Renderer::Renderer(GpuDevice& gpu) : m_gpu(gpu) {
     // allocation inside the render loop would perturb the very timing the
     // journal exists to observe.
     m_journal.reserve(kJournalCap);
+    m_vtxShadow.resize(kVtxShadowCap);
     resetLiquidGlassSettings();
 }
 Renderer::~Renderer() {}
@@ -389,6 +390,7 @@ void Renderer::journalReset() {
     m_journalScissor = {0.f, 0.f, (float)m_gpu.width(), (float)m_gpu.height()};
     m_journalBackbufferClearSeen = false;
     m_journalNonQuadBatches = 0;
+    m_journalUnshadowed = 0;
     m_journalBackbufferClear = {0.f, 0.f, 0.f, 0.f};
 }
 
@@ -429,21 +431,28 @@ void Renderer::flush() {
         e.texSlot = (int16_t)((m_texturing && m_curTexSlot >= 0) ? m_curTexSlot : WHITE_TEX_SLOT);
         e.verts   = batchVerts;
 
-        const Vertex2D& v0 = m_vtxBase[m_vtxBatchStart];
-        float minX = v0.x, minY = v0.y, maxX = v0.x, maxY = v0.y;
-        e.minR = e.maxR = v0.r; e.minG = e.maxG = v0.g;
-        e.minB = e.maxB = v0.b; e.minA = e.maxA = v0.a;
-        e.minU = e.maxU = v0.u; e.minV = e.maxV = v0.v;
-        for (uint32_t i = 1; i < batchVerts; ++i) {
-            const Vertex2D& v = m_vtxBase[m_vtxBatchStart + i];
-            minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
-            minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
-            e.minR = std::min(e.minR, v.r); e.maxR = std::max(e.maxR, v.r);
-            e.minG = std::min(e.minG, v.g); e.maxG = std::max(e.maxG, v.g);
-            e.minB = std::min(e.minB, v.b); e.maxB = std::max(e.maxB, v.b);
-            e.minA = std::min(e.minA, v.a); e.maxA = std::max(e.maxA, v.a);
-            e.minU = std::min(e.minU, v.u); e.maxU = std::max(e.maxU, v.u);
-            e.minV = std::min(e.minV, v.v); e.maxV = std::max(e.maxV, v.v);
+        // Batch bounds also come from the cached shadow, for the same reason the
+        // per-quad scan below does: re-reading the uncached arena yields
+        // corrupted exponents. UV is not shadowed, so it is reported as zero
+        // rather than as an untrustworthy re-read.
+        const uint32_t sEnd = std::min(m_vtxBatchStart + batchVerts, kVtxShadowCap);
+        if (m_vtxBatchStart < sEnd) {
+            const VtxShadow& v0 = m_vtxShadow[m_vtxBatchStart];
+            float minX = v0.x, minY = v0.y, maxX = v0.x, maxY = v0.y;
+            e.minR = e.maxR = v0.r; e.minG = e.maxG = v0.g;
+            e.minB = e.maxB = v0.b; e.minA = e.maxA = v0.a;
+            for (uint32_t i = m_vtxBatchStart + 1; i < sEnd; ++i) {
+                const VtxShadow& v = m_vtxShadow[i];
+                minX = std::min(minX, v.x); maxX = std::max(maxX, v.x);
+                minY = std::min(minY, v.y); maxY = std::max(maxY, v.y);
+                e.minR = std::min(e.minR, v.r); e.maxR = std::max(e.maxR, v.r);
+                e.minG = std::min(e.minG, v.g); e.maxG = std::max(e.maxG, v.g);
+                e.minB = std::min(e.minB, v.b); e.maxB = std::max(e.maxB, v.b);
+                e.minA = std::min(e.minA, v.a); e.maxA = std::max(e.maxA, v.a);
+            }
+            e.x0 = minX; e.y0 = minY; e.x1 = maxX; e.y1 = maxY;
+        } else {
+            ++m_journalUnshadowed;
         }
 
         // Scan the batch one six-vertex quad at a time, and record any single
@@ -466,7 +475,9 @@ void Renderer::flush() {
             const float fbW = (float)m_gpu.width();
             const float fbH = (float)m_gpu.height();
             for (uint32_t q = 0; q + 6 <= batchVerts; q += 6) {
-                const Vertex2D* v = &m_vtxBase[m_vtxBatchStart + q];
+                const uint32_t base = m_vtxBatchStart + q;
+                if (base + 6 > kVtxShadowCap) { ++m_journalUnshadowed; continue; }
+                const VtxShadow* v = &m_vtxShadow[base];
                 float qx0 = v[0].x, qy0 = v[0].y, qx1 = v[0].x, qy1 = v[0].y;
                 float mr = v[0].r, mg = v[0].g, mb = v[0].b;
                 float minA = v[0].a, maxA = v[0].a;
@@ -503,7 +514,6 @@ void Renderer::flush() {
             }
             if (batchVerts % 6u != 0u) ++m_journalNonQuadBatches;
         }
-        e.x0 = minX; e.y0 = minY; e.x1 = maxX; e.y1 = maxY;
         e.sx = m_journalScissor.x;     e.sy = m_journalScissor.y;
         e.sw = m_journalScissor.width; e.sh = m_journalScissor.height;
         journalPush(e);
@@ -925,6 +935,23 @@ void Renderer::addVertex(float x, float y, float u, float v, const Color& c) {
         std::printf("[Renderer] WARN: vertex buffer full (%u)\n", m_vtxCount);
         return;
     }
+    // Shadow the geometry the journal needs, in normal cached memory, at the
+    // moment it is written.
+    //
+    // m_vtxBase points into a DkMemBlockFlags_CpuUncached block. Reading it
+    // back produced values near 1e19 whose mantissa was intact but whose
+    // exponent byte was wrong, for 40-54 batches per frame — roughly a fifth of
+    // every frame. That is a property of re-reading write-combined uncached
+    // memory, not of the geometry: the same values render correctly. Those
+    // unreadable bounds are what forced the per-quad verdict to report
+    // INCONCLUSIVE on every frame of capture 20260915_073314, including all
+    // three glitched ones. Capturing at write time removes the re-read
+    // entirely.
+    if (m_journalEnabled && m_vtxCount < kVtxShadowCap) {
+        auto& s = m_vtxShadow[m_vtxCount];
+        s.x = x; s.y = y;
+        s.r = c.r; s.g = c.g; s.b = c.b; s.a = c.a;
+    }
     auto& vtx  = m_vtxBase[m_vtxCount++];
     if (m_vtxCount > m_peakVtxCount) m_peakVtxCount = m_vtxCount;
     vtx.x = x; vtx.y = y;
@@ -1301,11 +1328,13 @@ std::string Renderer::formatDrawJournal() const {
             ++unreadable;
     }
     const bool trustworthy = (m_journalDropped == 0 && unreadable == 0 &&
-                              m_journalNonQuadBatches == 0);
+                              m_journalNonQuadBatches == 0 &&
+                              m_journalUnshadowed == 0);
     std::snprintf(line, sizeof(line),
                   "verdict: dimmer_quads=%d unreadable_batches=%d "
-                  "non_quad_batches=%u %s\n",
+                  "non_quad_batches=%u unshadowed=%u %s\n",
                   suspects, unreadable, m_journalNonQuadBatches,
+                  m_journalUnshadowed,
                   suspects > 0
                       ? "(a submitted quad covers the framebuffer and dims it)"
                       : (trustworthy
