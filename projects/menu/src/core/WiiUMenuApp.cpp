@@ -3971,19 +3971,26 @@ void WiiUMenuApp::commitLaunchRecency(std::uint64_t titleId, const std::string& 
 void WiiUMenuApp::activateApplication(GlossyIcon* source, AppEntry* entry,
                                       std::uint64_t titleId,
                                       const std::string& launchTitle) {
-    if (!source || titleId == 0) return;
+    if (titleId == 0) return;
+    if (!source && m_grid) {
+        for (auto& icon : m_grid->allIcons()) {
+            if (icon && icon->titleId() == titleId) {
+                source = icon.get();
+                break;
+            }
+        }
+    }
     if (m_launcher.isAppSuspended(titleId)) {
         switchu::smi::LaunchTransitionTrace transitionTrace{};
         transitionTrace.activation_tick = armGetSystemTick();
         transitionTrace.user_selected_tick = transitionTrace.activation_tick;
         m_audio.playSfx(Sfx::LaunchGame);
-        // Written here rather than from the animation callback: that callback
-        // runs as the menu is being torn down for the handoff, and the store
-        // came back empty every time, so the recently-played and playtime
-        // widgets never learned anything had been played.
         commitLaunchRecency(titleId, launchTitle);
-        m_launchAnim->start(source->focusRect(), source->texture(),
-            source->cornerRadius(), m_theme.panelBase, m_theme.panelBorder,
+        const nxui::Rect focusR = source ? source->focusRect() : nxui::Rect{640.0f - 64.0f, 360.0f - 64.0f, 128.0f, 128.0f};
+        const nxui::Texture* tex = source ? source->texture() : nullptr;
+        const float r = source ? source->cornerRadius() : 18.0f;
+        m_launchAnim->start(focusR, tex,
+            r, m_theme.panelBase, m_theme.panelBorder,
             0, {}, nullptr,
             [this, transitionTrace]() mutable {
                 transitionTrace.animation_complete_tick = armGetSystemTick();
@@ -4015,9 +4022,9 @@ void WiiUMenuApp::activateApplication(GlossyIcon* source, AppEntry* entry,
         return;
     }
 
-    const nxui::Rect frame = source->focusRect();
-    const nxui::Texture* texture = source->texture();
-    const float radius = source->cornerRadius();
+    const nxui::Rect frame = source ? source->focusRect() : nxui::Rect{640.0f - 64.0f, 360.0f - 64.0f, 128.0f, 128.0f};
+    const nxui::Texture* texture = source ? source->texture() : nullptr;
+    const float radius = source ? source->cornerRadius() : 18.0f;
     const nxui::Color base = m_theme.panelBase;
     const nxui::Color border = m_theme.panelBorder;
     auto startLaunch = [this, frame, texture, radius, base, border,
@@ -6481,7 +6488,8 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
         return hints;
 
     if (m_plazaScreen && m_plazaScreen->isActive()) {
-        add(dpadGlyph(), i18n.tr("hint.navigate", "Move Hand"));
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Select"));
+        add(buttonGlyph(nxui::Button::L) + buttonGlyph(nxui::Button::R), "Rotate");
         add(buttonGlyph(nxui::Button::ZL) + buttonGlyph(nxui::Button::ZR), "Zoom");
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Open Game"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Return"));

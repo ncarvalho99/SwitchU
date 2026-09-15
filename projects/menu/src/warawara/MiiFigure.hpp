@@ -108,7 +108,7 @@ public:
     /// Procedural skeletal rendering via nxui::Renderer.
     void render(nxui::Renderer& ren, nxui::Font* font = nullptr,
                 nxui::Font* smallFont = nullptr, float cameraOffsetX = 0.0f,
-                float viewZoom = 1.0f,
+                float cameraOffsetY = 0.0f, float viewZoom = 1.0f,
                 const nxui::Vec2& viewCenter = {640.0f, 400.0f}) const;
 
 private:

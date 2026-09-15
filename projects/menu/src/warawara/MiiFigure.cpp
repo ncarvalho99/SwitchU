@@ -271,12 +271,12 @@ float MiiFigure::randomFloat(float min, float max) {
 }
 
 void MiiFigure::render(nxui::Renderer& ren, nxui::Font* font, nxui::Font* smallFont,
-                       float cameraOffsetX, float viewZoom,
+                       float cameraOffsetX, float cameraOffsetY, float viewZoom,
                        const nxui::Vec2& viewCenter) const {
     const float effScale = m_scale * viewZoom;
     const nxui::Vec2 renderPos{
         viewCenter.x + (m_pos.x - cameraOffsetX - viewCenter.x) * viewZoom,
-        viewCenter.y + (m_pos.y - viewCenter.y) * viewZoom
+        viewCenter.y + (m_pos.y - cameraOffsetY - viewCenter.y) * viewZoom
     };
     // The rendering code below was originally authored around m_pos. Shadow it
     // locally so every primitive, face texture, name pill, and speech-bubble

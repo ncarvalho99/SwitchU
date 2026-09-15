@@ -1,4 +1,4 @@
-﻿#include "PlazaPedestal.hpp"
+#include "PlazaPedestal.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -63,10 +63,11 @@ void PlazaPedestal::render(nxui::Renderer& ren,
                            nxui::Font* font,
                            nxui::Font* smallFont,
                            float cameraOffsetX,
+                           float cameraOffsetY,
                            float viewZoom,
                            const nxui::Vec2& viewCenter) const {
     const float sx = viewCenter.x + (m_pos.x - cameraOffsetX - viewCenter.x) * viewZoom;
-    const float sy = viewCenter.y + (m_pos.y - viewCenter.y) * viewZoom;
+    const float sy = viewCenter.y + (m_pos.y - cameraOffsetY - viewCenter.y) * viewZoom;
 
     const float objectScale = m_scale * viewZoom;
     const float effR = m_baseRadius * objectScale;
@@ -191,16 +192,17 @@ void PlazaPedestal::render(nxui::Renderer& ren,
 }
 
 bool PlazaPedestal::hitTest(const nxui::Vec2& screenPoint, float cameraOffsetX,
-                            float viewZoom, const nxui::Vec2& viewCenter) const {
-    nxui::Rect b = bounds(cameraOffsetX, viewZoom, viewCenter);
+                            float cameraOffsetY, float viewZoom,
+                            const nxui::Vec2& viewCenter) const {
+    nxui::Rect b = bounds(cameraOffsetX, cameraOffsetY, viewZoom, viewCenter);
     return b.contains(screenPoint.x, screenPoint.y);
 }
 
-nxui::Rect PlazaPedestal::bounds(float cameraOffsetX, float viewZoom,
-                                 const nxui::Vec2& viewCenter) const {
+nxui::Rect PlazaPedestal::bounds(float cameraOffsetX, float cameraOffsetY,
+                                 float viewZoom, const nxui::Vec2& viewCenter) const {
     const float objectScale = m_scale * viewZoom;
     const float sx = viewCenter.x + (m_pos.x - cameraOffsetX - viewCenter.x) * viewZoom;
-    const float sy = viewCenter.y + (m_pos.y - viewCenter.y) * viewZoom;
+    const float sy = viewCenter.y + (m_pos.y - cameraOffsetY - viewCenter.y) * viewZoom;
     const float effR = (m_baseRadius + 10.0f) * objectScale;
     const float topY = sy - 95.0f * objectScale;
     const float bottomY = sy + effR * 0.45f;

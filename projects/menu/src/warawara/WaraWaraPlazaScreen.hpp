@@ -82,27 +82,42 @@ private:
     void drawHandCursor(nxui::Renderer& ren) const;
     void updateHandSelection();
     void moveHandToPedestal(int index, bool playSfx);
+    void selectPedestalStep(int step);
     int findDirectionalPedestal(int fromIndex, const nxui::Vec2& direction) const;
     void activateHandTarget();
+    void updateCarouselPositions();
     nxui::Vec2 worldToScreen(const nxui::Vec2& world) const;
+
+    struct MiiBinding {
+        int pedestalIndex = -1; // -1 for center VIP welcoming Miis, >= 0 for community pedestal
+        int slotIndex = 0;
+        nxui::Vec2 localJitter{0.0f, 0.0f};
+        float stateTimer = 3.0f;
+    };
 
     bool m_active = false;
     float m_fadeAlpha = 0.0f;
     float m_time = 0.0f;
 
-    // Camera and selection. The installed-title communities fit around one
-    // elliptical plaza, while zoom moves from overview to a closer browsing
-    // view without requiring a second screen.
+    // Camera panning (X and Y) when zoomed in, plus zoom factor
     float m_cameraX = 0.0f;
+    float m_cameraY = 0.0f;
     float m_cameraTargetX = 0.0f;
-    float m_plazaWidth = 1280.0f;
+    float m_cameraTargetY = 0.0f;
     float m_zoom = 1.0f;
     float m_zoomTarget = 1.0f;
+
+    // Carousel rotation around the elliptical plaza ring
+    float m_carouselAngle = 0.0f;
+    float m_carouselTargetAngle = 0.0f;
+
+    nxui::Vec2 m_lastTouchPos{0.0f, 0.0f};
     bool m_isDraggingTouch = false;
 
-    // Pedestals, Miis, and Wii U-style hand pointer.
+    // Pedestals, Miis, bindings, and Wii U-style hand pointer
     std::vector<std::unique_ptr<PlazaPedestal>> m_pedestals;
     std::vector<std::unique_ptr<MiiFigure>> m_miis;
+    std::vector<MiiBinding> m_miiBindings;
     int m_focusedPedestalIndex = -1;
     MiiFigure* m_focusedMii = nullptr;
     nxui::Vec2 m_handPos{640.0f, 360.0f};

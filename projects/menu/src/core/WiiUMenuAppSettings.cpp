@@ -908,8 +908,21 @@ void WiiUMenuApp::createWaraWaraPlaza() {
         if (titleId == 0) return;
         for (auto& app : m_allApps) {
             if (app.titleId == titleId) {
+                GlossyIcon* iconSource = nullptr;
+                if (m_grid) {
+                    for (auto& icon : m_grid->allIcons()) {
+                        if (icon && icon->titleId() == titleId) {
+                            iconSource = icon.get();
+                            break;
+                        }
+                    }
+                }
                 closeWaraWaraPlaza();
-                activateApplication(nullptr, &app, app.titleId, app.title);
+                if (iconSource) {
+                    m_grid->focusManager().setFocus(iconSource);
+                    focusManager().setFocus(iconSource);
+                }
+                activateApplication(iconSource, &app, app.titleId, app.title);
                 break;
             }
         }
@@ -1039,6 +1052,20 @@ void WiiUMenuApp::closeWaraWaraPlaza() {
         m_screenSwapButton->setPlazaActive(false);
     }
     m_audio.playSfx(Sfx::ModalHide);
+
+    if (m_grid) {
+        auto* target = m_grid->focusManager().current();
+        if (target && isCurrentFocusableWidget(target)) {
+            m_suppressNextNavigateSfx = true;
+            focusManager().setFocus(target);
+        } else {
+            auto icons = m_grid->allIcons();
+            if (!icons.empty() && icons[0]) {
+                m_suppressNextNavigateSfx = true;
+                focusManager().setFocus(icons[0].get());
+            }
+        }
+    }
 }
 
 void WiiUMenuApp::toggleWaraWaraPlaza() {
