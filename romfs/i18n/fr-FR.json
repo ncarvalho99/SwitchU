@@ -909,6 +909,7 @@
     "non_game_options_body": "Les homebrews et les portages n'ont ni détails de jeu, ni illustrations, ni mods à gérer. Supprimer est la seule action disponible ici.",
     "mark_as_game_port": "Marquer comme portage de jeu",
     "unmark_port": "Ne plus marquer comme portage",
+    "port_options": "Options de portage",
     "mark_as_favorite": "Ajouter aux favoris",
     "unmark_favorite": "Retirer des favoris",
     "edit_search_title": "Modifier le titre de recherche",

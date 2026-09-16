@@ -909,6 +909,7 @@
     "non_game_options_body": "Homebrew und Ports haben keine Spieldetails, Grafiken oder Mods zu verwalten. Löschen ist hier die einzige verfügbare Aktion.",
     "mark_as_game_port": "Als Spiel-Port markieren",
     "unmark_port": "Port-Markierung entfernen",
+    "port_options": "Port-Optionen",
     "mark_as_favorite": "Zu Favoriten hinzufügen",
     "unmark_favorite": "Aus Favoriten entfernen",
     "edit_search_title": "Suchtitel bearbeiten",

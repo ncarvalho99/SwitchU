@@ -1649,6 +1649,47 @@ void WiiUMenuApp::createGameDetails() {
                     m_gameDetails->updateSearchTitle(trimmed);
             });
     });
+    // Only reachable from the dossier once a title is already marked as a
+    // port -- "Mark as game port" is offered instead in the rail when it is
+    // not. Folds edit-search-title and unmark behind one entry rather than
+    // two permanent rail rows, matching the same "roll related settings into
+    // one submenu" shrink applied to Active artwork.
+    m_gameDetails->onPortOptions([this]() {
+        if (!m_gameDetails || !m_dialog) return;
+        raiseOverlay(m_dialog);
+        const std::uint64_t titleId = m_gameDetails->titleId();
+        const std::string title = m_gameDetails->title();
+        auto& i18n = nxui::I18n::instance();
+        auto returnToDetails = [this]() {
+            if (m_gameDetails && m_gameDetails->isActive())
+                focusManager().setFocus(m_gameDetails.get());
+        };
+        m_dialog->show(
+            i18n.tr("dialog.port_options", "Port options"), title,
+            {
+                {i18n.tr("dialog.edit_search_title", "Edit search title"),
+                 [this, titleId]() {
+                     auto& editI18n = nxui::I18n::instance();
+                     requestTextEntry(
+                         editI18n.tr("dialog.edit_search_title", "Edit search title"),
+                         editI18n.tr("dialog.edit_search_title_guide", "Search title"),
+                         m_gameDetails ? m_gameDetails->searchTitle() : std::string{}, 128, false,
+                         [this, titleId](const std::string& value) {
+                             const std::string trimmed = trimWhitespace(value);
+                             if (trimmed.empty()) return;
+                             m_config.setGamePortSearchTitle(titleId, trimmed);
+                             m_config.save();
+                             if (m_gameDetails && m_gameDetails->titleId() == titleId)
+                                 m_gameDetails->updateSearchTitle(trimmed);
+                         });
+                 }, false},
+                {i18n.tr("dialog.unmark_port", "Unmark port"),
+                 [this, titleId]() { removeGamePort(titleId); }, false},
+                {i18n.tr("button.cancel", "Cancel"), returnToDetails, true},
+            },
+            0, returnToDetails);
+        focusManager().setFocus(m_dialog.get());
+    });
     m_gameDetails->onRename([this]() {
         if (!m_gameDetails) return;
         const std::uint64_t titleId = m_gameDetails->titleId();

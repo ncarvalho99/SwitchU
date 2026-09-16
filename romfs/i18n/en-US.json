@@ -915,6 +915,7 @@
     "non_game_options_body": "Homebrew and ports have no game details, artwork or mods to manage. Removing it is the only action available here.",
     "mark_as_game_port": "Mark as game port",
     "unmark_port": "Unmark port",
+    "port_options": "Port options",
     "mark_as_favorite": "Mark as favorite",
     "unmark_favorite": "Remove from favorites",
     "edit_search_title": "Edit search title",

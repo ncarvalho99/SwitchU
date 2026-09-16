@@ -74,6 +74,7 @@ public:
     // platform.
     void onEditSearchTitle(ActionCb cb) { m_editSearchTitleCb = std::move(cb); }
     void onRename(ActionCb cb) { m_renameCb = std::move(cb); }
+    void onPortOptions(ActionCb cb) { m_portOptionsCb = std::move(cb); }
     // The name shown in the header, after the owner renames the game.
     void updateTitle(std::string title) { m_title = std::move(title); }
     // Reads "Add to folder" or "Remove from folder" depending on where the
@@ -166,6 +167,7 @@ private:
     ActionCb m_markAsGamePortCb;
     ActionCb m_editSearchTitleCb;
     ActionCb m_renameCb;
+    ActionCb m_portOptionsCb;
     std::string m_folderActionLabel;
     ActionCb m_openGalleryCb;
     ActionCb m_showArtworkCb;

@@ -1917,7 +1917,12 @@ void WiiUMenuApp::showGameArtworkStatus(std::uint64_t titleId, const std::string
             focusManager().setFocus(m_gameDetails.get());
     };
     m_dialog->show(i18n.tr("dialog.customize_active_art", "Active artwork"), body,
-                   {{i18n.tr("button.ok", "OK"), returnToDetails, true}}, 0, returnToDetails);
+                   {
+                       {i18n.tr("dialog.customize_restore_default", "Restore default"),
+                        [this, titleId, title]() { showGameArtworkRestoreMenu(titleId, title); }, false},
+                       {i18n.tr("button.ok", "OK"), returnToDetails, true},
+                   },
+                   0, returnToDetails);
     focusManager().setFocus(m_dialog.get());
 #else
     (void)titleId;

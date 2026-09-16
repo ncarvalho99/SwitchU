@@ -2142,6 +2142,17 @@ void WiiUMenuApp::syncSoftwareDeletion() {
             m_folderStore.removeTitle(folderId, m_softwareDeleteTitleId);
             m_folderStore.save();
         }
+        std::replace(m_layoutSlots.begin(), m_layoutSlots.end(),
+                     m_softwareDeleteTitleId, std::uint64_t{0});
+        m_layoutDirty = true;
+        if (m_config.hasCustomTitle(m_softwareDeleteTitleId)) {
+            m_config.setCustomTitle(m_softwareDeleteTitleId, "");
+            m_config.save();
+        }
+        if (m_gameDetails && m_gameDetails->isActive() &&
+            m_gameDetails->titleId() == m_softwareDeleteTitleId) {
+            m_gameDetails->hide();
+        }
         m_audio.playSfx(Sfx::ConfirmPositive);
         if (m_softwareDeleteClosesGameOptions && m_gameOptions) {
             m_gameOptions->hide();

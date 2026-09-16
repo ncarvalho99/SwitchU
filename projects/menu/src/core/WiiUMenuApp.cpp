@@ -5580,11 +5580,21 @@ void WiiUMenuApp::finalizeRefresh() {
     m_model = buildRootFolderModel();
 
     std::vector<std::shared_ptr<GlossyIcon>> icons;
+    std::vector<std::uint64_t> titleIds;
+    icons.reserve(m_model.count());
+    titleIds.reserve(m_model.count());
     for (int i = 0; i < m_model.count(); ++i) {
         auto icon = makeIcon(m_model.at(i));
         icon->setBaseColor(m_theme.iconDefault);
         icons.push_back(std::move(icon));
+        titleIds.push_back(m_model.at(i).isApplication() ? m_model.at(i).titleId : 0);
     }
+    // Reconcile the streamer's internal mappings with the newly composed and
+    // sorted display model. Without this, the streamer remains indexed by the
+    // raw layout from the loader while the grid icons are arranged in
+    // projected order (such as Most played), mapping textures to the wrong
+    // cells, leaving titles spinning, and desyncing the selection pill.
+    m_iconStreamer.reconcileTitleIds(titleIds);
 
     GridLayoutMetrics gridMetrics = computeGridLayoutMetrics();
 
@@ -5634,7 +5644,23 @@ void WiiUMenuApp::finalizeRefresh() {
     m_grid->startAppearAnimation();
     // If the rebuilt grid has nothing focusable, the app focus manager must be
     // left holding nothing rather than whatever it held before.
-    focusManager().setFocus(m_grid->focusManager().current());
+    if (auto* currentIcon = m_grid->focusManager().current()) {
+        focusManager().setFocus(currentIcon);
+        if (currentIcon->tag() == "glossy_icon") {
+            auto* icon = static_cast<GlossyIcon*>(currentIcon);
+            if (icon->titleId() != 0) {
+                m_titlePill->setText(icon->title());
+                m_titlePill->setVisible(true);
+            } else {
+                m_titlePill->hideAnimated();
+            }
+            refreshGameArtworkBackdrop(icon->titleId());
+        }
+    } else {
+        focusManager().setFocus(nullptr);
+        m_titlePill->hideAnimated();
+    }
+    updateCursor();
 
     // Keep a short cooldown to coalesce duplicate app-record notifications.
     m_refreshCooldownFrames = 20;
