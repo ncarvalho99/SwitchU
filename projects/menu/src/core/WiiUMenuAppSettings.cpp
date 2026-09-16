@@ -958,7 +958,9 @@ void WiiUMenuApp::createWaraWaraPlaza() {
                     m_grid->focusManager().setFocus(iconSource);
                     focusManager().setFocus(iconSource);
                 }
+#ifdef SWITCHU_MENU
                 activateApplication(iconSource, &app, app.titleId, app.title);
+#endif
                 break;
             }
         }
