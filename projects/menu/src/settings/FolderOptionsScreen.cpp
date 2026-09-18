@@ -104,6 +104,16 @@ void FolderOptionsScreen::buildTabs() {
     erase.type = ItemType::Action;
     erase.onChange = [this](SettingItem&) { if (m_deleteCb) m_deleteCb(); };
     management.items.push_back(std::move(erase));
+
+    if (m_folder.pageCount > 1) {
+        SettingItem deletePages;
+        deletePages.label = i18n.tr("folder.delete_empty_pages", "Delete empty pages");
+        deletePages.buttonLabel = i18n.tr("button.delete", "Delete");
+        deletePages.description = i18n.tr("folder.delete_empty_pages_desc", "Remove trailing empty pages from this folder.");
+        deletePages.type = ItemType::Action;
+        deletePages.onChange = [this](SettingItem&) { if (m_deleteEmptyPagesCb) m_deleteEmptyPagesCb(); };
+        management.items.push_back(std::move(deletePages));
+    }
     m_tabs.push_back(std::move(management));
 
     m_cachedTabContentWidgets.clear();

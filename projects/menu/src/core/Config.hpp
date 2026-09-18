@@ -17,6 +17,7 @@ struct AppConfig {
     float sfxVolume    = 0.25f;
     int   gridColumns  = 5;
     int   gridRows     = 3;
+    bool  dynamicPages = true;
     AppLayoutMode appLayoutMode = AppLayoutMode::Grid;
     std::string actionHintStyle = "capsules";
     std::string uiLanguageOverride = "auto";

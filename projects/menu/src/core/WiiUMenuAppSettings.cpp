@@ -977,12 +977,10 @@ void WiiUMenuApp::refreshPlazaCommunities() {
     std::vector<warawara::WaraWaraPlazaScreen::GameCommunityEntry> entries;
     entries.reserve(10);
 
-    // The streamer is indexed by the current display model, not by m_allApps:
-    // folders/widgets and user layout order can make those vectors diverge.
-    // Build an explicit title -> display-index map, then pump one Plaza title
-    // per update. onPageChanged() uploads at most two completed decodes and
-    // schedules a bounded worker queue; one round-robin call avoids ten
-    // successive cache-window evictions in a single frame.
+    // Plaza holds up to 10 communities. To prevent page-eviction thrashing on
+    // the home grid and endless flickering between images and placeholder tiles,
+    // Plaza loads and retains its own textures directly via AppListLoader::loadIconData,
+    // pumping at most one decode/upload per frame without touching IconStreamer.
     const auto* gridIcons = m_grid ? &m_grid->allIcons() : nullptr;
     std::unordered_map<std::uint64_t, int> displayIndexByTitle;
     displayIndexByTitle.reserve(static_cast<std::size_t>(std::max(0, m_model.count())));
@@ -992,24 +990,22 @@ void WiiUMenuApp::refreshPlazaCommunities() {
             displayIndexByTitle.emplace(displayEntry.titleId, i);
     }
 
-    if (m_grid && m_grid->iconsPerPage() > 0 && gridIcons) {
-        const int communityCount = std::min(10, static_cast<int>(m_allApps.size()));
-        for (int offset = 0; offset < communityCount; ++offset) {
-            const int appPos = (m_plazaIconPumpIndex + offset) % communityCount;
-            const auto& candidate = m_allApps[static_cast<std::size_t>(appPos)];
-            const auto found = displayIndexByTitle.find(candidate.titleId);
-            if (found != displayIndexByTitle.end()) {
-                const int dispIdx = found->second;
-                if (dispIdx >= 0 && dispIdx < static_cast<int>(gridIcons->size()) &&
-                    (!(*gridIcons)[dispIdx] || !(*gridIcons)[dispIdx]->texture())) {
-                    const int page = dispIdx / m_grid->iconsPerPage();
-                    m_iconStreamer.onPageChanged(page, m_grid->iconsPerPage(),
-                                                 this->app().gpu(), this->app().renderer(),
-                                                 *gridIcons);
-                    m_plazaIconPumpIndex = (appPos + 1) % communityCount;
-                    break;
-                }
+    const int communityCount = std::min(10, static_cast<int>(m_allApps.size()));
+    for (int offset = 0; offset < communityCount; ++offset) {
+        const int appPos = (m_plazaIconPumpIndex + offset) % communityCount;
+        const auto& candidate = m_allApps[static_cast<std::size_t>(appPos)];
+        if (candidate.titleId == 0 || candidate.isWidget())
+            continue;
+
+        auto& tex = m_plazaCommunityTextures[candidate.titleId];
+        if (!tex.valid()) {
+            std::vector<uint8_t> raw = AppListLoader::loadIconData(candidate.titleId);
+            if (!raw.empty()) {
+                tex.loadFromMemory(this->app().gpu(), this->app().renderer(),
+                                   raw.data(), raw.size(), 256);
             }
+            m_plazaIconPumpIndex = (appPos + 1) % communityCount;
+            break;
         }
     }
 
@@ -1039,10 +1035,13 @@ void WiiUMenuApp::refreshPlazaCommunities() {
             entry.subtitle = "Installed Game";
         }
 
-        if (gridIcons && displayIndex >= 0 &&
-            displayIndex < static_cast<int>(gridIcons->size())) {
+        auto texIt = m_plazaCommunityTextures.find(app.titleId);
+        if (texIt != m_plazaCommunityTextures.end() && texIt->second.valid()) {
+            entry.iconTexture = &texIt->second;
+        } else if (gridIcons && displayIndex >= 0 &&
+                   displayIndex < static_cast<int>(gridIcons->size())) {
             const auto& icon = (*gridIcons)[static_cast<std::size_t>(displayIndex)];
-            if (icon && icon->titleId() == app.titleId)
+            if (icon && icon->titleId() == app.titleId && icon->texture() && icon->texture()->valid())
                 entry.iconTexture = icon->texture();
         }
 
@@ -1093,6 +1092,7 @@ void WiiUMenuApp::closeWaraWaraPlaza() {
 
     m_plazaScreen->close();
     m_plazaScreen->setVisible(false);
+    m_plazaCommunityTextures.clear();
     m_navigator.routeDidClose(switchu::navigation::Route::WaraWaraPlaza);
     if (m_screenSwapButton) {
         m_screenSwapButton->setPlazaActive(false);
@@ -1231,6 +1231,7 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->setRenderContext(&app().gpu(), &app().renderer());
     m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
     m_themeShop->setGridLayoutState(m_config.gridColumns, m_config.gridRows);
+    m_themeShop->setDynamicPagesState(m_config.dynamicPages);
     m_themeShop->setAppearanceState(m_config.glassSharpness,
                                     m_config.backgroundSpeed,
                                     m_config.backgroundBlur);
@@ -1279,6 +1280,13 @@ void WiiUMenuApp::createThemeShop() {
         if (m_config.gridRows == rows)
             return;
         m_config.gridRows = rows;
+        reflowHomeGrid();
+    });
+    m_themeShop->onDynamicPagesChange([this](bool enabled) {
+        if (m_config.dynamicPages == enabled)
+            return;
+        m_config.dynamicPages = enabled;
+        m_config.save();
         reflowHomeGrid();
     });
     m_themeShop->onNextTrack([this]() {
@@ -1669,6 +1677,37 @@ void WiiUMenuApp::createGameDetails() {
         m_dialog->show(
             i18n.tr("dialog.port_options", "Port options"), title,
             {
+                {i18n.tr("dialog.details_rename", "Rename"),
+                 [this, titleId]() {
+                     auto& editI18n = nxui::I18n::instance();
+                     requestTextEntry(
+                         editI18n.tr("dialog.details_rename", "Rename"),
+                         editI18n.tr("dialog.details_rename_guide",
+                                     "Enter a name. Leave it empty to use the original."),
+                         m_gameDetails ? m_gameDetails->title() : std::string{}, 128, false,
+                         [this, titleId](const std::string& value) {
+                             const std::string original = [&]() {
+                                 for (const auto& app : m_allApps) {
+                                     if (app.titleId != titleId) continue;
+                                     return app.title;
+                                 }
+                                 return std::string{};
+                             }();
+                             const std::string custom = trimWhitespace(value);
+                             m_config.setCustomTitle(titleId, custom);
+                             m_config.save();
+                             switchu::commitSdCard("custom title");
+                             for (auto& app : m_allApps) {
+                                 if (app.titleId != titleId) continue;
+                                 app.title = m_config.customTitle(titleId, original);
+                                 break;
+                             }
+                             if (m_gameDetails && m_gameDetails->titleId() == titleId)
+                                 m_gameDetails->updateTitle(m_config.customTitle(titleId, original));
+                             if (m_grid && m_openFolderId == 0)
+                                 applyDisplayModel(buildRootFolderModel(), titleId, false);
+                         });
+                 }, false},
                 {i18n.tr("dialog.edit_search_title", "Edit search title"),
                  [this, titleId]() {
                      auto& editI18n = nxui::I18n::instance();

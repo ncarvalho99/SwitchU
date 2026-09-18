@@ -328,6 +328,8 @@
       "background_speed_desc": "O quanto as formas se movem. O centro é o ritmo do próprio tema.",
       "grid_columns": "Colunas da grade",
       "grid_rows": "Linhas da grade",
+      "dynamic_pages": "Páginas dinâmicas",
+      "dynamic_pages_desc": "Ajusta a quantidade de páginas aos jogos instalados em vez de manter 8 páginas fixas.",
       "reload_grid": "Recarregar jogos e atalhos",
       "reload_grid_desc": "Relê os títulos instalados e descarta os nomes e ícones em cache. Use depois de criar ou apagar um atalho.",
       "reload_grid_done": "Relendo os títulos instalados...",
@@ -584,6 +586,12 @@
     "rename_title": "Nome da pasta",
     "delete": "Excluir pasta",
     "delete_desc": "Os jogos dentro dela voltam para o menu HOME.",
+    "page_added": "Página adicionada",
+    "page_deleted": "Página excluída",
+    "delete_page": "Excluir página",
+    "delete_page_desc": "Remover esta página vazia.",
+    "delete_empty_pages": "Excluir páginas vazias",
+    "delete_empty_pages_desc": "Remove páginas vazias no final desta pasta.",
     "name_guide": "Digite um nome para a pasta",
     "default_name": "Pasta",
     "rename_guide": "Renomear pasta",
@@ -624,6 +632,10 @@
   },
   "add": {
     "title": "Adicionar"
+  },
+  "home": {
+    "page_added": "Página adicionada",
+    "page_deleted": "Página excluída"
   },
   "widget": {
     "title": "Widget",

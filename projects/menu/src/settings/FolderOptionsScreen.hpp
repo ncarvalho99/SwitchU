@@ -11,6 +11,7 @@ public:
         int itemCount = 0;
         int colorIndex = 0;
         int sizeIndex = 1;
+        int pageCount = 1;
     };
 
     FolderOptionsScreen();
@@ -19,6 +20,7 @@ public:
     void onOpen(VoidCb cb) { m_openCb = std::move(cb); }
     void onRename(VoidCb cb) { m_renameCb = std::move(cb); }
     void onDelete(VoidCb cb) { m_deleteCb = std::move(cb); }
+    void onDeleteEmptyPages(VoidCb cb) { m_deleteEmptyPagesCb = std::move(cb); }
     void onColorChange(IntCb cb) { m_colorCb = std::move(cb); }
     void onSizeChange(IntCb cb) { m_sizeCb = std::move(cb); }
 
@@ -34,6 +36,7 @@ private:
     VoidCb m_openCb;
     VoidCb m_renameCb;
     VoidCb m_deleteCb;
+    VoidCb m_deleteEmptyPagesCb;
     IntCb m_colorCb;
     IntCb m_sizeCb;
 };

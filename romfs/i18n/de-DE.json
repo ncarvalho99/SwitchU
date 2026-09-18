@@ -322,6 +322,8 @@
       "background_speed_desc": "Wie schnell die Formen treiben. Die Mitte ist das Tempo des Themes.",
       "grid_columns": "Rasterspalten",
       "grid_rows": "Rasterzeilen",
+      "dynamic_pages": "Dynamische Seiten",
+      "dynamic_pages_desc": "Passt die Seitenzahl an die installierte Software an, anstatt 8 feste Seiten beizubehalten.",
       "reload_grid": "Spiele und Verknüpfungen neu laden",
       "reload_grid_desc": "Liest die installierten Titel erneut und verwirft zwischengespeicherte Namen und Symbole. Nach dem Anlegen oder Löschen einer Verknüpfung verwenden.",
       "reload_grid_done": "Installierte Titel werden erneut gelesen...",
@@ -578,6 +580,12 @@
     "rename_title": "Ordnername",
     "delete": "Ordner löschen",
     "delete_desc": "Enthaltene Spiele kehren zum HOME-Menü zurück.",
+    "page_added": "Seite hinzugefügt",
+    "page_deleted": "Seite gelöscht",
+    "delete_page": "Seite löschen",
+    "delete_page_desc": "Diese leere Seite entfernen.",
+    "delete_empty_pages": "Leere Seiten löschen",
+    "delete_empty_pages_desc": "Leere Seiten am Ende dieses Ordners entfernen.",
     "name_guide": "Ordnernamen eingeben",
     "default_name": "Ordner",
     "rename_guide": "Ordner umbenennen",
@@ -618,6 +626,10 @@
   },
   "add": {
     "title": "Hinzufügen"
+  },
+  "home": {
+    "page_added": "Seite hinzugefügt",
+    "page_deleted": "Seite gelöscht"
   },
   "widget": {
     "title": "Widget",

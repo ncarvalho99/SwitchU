@@ -328,6 +328,8 @@
       "background_speed_desc": "How fast the shapes drift. Centre is the theme's own pace.",
       "grid_columns": "Home Grid Columns",
       "grid_rows": "Home Grid Rows",
+      "dynamic_pages": "Dynamic Pages",
+      "dynamic_pages_desc": "Adjust page count to fit installed software instead of keeping 8 fixed pages.",
       "reload_grid": "Reload games and shortcuts",
       "reload_grid_desc": "Reads the installed titles again and discards the cached names and icons. Use it after creating or deleting a shortcut.",
       "reload_grid_done": "Reading the installed titles again...",
@@ -584,6 +586,12 @@
     "rename_title": "Folder name",
     "delete": "Delete folder",
     "delete_desc": "Games inside will return to the HOME menu.",
+    "page_added": "Page added",
+    "page_deleted": "Page deleted",
+    "delete_page": "Delete page",
+    "delete_page_desc": "Remove this empty page.",
+    "delete_empty_pages": "Delete empty pages",
+    "delete_empty_pages_desc": "Remove trailing empty pages from this folder.",
     "name_guide": "Enter a folder name",
     "default_name": "Folder",
     "rename_guide": "Rename folder",
@@ -624,6 +632,10 @@
   },
   "add": {
     "title": "Add"
+  },
+  "home": {
+    "page_added": "Page added",
+    "page_deleted": "Page deleted"
   },
   "widget": {
     "title": "Widget",

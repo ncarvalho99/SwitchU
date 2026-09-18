@@ -322,6 +322,8 @@
       "background_speed_desc": "À quelle vitesse les formes dérivent. Le centre est le rythme du thème.",
       "grid_columns": "Colonnes de la grille",
       "grid_rows": "Lignes de la grille",
+      "dynamic_pages": "Pages dynamiques",
+      "dynamic_pages_desc": "Ajuste le nombre de pages aux logiciels installés au lieu de conserver 8 pages fixes.",
       "reload_grid": "Recharger jeux et raccourcis",
       "reload_grid_desc": "Relit les titres installés et jette les noms et icônes en cache. À utiliser après avoir créé ou supprimé un raccourci.",
       "reload_grid_done": "Relecture des titres installés...",
@@ -578,6 +580,12 @@
     "rename_title": "Nom du dossier",
     "delete": "Supprimer le dossier",
     "delete_desc": "Les jeux du dossier retourneront au menu HOME.",
+    "page_added": "Page ajoutée",
+    "page_deleted": "Page supprimée",
+    "delete_page": "Supprimer la page",
+    "delete_page_desc": "Supprimer cette page vide.",
+    "delete_empty_pages": "Supprimer les pages vides",
+    "delete_empty_pages_desc": "Supprimer les pages vides à la fin de ce dossier.",
     "name_guide": "Saisissez un nom de dossier",
     "default_name": "Dossier",
     "rename_guide": "Renommer le dossier",
@@ -618,6 +626,10 @@
   },
   "add": {
     "title": "Ajouter"
+  },
+  "home": {
+    "page_added": "Page ajoutée",
+    "page_deleted": "Page supprimée"
   },
   "widget": {
     "title": "Widget",

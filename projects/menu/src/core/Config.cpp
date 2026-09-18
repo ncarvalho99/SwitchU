@@ -61,6 +61,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "sfxVolume", sfxVolume);
     readJsonOpt(j, "gridColumns", gridColumns);
     readJsonOpt(j, "gridRows", gridRows);
+    readJsonOpt(j, "dynamicPages", dynamicPages);
     {
         std::string mode;
         readJsonOpt(j, "appLayoutMode", mode);
@@ -180,6 +181,7 @@ bool AppConfig::save() const {
     j["sfxVolume"] = sfxVolume;
     j["gridColumns"] = std::clamp(gridColumns, 3, 8);
     j["gridRows"] = std::clamp(gridRows, 2, 5);
+    j["dynamicPages"] = dynamicPages;
     j["appLayoutMode"] = appLayoutMode == AppLayoutMode::DynamicLine ? "dynamic_line" : "grid";
     j["actionHintStyle"] = actionHintStyle == "panel" ? "panel" : "capsules";
     j["uiLanguageOverride"] = uiLanguageOverride;

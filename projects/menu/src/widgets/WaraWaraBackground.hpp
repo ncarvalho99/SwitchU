@@ -209,7 +209,7 @@ private:
     size_t m_pendingFrameStride = 1;
     size_t m_pendingFrameSourceCount = 0;
 
-    bool m_ambientMiisEnabled = true;
+    bool m_ambientMiisEnabled = false;
     std::vector<std::unique_ptr<warawara::MiiFigure>> m_ambientMiis;
     nxui::Font* m_ambientFont = nullptr;
     nxui::Font* m_ambientSmallFont = nullptr;

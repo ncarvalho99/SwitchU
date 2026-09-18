@@ -444,7 +444,9 @@ std::vector<GameDetailsScreen::RailAction> GameDetailsScreen::railActions() cons
     actions.push_back({i18n.tr("dialog.customize_active_art", "Active artwork"), m_showArtworkCb});
     actions.push_back({i18n.tr("dialog.details_manage_mods", "Manage mods"), m_manageModsCb});
     actions.push_back({i18n.tr("dialog.details_cheats", "Cheats"), m_cheatsCb});
-    actions.push_back({i18n.tr("dialog.details_rename", "Rename"), m_renameCb});
+    if (!m_isGamePort) {
+        actions.push_back({i18n.tr("dialog.details_rename", "Rename"), m_renameCb});
+    }
     if (m_isGamePort) {
         actions.push_back({i18n.tr("dialog.port_options", "Port options"), m_portOptionsCb});
     }

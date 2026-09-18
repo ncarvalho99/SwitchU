@@ -2129,10 +2129,18 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             }
         }
 
-        nxui::Color cardFill = m_theme->panelBase.withAlpha((cardSelected ? 0.18f : 0.14f) * rowOpacity);
-        nxui::Color cardBorder = m_theme->panelBorder.withAlpha((cardSelected ? 0.34f : 0.24f) * rowOpacity);
+        const bool isGridFocused = !m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Grid;
+        const bool showSelected = cardSelected && isGridFocused;
+
+        nxui::Color cardFill = m_theme->panelBase.withAlpha((showSelected ? 0.40f : 0.14f) * rowOpacity);
+        nxui::Color cardBorder = showSelected
+            ? m_theme->cursorNormal.withAlpha(0.95f * rowOpacity)
+            : m_theme->panelBorder.withAlpha(0.24f * rowOpacity);
         ren.drawRoundedRect(card, cardFill, 22.f);
-        ren.drawRoundedRectOutline(card, cardBorder, 22.f, 1.0f);
+        ren.drawRoundedRectOutline(card, cardBorder, 22.f, showSelected ? 3.0f : 1.0f);
+        if (showSelected) {
+            ren.drawRoundedRectOutline(card.expanded(2.f), m_theme->cursorNormal.withAlpha(0.40f * rowOpacity), 24.f, 2.0f);
+        }
 
         nxui::Rect previewBounds = {card.x + 10.f, card.y + 10.f, card.width - 20.f, card.height - 76.f};
         nxui::Rect preview = fitAspectRect(previewBounds, kPreviewAspect);
@@ -2589,7 +2597,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     auto buttons = detailButtonRects(dialog, (int)buttonLabels.size());
     bool disableCommunityButtons = isCommunityTab() && m_packageTransferState.isRunning();
     for (int i = 0; i < (int)buttons.size(); ++i) {
-        bool selectedButton = !disableCommunityButtons && (i == m_detailButtonIndex);
+        bool selectedButton = !disableCommunityButtons && (i == m_detailButtonIndex) && (m_detailFocusArea == DetailFocusArea::Buttons);
         nxui::Color textColor = disableCommunityButtons ? m_theme->textSecondary : m_theme->textPrimary;
         drawActionButtonChip(ren,
                              m_smallFont,
@@ -2601,6 +2609,14 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                              selectedButton ? 1.f : 0.f,
                              disableCommunityButtons ? 0.f : (selectedButton ? 1.f : 0.18f),
                              0.84f);
+        if (selectedButton) {
+            ren.drawRoundedRectOutline(buttons[(size_t)i].expanded(2.f),
+                                       m_theme->cursorNormal.withAlpha(0.95f * contentOpacity),
+                                       20.f, 2.5f);
+            ren.drawRoundedRectOutline(buttons[(size_t)i].expanded(4.f),
+                                       m_theme->cursorNormal.withAlpha(0.40f * contentOpacity),
+                                       22.f, 1.5f);
+        }
     }
 
     if (!(isCommunityTab() && m_detailFocusArea == DetailFocusArea::Preview && detailPreviewRequested)

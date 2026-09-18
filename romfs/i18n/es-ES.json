@@ -322,6 +322,8 @@
       "background_speed_desc": "Cuánto se mueven las formas. El centro es el ritmo del propio tema.",
       "grid_columns": "Columnas de la cuadrícula",
       "grid_rows": "Filas de la cuadrícula",
+      "dynamic_pages": "Páginas dinámicas",
+      "dynamic_pages_desc": "Ajusta la cantidad de páginas al software instalado en lugar de mantener 8 páginas fijas.",
       "reload_grid": "Recargar juegos y accesos directos",
       "reload_grid_desc": "Vuelve a leer los títulos instalados y descarta los nombres e iconos en caché. Úsalo tras crear o borrar un acceso directo.",
       "reload_grid_done": "Releyendo los títulos instalados...",
@@ -578,6 +580,12 @@
     "rename_title": "Nombre de la carpeta",
     "delete": "Eliminar carpeta",
     "delete_desc": "Los juegos que contiene volverán al menú HOME.",
+    "page_added": "Página añadida",
+    "page_deleted": "Página eliminada",
+    "delete_page": "Eliminar página",
+    "delete_page_desc": "Eliminar esta página vacía.",
+    "delete_empty_pages": "Eliminar páginas vacías",
+    "delete_empty_pages_desc": "Eliminar páginas vacías al final de esta carpeta.",
     "name_guide": "Escribe un nombre de carpeta",
     "default_name": "Carpeta",
     "rename_guide": "Renombrar carpeta",
@@ -618,6 +626,10 @@
   },
   "add": {
     "title": "Añadir"
+  },
+  "home": {
+    "page_added": "Página añadida",
+    "page_deleted": "Página eliminada"
   },
   "widget": {
     "title": "Widget",

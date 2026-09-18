@@ -142,6 +142,21 @@ ThemeShopScreen::Tab themeshop::tabs::OptionsTab::build(ThemeShopScreen& screen)
         t.items.push_back(std::move(it));
     }
 
+    {
+        SettingItem it;
+        it.label = i18n.tr("settings.display.dynamic_pages", "Dynamic Pages");
+        it.description = i18n.tr("settings.display.dynamic_pages_desc",
+                                 "Adjust home pages to fit installed games and homebrew instead of keeping 8 fixed pages.");
+        it.type = ItemType::Toggle;
+        it.boolVal = screen.m_dynamicPages;
+        it.anim01 = it.boolVal ? 1.f : 0.f;
+        it.onChange = [&screen](SettingItem& self) {
+            screen.m_dynamicPages = self.boolVal;
+            if (screen.m_dynamicPagesCb) screen.m_dynamicPagesCb(self.boolVal);
+        };
+        t.items.push_back(std::move(it));
+    }
+
     // Asked for by a player who had just made a shortcut and could only get the
     // grid to show it by rebooting the console.
     {

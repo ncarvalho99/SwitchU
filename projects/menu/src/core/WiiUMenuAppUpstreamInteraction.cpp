@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include "launcher/AppListLoader.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "widgets/FolderPalette.hpp"
 #include "DebugLog.hpp"
@@ -187,12 +188,21 @@ void WiiUMenuApp::announceFocusedWidget(nxui::Widget* w) {
 #endif
 
 nxui::Texture* WiiUMenuApp::adoptEditGhostTexture(GlossyIcon* sourceIcon) {
-    // The streamer pins the source index for the whole edit operation, so the
-    // source texture already has the lifetime needed by the ghost. Re-decoding
-    // and uploading a second copy here forced a synchronous GPU drain both
-    // when movement started and when it stopped.
-    m_editGhostTexture.reset();
-    return sourceIcon ? sourceIcon->texture() : nullptr;
+    if (!sourceIcon) return nullptr;
+    // When the icon moves between root and folder, the streamer pool evicts
+    // the source texture because it is not present in the folder model.
+    // Keeping an independent owned texture keeps the ghost alive across folder boundaries.
+    if (!m_editGhostTexture) {
+        m_editGhostTexture = std::make_unique<nxui::Texture>();
+        std::vector<uint8_t> data = AppListLoader::loadIconData(sourceIcon->titleId());
+        if (!data.empty()) {
+            m_editGhostTexture->loadFromMemory(app().gpu(), app().renderer(),
+                                               data.data(), data.size(), 256);
+        }
+    }
+    if (m_editGhostTexture && m_editGhostTexture->valid())
+        return m_editGhostTexture.get();
+    return sourceIcon->texture();
 }
 
 #if 1 // Upstream 1.2 edit ghost owns detached source icons safely.
@@ -258,7 +268,7 @@ void WiiUMenuApp::detachEditSourceIcon() {
     if (m_editSourceIcon)
         m_editSourceIcon->setOpacity(1.f);
     m_editSourceIcon = nullptr;
-    if (m_editGhostIcon && !m_editGhostTexture)
+    if (m_editGhostIcon && !m_editGhostTexture && !m_editMode)
         m_editGhostIcon->setTexture(nullptr);
 }
 
@@ -1166,6 +1176,16 @@ void WiiUMenuApp::wireGlobalActions() {
 #ifdef SWITCHU_MENU
     root.addAction(static_cast<uint64_t>(nxui::Button::X), [this]() {
         if (m_editMode) return;
+        if (m_navigator.route() != switchu::navigation::Route::Home ||
+            focusRoot() != &rootBox())
+            return;
+        if (deletePageAvailable()) {
+            if (m_openFolderId != 0)
+                deleteFolderPage();
+            else
+                deleteHomePage();
+            return;
+        }
         if (m_launcher.suspendedTitleId() == 0) return;
         auto* cur = focusManager().current();
         if (!cur || cur->tag() != "glossy_icon") return;
@@ -1289,7 +1309,33 @@ void WiiUMenuApp::showFolderContextMenu(std::uint32_t folderId) {
     info.itemCount = static_cast<int>(folder->titleCount());
     info.colorIndex = folder->colorIndex;
     info.sizeIndex = folder->sizeIndex;
+    info.pageCount = folder->pageCount;
     m_folderOptions->setFolder(info);
+    m_folderOptions->onDeleteEmptyPages([this, folderId]() {
+        auto* f = m_folderStore.find(folderId);
+        if (!f || f->pageCount <= 1) return;
+        const auto dims = folderGridDimensions(folderId);
+        const int perPage = std::max(1, dims.first * dims.second);
+        int lastOccupied = -1;
+        for (int i = static_cast<int>(f->titleIds.size()) - 1; i >= 0; --i) {
+            if (f->titleIds[static_cast<size_t>(i)] != 0) {
+                lastOccupied = i;
+                break;
+            }
+        }
+        const int occupiedPages = lastOccupied >= 0 ? (lastOccupied / perPage + 1) : 1;
+        if (f->pageCount > occupiedPages) {
+            m_folderStore.setPageCount(folderId, occupiedPages);
+            saveFoldersOrReport("delete_empty_folder_pages");
+            if (m_folderOptions) m_folderOptions->hide();
+            m_navigator.resetToHome();
+            if (m_openFolderId == folderId) {
+                applyDisplayModel(buildOpenFolderModel(folderId), 0, false);
+                syncPageIndicator();
+            }
+            m_audio.playSfx(Sfx::ToggleOff);
+        }
+    });
     m_folderOptions->onOpen([this, folderId]() {
         if (m_folderOptions) m_folderOptions->hide();
         m_navigator.resetToHome();

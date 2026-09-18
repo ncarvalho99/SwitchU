@@ -187,7 +187,7 @@ inline std::vector<uint8_t> readIcon(uint64_t titleId) {
         return data;
 
     const std::streamoff size = file.tellg();
-    if (size <= 0 || size > 0x40000)
+    if (size <= 0 || size > 0x100000)
         return data;
 
     file.seekg(0, std::ios::beg);

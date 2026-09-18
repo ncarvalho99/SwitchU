@@ -338,9 +338,14 @@ private:
     bool flipPage(int dir);
     bool addPageAvailable();
     void createFolderPage();
+    void createHomePage();
+    bool deletePageAvailable();
+    void deleteFolderPage();
+    void deleteHomePage();
     float m_addPageHold = 0.f;
     bool m_addPageMode = false;
     bool m_addPageTouchHold = false;
+    bool m_addPageTriggered = false;
     int findTitleIndex(uint64_t titleId) const;
     bool focusTitle(uint64_t titleId);
     // Devolve o seletor para a grade quando não há um título específico para
@@ -640,6 +645,7 @@ private:
         std::unique_ptr<nxui::Texture> logo;
     };
     std::unordered_map<std::uint64_t, GameArtworkTextures> m_gameArtwork;
+    std::unordered_map<std::uint64_t, nxui::Texture> m_plazaCommunityTextures;
     struct GameArtworkDecodeState {
         std::uint64_t titleId = 0;
         steamgriddb::artwork::DecodedImage hero;

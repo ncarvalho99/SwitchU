@@ -81,6 +81,7 @@ public:
     void onBackgroundBlurChange(FloatCb cb)  { m_backgroundBlurCb = std::move(cb); }
     void onGridColumnsChange(IntCb cb)   { m_gridColumnsCb = std::move(cb); }
     void onGridRowsChange(IntCb cb)      { m_gridRowsCb = std::move(cb); }
+    void onDynamicPagesChange(BoolCb cb) { m_dynamicPagesCb = std::move(cb); }
     void onNextTrack(VoidCb cb)          { m_nextTrackCb = std::move(cb); }
     void onThemeShopApply(StringCb cb)   { m_themeShopApplyCb = std::move(cb); }
     void onThemeShopDelete(StringCb cb)  { m_themeShopDeleteCb = std::move(cb); }
@@ -106,6 +107,9 @@ public:
     void setGridLayoutState(int columns, int rows) {
         m_gridColumns = std::clamp(columns, 3, 8);
         m_gridRows = std::clamp(rows, 2, 5);
+    }
+    void setDynamicPagesState(bool enabled) {
+        m_dynamicPages = enabled;
     }
 
     void setThreadPool(nxui::ThreadPool* pool);
@@ -286,6 +290,7 @@ private:
     FloatCb m_backgroundBlurCb;
     IntCb m_gridColumnsCb;
     IntCb m_gridRowsCb;
+    BoolCb m_dynamicPagesCb;
     VoidCb m_nextTrackCb;
     StringCb m_themeShopApplyCb;
     StringCb m_themeShopDeleteCb;
@@ -320,6 +325,7 @@ private:
     float m_backgroundBlur = 0.f;
     int m_gridColumns = 5;
     int m_gridRows = 3;
+    bool m_dynamicPages = true;
     std::string m_searchQuery;
     std::vector<ThemeShopEntry> m_allThemeShopEntries;
     std::vector<ThemeShopEntry> m_themeShopEntries;

@@ -1414,101 +1414,96 @@ void WiiUMenuApp::wireGlobalActions() {
 #ifdef SWITCHU_MENU
     root.addAction(static_cast<uint64_t>(nxui::Button::X), [this]() {
         if (m_editMode) return;
+        if (m_navigator.route() != switchu::navigation::Route::Home ||
+            focusRoot() != &rootBox())
+            return;
+
+        if (deletePageAvailable()) {
+            if (m_openFolderId != 0)
+                deleteFolderPage();
+            else
+                deleteHomePage();
+            return;
+        }
+
         auto* cur = focusManager().current();
         if (!cur || cur->tag() != "glossy_icon") return;
         auto* icon = static_cast<GlossyIcon*>(cur);
 
-        // X is the folder button, both ways round: on the home screen it files
-        // the focused title into a folder, and inside an open folder it takes
-        // the focused title out. One button for one idea, rather than X to put
-        // in and R to take out.
-        //
-        // It is the only free press on either screen: A launches, B is back, Y
-        // moves, R sorts, ZL and ZR page, Plus opens the options, Minus switches
-        // view, L repeats the announcement. X itself is claimed only while a
-        // title is suspended, where it closes it -- that case is tested first
-        // and keeps the button, and the hint bar says which of the two it is.
-        if (!(m_launcher.suspendedTitleId() != 0 &&
-              m_launcher.isAppSuspended(icon->titleId()))) {
-            const std::uint64_t titleId = icon->titleId();
-            // Folder and widget tiles share the id space and are neither filed
-            // nor removed.
-            if (titleId == 0 || (titleId >> 56) == 0xF1ULL || (titleId >> 56) == 0xF2ULL)
-                return;
-            if (m_openFolderId != 0) {
-                if (m_folderStore.folderForTitle(titleId) != m_openFolderId)
-                    return;
-                DebugLog::log("[folders] X removes %016llX from folder %u",
-                              static_cast<unsigned long long>(titleId), m_openFolderId);
-                removeTitleFromFolder(titleId);
-                return;
-            }
+        if (m_launcher.suspendedTitleId() != 0 &&
+            m_launcher.isAppSuspended(icon->titleId())) {
+            m_audio.playSfx(Sfx::ModalShow);
             m_dialogReturnFocus = cur;
-            showFolderAssignment(titleId, icon->title());
+            auto& i18n = nxui::I18n::instance();
+            const auto markCloseRequested = [this]() {
+                m_launcher.setAppRunning(false);
+                m_launcher.setAppHasForeground(false);
+                m_launcher.setSuspendedTitleId(0);
+                for (auto& ic : m_grid->allIcons())
+                    ic->setSuspended(false);
+                if (auto* current = m_grid->focusManager().current()) {
+                    auto* focusedIcon = static_cast<GlossyIcon*>(current);
+                    m_titlePill->setText(focusedIcon->title());
+                }
+            };
+#ifdef SWITCHU_TERMINATION_QUEUE_TEST
+            m_dialog->show(
+                "Lifecycle close test",
+                "DIAGNOSTIC BUILD. B cancels. Applet close: use after HOME from a game's "
+                "full-screen keyboard. Sleep powers down. Force 15s: wait.",
+                {
+                    {"Applet close", [this, markCloseRequested]() {
+                        m_launcher.terminateApplication();
+                        markCloseRequested();
+                    }, true},
+                    {"Duplicate", [this, markCloseRequested]() {
+                        m_launcher.terminateApplicationDuplicate();
+                        markCloseRequested();
+                    }, true},
+                    {"Sleep test", [this, markCloseRequested]() {
+                        m_launcher.terminateApplicationHold();
+                        m_launcher.enterSleep();
+                        markCloseRequested();
+                    }, true},
+                    {"Force 15s", [this, markCloseRequested]() {
+                        m_launcher.terminateApplicationForce();
+                        markCloseRequested();
+                    }, true}
+                },
+                0,
+                {}
+            );
+#else
+            m_dialog->show(
+                i18n.tr("game.close_title", "Close game"),
+                i18n.tr("game.close_prefix", "Close") + std::string(" ") + icon->title()
+                    + i18n.tr("game.close_suffix", "?\nUnsaved progress will be lost."),
+                {
+                    {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
+                    {i18n.tr("button.close", "Close"),  [this, markCloseRequested]() {
+                        m_launcher.terminateApplication();
+                        markCloseRequested();
+                    }, true}
+                },
+                1,
+                {}
+            );
+#endif
+            focusManager().setFocus(m_dialog.get());
             return;
         }
 
-        if (m_launcher.suspendedTitleId() == 0) return;
-        if (!m_launcher.isAppSuspended(icon->titleId())) return;
-
-        m_audio.playSfx(Sfx::ModalShow);
-        m_dialogReturnFocus = cur;
-        auto& i18n = nxui::I18n::instance();
-        const auto markCloseRequested = [this]() {
-            m_launcher.setAppRunning(false);
-            m_launcher.setAppHasForeground(false);
-            m_launcher.setSuspendedTitleId(0);
-            for (auto& ic : m_grid->allIcons())
-                ic->setSuspended(false);
-            if (auto* current = m_grid->focusManager().current()) {
-                auto* focusedIcon = static_cast<GlossyIcon*>(current);
-                m_titlePill->setText(focusedIcon->title());
-            }
-        };
-#ifdef SWITCHU_TERMINATION_QUEUE_TEST
-        m_dialog->show(
-            "Lifecycle close test",
-            "DIAGNOSTIC BUILD. B cancels. Applet close: use after HOME from a game's "
-            "full-screen keyboard. Sleep powers down. Force 15s: wait.",
-            {
-                {"Applet close", [this, markCloseRequested]() {
-                    m_launcher.terminateApplication();
-                    markCloseRequested();
-                }, true},
-                {"Duplicate", [this, markCloseRequested]() {
-                    m_launcher.terminateApplicationDuplicate();
-                    markCloseRequested();
-                }, true},
-                {"Sleep test", [this, markCloseRequested]() {
-                    m_launcher.terminateApplicationHold();
-                    m_launcher.enterSleep();
-                    markCloseRequested();
-                }, true},
-                {"Force 15s", [this, markCloseRequested]() {
-                    m_launcher.terminateApplicationForce();
-                    markCloseRequested();
-                }, true}
-            },
-            0,
-            {}
-        );
-#else
-        m_dialog->show(
-            i18n.tr("game.close_title", "Close game"),
-            i18n.tr("game.close_prefix", "Close") + std::string(" ") + icon->title()
-                + i18n.tr("game.close_suffix", "?\nUnsaved progress will be lost."),
-            {
-                {i18n.tr("button.cancel", "Cancel"), [this]() {}, true},
-                {i18n.tr("button.close", "Close"),  [this, markCloseRequested]() {
-                    m_launcher.terminateApplication();
-                    markCloseRequested();
-                }, true}
-            },
-            1,
-            {}
-        );
-#endif
-        focusManager().setFocus(m_dialog.get());
+        if (m_openFolderId != 0) {
+            const std::uint64_t titleId = icon->titleId();
+            if (titleId == 0 || (titleId >> 56) == 0xF1ULL || (titleId >> 56) == 0xF2ULL)
+                return;
+            if (m_folderStore.folderForTitle(titleId) != m_openFolderId)
+                return;
+            DebugLog::log("[folders] X removes %016llX from folder %u",
+                          static_cast<unsigned long long>(titleId), m_openFolderId);
+            removeTitleFromFolder(titleId);
+            return;
+        }
     });
 #endif
 }
