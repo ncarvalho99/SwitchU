@@ -1,25 +1,50 @@
 # SwitchU 2.6.2
 
-Stability and ergonomics update resolving user-reported issues with folder drag-and-drop icon textures, grid slot reachability near multi-cell widgets, keyboard deletion keys, game update title identification, and adding automatic NTP clock sync, new game artwork prompting, and authentic Wii U Plaza branding.
+Stability, ergonomics, and security update resolving user-reported issues with folder drag-and-drop icon textures, grid slot reachability, page deletion, single Joy-Con controls, and controller reordering, while introducing official client service authentication, automatic NTP clock sync, dynamic SteamGridDB artwork detection, and authentic Wii U Plaza branding.
 
 ## English
+
+### Controllers & Input
+- **Sideways Joy-Con & 8-Player Support**: Configured standard 8-player input across all connected controllers so the Home menu responds to whichever controller is in the player's hands. Lone Joy-Cons are now set to horizontal hold orientation, enabling standard A/B/X/Y confirmation and navigation on a single Joy-Con (including left Joy-Con). Added state logging for connected controllers.
+- **Change Grip/Order Reassignment**: When launching the Change Grip/Order applet, current controller connections are no longer locked in (`enable_take_over_connection = 0`), allowing Player 1 to be reassigned to any controller rather than remaining stuck on the opening gamepad.
+- **Continuous D-Pad Page Flipping**: Holding D-pad Left or Right continuously now triggers automatic wrap-around page transitions (infinite page turn) while keeping focus on the game grid, while tapping one-by-one continues to navigate into the launcher sidebar menus as expected.
+- **Hold-to-Delete Page (ZL)**: Remapped page deletion from `X` to `ZL` with a matching hold animation featuring a minus (`-`) icon and filling circular progress arc, pairing naturally with `ZR` for page creation. When ZL is held on an empty page, the deletion animation runs directly on the current page without jumping back, while a quick tap on ZL continues to navigate to the previous page.
+- **Keyboard Erase Remap**: Swapped `B` to backspace/erase and `X` to cancel/close in the on-screen keyboard, matching standard Switch game keyboard conventions, with updated localizations across all 8 languages.
 
 ### Folder & Grid Improvements
 - **Drag-and-Drop Texture Isolation**: Fixed an issue where dragging an icon into an open folder temporarily replaced the dragged icon's image with the folder's first game icon. Independent textures and custom artwork are now preserved across folder boundaries.
 - **Unrestricted Grid Placement**: Fixed empty slot placement constraints when moving folders or icons. Edit-mode D-pad navigation now skips continuation cells, allowing smooth traversal across multi-cell widgets, and grid layout slots dynamically accommodate the full visible grid.
 - **Folder Move Persistence**: Fixed internal folder grid moves not persisting changes to disk.
 
-### Navigation & Ergonomics
-- **Continuous D-Pad Page Flipping**: Holding D-pad Left or Right continuously now triggers automatic wrap-around page transitions (infinite page turn) while keeping focus on the game grid, while tapping one-by-one continues to navigate into the launcher sidebar menus as expected.
-- **Hold-to-Delete Page (ZL)**: Remapped page deletion from `X` to `ZL` with a matching hold animation featuring a minus (`-`) icon and filling circular progress arc, pairing naturally with `ZR` for page creation. When ZL is held on an empty page, the deletion animation runs directly on the current page without jumping back, while a quick tap on ZL continues to navigate to the previous page.
-- **Keyboard Erase Remap**: Swapped `B` to backspace/erase and `X` to cancel/close in the on-screen keyboard, matching standard Switch game keyboard conventions, with updated localizations across all 8 languages.
-
 ### Title Identification & Network Services
 - **Game Update Name Recognition**: Resolved an issue where games with updates installed (such as Super Mario Bros. Wonder) fell back to displaying numeric Title IDs instead of localized names due to compressed NACP language title blocks.
 - **SteamGridDB Real Title Detection & Auto-Prompt**: Added an automatic check on boot, restart, or when a homebrew port is marked as a game that prompts users with a centered modal dialog displaying the resolved game name (instead of the title ID hex code) asking if they would like to download covers and artwork from SteamGridDB.
 - **Modal Dialog Liquid Glass & Dimming Scrim**: Enhanced `OverlayDialog` with a translucent backdrop dimming scrim and authentic liquid glass frosted blur matching the default SwitchU window style.
+- **Official Client Key Gate**: Embedded a compile-time authentication key (`X-SwitchU-Key`) in official SwitchU client builds, protecting project servers (`gallery.nclabs.dev`, `switchu-api.nclabs.dev`, `themes.nclabs.dev`) from unauthorized third-party forks.
 - **Automatic Internet Clock Sync**: Integrated background NTP synchronization on startup and network connection so the console time automatically stays accurate without requiring manual configuration.
 - **Wii U Plaza Icon**: Replaced the procedural top header icon with the authentic Wii U logo icon (`warawara_u.png`).
+
+## Português
+
+### Controles e Entrada
+- **Joy-Con Individual na Horizontal e Suporte a 8 Jogadores**: Configurada a leitura padrão de até 8 jogadores para que o menu inicial responda a qualquer controle que esteja nas mãos do jogador. Joy-Cons avulsos agora são configurados automaticamente na orientação horizontal, habilitando os botões de ação A/B/X/Y mesmo no Joy-Con esquerdo sozinho. Adicionado registro de diagnóstico do estado dos controles.
+- **Reatribuição no Mudar a Ordem/Pegada**: Ao abrir o menu de Mudar a Ordem/Pegada dos controles, as conexões atuais não são mais fixadas (`enable_take_over_connection = 0`), permitindo que o Jogador 1 seja reatribuído a qualquer controle em vez de ficar preso no controle que abriu o aplicativo.
+- **Mudança Contínua de Páginas com D-Pad**: Segurar o D-Pad para a esquerda ou direita agora troca de página continuamente com giro infinito mantendo o foco na grade, enquanto toques únicos continuam navegando para a barra lateral.
+- **Segurar para Excluir Página (ZL)**: Remapeada a exclusão de páginas de `X` para `ZL` com animação de progresso circular e ícone de menos (`-`). Ao segurar ZL numa página vazia, a animação é exibida diretamente na página atual sem voltar antes; toques rápidos no ZL continuam voltando uma página.
+- **Remapeamento do Teclado Virtual**: Invertidos os botões `B` para apagar caractere e `X` para cancelar/fechar o teclado virtual, seguindo o padrão oficial do console, com textos localizados em todos os 8 idiomas.
+
+### Pastas e Grade
+- **Isolamento de Texturas no Arrastar e Soltar**: Corrigida a substituição temporária do ícone de um jogo arrastado pelo primeiro ícone de uma pasta aberta.
+- **Posicionamento sem Bloqueios na Grade**: Corrigidos os limites de movimentação de pastas e ícones sobre espaços vazios adjacentes a widgets de múltiplas células.
+- **Persistência de Movimentação em Pastas**: Corrigido o salvamento em disco de reorganizações de ícones dentro de pastas.
+
+### Reconhecimento de Títulos e Serviços de Rede
+- **Nomes de Jogos Atualizados**: Corrigida a exibição de códigos numéricos em vez dos nomes localizados em jogos com atualizações instaladas (como Super Mario Bros. Wonder) através da descompressão zlib de blocos NACP.
+- **Detecção Real de Jogos e Aviso do SteamGridDB**: Diálogo de download do SteamGridDB agora exibe o nome real do jogo e abre automaticamente ao marcar um port como jogo.
+- **Vidro Líquido e Desfoque nos Diálogos**: Janelas modais agora contam com escurecimento translúcido e desfoque idênticos às demais telas do SwitchU.
+- **Chave de Autenticação do Cliente Oficial**: Compilação oficial agora injeta chave de acesso (`X-SwitchU-Key`) aos serviços `nclabs.dev`.
+- **Sincronização Automática de Relógio via Internet**: Ajuste de hora via NTP em segundo plano na inicialização e ao conectar à internet.
+- **Ícone do Wii U na WaraWara Plaza**: Adicionado o logotipo autêntico do Wii U (`warawara_u.png`) no topo da tela.
 
 # SwitchU 2.6.1
 
