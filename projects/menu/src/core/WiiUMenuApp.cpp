@@ -2,6 +2,7 @@
 #include "services/NtpClient.hpp"
 #include <cctype>
 #include <switchu/sd_commit.hpp>
+#include <switchu/control_cache.hpp>
 #include "core/PlayTime.hpp"
 #include "widgets/GlossyIcon.hpp"
 #include "widgets/FolderPalette.hpp"
@@ -5366,7 +5367,7 @@ void WiiUMenuApp::buildGrid() {
         m_config.gamePortPlatforms.emplace_back(titleId, slug);
         m_config.save();
         m_platformPicker->hide();
-        showGameDetails(titleId, title);
+        promptSteamGridDbForGame(titleId, title);
     });
     m_overlayLayer->addChild(m_platformPicker);
     createFolderOptions();
@@ -5828,14 +5829,24 @@ void WiiUMenuApp::checkNewGameSteamGridDbPrompt() {
     std::string title = i18n.tr("steamgriddb.new_games_title", "SteamGridDB");
     std::string message;
     if (newGames.size() == 1) {
+        std::string displayName = resolveAppTitle(newGames[0].titleId, newGames[0].title);
+        newGames[0].title = displayName;
+        for (auto& a : m_allApps) {
+            if (a.titleId == newGames[0].titleId) {
+                a.title = displayName;
+                break;
+            }
+        }
         message = i18n.tr("steamgriddb.new_game_detected", "New game detected: ") +
-                  newGames[0].title + "\n\n" +
+                  displayName + "\n\n" +
                   i18n.tr("steamgriddb.new_game_ask", "Would you like to check and download covers and artwork from SteamGridDB?");
     } else {
         message = std::to_string(newGames.size()) + " " +
                   i18n.tr("steamgriddb.new_games_detected", "new games or shortcuts detected.\n\nWould you like to check and download covers and artwork from SteamGridDB?");
     }
 
+    raiseOverlay(m_dialog);
+    m_audio.playSfx(Sfx::ModalShow);
     m_dialogReturnFocus = focusManager().current();
     m_dialog->show(title, message, {
         {i18n.tr("button.download", "Download"), [this]() {
@@ -5848,6 +5859,87 @@ void WiiUMenuApp::checkNewGameSteamGridDbPrompt() {
         }}
     });
     focusManager().setFocus(m_dialog.get());
+}
+
+void WiiUMenuApp::promptSteamGridDbForGame(std::uint64_t titleId, const std::string& title) {
+    if (titleId == 0 || !m_dialog) return;
+
+    if (std::find(m_config.steamGridDbKnownTitles.begin(),
+                  m_config.steamGridDbKnownTitles.end(),
+                  titleId) == m_config.steamGridDbKnownTitles.end()) {
+        m_config.steamGridDbKnownTitles.push_back(titleId);
+        m_config.save();
+    }
+
+    auto& i18n = nxui::I18n::instance();
+    std::string resolvedTitle = resolveAppTitle(titleId, title);
+    std::string dlgTitle = i18n.tr("steamgriddb.new_games_title", "SteamGridDB");
+    std::string message = i18n.tr("steamgriddb.new_game_detected", "New game detected: ") +
+                          resolvedTitle + "\n\n" +
+                          i18n.tr("steamgriddb.new_game_ask",
+                                  "Would you like to check and download covers and artwork from SteamGridDB?");
+
+    raiseOverlay(m_dialog);
+    m_audio.playSfx(Sfx::ModalShow);
+    m_dialogReturnFocus = focusManager().current();
+    m_dialog->show(dlgTitle, message, {
+        {i18n.tr("button.download", "Download"), [this]() {
+            if (m_dialog) m_dialog->hide();
+            startSteamGridDbScrape();
+        }, true},
+        {i18n.tr("button.cancel", "Cancel"), [this, titleId, resolvedTitle]() {
+            if (m_dialog) m_dialog->hide();
+            showGameDetails(titleId, resolvedTitle);
+        }}
+    });
+    focusManager().setFocus(m_dialog.get());
+}
+
+std::string WiiUMenuApp::resolveAppTitle(std::uint64_t titleId, const std::string& currentTitle) {
+    if (titleId != 0 && m_config.hasCustomTitle(titleId)) {
+        return m_config.customTitle(titleId, currentTitle);
+    }
+    if (titleId != 0 && m_config.isGamePort(titleId)) {
+        const std::string searchTitle = m_config.gamePortSearchTitle(titleId, "");
+        if (!searchTitle.empty())
+            return searchTitle;
+    }
+    std::string title = currentTitle;
+    char tidBuf[17]{};
+    std::snprintf(tidBuf, sizeof(tidBuf), "%016llX", (unsigned long long)titleId);
+    const bool isFallback = title.empty() || title == tidBuf;
+
+    if (isFallback && titleId != 0) {
+        // 1. Try reading metadata from control cache
+        switchu::control_cache::Meta meta{};
+        if (switchu::control_cache::readMeta(titleId, meta) && meta.name[0] != '\0') {
+            title = meta.name;
+        }
+#ifdef __SWITCH__
+        // 2. Try live query from Horizon OS
+        if (title.empty() || title == tidBuf) {
+            auto* controlData = new (std::nothrow) NsApplicationControlData();
+            if (controlData) {
+                size_t controlSize = 0;
+                Result rc = nsGetApplicationControlData(NsApplicationControlSource_Storage,
+                                                        titleId,
+                                                        controlData,
+                                                        sizeof(NsApplicationControlData),
+                                                        &controlSize);
+                if (R_SUCCEEDED(rc)) {
+                    switchu::control_cache::Meta liveMeta{};
+                    if (switchu::control_cache::fillMetaFromControlData(titleId, *controlData, liveMeta)) {
+                        if (liveMeta.name[0] != '\0') {
+                            title = liveMeta.name;
+                        }
+                    }
+                }
+                delete controlData;
+            }
+        }
+#endif
+    }
+    return title.empty() ? std::string(tidBuf) : title;
 }
 
 void WiiUMenuApp::pollAutoNtpSync(float dt) {
@@ -6096,6 +6188,8 @@ void WiiUMenuApp::onUpdate(float dt) {
                         m_deletePageHold = 0.f;
                         m_deletePageTouchHold = false;
                         m_deletePageTriggered = true;
+                        m_zlQuickFlipArmed = false;
+                        m_zlQuickFlipHeld = 0.f;
                         if (m_openFolderId != 0)
                             deleteFolderPage();
                         else
@@ -6560,8 +6654,10 @@ void WiiUMenuApp::onUpdate(float dt) {
         handleFrameDumpShortcut();
     syncFrameDumpCapture();
 
-    if (!lockScreenUp)
+    if (!lockScreenUp) {
         handleSortShortcutRelease(dt);
+        handleZlShortcutRelease(dt);
+    }
     syncUpdateCheck();
     syncUpdateDownload();
     pollAutoNtpSync(dt);

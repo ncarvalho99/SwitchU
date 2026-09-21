@@ -1444,6 +1444,15 @@ void OverlayDialog::render(nxui::Renderer& ren) {
         m_cachedBlurIterations = tuning.blurIterations;
     }
 
+    // Translucent backdrop scrim matching default window style (Settings / Quick Settings)
+    if (m_theme) {
+        nxui::Rect screen = {0.f, 0.f, (float)ren.width(), (float)ren.height()};
+        nxui::Color scrim = nxui::Color::lerp(m_theme->background, nxui::Color::black(),
+                                              m_theme->mode == nxui::ThemeMode::Dark ? 0.72f : 0.28f)
+            .withAlpha((m_theme->mode == nxui::ThemeMode::Dark ? 0.25f : 0.14f) * alpha);
+        ren.drawRect(screen, scrim);
+    }
+
     renderGlassPanel(ren, m_theme, panel, kPanelRadius, m_base, m_border, m_highlight,
                      alpha, kBackdropCacheTarget);
 

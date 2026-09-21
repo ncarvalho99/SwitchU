@@ -350,6 +350,8 @@ private:
     bool m_deletePageMode = false;
     bool m_deletePageTouchHold = false;
     bool m_deletePageTriggered = false;
+    bool m_zlQuickFlipArmed = false;
+    float m_zlQuickFlipHeld = 0.f;
     int findTitleIndex(uint64_t titleId) const;
     bool focusTitle(uint64_t titleId);
     // Devolve o seletor para a grade quando não há um título específico para
@@ -380,8 +382,11 @@ private:
     bool handleFrameDumpShortcut();
     void syncFrameDumpCapture();
     void checkNewGameSteamGridDbPrompt();
+    void promptSteamGridDbForGame(std::uint64_t titleId, const std::string& title);
+    std::string resolveAppTitle(std::uint64_t titleId, const std::string& currentTitle);
     void pollAutoNtpSync(float dt);
     void handleSortShortcutRelease(float dt);
+    void handleZlShortcutRelease(float dt);
     // Longer than a deliberate tap, far shorter than the hold used to reach
     // Sphaira, so the two gestures never get confused for one another.
     static constexpr float kSortShortcutTapSeconds = 0.35f;

@@ -919,6 +919,28 @@ void WiiUMenuApp::handleSortShortcutRelease(float dt) {
     cycleSortMode();
 }
 
+void WiiUMenuApp::handleZlShortcutRelease(float dt) {
+    if (!m_zlQuickFlipArmed)
+        return;
+    auto& input = app().input();
+    if (input.isHeld(nxui::Button::ZL)) {
+        m_zlQuickFlipHeld += dt;
+    }
+    if (input.isUp(nxui::Button::ZL)) {
+        const bool armed = m_zlQuickFlipArmed;
+        const float held = m_zlQuickFlipHeld;
+        const bool triggered = m_deletePageTriggered;
+        m_zlQuickFlipArmed = false;
+        m_zlQuickFlipHeld = 0.f;
+        if (armed && !triggered && held < 0.35f) {
+            if (m_navigator.route() == switchu::navigation::Route::Home &&
+                focusRoot() == &rootBox()) {
+                flipPage(-1);
+            }
+        }
+    }
+}
+
 bool WiiUMenuApp::handleAccessibilityToggleCombo() {
     if (m_navigator.route() == switchu::navigation::Route::ControllerTest)
         return false;
@@ -1325,6 +1347,11 @@ void WiiUMenuApp::wireGlobalActions() {
         if (m_navigator.route() != switchu::navigation::Route::Home ||
             focusRoot() != &rootBox())
             return;
+        if (deletePageAvailable()) {
+            m_zlQuickFlipArmed = true;
+            m_zlQuickFlipHeld = 0.f;
+            return;
+        }
         flipPage(-1);
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::ZR), [this]() {

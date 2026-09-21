@@ -1166,8 +1166,11 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() {
         if (m_navigator.route() != switchu::navigation::Route::Home || focusRoot() != &rootBox())
             return;
-        if (m_deletePageMode)
+        if (deletePageAvailable()) {
+            m_zlQuickFlipArmed = true;
+            m_zlQuickFlipHeld = 0.f;
             return;
+        }
         flipPage(-1);
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::ZR), [this]() {
