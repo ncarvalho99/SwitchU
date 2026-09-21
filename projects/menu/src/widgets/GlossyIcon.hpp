@@ -26,6 +26,7 @@ public:
     void setTexture(nxui::Texture* tex) { m_tex = tex; }
     nxui::Texture* texture() const      { return m_tex; }
     void setCustomArtwork(bool custom)  { m_customArtwork = custom; }
+    bool customArtwork() const          { return m_customArtwork; }
 
     void setGameCardTexture(nxui::Texture* tex) { m_gameCardTex = tex; }
     nxui::Texture* gameCardTexture() const      { return m_gameCardTex; }
