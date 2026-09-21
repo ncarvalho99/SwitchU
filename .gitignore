@@ -150,3 +150,21 @@ id_ed25519
 /cloud.md
 /graphify-out/
 /TODO.md
+/HANDOFF_CLIENT_KEY.md
+/web/CLIENT-AUTH.md
+
+# Agent/assistant local config and memory markers, internal audits, and the
+# scratch files agents leave in the checkout root (commit dumps, diffs, one-off
+# analysis scripts, cropped screenshots). None of it is part of the project.
+/.ai-memory.toml
+/opencode.json
+/NXLAUNCHER_INTEGRATION_AUDIT.md
+/_*
+/extract.py
+/crop_dialog.jpg
+
+# Device logs, frame dumps and captures pulled from a console for debugging.
+/logs_backup/
+
+# Agent-protocol validator: tooling for the agent workflow, not for the project.
+/tools/validate-agent-protocol.ps1
