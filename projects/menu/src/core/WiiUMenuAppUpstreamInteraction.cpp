@@ -194,7 +194,16 @@ nxui::Texture* WiiUMenuApp::adoptEditGhostTexture(GlossyIcon* sourceIcon) {
     // Keeping an independent owned texture keeps the ghost alive across folder boundaries.
     if (!m_editGhostTexture) {
         m_editGhostTexture = std::make_unique<nxui::Texture>();
-        std::vector<uint8_t> data = AppListLoader::loadIconData(sourceIcon->titleId());
+        std::vector<uint8_t> data;
+        if (sourceIcon->customArtwork()) {
+            data = gallery::GameArtworkStore::loadCover(sourceIcon->titleId());
+        }
+        if (data.empty()) {
+            data = AppListLoader::loadIconData(sourceIcon->titleId());
+        }
+        if (data.empty()) {
+            data = gallery::GameArtworkStore::loadCover(sourceIcon->titleId());
+        }
         if (!data.empty()) {
             m_editGhostTexture->loadFromMemory(app().gpu(), app().renderer(),
                                                data.data(), data.size(), 256);
@@ -222,8 +231,9 @@ void WiiUMenuApp::startEditGhost(GlossyIcon* sourceIcon) {
     ghost->setFocusable(false);
     ghost->setTitle(sourceIcon->title());
     ghost->setTitleId(sourceIcon->titleId());
-    ghost->setTexture(adoptEditGhostTexture(sourceIcon));
     ghost->copyWidgetPresentationFrom(*sourceIcon);
+    ghost->setTexture(adoptEditGhostTexture(sourceIcon));
+    ghost->setCustomArtwork(sourceIcon->customArtwork());
     ghost->setIsGameCard(sourceIcon->isGameCard());
     ghost->setGameCardTexture(sourceIcon->gameCardTexture());
     ghost->setNotLaunchable(sourceIcon->isNotLaunchable());
