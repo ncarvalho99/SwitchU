@@ -346,6 +346,10 @@ private:
     bool m_addPageMode = false;
     bool m_addPageTouchHold = false;
     bool m_addPageTriggered = false;
+    float m_deletePageHold = 0.f;
+    bool m_deletePageMode = false;
+    bool m_deletePageTouchHold = false;
+    bool m_deletePageTriggered = false;
     int findTitleIndex(uint64_t titleId) const;
     bool focusTitle(uint64_t titleId);
     // Devolve o seletor para a grade quando não há um título específico para

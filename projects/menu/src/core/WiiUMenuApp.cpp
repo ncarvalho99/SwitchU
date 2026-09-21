@@ -5972,11 +5972,39 @@ void WiiUMenuApp::onUpdate(float dt) {
             a.press = std::max(0.f, a.press - dt / kPageArrowKick);
         };
         m_addPageMode = addPageAvailable();
+        m_deletePageMode = deletePageAvailable();
         const bool line = m_appLayoutMode == AppLayoutMode::DynamicLine;
         const bool hasLeft = line ? dynamicLineNeighbour(-1) >= 0 : page > 0;
         const bool hasRight = line ? dynamicLineNeighbour(+1) >= 0 : page < total - 1;
-        step(m_arrowAnimLeft, paging && hasLeft);
+        step(m_arrowAnimLeft, (paging && hasLeft) || m_deletePageMode);
         step(m_arrowAnimRight, (paging && hasRight) || m_addPageMode);
+
+        if (m_deletePageMode) {
+            const bool holding = m_deletePageTouchHold ||
+                                 app().input().isHeld(nxui::Button::ZL);
+            if (holding) {
+                if (!m_deletePageTriggered) {
+                    m_deletePageHold = std::min(1.f, m_deletePageHold + dt / kAddPageHoldDur);
+                    if (m_deletePageHold >= 1.f) {
+                        m_deletePageHold = 0.f;
+                        m_deletePageTouchHold = false;
+                        m_deletePageTriggered = true;
+                        if (m_openFolderId != 0)
+                            deleteFolderPage();
+                        else
+                            deleteHomePage();
+                    }
+                }
+            } else {
+                m_deletePageTriggered = false;
+                m_deletePageHold = std::max(0.f,
+                    m_deletePageHold - dt / (kAddPageHoldDur * 0.4f));
+            }
+        } else {
+            m_deletePageHold = 0.f;
+            m_deletePageTouchHold = false;
+            m_deletePageTriggered = false;
+        }
 
         if (m_addPageMode) {
             const bool holding = m_addPageTouchHold ||
@@ -6996,10 +7024,10 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
             add(buttonGlyph(nxui::Button::Plus), i18n.tr("add.title", "Add"));
 #endif
             if (deletePageAvailable()) {
-                add(buttonGlyph(nxui::Button::X), i18n.tr("folder.delete_page", "Delete page"));
+                add(buttonGlyph(nxui::Button::ZL), i18n.tr("folder.delete_page", "Delete page"));
             }
         } else if (m_openFolderId != 0 && deletePageAvailable()) {
-            add(buttonGlyph(nxui::Button::X), i18n.tr("folder.delete_page", "Delete page"));
+            add(buttonGlyph(nxui::Button::ZL), i18n.tr("folder.delete_page", "Delete page"));
         }
     } else if (cur) {
         for (const auto& btn : m_sidebar.leftButtons()) {
@@ -7593,8 +7621,8 @@ void WiiUMenuApp::renderPageArrows(nxui::Renderer& ren) {
     constexpr float kGlyphScale = 0.70f;
     auto drawArrow = [&](bool left, const nxui::Texture& texture,
                          const PageArrowAnim& animation,
-                         const std::string& glyph, bool plus) {
-        if (animation.show <= 0.002f || (!plus && !texture.valid()))
+                         const std::string& glyph, bool plus, bool minus) {
+        if (animation.show <= 0.002f || (!plus && !minus && !texture.valid()))
             return;
 
         const float eased = animation.show * animation.show *
@@ -7603,7 +7631,8 @@ void WiiUMenuApp::renderPageArrows(nxui::Renderer& ren) {
         const nxui::Rect base = pageArrowRect(left);
         const float outward = (left ? -1.f : 1.f) *
                               ((1.f - eased) * 16.f + bump * 9.f);
-        const float grow = plus ? 0.10f * m_addPageHold : 0.f;
+        const float holdVal = plus ? m_addPageHold : (minus ? m_deletePageHold : 0.f);
+        const float grow = (plus || minus) ? 0.10f * holdVal : 0.f;
         const float scale = (0.86f + 0.14f * eased) *
                             (1.f + 0.18f * bump + grow);
         const float cx = base.x + base.width * 0.5f + outward;
@@ -7611,7 +7640,7 @@ void WiiUMenuApp::renderPageArrows(nxui::Renderer& ren) {
         const float width = base.width * scale;
         const float height = base.height * scale;
 
-        if (plus) {
+        if (plus || minus) {
             const float ring = std::min(width, height) * 0.40f;
             ren.drawCircle({cx, cy + 2.f}, ring,
                            nxui::Color(0.02f, 0.04f, 0.06f, 0.32f * eased), 28);
@@ -7622,16 +7651,22 @@ void WiiUMenuApp::renderPageArrows(nxui::Renderer& ren) {
             const float bar = ring * 0.92f;
             const float thick = std::max(2.f, ring * 0.17f);
             const nxui::Color ink = m_theme.textPrimary.withAlpha(0.92f * eased);
+            // Horizontal bar for both plus and minus
             ren.drawRoundedRect({cx - bar * 0.5f, cy - thick * 0.5f, bar, thick},
                                 ink, thick * 0.5f);
-            ren.drawRoundedRect({cx - thick * 0.5f, cy - bar * 0.5f, thick, bar},
-                                ink, thick * 0.5f);
-            if (m_addPageHold > 0.002f) {
+            // Vertical bar only for plus
+            if (plus) {
+                ren.drawRoundedRect({cx - thick * 0.5f, cy - bar * 0.5f, thick, bar},
+                                    ink, thick * 0.5f);
+            }
+            if (holdVal > 0.002f) {
                 constexpr int kSegments = 44;
                 const float radius = ring + 3.5f;
                 const int lit = std::max(1,
-                    (int)std::ceil(kSegments * m_addPageHold));
-                const nxui::Color arc = m_theme.cursorNormal.withAlpha(0.95f * eased);
+                    (int)std::ceil(kSegments * holdVal));
+                const nxui::Color arc = minus
+                    ? nxui::Color(1.0f, 0.35f, 0.35f, 0.95f * eased)
+                    : m_theme.cursorNormal.withAlpha(0.95f * eased);
                 for (int i = 0; i < lit; ++i) {
                     const float a0 = -1.5707963f +
                         6.2831853f * (float)i / kSegments;
@@ -7660,9 +7695,9 @@ void WiiUMenuApp::renderPageArrows(nxui::Renderer& ren) {
     };
 
     drawArrow(true, m_arrowTexLeft, m_arrowAnimLeft,
-              buttonGlyph(nxui::Button::ZL), false);
+              buttonGlyph(nxui::Button::ZL), false, m_deletePageMode);
     drawArrow(false, m_arrowTexRight, m_arrowAnimRight,
-              buttonGlyph(nxui::Button::ZR), m_addPageMode);
+              buttonGlyph(nxui::Button::ZR), m_addPageMode, false);
 }
 
 void WiiUMenuApp::onRender(nxui::Renderer& ren) {

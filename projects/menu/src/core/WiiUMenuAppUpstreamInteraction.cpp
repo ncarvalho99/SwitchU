@@ -1118,10 +1118,14 @@ void WiiUMenuApp::wireGlobalActions() {
     root.addAction(static_cast<uint64_t>(nxui::Button::ZL), [this]() {
         if (m_navigator.route() != switchu::navigation::Route::Home || focusRoot() != &rootBox())
             return;
+        if (m_deletePageMode)
+            return;
         flipPage(-1);
     });
     root.addAction(static_cast<uint64_t>(nxui::Button::ZR), [this]() {
         if (m_navigator.route() != switchu::navigation::Route::Home || focusRoot() != &rootBox())
+            return;
+        if (m_addPageMode)
             return;
         flipPage(+1);
     });
@@ -1179,13 +1183,6 @@ void WiiUMenuApp::wireGlobalActions() {
         if (m_navigator.route() != switchu::navigation::Route::Home ||
             focusRoot() != &rootBox())
             return;
-        if (deletePageAvailable()) {
-            if (m_openFolderId != 0)
-                deleteFolderPage();
-            else
-                deleteHomePage();
-            return;
-        }
         if (m_launcher.suspendedTitleId() == 0) return;
         auto* cur = focusManager().current();
         if (!cur || cur->tag() != "glossy_icon") return;
@@ -1451,6 +1448,7 @@ void WiiUMenuApp::handleTouch() {
         m_touchArrowLeft = m_touchArrowRight = false;
         if (m_arrowAnimLeft.show > 0.5f && pageArrowRect(true).expanded(12.f).contains(tx, ty)) {
             m_touchArrowLeft = true;
+            m_deletePageTouchHold = m_deletePageMode;
             m_touchHitIndex = -1;
             return;
         }
@@ -1484,6 +1482,10 @@ void WiiUMenuApp::handleTouch() {
     if (input.isTouching() && m_addPageTouchHold &&
         !pageArrowRect(false).expanded(20.f).contains(input.touchX(), input.touchY())) {
         m_addPageTouchHold = false;
+    }
+    if (input.isTouching() && m_deletePageTouchHold &&
+        !pageArrowRect(true).expanded(20.f).contains(input.touchX(), input.touchY())) {
+        m_deletePageTouchHold = false;
     }
 
     if (input.isTouching() && m_touchHitIndex >= 0) {
@@ -1519,9 +1521,11 @@ void WiiUMenuApp::handleTouch() {
         if (m_touchArrowLeft || m_touchArrowRight) {
             const bool left = m_touchArrowLeft;
             const bool wasAddHold = m_addPageTouchHold;
+            const bool wasDeleteHold = m_deletePageTouchHold;
             m_touchArrowLeft = m_touchArrowRight = false;
             m_addPageTouchHold = false;
-            if (!wasAddHold &&
+            m_deletePageTouchHold = false;
+            if (!wasAddHold && !wasDeleteHold &&
                 pageArrowRect(left).expanded(12.f).contains(input.touchX(), input.touchY()))
                 flipPage(left ? -1 : +1);
             return;
