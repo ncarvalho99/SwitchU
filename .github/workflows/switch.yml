@@ -103,6 +103,8 @@ jobs:
 
       - name: Configure xmake
         shell: bash
+        env:
+          SWITCHU_CLIENT_KEY: ${{ secrets.SWITCHU_CLIENT_KEY }}
         run: |
           if [ "${{ matrix.variant }}" = "homebrew" ]; then
             xmake f --yes -p cross -m "${{ matrix.mode }}" -a aarch64 --toolchain=devkita64 --homebrew=y -vD --root
@@ -111,6 +113,8 @@ jobs:
           fi
 
       - name: Build SwitchU
+        env:
+          SWITCHU_CLIENT_KEY: ${{ secrets.SWITCHU_CLIENT_KEY }}
         run: xmake -vD --root
 
       - name: Package install layout

@@ -1,6 +1,7 @@
 #include "ThemeHttp.hpp"
 
 #include "core/DebugLog.hpp"
+#include "ClientKey.hpp"
 
 #include <curl/curl.h>
 #include <switch.h>
@@ -24,6 +25,30 @@ std::string resultToString(Result rc) {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "0x%08X", (unsigned int)rc);
     return buf;
+}
+
+bool isOfficialHost(const std::string& url) {
+    if (url.size() < 8) return false;
+    const char* expectedScheme = "https://";
+    for (size_t i = 0; i < 8; ++i) {
+        char c = url[i];
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A'));
+        if (c != expectedScheme[i]) return false;
+    }
+
+    const size_t hostStart = 8;
+    const size_t hostEnd = url.find_first_of("/:?#", hostStart);
+    std::string host = (hostEnd == std::string::npos)
+        ? url.substr(hostStart)
+        : url.substr(hostStart, hostEnd - hostStart);
+
+    for (char& c : host) {
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A'));
+    }
+
+    return (host == "gallery.nclabs.dev" ||
+            host == "switchu-api.nclabs.dev" ||
+            host == "themes.nclabs.dev");
 }
 
 bool runtimeInitializedLocked() {
@@ -161,9 +186,10 @@ std::vector<std::uint8_t> performRequestBytes(const std::string& url,
     if (!request)
         throw std::runtime_error("Could not create HTTP request");
 
+    const bool official = isOfficialHost(url);
     std::string response;
     curl_easy_setopt(request, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(request, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(request, CURLOPT_FOLLOWLOCATION, official ? 0L : 1L);
     curl_easy_setopt(request, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(request, CURLOPT_CONNECTTIMEOUT, 4L);
     curl_easy_setopt(request, CURLOPT_TIMEOUT, 30L);
@@ -180,6 +206,10 @@ std::vector<std::uint8_t> performRequestBytes(const std::string& url,
     struct curl_slist* requestHeaders = nullptr;
     for (const auto& header : headers)
         requestHeaders = curl_slist_append(requestHeaders, header.c_str());
+    if (official && switchu::auth::kClientKey && switchu::auth::kClientKey[0] != '\0') {
+        const std::string authHeader = std::string("X-SwitchU-Key: ") + switchu::auth::kClientKey;
+        requestHeaders = curl_slist_append(requestHeaders, authHeader.c_str());
+    }
     if (requestHeaders)
         curl_easy_setopt(request, CURLOPT_HTTPHEADER, requestHeaders);
 
@@ -302,10 +332,11 @@ std::uint64_t getToFile(const std::string& url,
             if (!request)
                 throw std::runtime_error("Could not create HTTP request");
 
+            const bool official = isOfficialHost(url);
             FileWriteContext writeCtx{out, 0, false, &onProgress};
             const std::string agent = std::string("SwitchU/") + SWITCHU_VERSION;
             curl_easy_setopt(request, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(request, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(request, CURLOPT_FOLLOWLOCATION, official ? 0L : 1L);
             curl_easy_setopt(request, CURLOPT_NOSIGNAL, 1L);
             curl_easy_setopt(request, CURLOPT_CONNECTTIMEOUT, 4L);
             // Large packages have no total timeout, but the transfer callback
@@ -320,7 +351,16 @@ std::uint64_t getToFile(const std::string& url,
             curl_easy_setopt(request, CURLOPT_NOPROGRESS, 0L);
             curl_easy_setopt(request, CURLOPT_XFERINFOFUNCTION, cancelIfAppletHandoff);
 
+            struct curl_slist* requestHeaders = nullptr;
+            if (official && switchu::auth::kClientKey && switchu::auth::kClientKey[0] != '\0') {
+                const std::string authHeader = std::string("X-SwitchU-Key: ") + switchu::auth::kClientKey;
+                requestHeaders = curl_slist_append(requestHeaders, authHeader.c_str());
+                curl_easy_setopt(request, CURLOPT_HTTPHEADER, requestHeaders);
+            }
+
             const CURLcode result = curl_easy_perform(request);
+            if (requestHeaders)
+                curl_slist_free_all(requestHeaders);
             long statusCode = 0;
             curl_easy_getinfo(request, CURLINFO_RESPONSE_CODE, &statusCode);
             curl_easy_cleanup(request);

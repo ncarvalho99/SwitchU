@@ -173,6 +173,16 @@ if (& $docker ps -q --filter "ancestor=$buildImage") {
     throw 'Ja existe um build SwitchU rodando. Espere ele terminar antes de iniciar outro.'
 }
 
+if ([string]::IsNullOrWhiteSpace($env:SWITCHU_CLIENT_KEY)) {
+    $clientKeyFile = Join-Path $env:USERPROFILE '.switchu\client-key'
+    if (Test-Path $clientKeyFile) {
+        $env:SWITCHU_CLIENT_KEY = (Get-Content -Path $clientKeyFile -Raw).Trim()
+    }
+}
+if ([string]::IsNullOrWhiteSpace($env:SWITCHU_CLIENT_KEY)) {
+    throw 'Official client key is missing! Set SWITCHU_CLIENT_KEY environment variable or create %USERPROFILE%\.switchu\client-key.'
+}
+
 Write-Host "build $Mode/$Variant -> $log" -ForegroundColor Cyan
 $started = Get-Date
 
@@ -180,7 +190,7 @@ $started = Get-Date
 # its project cache survives on the bind mount, so discarding package state at
 # every --rm run would make later builds incorrectly think dependencies exist.
 $ErrorActionPreference = 'Continue'
-& $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake `
+& $docker run --rm -v "${repo}:/src" -v switchu-xmake:/root/.xmake -e SWITCHU_CLIENT_KEY `
     $buildImage bash /src/tools/build-inside.sh $Mode $Variant $terminationQueueTestMode $preflightMatrixTestMode $preflightEdgeTestMode $resumeFailureTestMode |
     Tee-Object -FilePath $log
 $rc = $LASTEXITCODE
