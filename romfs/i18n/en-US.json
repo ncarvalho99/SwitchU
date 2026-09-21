@@ -377,7 +377,11 @@
       "start_failed": "The artwork scan could not be started.",
       "started": "SteamGridDB scan started.",
       "download_title": "Downloading artwork",
-      "download_start": "Searching SteamGridDB..."
+      "download_start": "Searching SteamGridDB...",
+      "new_games_title": "SteamGridDB",
+      "new_game_detected": "New game detected: ",
+      "new_game_ask": "Would you like to check and download covers and artwork from SteamGridDB?",
+      "new_games_detected": "new games or shortcuts detected.\n\nWould you like to check and download covers and artwork from SteamGridDB?"
     },
     "controllers": {
       "test": "Test Input Devices",
@@ -712,6 +716,7 @@
   "button": {
     "ok": "OK",
     "cancel": "Cancel",
+    "download": "Download",
     "delete": "Delete",
     "close": "Close",
     "replace": "Replace",

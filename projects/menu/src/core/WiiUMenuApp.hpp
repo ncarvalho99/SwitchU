@@ -379,6 +379,8 @@ private:
     bool handleAccessibilityToggleCombo();
     bool handleFrameDumpShortcut();
     void syncFrameDumpCapture();
+    void checkNewGameSteamGridDbPrompt();
+    void pollAutoNtpSync(float dt);
     void handleSortShortcutRelease(float dt);
     // Longer than a deliberate tap, far shorter than the hold used to reach
     // Sphaira, so the two gestures never get confused for one another.
@@ -715,6 +717,9 @@ private:
     std::uint64_t m_steamGridDbUiRevision = 0;
     std::uint64_t m_steamGridDbLastCompletedTitleId = 0;
     bool m_steamGridDbWasRunning = false;
+    bool m_newGamePromptChecked = false;
+    bool m_autoNtpSynced = false;
+    float m_ntpCheckTimer = 0.f;
     bool m_startupConfigProvided = false;
     bool m_settingsNeedRefresh        = false;
     std::string m_loadedRegularFontPath;

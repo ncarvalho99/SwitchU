@@ -1,4 +1,5 @@
 #include "WiiUMenuApp.hpp"
+#include "services/NtpClient.hpp"
 #include <cctype>
 #include <switchu/sd_commit.hpp>
 #include "core/PlayTime.hpp"
@@ -5779,6 +5780,98 @@ void WiiUMenuApp::finalizeRefresh() {
     if (m_layoutDirty)
         saveMenuLayout();
     DebugLog::log("[refresh] done, %d icons on page %d", m_model.count(), m_grid->currentPage());
+    checkNewGameSteamGridDbPrompt();
+}
+
+void WiiUMenuApp::checkNewGameSteamGridDbPrompt() {
+    if (m_allApps.empty())
+        return;
+
+    std::vector<AppEntry> newGames;
+    std::unordered_set<uint64_t> known(
+        m_config.steamGridDbKnownTitles.begin(),
+        m_config.steamGridDbKnownTitles.end());
+
+    if (known.empty()) {
+        for (const auto& app : m_allApps) {
+            if (app.titleId != 0 && (isNativeApplicationId(app.titleId) || m_config.isGamePort(app.titleId))) {
+                m_config.steamGridDbKnownTitles.push_back(app.titleId);
+            }
+        }
+        m_config.save();
+        return;
+    }
+
+    for (const auto& app : m_allApps) {
+        if (app.titleId == 0)
+            continue;
+        const bool isGameOrPort = isNativeApplicationId(app.titleId) || m_config.isGamePort(app.titleId);
+        if (!isGameOrPort)
+            continue;
+        if (known.find(app.titleId) == known.end()) {
+            newGames.push_back(app);
+        }
+    }
+
+    if (newGames.empty())
+        return;
+
+    for (const auto& app : newGames) {
+        m_config.steamGridDbKnownTitles.push_back(app.titleId);
+    }
+    m_config.save();
+
+    if (!m_dialog)
+        return;
+
+    auto& i18n = nxui::I18n::instance();
+    std::string title = i18n.tr("steamgriddb.new_games_title", "SteamGridDB");
+    std::string message;
+    if (newGames.size() == 1) {
+        message = i18n.tr("steamgriddb.new_game_detected", "New game detected: ") +
+                  newGames[0].title + "\n\n" +
+                  i18n.tr("steamgriddb.new_game_ask", "Would you like to check and download covers and artwork from SteamGridDB?");
+    } else {
+        message = std::to_string(newGames.size()) + " " +
+                  i18n.tr("steamgriddb.new_games_detected", "new games or shortcuts detected.\n\nWould you like to check and download covers and artwork from SteamGridDB?");
+    }
+
+    m_dialogReturnFocus = focusManager().current();
+    m_dialog->show(title, message, {
+        {i18n.tr("button.download", "Download"), [this]() {
+            if (m_dialog) m_dialog->hide();
+            startSteamGridDbScrape();
+        }, true},
+        {i18n.tr("button.cancel", "Cancel"), [this]() {
+            if (m_dialog) m_dialog->hide();
+            if (m_dialogReturnFocus) focusManager().setFocus(m_dialogReturnFocus);
+        }}
+    });
+    focusManager().setFocus(m_dialog.get());
+}
+
+void WiiUMenuApp::pollAutoNtpSync(float dt) {
+#ifdef SWITCHU_MENU
+    if (m_autoNtpSynced)
+        return;
+
+    m_ntpCheckTimer += dt;
+    if (m_ntpCheckTimer < 5.0f)
+        return;
+    m_ntpCheckTimer = 0.f;
+
+    NifmInternetConnectionStatus nifmStatus = NifmInternetConnectionStatus_Connecting;
+    if (R_SUCCEEDED(nifmGetInternetConnectionStatus(nullptr, nullptr, &nifmStatus)) &&
+        nifmStatus == NifmInternetConnectionStatus_Connected) {
+        switchu::services::NtpClient::syncAsync([this](bool ok, uint64_t timestamp) {
+            if (ok) {
+                m_autoNtpSynced = true;
+                DebugLog::log("[ntp] auto internet clock sync successful: timestamp=%llu",
+                              static_cast<unsigned long long>(timestamp));
+            }
+        });
+    }
+#endif
 }
 
 #endif
@@ -6471,6 +6564,12 @@ void WiiUMenuApp::onUpdate(float dt) {
         handleSortShortcutRelease(dt);
     syncUpdateCheck();
     syncUpdateDownload();
+    pollAutoNtpSync(dt);
+
+    if (!m_newGamePromptChecked && !lockScreenUp && !m_fastReturnRequested && !m_allApps.empty()) {
+        m_newGamePromptChecked = true;
+        checkNewGameSteamGridDbPrompt();
+    }
 
     if (!app().input().isDown(nxui::Button::Plus) || !app().input().isDown(nxui::Button::Minus))
         m_accessibilityToggleComboHeld = false;

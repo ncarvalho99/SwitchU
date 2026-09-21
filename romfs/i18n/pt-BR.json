@@ -377,7 +377,11 @@
       "start_failed": "Não foi possível iniciar a busca de arte.",
       "started": "Busca do SteamGridDB iniciada.",
       "download_title": "Baixando arte",
-      "download_start": "Procurando no SteamGridDB..."
+      "download_start": "Procurando no SteamGridDB...",
+      "new_games_title": "SteamGridDB",
+      "new_game_detected": "Novo jogo detectado: ",
+      "new_game_ask": "Deseja verificar e baixar capas e artes do SteamGridDB?",
+      "new_games_detected": "novos jogos ou atalhos detectados.\n\nDeseja verificar e baixar capas e artes do SteamGridDB?"
     },
     "controllers": {
       "test": "Testar dispositivos de entrada",
@@ -712,6 +716,7 @@
   "button": {
     "ok": "OK",
     "cancel": "Cancelar",
+    "download": "Baixar",
     "delete": "Excluir",
     "close": "Fechar",
     "replace": "Substituir",

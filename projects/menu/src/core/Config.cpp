@@ -151,6 +151,19 @@ bool AppConfig::load() {
             }
         }
     }
+    steamGridDbKnownTitles.clear();
+    if (auto it = j.find("steamGridDbKnownTitles"); it != j.end() && it->is_array()) {
+        for (auto& v : *it) {
+            if (v.is_string()) {
+                const std::string s = v.get<std::string>();
+                if (!s.empty()) {
+                    steamGridDbKnownTitles.push_back(std::strtoull(s.c_str(), nullptr, 16));
+                }
+            } else if (v.is_number_unsigned()) {
+                steamGridDbKnownTitles.push_back(v.get<std::uint64_t>());
+            }
+        }
+    }
     if (musicVolume < 0.f) musicVolume = 0.f;
     if (musicVolume > 1.f) musicVolume = 1.f;
     if (sfxVolume   < 0.f) sfxVolume   = 0.f;
@@ -259,6 +272,15 @@ bool AppConfig::save() const {
             favorites.push_back(std::string(key));
         }
         j["favorites"] = std::move(favorites);
+    }
+    {
+        nlohmann::json known = nlohmann::json::array();
+        char key[17];
+        for (std::uint64_t tid : steamGridDbKnownTitles) {
+            std::snprintf(key, sizeof(key), "%016llX", (unsigned long long)tid);
+            known.push_back(std::string(key));
+        }
+        j["steamGridDbKnownTitles"] = std::move(known);
     }
 
     // Written beside the real file and swapped in, never over it. Truncating

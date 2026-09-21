@@ -36,6 +36,7 @@ struct AppConfig {
     int   accessibilitySpeechRate = 190;
     bool  steamGridDbEnabled = true;
     std::string steamGridDbApiKey;
+    std::vector<uint64_t> steamGridDbKnownTitles;
 
     // Softens the wallpaper and the shapes drifting over it.
     // This was zero on the argument that the blur costs half the wallpaper's
