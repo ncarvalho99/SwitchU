@@ -2564,6 +2564,12 @@ void WiiUMenuApp::applyDisplayModel(GridModel model, std::uint64_t focusId, bool
     applyPlaytimeBadges();
     wireFocusCallback();
     m_grid->onEdgePage([this](int dir) { flipPageFromEdge(dir); });
+    m_grid->onEdgePageHold([this](int dir) -> bool {
+        if (app().navHoldFrames() < 12)
+            return false;
+        flipPageFromEdge(dir);
+        return true;
+    });
     m_grid->onPageSwitched([this]() {
         if (m_editMode && m_editTargetIndex >= 0) {
             const int perPage = std::max(1, m_grid->iconsPerPage());
@@ -3959,9 +3965,11 @@ void WiiUMenuApp::requestOpenFolder(std::uint32_t folderId, std::uint64_t focusT
 void WiiUMenuApp::flipPageFromEdge(int dir) {
     if (!m_grid || m_grid->isTransitioning())
         return;
-    const int target = m_grid->currentPage() + dir;
-    if (target < 0 || target >= m_grid->totalPages())
+    const int total = m_grid->totalPages();
+    if (total <= 1)
         return;
+
+    int target = (m_grid->currentPage() + dir + total) % total;
 
     const int cols = std::max(1, m_grid->columns());
     const int perPage = std::max(1, m_grid->iconsPerPage());

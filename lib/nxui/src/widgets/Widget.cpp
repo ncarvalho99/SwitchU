@@ -106,20 +106,33 @@ void Widget::addAction(uint64_t button, std::function<void()> cb) {
     m_actions[button] = std::move(cb);
 }
 
+void Widget::addPredicateAction(uint64_t button, std::function<bool()> cb) {
+    m_predicateActions[button] = std::move(cb);
+}
+
 void Widget::removeAction(uint64_t button) {
     m_actions.erase(button);
+    m_predicateActions.erase(button);
 }
 
 void Widget::clearActions() {
     m_actions.clear();
+    m_predicateActions.clear();
 }
 
 uint64_t Widget::fireActions(const Input& input) const {
     uint64_t consumed = 0;
     // Snapshot — callbacks may call clearActions() and invalidate iterators.
+    auto predicateSnapshot = m_predicateActions;
+    for (auto& [btn, cb] : predicateSnapshot) {
+        if (input.isDown(static_cast<Button>(btn))) {
+            if (cb && cb())
+                consumed |= btn;
+        }
+    }
     auto snapshot = m_actions;
     for (auto& [btn, cb] : snapshot) {
-        if (input.isDown(static_cast<Button>(btn))) {
+        if (!(consumed & btn) && input.isDown(static_cast<Button>(btn))) {
             if (cb) cb();
             consumed |= btn;
         }
@@ -128,6 +141,12 @@ uint64_t Widget::fireActions(const Input& input) const {
 }
 
 bool Widget::fireAction(uint64_t button) const {
+    auto pit = m_predicateActions.find(button);
+    if (pit != m_predicateActions.end() && pit->second) {
+        auto cb = pit->second;
+        if (cb())
+            return true;
+    }
     auto it = m_actions.find(button);
     if (it != m_actions.end() && it->second) {
         // Copy the callback — invoking it may call clearActions().

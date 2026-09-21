@@ -319,22 +319,39 @@ void IconGrid::layoutLine() {
 }
 
 void IconGrid::bindEdgeActions(int start, int end) {
-    if (!m_edgePaging || m_cols <= 0)
+    if (m_cols <= 0)
         return;
     for (int i = start; i < end; ++i) {
         nxui::Widget* w = m_allIcons[i].get();
+        if (!w) continue;
         const int col = (i - start) % m_cols;
         if (col == m_cols - 1) {
-            auto next = [this]() { if (m_onEdgePage) m_onEdgePage(+1); };
-            w->addAction(static_cast<uint64_t>(nxui::Button::DRight), next);
-            w->addAction(static_cast<uint64_t>(nxui::Button::LStickR), next);
-            w->addAction(static_cast<uint64_t>(nxui::Button::RStickR), next);
+            auto onRight = [this]() -> bool {
+                if (m_onEdgePageHold && m_onEdgePageHold(+1))
+                    return true;
+                if (m_edgePaging && m_onEdgePage) {
+                    m_onEdgePage(+1);
+                    return true;
+                }
+                return false;
+            };
+            w->addPredicateAction(static_cast<uint64_t>(nxui::Button::DRight), onRight);
+            w->addPredicateAction(static_cast<uint64_t>(nxui::Button::LStickR), onRight);
+            w->addPredicateAction(static_cast<uint64_t>(nxui::Button::RStickR), onRight);
         }
         if (col == 0) {
-            auto prev = [this]() { if (m_onEdgePage) m_onEdgePage(-1); };
-            w->addAction(static_cast<uint64_t>(nxui::Button::DLeft), prev);
-            w->addAction(static_cast<uint64_t>(nxui::Button::LStickL), prev);
-            w->addAction(static_cast<uint64_t>(nxui::Button::RStickL), prev);
+            auto onLeft = [this]() -> bool {
+                if (m_onEdgePageHold && m_onEdgePageHold(-1))
+                    return true;
+                if (m_edgePaging && m_onEdgePage) {
+                    m_onEdgePage(-1);
+                    return true;
+                }
+                return false;
+            };
+            w->addPredicateAction(static_cast<uint64_t>(nxui::Button::DLeft), onLeft);
+            w->addPredicateAction(static_cast<uint64_t>(nxui::Button::LStickL), onLeft);
+            w->addPredicateAction(static_cast<uint64_t>(nxui::Button::RStickL), onLeft);
         }
     }
 }

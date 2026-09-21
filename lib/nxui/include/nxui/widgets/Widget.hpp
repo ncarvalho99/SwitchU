@@ -92,6 +92,7 @@ public:
     /// Register a callback for a specific button press while this widget has focus.
     /// e.g. btn->addAction(Button::A, [](){ ... });
     void addAction(uint64_t button, std::function<void()> cb);
+    void addPredicateAction(uint64_t button, std::function<bool()> cb);
     void removeAction(uint64_t button);
     void clearActions();
     /// Fire matching actions for buttons pressed this frame.
@@ -191,6 +192,7 @@ protected:
 
     // Action bindings (button → callback)
     std::unordered_map<uint64_t, std::function<void()>> m_actions;
+    std::unordered_map<uint64_t, std::function<bool()>> m_predicateActions;
 
 public:
     /// Read-only access to the action map (used by FocusManager for bubbling).

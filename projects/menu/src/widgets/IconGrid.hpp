@@ -64,6 +64,7 @@ public:
     void setSlideTransition(bool enabled) { m_slideTransition = enabled; }
     void setEdgePaging(bool enabled) { m_edgePaging = enabled; }
     void onEdgePage(std::function<void(int dir)> cb) { m_onEdgePage = std::move(cb); }
+    void onEdgePageHold(std::function<bool(int dir)> cb) { m_onEdgePageHold = std::move(cb); }
 
     void onPageSwitched(std::function<void()> cb) { m_onPageSwitched = std::move(cb); }
 
@@ -141,4 +142,5 @@ private:
 
     std::function<void()> m_onPageSwitched;
     std::function<void(int)> m_onEdgePage;
+    std::function<bool(int)> m_onEdgePageHold;
 };

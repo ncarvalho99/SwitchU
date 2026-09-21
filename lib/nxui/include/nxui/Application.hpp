@@ -66,6 +66,7 @@ public:
     GpuDevice& gpu()       { return m_gpu; }
     Renderer&  renderer()  { return *m_renderer; }
     Input&     input()     { return m_input; }
+    int        navHoldFrames() const { return m_navHoldFrames; }
 
     void requestExit()       { m_running = false; }
     bool isRunning() const   { return m_running; }
