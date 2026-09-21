@@ -34,6 +34,15 @@ void PlazaScreenSwapButton::onRender(nxui::Renderer& ren) {
     const float alpha = m_opacity * m_panelOpacity;
     if (alpha <= 0.01f) return;
 
+    if (!m_uIconLoaded) {
+        m_uIconLoaded = true;
+        static constexpr const char* kSdIcon = "sdmc:/switch/SwitchU/icons/warawara_u.png";
+        static constexpr const char* kRomfsIcon = "romfs:/icons/warawara_u.png";
+        if (!m_uIconTex.loadFromFile(ren.gpu(), ren, kSdIcon, 128)) {
+            m_uIconTex.loadFromFile(ren.gpu(), ren, kRomfsIcon, 128);
+        }
+    }
+
     // Background glass pill
     const float r = cornerRadius();
     nxui::Color bgCol = m_plazaActive
@@ -52,9 +61,21 @@ void PlazaScreenSwapButton::onRender(nxui::Renderer& ren) {
 
     ren.drawRoundedRectOutline(m_rect, borderCol, r, isFocused() ? 2.0f : 1.2f);
 
-    // Procedural TV / GamePad Swap Icon Glyph
     const float cx = m_rect.x + m_rect.width * 0.5f;
     const float cy = m_rect.y + m_rect.height * 0.5f;
+
+    if (m_uIconTex.valid()) {
+        constexpr float iconW = 34.0f;
+        constexpr float iconH = 33.0f;
+        const nxui::Rect iconRect{cx - iconW * 0.5f, cy - iconH * 0.5f, iconW, iconH};
+        nxui::Color tint = m_plazaActive
+            ? nxui::Color(0.40f, 0.85f, 1.0f, alpha)
+            : nxui::Color(1.0f, 1.0f, 1.0f, 0.95f * alpha);
+        ren.drawTexture(&m_uIconTex, iconRect, tint);
+        return;
+    }
+
+    // Procedural TV / GamePad Swap Icon Glyph
 
     // TV screen icon (top-left)
     const float tvW = 22.0f;

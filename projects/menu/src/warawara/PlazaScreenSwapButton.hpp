@@ -2,6 +2,7 @@
 
 #include <nxui/widgets/GlassWidget.hpp>
 #include <nxui/core/Renderer.hpp>
+#include <nxui/core/Texture.hpp>
 #include <nxui/core/Types.hpp>
 #include <nxui/core/Input.hpp>
 #include <functional>
@@ -46,6 +47,8 @@ private:
     float m_pulseAnim = 0.0f;
     bool m_hovered = false;
     std::function<void()> m_onActivateCb;
+    nxui::Texture m_uIconTex;
+    bool m_uIconLoaded = false;
 };
 
 } // namespace warawara
