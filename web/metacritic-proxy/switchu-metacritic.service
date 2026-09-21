@@ -13,8 +13,9 @@ Environment=PYTHONUNBUFFERED=1
 Environment=SWITCHU_METADATA_DB=/var/lib/switchu-metacritic/cache.sqlite3
 Environment=SWITCHU_TRUSTED_NETWORKS=172.26.128.0/26,10.0.0.0/26,127.0.0.0/8,::1/128
 EnvironmentFile=-/etc/switchu-metadata/igdb.env
+EnvironmentFile=-/etc/switchu-metadata/gemini.env
 UMask=0077
-ExecStart=/usr/bin/python3 -m uvicorn metacritic_proxy:app --host 0.0.0.0 --port 8082 --no-proxy-headers
+ExecStart=/usr/bin/python3 -m uvicorn metacritic_proxy:app --host 127.0.0.1 --port 8082 --no-proxy-headers
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
