@@ -40,6 +40,58 @@ extern "C" size_t g_switchuHeapSize;
 namespace {
 
 static constexpr const char* kLayoutPath = "sdmc:/config/SwitchU/layout.json";
+
+// A controller that cannot press A is worth being able to tell apart after the
+// fact: a lone Joy-Con registered on its own reports style JoyLeft or JoyRight
+// and, with the sideways hold type, has its four direction buttons standing in
+// for A/B/X/Y, while half of a pair that is still registered as a pair reports
+// JoyDual with one side missing and has no action buttons at all. Logged only
+// when it changes.
+void logControllerState(float dt) {
+    static float timer = 0.f;
+    static std::string previous;
+    timer += dt;
+    if (timer < 2.f)
+        return;
+    timer = 0.f;
+
+    static const struct { HidNpadIdType id; const char* name; } kPads[] = {
+        {HidNpadIdType_Handheld, "handheld"}, {HidNpadIdType_No1, "p1"},
+        {HidNpadIdType_No2, "p2"}, {HidNpadIdType_No3, "p3"},
+        {HidNpadIdType_No4, "p4"}, {HidNpadIdType_No5, "p5"},
+        {HidNpadIdType_No6, "p6"}, {HidNpadIdType_No7, "p7"},
+        {HidNpadIdType_No8, "p8"},
+    };
+
+    std::string line;
+    char entry[96];
+    for (const auto& pad : kPads) {
+        const u32 style = hidGetNpadStyleSet(pad.id);
+        if (style == 0)
+            continue;
+        u32 attributes = 0;
+        if (style & HidNpadStyleTag_NpadJoyDual) {
+            HidNpadJoyDualState state{};
+            if (hidGetNpadStatesJoyDual(pad.id, &state, 1) > 0)
+                attributes = state.attributes;
+        }
+        std::snprintf(entry, sizeof(entry), " %s=0x%X/0x%X",
+                      pad.name, style, attributes);
+        line += entry;
+    }
+    if (line.empty())
+        line = " none";
+    if (line == previous)
+        return;
+    previous = line;
+
+    HidNpadJoyHoldType holdType = HidNpadJoyHoldType_Vertical;
+    hidGetNpadJoyHoldType(&holdType);
+    DebugLog::log("[controllers] hold=%s style/attr:%s",
+                  holdType == HidNpadJoyHoldType_Horizontal ? "sideways" : "upright",
+                  line.c_str());
+}
+
 static constexpr int kMinHomePages = 8;
 static constexpr const char* kBuiltInSoundPreset = "wiiu";
 // How often the console's own sleep plan is re-read. It changes only when
@@ -6019,6 +6071,7 @@ void WiiUMenuApp::setupLockScreen() {
 }
 
 void WiiUMenuApp::onUpdate(float dt) {
+    logControllerState(dt);
     m_animalesePlayer.update(dt);
 
     // Retire and upload widget-owned textures before the next frame begins.

@@ -23,8 +23,14 @@ float applyGyroDeadzone(float value) {
 } // namespace
 
 void Input::initialize() {
-    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
-    padInitializeDefault(&m_pad);
+    padConfigureInput(8, HidNpadStyleSet_NpadStandard);
+    // A home menu answers to whichever controller is in the player's hands,
+    // not just to player 1.
+    padInitializeAny(&m_pad);
+    // Single Joy-Con are held sideways here, the way qlaunch does it. Without
+    // this the system reports a lone left Joy-Con in its upright layout, where
+    // it has a d-pad and no action buttons at all, so nothing can be confirmed.
+    hidSetNpadJoyHoldType(HidNpadJoyHoldType_Horizontal);
     hidInitializeTouchScreen();
 
     recenterVirtualPointer();

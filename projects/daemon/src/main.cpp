@@ -66,6 +66,23 @@ extern "C" {
     size_t __nx_heap_size = 0x800000;
 }
 
+// The controller applet is handed the npad configuration of whoever launches
+// it, and this daemon never published one: it asked hid for a style set it had
+// never set. qlaunch publishes the standard set and the sideways hold type, so
+// that a lone Joy-Con can be registered horizontally and used as a player of
+// its own; this does the same.
+static void setupNpad() {
+    static const HidNpadIdType npadIds[] = {
+        HidNpadIdType_No1, HidNpadIdType_No2, HidNpadIdType_No3,
+        HidNpadIdType_No4, HidNpadIdType_No5, HidNpadIdType_No6,
+        HidNpadIdType_No7, HidNpadIdType_No8, HidNpadIdType_Handheld,
+    };
+    hidInitializeNpad();
+    hidSetSupportedNpadIdType(npadIds, sizeof(npadIds) / sizeof(npadIds[0]));
+    hidSetSupportedNpadStyleSet(HidNpadStyleSet_NpadStandard | HidNpadStyleTag_NpadSystemExt);
+    hidSetNpadJoyHoldType(HidNpadJoyHoldType_Horizontal);
+}
+
 extern "C" void __appInit(void) {
     Result rc;
 
@@ -159,6 +176,8 @@ extern "C" void __appInit(void) {
     g_hidReady = R_SUCCEEDED(rc);
     if (R_FAILED(rc))
         svcOutputDebugString("[SwitchU-daemon] hidInitialize FAIL", 36);
+    else
+        setupNpad();
 
     rc = fsdevMountSdmc();
     if (R_FAILED(rc)) {
@@ -1235,12 +1254,17 @@ static Result setupControllerPrivateArg(HidLaControllerSupportArgPrivate& privat
     privateArg.flag1 = 1;
     privateArg.mode = mode;
     if (hosversionAtLeast(3, 0, 0)) {
-        Result setupRc = hidGetSupportedNpadStyleSet(&privateArg.npad_style_set);
-        HidNpadJoyHoldType holdType{};
-        if (R_SUCCEEDED(setupRc))
-            setupRc = hidGetNpadJoyHoldType(&holdType);
+        // Both of these are answers to what this process itself configured, so
+        // if setupNpad() was called they reflect that; if hid is unavailable or
+        // neither has been set yet, fall back to the standard home menu set.
+        u32 style = HidNpadStyleSet_NpadStandard | HidNpadStyleTag_NpadSystemExt;
+        hidGetSupportedNpadStyleSet(&style);
+        privateArg.npad_style_set = style;
+
+        HidNpadJoyHoldType holdType = HidNpadJoyHoldType_Horizontal;
+        hidGetNpadJoyHoldType(&holdType);
         privateArg.npad_joy_hold_type = holdType;
-        return setupRc;
+        return 0;
     } else {
         privateArg.npad_style_set = 0;
         privateArg.npad_joy_hold_type = HidNpadJoyHoldType_Horizontal;
@@ -1292,6 +1316,10 @@ static Result launchControllerPairing() {
     hidLaCreateControllerSupportArg(&arg);
     arg.hdr.player_count_max = 8;
     arg.hdr.enable_single_mode = false;
+    // Change Grip/Order exists to redo the player order, so it has to start
+    // from nothing: taking the current connections over leaves player 1 pinned
+    // to whichever controller opened the applet, and it can never be replaced.
+    arg.hdr.enable_take_over_connection = 0;
 
     HidLaControllerSupportArgV3 legacyArg{};
     const void* publicArg = &arg;
