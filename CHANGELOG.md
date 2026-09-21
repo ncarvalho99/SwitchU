@@ -1,3 +1,25 @@
+# SwitchU 2.6.2
+
+Stability and ergonomics update resolving user-reported issues with folder drag-and-drop icon textures, grid slot reachability near multi-cell widgets, keyboard deletion keys, game update title identification, and adding automatic NTP clock sync, new game artwork prompting, and authentic Wii U Plaza branding.
+
+## English
+
+### Folder & Grid Improvements
+- **Drag-and-Drop Texture Isolation**: Fixed an issue where dragging an icon into an open folder temporarily replaced the dragged icon's image with the folder's first game icon. Independent textures and custom artwork are now preserved across folder boundaries.
+- **Unrestricted Grid Placement**: Fixed empty slot placement constraints when moving folders or icons. Edit-mode D-pad navigation now skips continuation cells, allowing smooth traversal across multi-cell widgets, and grid layout slots dynamically accommodate the full visible grid.
+- **Folder Move Persistence**: Fixed internal folder grid moves not persisting changes to disk.
+
+### Navigation & Ergonomics
+- **Continuous D-Pad Page Flipping**: Holding D-pad Left or Right continuously now triggers automatic wrap-around page transitions (infinite page turn) while keeping focus on the game grid, while tapping one-by-one continues to navigate into the launcher sidebar menus as expected.
+- **Hold-to-Delete Page (ZL)**: Remapped page deletion from `X` to `ZL` with a matching hold animation featuring a minus (`-`) icon and filling circular progress arc, pairing naturally with `ZR` for page creation.
+- **Keyboard Erase Remap**: Swapped `B` to backspace/erase and `X` to cancel/close in the on-screen keyboard, matching standard Switch game keyboard conventions, with updated localizations across all 8 languages.
+
+### Title Identification & Network Services
+- **Game Update Name Recognition**: Resolved an issue where games with updates installed (such as Super Mario Bros. Wonder) fell back to displaying numeric Title IDs instead of localized names due to compressed NACP language title blocks.
+- **SteamGridDB New Game Prompt**: Added an automatic check on boot, restart, or shortcut creation that prompts users with a centered modal dialog when newly installed native games or ports are detected, asking if they would like to search and download covers and artwork.
+- **Automatic Internet Clock Sync**: Integrated background NTP synchronization on startup and network connection so the console time automatically stays accurate without requiring manual configuration.
+- **Wii U Plaza Icon**: Replaced the procedural top header icon with the authentic Wii U logo icon (`warawara_u.png`).
+
 # SwitchU 2.6.1
 
 Maintenance release bringing dynamic page sizing to the Home menu and folders, seamless icon drag-and-drop into folders, dedicated Plaza icon caching, and critical UI/focus polish.
