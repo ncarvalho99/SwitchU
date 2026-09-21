@@ -141,7 +141,12 @@ def _allow_request(identity: str, is_availability: bool = False) -> bool:
     now = time.monotonic()
     limit = RATE_LIMIT_AVAILABILITY_REQUESTS if is_availability else RATE_LIMIT_REQUESTS
     with _rate_lock:
-        window = _rate_windows_availability[identity] if is_availability else _rate_windows[identity]
+        rate_dict = _rate_windows_availability if is_availability else _rate_windows
+        if len(rate_dict) > 2000:
+            stale_keys = [k for k, w in rate_dict.items() if not w or now - w[-1] >= RATE_LIMIT_WINDOW_SECONDS]
+            for k in stale_keys:
+                rate_dict.pop(k, None)
+        window = rate_dict[identity]
         while window and now - window[0] >= RATE_LIMIT_WINDOW_SECONDS:
             window.popleft()
         if len(window) >= limit:
@@ -1104,7 +1109,7 @@ def _admin_refresh_metadata(title: str, language: str) -> dict[str, Any]:
     """Re-query the origin for one title, ignoring whatever is cached."""
     platform = "nintendo-switch"
     result = _igdb_metadata(title, platform, language)
-    cache_key = f"igdb:v2:{platform}:{_language_code(language)}:{_normalise_title(title)}"
+    cache_key = f"igdb:v4:{platform}:{_language_code(language)}:{_normalise_title(title)}"
     incomplete = _translation_incomplete(result, language)
     _save_cached(cache_key, result, bool(result["found"]),
                  ttl_override=UNTRANSLATED_CACHE_SECONDS if incomplete else None)
