@@ -1033,9 +1033,9 @@
   "text_entry": {
     "erase": "Borrar",
     "full": "Longitud máxima alcanzada",
-    "hint": "A: escribir   X: borrar   Y: mayúsculas   L/R: símbolos   Más: confirmar   B: cancelar",
+    "hint": "A: escribir   B: borrar   Y: mayúsculas   L/R: símbolos   Más: confirmar   X: cancelar",
     "letters": "ABC",
-    "opened": "Teclado en pantalla. Cruz direccional para elegir una tecla, A para escribir, X para borrar, Más para confirmar, B para cancelar.",
+    "opened": "Teclado en pantalla. Cruz direccional para elegir una tecla, A para escribir, B para borrar, Más para confirmar, X para cancelar.",
     "shift": "Mayúsculas",
     "space": "Espacio",
     "symbols": "?12#"

@@ -1039,9 +1039,9 @@
   "text_entry": {
     "erase": "Apagar",
     "full": "Tamanho máximo atingido",
-    "hint": "A: digitar   X: apagar   Y: maiúscula   L/R: símbolos   Mais: confirmar   B: cancelar",
+    "hint": "A: digitar   B: apagar   Y: maiúscula   L/R: símbolos   Mais: confirmar   X: cancelar",
     "letters": "ABC",
-    "opened": "Teclado na tela. Direcional para escolher uma tecla, A para digitar, X para apagar, Mais para confirmar, B para cancelar.",
+    "opened": "Teclado na tela. Direcional para escolher uma tecla, A para digitar, B para apagar, Mais para confirmar, X para cancelar.",
     "shift": "Maiúscula",
     "space": "Espaço",
     "symbols": "?12#"

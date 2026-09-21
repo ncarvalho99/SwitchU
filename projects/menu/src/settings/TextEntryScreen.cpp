@@ -190,8 +190,8 @@ void TextEntryScreen::setupActions() {
     addDirectionAction(nxui::FocusDirection::RIGHT, [this]() { moveSelection(1, 0); });
 
     addAction(static_cast<std::uint64_t>(nxui::Button::A), [this]() { pressSelected(); });
-    addAction(static_cast<std::uint64_t>(nxui::Button::B), [this]() { hide(false); });
-    addAction(static_cast<std::uint64_t>(nxui::Button::X), [this]() { backspace(); });
+    addAction(static_cast<std::uint64_t>(nxui::Button::B), [this]() { backspace(); });
+    addAction(static_cast<std::uint64_t>(nxui::Button::X), [this]() { hide(false); });
     addAction(static_cast<std::uint64_t>(nxui::Button::Y), [this]() {
         m_shift = !m_shift;
         if (m_keySfxCb) m_keySfxCb();
@@ -549,7 +549,7 @@ void TextEntryScreen::onContentRender(nxui::Renderer& ren) {
     const float keysBottom = panel.y + kKeyboardTop +
         static_cast<float>(all.size()) * (kRowHeight + kKeyGap);
     const std::string hint = nxui::I18n::instance().tr("text_entry.hint",
-        "A: type   X: erase   Y: shift   L/R: symbols   Plus: confirm   B: cancel");
+        "A: type   B: erase   Y: shift   L/R: symbols   Plus: confirm   X: cancel");
     const nxui::Vec2 hintSize = m_smallFont->measure(hint);
     ren.drawText(hint,
                  {panel.x + (panel.width - hintSize.x * 0.64f) * 0.5f, keysBottom + 6.f},
