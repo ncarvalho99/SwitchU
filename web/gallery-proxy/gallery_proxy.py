@@ -19,11 +19,13 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException, Request as FastApiRequest
+from fastapi.responses import JSONResponse
 
 
 APP_NAME = "switchu-gallery"
 STEAMGRIDDB_API = "https://www.steamgriddb.com/api/v2"
 CACHE_TTL_SECONDS = 15 * 60
+MAX_CACHE_ENTRIES = 2000
 RATE_LIMIT_REQUESTS = 40
 RATE_LIMIT_WINDOW_SECONDS = 60
 GRID_DIMENSIONS = frozenset({"600x900", "342x482", "660x930", "512x512", "1024x1024", "460x215", "920x430"})
@@ -69,6 +71,10 @@ def _client_identity(request: FastApiRequest) -> str:
 def _allow_request(identity: str) -> bool:
     now = time.monotonic()
     with _rate_lock:
+        if len(_rate_windows) > 2000:
+            stale_keys = [k for k, w in _rate_windows.items() if not w or now - w[-1] >= RATE_LIMIT_WINDOW_SECONDS]
+            for k in stale_keys:
+                _rate_windows.pop(k, None)
         window = _rate_windows[identity]
         while window and now - window[0] >= RATE_LIMIT_WINDOW_SECONDS:
             window.popleft()
@@ -89,8 +95,17 @@ def _cached(key: str) -> Any | None:
 
 
 def _store_cache(key: str, value: Any) -> Any:
+    now = time.monotonic()
     with _cache_lock:
-        _cache[key] = (time.monotonic() + CACHE_TTL_SECONDS, value)
+        if len(_cache) >= MAX_CACHE_ENTRIES:
+            expired = [k for k, (exp, _) in _cache.items() if exp <= now]
+            for k in expired:
+                _cache.pop(k, None)
+            if len(_cache) >= MAX_CACHE_ENTRIES:
+                overflow = len(_cache) - MAX_CACHE_ENTRIES + 1
+                for _ in range(overflow):
+                    _cache.pop(next(iter(_cache)), None)
+        _cache[key] = (now + CACHE_TTL_SECONDS, value)
     return value
 
 
@@ -142,9 +157,9 @@ def _asset(item: dict[str, Any]) -> dict[str, Any]:
 async def restrict_to_tunnel(request: FastApiRequest, call_next: Any) -> Any:
     client_host = request.client.host if request.client else None
     if not _is_trusted_proxy(client_host):
-        raise HTTPException(status_code=403, detail="Tunnel access required")
+        return JSONResponse(status_code=403, content={"detail": "Tunnel access required"})
     if request.url.path != "/health" and not _allow_request(_client_identity(request)):
-        raise HTTPException(status_code=429, detail="Too many requests")
+        return JSONResponse(status_code=429, content={"detail": "Too many requests"})
     return await call_next(request)
 
 
