@@ -305,7 +305,7 @@ static ZipExtractResult walkArchive(const std::string& archivePath,
         std::string rawName((const char*)(dir.data() + walker + 46), nameLen);
         walker += 46u + nameLen + extraLen + commentLen;
 
-        if (!rawName.empty() && rawName.back() == '/')
+        if (!rawName.empty() && (rawName.back() == '/' || rawName.back() == '\\'))
             continue;                                   // directory record
 
         std::string relative;
@@ -313,6 +313,9 @@ static ZipExtractResult walkArchive(const std::string& archivePath,
             result.error = "refusing entry that escapes the theme folder: " + rawName;
             break;
         }
+
+        if (!relative.empty() && (relative.back() == '/' || relative.back() == '\\'))
+            continue;                                   // directory record
         if (!policy.allowExecutablePayload && !allowedExtension(relative)) {
             result.error = "refusing file type: " + relative;
             break;
