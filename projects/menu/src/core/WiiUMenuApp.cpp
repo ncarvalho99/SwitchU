@@ -5860,7 +5860,7 @@ void WiiUMenuApp::pollAutoNtpSync(float dt) {
         return;
     m_ntpCheckTimer = 0.f;
 
-    NifmInternetConnectionStatus nifmStatus = NifmInternetConnectionStatus_Connecting;
+    NifmInternetConnectionStatus nifmStatus = NifmInternetConnectionStatus_ConnectingUnknown1;
     if (R_SUCCEEDED(nifmGetInternetConnectionStatus(nullptr, nullptr, &nifmStatus)) &&
         nifmStatus == NifmInternetConnectionStatus_Connected) {
         switchu::services::NtpClient::syncAsync([this](bool ok, uint64_t timestamp) {
