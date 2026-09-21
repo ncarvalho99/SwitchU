@@ -7,10 +7,12 @@ Wants=network-online.target
 Type=exec
 User=switchu-gallery
 Group=switchu-gallery
+SupplementaryGroups=switchu-keys
 WorkingDirectory=/opt/switchu-gallery
 EnvironmentFile=-/etc/switchu-gallery/steamgriddb.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
+Environment=SWITCHU_CLIENT_AUTH=monitor
 UMask=0077
 ExecStart=/usr/bin/python3 -m uvicorn gallery_proxy:app --host 127.0.0.1 --port 8081 --no-proxy-headers
 Restart=on-failure

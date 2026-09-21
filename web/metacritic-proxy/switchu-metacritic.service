@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=exec
 User=switchu-metacritic
 Group=switchu-metacritic
+SupplementaryGroups=switchu-keys
 WorkingDirectory=/opt/switchu-metacritic
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
@@ -14,6 +15,7 @@ Environment=SWITCHU_METADATA_DB=/var/lib/switchu-metacritic/cache.sqlite3
 Environment=SWITCHU_TRUSTED_NETWORKS=172.26.128.0/26,10.0.0.0/26,127.0.0.0/8,::1/128
 EnvironmentFile=-/etc/switchu-metadata/igdb.env
 EnvironmentFile=-/etc/switchu-metadata/gemini.env
+Environment=SWITCHU_CLIENT_AUTH=monitor
 UMask=0077
 ExecStart=/usr/bin/python3 -m uvicorn metacritic_proxy:app --host 127.0.0.1 --port 8082 --no-proxy-headers
 Restart=on-failure

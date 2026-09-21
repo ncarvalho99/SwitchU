@@ -9,6 +9,7 @@ source URL needed for attribution.
 
 from __future__ import annotations
 
+import hmac
 import html as html_module
 import ipaddress
 import json
@@ -99,6 +100,64 @@ def _trusted_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, 
 
 
 TRUSTED_NETWORKS = _trusted_networks()
+
+# Official-client gate. Builds made by the project carry a secret key that is
+# injected at compile time and never committed, so a build compiled from the
+# public source (for example a fork) cannot present one. "monitor" only logs,
+# "enforce" rejects. Keys are read from a file so they can be rotated live.
+CLIENT_AUTH_MODE = os.environ.get("SWITCHU_CLIENT_AUTH", "monitor").strip().lower()
+if CLIENT_AUTH_MODE not in {"off", "monitor", "enforce"}:
+    raise RuntimeError("SWITCHU_CLIENT_AUTH must be off, monitor or enforce")
+CLIENT_KEYS_FILE = os.environ.get("SWITCHU_CLIENT_KEYS_FILE", "/etc/switchu/client-keys")
+CLIENT_KEY_HEADER = "x-switchu-key"
+_client_keys_state: tuple[float, tuple[bytes, ...]] = (-1.0, ())
+_client_keys_lock = threading.Lock()
+_client_auth_logged: dict[str, float] = {}
+
+
+def _client_keys() -> tuple[bytes, ...]:
+    global _client_keys_state
+    try:
+        mtime = os.stat(CLIENT_KEYS_FILE).st_mtime
+    except OSError:
+        return ()
+    with _client_keys_lock:
+        if _client_keys_state[0] != mtime:
+            try:
+                with open(CLIENT_KEYS_FILE, encoding="utf-8") as handle:
+                    lines = (line.strip() for line in handle)
+                    keys = tuple(line.encode() for line in lines if line and not line.startswith("#"))
+            except OSError:
+                return _client_keys_state[1]
+            _client_keys_state = (mtime, keys)
+        return _client_keys_state[1]
+
+
+def _client_authorized(request: FastApiRequest) -> bool:
+    presented = request.headers.get(CLIENT_KEY_HEADER, "").strip().encode()
+    if not presented or len(presented) > 256:
+        return False
+    matched = False
+    for key in _client_keys():
+        matched |= hmac.compare_digest(presented, key)
+    return matched
+
+
+def _log_unauthorized_client(request: FastApiRequest, identity: str) -> None:
+    # One line per client per ten minutes keeps a hostile client from flooding
+    # the journal while still showing who is calling without a key.
+    now = time.monotonic()
+    with _client_keys_lock:
+        if len(_client_auth_logged) > 2000:
+            for stale in [k for k, t in _client_auth_logged.items() if now - t >= 600]:
+                _client_auth_logged.pop(stale, None)
+        if now - _client_auth_logged.get(identity, -600.0) < 600:
+            return
+        _client_auth_logged[identity] = now
+    agent = request.headers.get("user-agent", "")[:80]
+    print(f"client-auth: no valid key mode={CLIENT_AUTH_MODE} ip={identity} path={request.url.path} ua={agent!r}", flush=True)
+
+
 _database_lock = threading.Lock()
 _upstream_lock = threading.Lock()
 _last_upstream_request = 0.0
@@ -1158,8 +1217,13 @@ async def restrict_to_tunnel(request: FastApiRequest, call_next: Any) -> Any:
     # to fix things.
     exempt = request.url.path == "/health" or request.url.path.startswith("/admin")
     if not exempt:
+        identity = _client_identity(request)
+        if CLIENT_AUTH_MODE != "off" and not _client_authorized(request):
+            _log_unauthorized_client(request, identity)
+            if CLIENT_AUTH_MODE == "enforce":
+                return JSONResponse(status_code=401, content={"detail": "Official client required"})
         is_avail = request.url.path == "/v1/availability"
-        if not _allow_request(_client_identity(request), is_availability=is_avail):
+        if not _allow_request(identity, is_availability=is_avail):
             return JSONResponse(status_code=429, content={"detail": "Too many requests"})
     return await call_next(request)
 
@@ -1186,6 +1250,8 @@ def health() -> dict[str, object]:
         "service": APP_NAME,
         "status": "ok",
         "source": "metacritic.com",
+        "clientAuth": CLIENT_AUTH_MODE,
+        "clientKeysLoaded": len(_client_keys()),
         "cacheTtlDays": CACHE_TTL_SECONDS // (24 * 60 * 60),
         "igdbConfigured": bool(os.environ.get("IGDB_CLIENT_ID") and os.environ.get("IGDB_CLIENT_SECRET")),
         "geminiConfigured": bool(_gemini_api_keys()),
