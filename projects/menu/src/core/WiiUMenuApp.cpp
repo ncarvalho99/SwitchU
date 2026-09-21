@@ -3155,8 +3155,13 @@ bool WiiUMenuApp::canPlaceGridItem(int targetSlot,
                                    switchu::widgets::WidgetSize size,
                                    std::uint64_t ignoringTitleId,
                                    std::uint64_t alsoIgnoringTitleId) const {
-    if (targetSlot < 0 || targetSlot >= static_cast<int>(m_layoutSlots.size()))
+    if (targetSlot < 0)
         return false;
+    if (targetSlot >= static_cast<int>(m_layoutSlots.size())) {
+        const_cast<WiiUMenuApp*>(this)->m_layoutSlots.resize(
+            static_cast<size_t>(targetSlot + 1), 0);
+        const_cast<WiiUMenuApp*>(this)->m_layoutDirty = true;
+    }
     size = m_appLayoutMode == AppLayoutMode::DynamicLine
         ? switchu::widgets::WidgetSize{1, 1} : size;
     const int columns = std::clamp(m_config.gridColumns, 3, 8);
@@ -4408,6 +4413,7 @@ std::shared_ptr<GlossyIcon> WiiUMenuApp::makeIcon(const AppEntry& entry) {
 
     if (entry.titleId == 0) {
         icon->setTag("glossy_icon");
+        icon->setEntryKind(GridEntryKind::Empty);
         icon->setTitle("");
         icon->setTitleId(0);
         // The dynamic line compacts real entries to the front and pads the rest

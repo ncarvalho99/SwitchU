@@ -524,6 +524,11 @@ bool WiiUMenuApp::commitEditModePlacement() {
     }
 
     if (m_openFolderId == 0) {
+        if (m_layoutSlots.size() < static_cast<size_t>(m_model.count())) {
+            m_layoutSlots.resize(static_cast<size_t>(m_model.count()), 0);
+            m_layoutDirty = true;
+        }
+
         const auto sizeForTitle = [this](std::uint64_t titleId) {
             const auto widgetId = switchu::widgets::widgetIdFromTitleId(titleId);
             if (const auto* widget = widgetId ? m_widgetStore.find(widgetId) : nullptr)
@@ -531,7 +536,15 @@ bool WiiUMenuApp::commitEditModePlacement() {
                     widget->type, widget->size, AppLayoutMode::Grid);
             return gameGridSize(titleId, AppLayoutMode::Grid);
         };
-        const std::uint64_t displacedTitleId = m_model.at(target).titleId;
+        std::uint64_t displacedTitleId = m_model.at(target).titleId;
+        if (m_model.at(target).kind == GridEntryKind::WidgetContinuation) {
+            for (int a = target - 1; a >= 0; --a) {
+                if (m_model.at(a).kind == GridEntryKind::Widget || m_model.at(a).titleId != 0) {
+                    displacedTitleId = m_model.at(a).titleId;
+                    break;
+                }
+            }
+        }
         const auto heldSize = sizeForTitle(m_editHeldTitleId);
         const auto displacedSize = sizeForTitle(displacedTitleId);
         const int columns = std::max(1, m_grid->columns());
@@ -619,12 +632,23 @@ bool WiiUMenuApp::commitEditModePlacement() {
             m_iconStreamer.swapIndices(from, target);
             return false;
         }
-        if (!m_layoutSlots.empty() && from < (int)m_layoutSlots.size() && target < (int)m_layoutSlots.size())
+        if (m_openFolderId != 0) {
+            auto* folder = m_folderStore.find(m_openFolderId);
+            if (folder) {
+                const size_t needed = static_cast<size_t>(std::max(from, target) + 1);
+                if (folder->titleIds.size() < needed)
+                    folder->titleIds.resize(needed, 0);
+                std::swap(folder->titleIds[static_cast<size_t>(from)],
+                          folder->titleIds[static_cast<size_t>(target)]);
+                saveFoldersOrReport("move_grid_folder");
+            }
+        } else if (!m_layoutSlots.empty() && from < (int)m_layoutSlots.size() && target < (int)m_layoutSlots.size()) {
             std::swap(m_layoutSlots[from], m_layoutSlots[target]);
+            m_layoutDirty = true;
+        }
 
         m_editSourceIndex = target;
         m_iconStreamer.setPinnedIndex(m_editSourceIndex);
-        m_layoutDirty = true;
     }
 
     m_grid->focusGlobalIndex(target);
@@ -785,6 +809,20 @@ bool WiiUMenuApp::moveFocusedIcon(nxui::FocusDirection dir) {
             else
                 return false;
             break;
+    }
+
+    if (target >= 0 && target < m_model.count()) {
+        if (m_model.at(target).kind == GridEntryKind::WidgetContinuation) {
+            if (dir == nxui::FocusDirection::RIGHT) {
+                while (target < m_model.count() && m_model.at(target).kind == GridEntryKind::WidgetContinuation) {
+                    ++target;
+                }
+            } else if (dir == nxui::FocusDirection::LEFT) {
+                while (target >= 0 && m_model.at(target).kind == GridEntryKind::WidgetContinuation) {
+                    --target;
+                }
+            }
+        }
     }
 
     if (target < 0 || target >= m_model.count() || target == from)
