@@ -5154,6 +5154,7 @@ void WiiUMenuApp::buildGrid() {
         m_audio.playSfx(Sfx::ModalShow);
         createSettings();
         if (m_settings) {
+            syncCustomBgmSettingsState();
             m_navigator.navigate(switchu::navigation::Route::Settings);
             if (m_themeShop && m_themeShop->isActive())
                 m_themeShop->hide();
@@ -5584,18 +5585,85 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
     m_audio.loadSfx(Sfx::ConfirmPositive, sfxPath("sfx/confirm.wav"));
     m_audio.loadSfx(Sfx::Volume,          sfxPath("sfx/volume.wav"));
 
-    // O tema manda na musica quando traz a propria. Os efeitos continuam do
-    // preset: um tema nao deveria ter de embarcar um som de clique para ter
-    // direito a trilha.
+    m_loadedSoundPreset = effectivePreset;
+    reloadMusicTracks();
+}
+
+constexpr const char* kCustomMusicDir = "sdmc:/config/SwitchU/music";
+
+std::vector<TrackInfo> WiiUMenuApp::scanCustomBgmTracks() {
+    std::vector<TrackInfo> tracks;
+    std::error_code ec;
+    std::filesystem::create_directories(kCustomMusicDir, ec);
+    ec.clear();
+
+    if (!std::filesystem::is_directory(kCustomMusicDir, ec)) {
+        return tracks;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(kCustomMusicDir, ec)) {
+        if (ec)
+            break;
+        if (!entry.is_regular_file(ec))
+            continue;
+
+        std::string ext = entry.path().extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        if (ext == ".mp3" || ext == ".ogg" || ext == ".wav") {
+            tracks.push_back({entry.path().string(), entry.path().stem().string()});
+        }
+    }
+
+    std::sort(tracks.begin(), tracks.end(), [](const TrackInfo& a, const TrackInfo& b) {
+        return a.title < b.title;
+    });
+
+    return tracks;
+}
+
+void WiiUMenuApp::reloadMusicTracks() {
+    const bool wasPlaying = m_audio.isPlaying();
+    m_audio.stop();
+    m_audio.clearTracks();
+    m_audio.setShuffle(m_config.customBgmShuffle);
+
+    // 1. Custom Soundtrack (User BGM Folder Support)
+    if (m_config.customBgmEnabled) {
+        m_customBgmTracks = scanCustomBgmTracks();
+        if (!m_customBgmTracks.empty()) {
+            for (const auto& track : m_customBgmTracks) {
+                m_audio.loadTrack(track.path, track.title);
+            }
+            DebugLog::log("[audio] Loaded %zu custom music track(s) from %s",
+                          m_customBgmTracks.size(), kCustomMusicDir);
+            if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
+                m_audio.play();
+            }
+            return;
+        } else {
+            DebugLog::log("[audio] Custom BGM enabled but no tracks found in %s; falling back",
+                          kCustomMusicDir);
+        }
+    }
+
+    // 2. Theme Music (if theme declares its own soundtrack)
     if (!m_themeMusicTracks.empty()) {
-        m_audio.clearTracks();
-        for (const auto& track : m_themeMusicTracks)
+        for (const auto& track : m_themeMusicTracks) {
             m_audio.loadTrack(track);
+        }
         DebugLog::log("[audio] %zu track(s) from the theme (preset music skipped)",
                       m_themeMusicTracks.size());
+        if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
+            m_audio.play();
+        }
         return;
     }
 
+    // 3. Preset Music
+    const std::string effectivePreset = resolveSoundPresetId(m_loadedSoundPreset.empty() ? m_config.soundPreset : m_loadedSoundPreset);
+    std::string musicBase = std::string(SD_ASSETS) + "/sounds/" + effectivePreset;
     std::string musicDir = musicBase + "/music";
     std::error_code ec;
     if (std::filesystem::is_directory(musicDir, ec)) {
@@ -5621,6 +5689,10 @@ void WiiUMenuApp::loadSoundPreset(const std::string& preset) {
         DebugLog::log("[audio] Loaded %zu music tracks", tracks.size());
     } else {
         DebugLog::log("[audio] No music directory for preset '%s'", effectivePreset.c_str());
+    }
+
+    if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
+        m_audio.play();
     }
 }
 
@@ -6090,6 +6162,7 @@ void WiiUMenuApp::setupLockScreen() {
 void WiiUMenuApp::onUpdate(float dt) {
     logControllerState(dt);
     m_animalesePlayer.update(dt);
+    m_audio.update();
 
     // Retire and upload widget-owned textures before the next frame begins.
     syncWidgetPageAssets();

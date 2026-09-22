@@ -2,6 +2,8 @@
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
+#include <random>
 
 AudioManager::~AudioManager() { shutdown(); }
 
@@ -30,9 +32,17 @@ void AudioManager::shutdown() {
     Mix_CloseAudio();
     m_initialized = false;
     m_playing.store(false);
+    m_trackFinished.store(false);
 
-    for (auto* m : m_tracks) Mix_FreeMusic(m);
+    if (m_activeMusic) {
+        Mix_FreeMusic(m_activeMusic);
+        m_activeMusic = nullptr;
+    }
     m_tracks.clear();
+    m_shuffleOrder.clear();
+    m_current = -1;
+    m_shufflePos = 0;
+
     for (auto& [id, chunk] : m_sfx) Mix_FreeChunk(chunk);
     m_sfx.clear();
     for (auto& [id, chunk] : m_namedSfx) Mix_FreeChunk(chunk);
@@ -40,46 +50,123 @@ void AudioManager::shutdown() {
     m_namedSfxVolumeScales.clear();
 }
 
-void AudioManager::loadTrack(const std::string& path) {
-    Mix_Music* music = Mix_LoadMUS(path.c_str());
-    if (!music) {
-        std::fprintf(stderr, "[Audio] Failed to load %s: %s\n", path.c_str(), Mix_GetError());
-        return;
+void AudioManager::rebuildShuffleOrderLocked() {
+    m_shuffleOrder.resize(m_tracks.size());
+    for (size_t i = 0; i < m_tracks.size(); ++i) {
+        m_shuffleOrder[i] = static_cast<int>(i);
+    }
+    if (m_shuffleOrder.size() > 1) {
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(m_shuffleOrder.begin(), m_shuffleOrder.end(), g);
+    }
+    m_shufflePos = 0;
+}
+
+void AudioManager::loadTrack(const std::string& path, const std::string& title) {
+    std::string effTitle = title;
+    if (effTitle.empty()) {
+        std::filesystem::path p(path);
+        effTitle = p.stem().string();
     }
     std::lock_guard<std::mutex> lk(m_trackMutex);
-    m_tracks.push_back(music);
+    m_tracks.push_back({path, effTitle});
+    rebuildShuffleOrderLocked();
 }
 
 void AudioManager::clearTracks() {
     std::lock_guard<std::mutex> lk(m_trackMutex);
     Mix_HookMusicFinished(nullptr);
     Mix_HaltMusic();
-    m_playing.store(false);
-    for (auto* m : m_tracks) Mix_FreeMusic(m);
+    if (m_activeMusic) {
+        Mix_FreeMusic(m_activeMusic);
+        m_activeMusic = nullptr;
+    }
     m_tracks.clear();
-    m_current = 0;
+    m_shuffleOrder.clear();
+    m_current = -1;
+    m_shufflePos = 0;
+    m_playing.store(false);
+    m_trackFinished.store(false);
 }
 
 std::atomic<AudioManager*> AudioManager::s_instance{nullptr};
 
 void AudioManager::onTrackFinished() {
     AudioManager* inst = s_instance.load();
-    if (inst) inst->nextTrack();
+    if (inst) {
+        inst->m_trackFinished.store(true);
+    }
+}
+
+void AudioManager::playCurrentTrackLocked() {
+    if (m_current < 0 || m_current >= static_cast<int>(m_tracks.size())) {
+        m_playing.store(false);
+        return;
+    }
+
+    Mix_HookMusicFinished(nullptr);
+    Mix_HaltMusic();
+    if (m_activeMusic) {
+        Mix_FreeMusic(m_activeMusic);
+        m_activeMusic = nullptr;
+    }
+
+    const auto& track = m_tracks[m_current];
+    m_activeMusic = Mix_LoadMUS(track.path.c_str());
+    if (!m_activeMusic) {
+        std::fprintf(stderr, "[Audio] Failed to load %s: %s\n", track.path.c_str(), Mix_GetError());
+        m_playing.store(false);
+        return;
+    }
+
+    s_instance.store(this);
+    Mix_HookMusicFinished(onTrackFinished);
+    applyMusicVolume();
+
+    // 250ms fade-in for smooth acoustic transition
+    if (Mix_FadeInMusic(m_activeMusic, 1, 250) < 0) {
+        Mix_PlayMusic(m_activeMusic, 1);
+    }
+    m_playing.store(true);
+    m_trackFinished.store(false);
 }
 
 void AudioManager::play() {
     std::lock_guard<std::mutex> lk(m_trackMutex);
     if (m_tracks.empty()) return;
-    s_instance.store(this);
-    Mix_HookMusicFinished(onTrackFinished);
-    Mix_PlayMusic(m_tracks[m_current], 1);
-    m_playing.store(true);
+    if (m_current < 0 || m_current >= static_cast<int>(m_tracks.size())) {
+        if (m_shuffle && !m_shuffleOrder.empty()) {
+            m_shufflePos = 0;
+            m_current = m_shuffleOrder[0];
+        } else {
+            m_current = 0;
+        }
+    }
+    playCurrentTrackLocked();
+}
+
+void AudioManager::playTrack(int index) {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (index < 0 || index >= static_cast<int>(m_tracks.size())) return;
+    m_current = index;
+    if (m_shuffle) {
+        for (size_t i = 0; i < m_shuffleOrder.size(); ++i) {
+            if (m_shuffleOrder[i] == m_current) {
+                m_shufflePos = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+    playCurrentTrackLocked();
 }
 
 void AudioManager::stop() {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
     Mix_HookMusicFinished(nullptr);
     Mix_HaltMusic();
     m_playing.store(false);
+    m_trackFinished.store(false);
 }
 
 void AudioManager::stopAll() {
@@ -90,9 +177,108 @@ void AudioManager::stopAll() {
 void AudioManager::nextTrack() {
     std::lock_guard<std::mutex> lk(m_trackMutex);
     if (m_tracks.empty()) return;
-    m_current = (m_current + 1) % (int)m_tracks.size();
-    Mix_PlayMusic(m_tracks[m_current], 1);
-    m_playing.store(true);
+    if (m_tracks.size() == 1) {
+        m_current = 0;
+        playCurrentTrackLocked();
+        return;
+    }
+    if (m_shuffle) {
+        m_shufflePos++;
+        if (m_shufflePos >= static_cast<int>(m_shuffleOrder.size())) {
+            int last = m_current;
+            rebuildShuffleOrderLocked();
+            if (m_shuffleOrder.size() > 1 && m_shuffleOrder[0] == last) {
+                std::swap(m_shuffleOrder[0], m_shuffleOrder[1]);
+            }
+            m_shufflePos = 0;
+        }
+        m_current = m_shuffleOrder[m_shufflePos];
+    } else {
+        m_current = (m_current + 1) % static_cast<int>(m_tracks.size());
+    }
+    playCurrentTrackLocked();
+}
+
+void AudioManager::previousTrack() {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (m_tracks.empty()) return;
+    if (m_tracks.size() == 1) {
+        m_current = 0;
+        playCurrentTrackLocked();
+        return;
+    }
+    if (m_shuffle) {
+        m_shufflePos--;
+        if (m_shufflePos < 0) {
+            m_shufflePos = static_cast<int>(m_shuffleOrder.size()) - 1;
+        }
+        m_current = m_shuffleOrder[m_shufflePos];
+    } else {
+        m_current = (m_current - 1 + static_cast<int>(m_tracks.size())) % static_cast<int>(m_tracks.size());
+    }
+    playCurrentTrackLocked();
+}
+
+void AudioManager::setShuffle(bool shuffle) {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (m_shuffle != shuffle) {
+        m_shuffle = shuffle;
+        if (m_shuffle) {
+            rebuildShuffleOrderLocked();
+            if (m_current >= 0) {
+                for (size_t i = 0; i < m_shuffleOrder.size(); ++i) {
+                    if (m_shuffleOrder[i] == m_current) {
+                        m_shufflePos = static_cast<int>(i);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+bool AudioManager::isShuffle() const {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    return m_shuffle;
+}
+
+int AudioManager::currentTrackIndex() const {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    return m_current;
+}
+
+size_t AudioManager::trackCount() const {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    return m_tracks.size();
+}
+
+std::string AudioManager::currentTrackTitle() const {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (m_current >= 0 && m_current < static_cast<int>(m_tracks.size())) {
+        return m_tracks[m_current].title;
+    }
+    return {};
+}
+
+std::string AudioManager::currentTrackPath() const {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (m_current >= 0 && m_current < static_cast<int>(m_tracks.size())) {
+        return m_tracks[m_current].path;
+    }
+    return {};
+}
+
+std::vector<TrackInfo> AudioManager::tracks() const {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    return m_tracks;
+}
+
+void AudioManager::update() {
+    if (m_trackFinished.exchange(false)) {
+        if (m_playing.load()) {
+            nextTrack();
+        }
+    }
 }
 
 void AudioManager::applyMusicVolume() {
@@ -128,7 +314,6 @@ void AudioManager::loadSfx(Sfx id, const std::string& path) {
 
 void AudioManager::clearSfx() {
     std::lock_guard<std::mutex> lk(m_sfxMutex);
-    Mix_HaltChannel(-1);
     for (auto& [id, chunk] : m_sfx) Mix_FreeChunk(chunk);
     m_sfx.clear();
     for (auto& [id, chunk] : m_namedSfx) Mix_FreeChunk(chunk);
@@ -139,7 +324,7 @@ void AudioManager::clearSfx() {
 void AudioManager::playSfx(Sfx id) {
     std::lock_guard<std::mutex> lk(m_sfxMutex);
     auto it = m_sfx.find(static_cast<int>(id));
-    if (it != m_sfx.end()) {
+    if (it != m_sfx.end() && it->second) {
         Mix_PlayChannel(-1, it->second, 0);
     }
 }
@@ -147,10 +332,11 @@ void AudioManager::playSfx(Sfx id) {
 void AudioManager::loadNamedSfx(const std::string& id, const std::string& path, float volumeScale) {
     Mix_Chunk* chunk = Mix_LoadWAV(path.c_str());
     if (!chunk) {
-        std::fprintf(stderr, "[Audio] Failed to load named SFX %s: %s\n", path.c_str(), Mix_GetError());
+        std::fprintf(stderr, "[Audio] Failed to load named SFX %s (%s): %s\n", id.c_str(), path.c_str(), Mix_GetError());
         return;
     }
-    Mix_VolumeChunk(chunk, (int)(m_sfxVolume * volumeScale * MIX_MAX_VOLUME));
+    const float scale = std::clamp(volumeScale, 0.f, 2.f);
+    Mix_VolumeChunk(chunk, (int)(m_sfxVolume * scale * MIX_MAX_VOLUME));
     std::lock_guard<std::mutex> lk(m_sfxMutex);
     auto it = m_namedSfx.find(id);
     if (it != m_namedSfx.end()) {
@@ -159,28 +345,29 @@ void AudioManager::loadNamedSfx(const std::string& id, const std::string& path, 
     } else {
         m_namedSfx[id] = chunk;
     }
-    m_namedSfxVolumeScales[id] = volumeScale;
+    m_namedSfxVolumeScales[id] = scale;
 }
 
 void AudioManager::playNamedSfx(const std::string& id) {
     std::lock_guard<std::mutex> lk(m_sfxMutex);
     auto it = m_namedSfx.find(id);
-    if (it != m_namedSfx.end()) {
+    if (it != m_namedSfx.end() && it->second) {
         Mix_PlayChannel(-1, it->second, 0);
     }
 }
 
 void AudioManager::setSfxVolume(float vol) {
-    std::lock_guard<std::mutex> lk(m_sfxMutex);
     m_sfxVolume = vol;
+    std::lock_guard<std::mutex> lk(m_sfxMutex);
     for (auto& [id, chunk] : m_sfx) {
-        Mix_VolumeChunk(chunk, (int)(vol * MIX_MAX_VOLUME));
+        if (chunk) Mix_VolumeChunk(chunk, (int)(m_sfxVolume * MIX_MAX_VOLUME));
     }
     for (auto& [id, chunk] : m_namedSfx) {
-        float scale = 1.f;
-        auto it = m_namedSfxVolumeScales.find(id);
-        if (it != m_namedSfxVolumeScales.end())
-            scale = it->second;
-        Mix_VolumeChunk(chunk, (int)(vol * scale * MIX_MAX_VOLUME));
+        if (chunk) {
+            float scale = 1.f;
+            auto it = m_namedSfxVolumeScales.find(id);
+            if (it != m_namedSfxVolumeScales.end()) scale = it->second;
+            Mix_VolumeChunk(chunk, (int)(m_sfxVolume * scale * MIX_MAX_VOLUME));
+        }
     }
 }

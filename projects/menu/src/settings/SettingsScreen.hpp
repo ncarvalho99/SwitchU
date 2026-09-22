@@ -51,6 +51,20 @@ public:
     void onShutdownRequest(VoidCb cb)   { m_shutdownCb = std::move(cb); }
     void onRebootRequest(VoidCb cb)     { m_rebootCb = std::move(cb); }
 
+    void onCustomBgmEnabledChange(BoolCb cb) { m_customBgmEnabledCb = std::move(cb); }
+    void onCustomBgmShuffleChange(BoolCb cb) { m_customBgmShuffleCb = std::move(cb); }
+    void onCustomBgmPreviewTrack(IntCb cb)   { m_customBgmPreviewTrackCb = std::move(cb); }
+    void onCustomBgmRescan(VoidCb cb)        { m_customBgmRescanCb = std::move(cb); }
+
+    void setCustomBgmState(bool enabled, bool shuffle, int trackCount, int currentTrackIndex,
+                           const std::vector<std::string>& trackTitles) {
+        m_customBgmEnabled = enabled;
+        m_customBgmShuffle = shuffle;
+        m_customBgmTrackCount = trackCount;
+        m_customBgmCurrentTrack = currentTrackIndex;
+        m_customBgmTrackTitles = trackTitles;
+    }
+
     // Lets a tab immediately reflect a system change that also affects one
     // of its sibling toggles without rebuilding widgets during input dispatch.
     void setCachedToggleState(const std::string& label, bool value) {
@@ -149,6 +163,10 @@ private:
     VoidCb m_sleepCb;
     VoidCb m_shutdownCb;
     VoidCb m_rebootCb;
+    BoolCb m_customBgmEnabledCb;
+    BoolCb m_customBgmShuffleCb;
+    IntCb  m_customBgmPreviewTrackCb;
+    VoidCb m_customBgmRescanCb;
 
     bool m_wireframeEnabled = false;
     int m_gridColumns = 5;
@@ -171,4 +189,10 @@ private:
     int m_steamGridDbFailed = 0;
     std::string m_steamGridDbCurrent;
     std::string m_steamGridDbMessage;
+
+    bool m_customBgmEnabled = false;
+    bool m_customBgmShuffle = true;
+    int m_customBgmTrackCount = 0;
+    int m_customBgmCurrentTrack = -1;
+    std::vector<std::string> m_customBgmTrackTitles;
 };

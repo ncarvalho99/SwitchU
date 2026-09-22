@@ -293,6 +293,7 @@ private:
     // chegava depois, sobrescrevendo o que o tema tinha posto -- entao quem
     // carrega o preset precisa saber que nao deve tocar na musica.
     std::vector<std::string> m_themeMusicTracks;
+    std::vector<TrackInfo> m_customBgmTracks;
     void applyUiLanguage();
     void rebuildThemeFromColors();
     ThemePreset buildEffectiveThemePreset();
@@ -421,6 +422,9 @@ private:
     void loadSoundPreset(const std::string& preset);
     void changeSoundPreset(const std::string& preset);
     std::vector<std::string> scanAvailablePresets();
+    std::vector<TrackInfo> scanCustomBgmTracks();
+    void reloadMusicTracks();
+    void syncCustomBgmSettingsState();
     void loadMenuLayout();
     void saveMenuLayout();
     void quiesceWritersForPowerAction();

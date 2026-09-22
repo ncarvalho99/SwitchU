@@ -57,6 +57,8 @@ bool AppConfig::load() {
     if (!parsed) return false;
 
     readJsonOpt(j, "musicEnabled", musicEnabled);
+    readJsonOpt(j, "customBgmEnabled", customBgmEnabled);
+    readJsonOpt(j, "customBgmShuffle", customBgmShuffle);
     readJsonOpt(j, "musicVolume", musicVolume);
     readJsonOpt(j, "sfxVolume", sfxVolume);
     readJsonOpt(j, "gridColumns", gridColumns);
@@ -190,6 +192,8 @@ bool AppConfig::save() const {
 
     nlohmann::json j;
     j["musicEnabled"] = musicEnabled;
+    j["customBgmEnabled"] = customBgmEnabled;
+    j["customBgmShuffle"] = customBgmShuffle;
     j["musicVolume"] = musicVolume;
     j["sfxVolume"] = sfxVolume;
     j["gridColumns"] = std::clamp(gridColumns, 3, 8);

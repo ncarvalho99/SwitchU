@@ -21,6 +21,11 @@ enum class Sfx {
     Volume,
 };
 
+struct TrackInfo {
+    std::string path;
+    std::string title;
+};
+
 class AudioManager {
 public:
     AudioManager() = default;
@@ -29,19 +34,32 @@ public:
     bool initialize();
     void shutdown();
 
-    void loadTrack(const std::string& path);
+    void loadTrack(const std::string& path, const std::string& title = "");
     void clearTracks();
     void play();
+    void playTrack(int index);
     void stop();
     /// Silence music and active sound effects without unloading audio assets.
     void stopAll();
     void nextTrack();
+    void previousTrack();
     void setVolume(float vol);
     float volume() const { return m_volume; }
     bool  isPlaying() const { return m_playing; }
 
     void setMusicFade(float fade);
     float musicFade() const { return m_musicFade; }
+
+    void setShuffle(bool shuffle);
+    bool isShuffle() const;
+
+    int currentTrackIndex() const;
+    size_t trackCount() const;
+    std::string currentTrackTitle() const;
+    std::string currentTrackPath() const;
+    std::vector<TrackInfo> tracks() const;
+
+    void update();
 
     void loadSfx(Sfx id, const std::string& path);
     void clearSfx();
@@ -56,14 +74,21 @@ private:
     static void onTrackFinished();
 
     void applyMusicVolume();
+    void rebuildShuffleOrderLocked();
+    void playCurrentTrackLocked();
 
-    std::mutex m_trackMutex;
-    std::vector<Mix_Music*> m_tracks;
-    int   m_current = 0;
+    mutable std::mutex m_trackMutex;
+    std::vector<TrackInfo> m_tracks;
+    std::vector<int> m_shuffleOrder;
+    int   m_current = -1;
+    int   m_shufflePos = 0;
+    bool  m_shuffle = false;
     float m_volume  = 0.5f;
     float m_musicFade = 1.f;
     std::atomic<bool> m_playing{false};
+    std::atomic<bool> m_trackFinished{false};
     bool  m_initialized = false;
+    Mix_Music* m_activeMusic = nullptr;
 
     std::mutex m_sfxMutex;
     std::unordered_map<int, Mix_Chunk*> m_sfx;

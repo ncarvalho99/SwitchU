@@ -317,6 +317,36 @@ void WiiUMenuApp::createSettings() {
                                                   m_config.accessibilitySpeakPosition);
     m_settings->setSteamGridDbState(m_config.steamGridDbEnabled,
                                     !m_config.steamGridDbApiKey.empty());
+    syncCustomBgmSettingsState();
+
+    m_settings->onCustomBgmEnabledChange([this](bool enabled) {
+        m_config.customBgmEnabled = enabled;
+        m_config.save();
+        reloadMusicTracks();
+        syncCustomBgmSettingsState();
+    });
+    m_settings->onCustomBgmShuffleChange([this](bool shuffle) {
+        m_config.customBgmShuffle = shuffle;
+        m_config.save();
+        m_audio.setShuffle(shuffle);
+        syncCustomBgmSettingsState();
+    });
+    m_settings->onCustomBgmPreviewTrack([this](int index) {
+        if (!m_config.customBgmEnabled) {
+            m_config.customBgmEnabled = true;
+            m_config.save();
+            reloadMusicTracks();
+        }
+        m_audio.playTrack(index);
+        syncCustomBgmSettingsState();
+    });
+    m_settings->onCustomBgmRescan([this]() {
+        m_customBgmTracks = scanCustomBgmTracks();
+        if (m_config.customBgmEnabled) {
+            reloadMusicTracks();
+        }
+        syncCustomBgmSettingsState();
+    });
 
     m_settings->onNavigateSfx([this]() { m_audio.playSfx(Sfx::Navigate); });
     m_settings->onActivateSfx([this]() { m_audio.playSfx(Sfx::Activate); });
@@ -2099,17 +2129,23 @@ void WiiUMenuApp::applyThemeMusic(const std::vector<std::string>& tracks) {
         return;
     }
 
-    const bool wasPlaying = m_audio.isPlaying();
-    m_audio.stop();
-    m_audio.clearTracks();
-    for (const auto& track : tracks)
-        m_audio.loadTrack(track);
-    DebugLog::log("[audio] %zu track(s) from the theme", tracks.size());
+    m_themeMusicTracks = tracks;
+    reloadMusicTracks();
+}
 
-    // So volta a tocar se ja estava: trocar de tema nao e motivo para ligar
-    // musica em quem a desligou.
-    if (wasPlaying && m_config.musicEnabled)
-        m_audio.play();
+void WiiUMenuApp::syncCustomBgmSettingsState() {
+    if (!m_settings) return;
+    m_customBgmTracks = scanCustomBgmTracks();
+    std::vector<std::string> titles;
+    titles.reserve(m_customBgmTracks.size());
+    for (const auto& tr : m_customBgmTracks) {
+        titles.push_back(tr.title);
+    }
+    m_settings->setCustomBgmState(m_config.customBgmEnabled,
+                                  m_config.customBgmShuffle,
+                                  static_cast<int>(m_customBgmTracks.size()),
+                                  m_audio.currentTrackIndex(),
+                                  titles);
 }
 
 void WiiUMenuApp::applyUiLanguage() {
