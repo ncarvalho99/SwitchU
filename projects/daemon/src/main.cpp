@@ -13,6 +13,7 @@
 #include "update_apply.hpp"
 #include "self_uninstall.hpp"
 #include "menu_launcher.hpp"
+#include "mem_probe.hpp"
 #include "library_applet_runner.hpp"
 #include "system_action_queue.hpp"
 #include <ctime>
@@ -50,6 +51,10 @@ static bool g_hidReady = false;
 // also went into the names of its archived logs. Not declared in any libnx
 // header, so it is declared here.
 extern "C" void __libnx_init_time(void);
+
+#ifndef SWITCHU_VERSION
+#define SWITCHU_VERSION "unknown"
+#endif
 
 extern "C" {
     u32 __nx_applet_type = AppletType_SystemApplet;
@@ -187,6 +192,11 @@ extern "C" void __appInit(void) {
     }
 
     switchu::FileLog::open("daemon");
+    // Which build this is, in the log of the process itself. The menu prints
+    // its own version on the About tab, and for a long time that was the only
+    // version anybody could read -- while an update left these two out of step
+    // for a whole session, the log gave no way to notice.
+    switchu::FileLog::log("[daemon] version %s", SWITCHU_VERSION);
     switchu::FileLog::log("[daemon] __appInit complete (sd mount: 0x%X)", rc);
     switchu::FileLog::log("[daemon] services time=%d setsys=%d set=%d ns=%d ldr=%d account=%d nssu=%d avm=%d psm=%d lbl=%d hid=%d",
                           g_timeReady ? 1 : 0,
@@ -2564,6 +2574,26 @@ int main(int argc, char* argv[]) {
     if (uninstallPending)
         switchu::FileLog::log("[uninstall] pending request blocks update apply");
 
+    // Before the menu exists, so nothing it would replace is open. Never apply
+    // an archive while an uninstall marker remains unresolved.
+    //
+    // And then reboot, rather than carry on into the menu. The payload holds
+    // both halves of the launcher, and only one of them can be picked up here:
+    // the menu is launched from the card after this runs, so it is the new one,
+    // while this daemon was loaded by Atmosphère before any of it happened and
+    // stays the old one until the console comes up again. That ran a menu
+    // against a daemon one release behind for a whole session -- every
+    // daemon-side fix in an update looked as though it had not shipped, and a
+    // command the two disagreed about had nothing to catch it. The staging is
+    // already cleared and committed by now, so this boots straight through.
+    if (!uninstallPending && switchu::daemon::update::applyStagedUpdate()) {
+        switchu::daemon::mem::snapshot("update");
+        switchu::FileLog::log("[update] applied; rebooting so the new daemon runs");
+        switchu::FileLog::flush();
+        requestPowerStateChange("update applied", true);
+        return 0;
+    }
+
     rebuildAppCatalog("boot");
 
     Result rc = startControlCacheWorker();
@@ -2573,11 +2603,6 @@ int main(int argc, char* argv[]) {
     rc = startEventManager();
     if (R_FAILED(rc))
         switchu::FileLog::log("[daemon] event manager failed: 0x%X (non-fatal)", rc);
-
-    // Before the menu exists, so nothing it would replace is open. Never apply
-    // an archive while an uninstall marker remains unresolved.
-    if (!uninstallPending)
-        switchu::daemon::update::applyStagedUpdate();
 
     switchu::FileLog::log("[daemon] launching menu...");
     rc = daemon::menu_la::launch(

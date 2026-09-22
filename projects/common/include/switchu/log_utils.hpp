@@ -189,13 +189,30 @@ private:
     std::time_t m_pending_since = 0;
 };
 
-inline bool rotate_current_log(const char* log_dir, const char* base_name, const char* extension, size_t keep_count) {
+// Archives the current log and says whether the new one starts empty.
+//
+// With rotate_above_bytes set, a log that has not grown past that size is kept
+// and appended to instead. The menu opens its log every time it starts, and it
+// starts every time a game is closed, so rotating on each open meant five files
+// covered five menu starts -- thirty-five minutes, in one console's logs, of
+// which the session actually being asked about was not part. Appending until a
+// file is large keeps hours in the same five.
+inline bool rotate_current_log(const char* log_dir, const char* base_name, const char* extension,
+                               size_t keep_count, std::uintmax_t rotate_above_bytes = 0) {
     char current_path[256];
     build_current_log_path(current_path, sizeof(current_path), log_dir, base_name, extension);
 
     bool can_truncate = true;
     std::error_code ec;
     if (std::filesystem::exists(current_path, ec)) {
+        if (rotate_above_bytes > 0) {
+            ec.clear();
+            const std::uintmax_t size = std::filesystem::file_size(current_path, ec);
+            // A size that cannot be read is treated as large, so an unreadable
+            // log is rotated away rather than appended to forever.
+            if (!ec && size < rotate_above_bytes)
+                return false;
+        }
         char archived_path[256];
         build_archived_log_path(archived_path, sizeof(archived_path), log_dir, base_name, extension);
         ec.clear();

@@ -420,6 +420,7 @@ target_end()
 
 target("switchu-daemon")
     set_kind("binary")
+    add_defines(version_define)
     if not is_plat("cross") then return end
     set_default(not has_config("homebrew"))
 

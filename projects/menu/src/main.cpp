@@ -169,7 +169,11 @@ extern "C" void __appInit(void) {
         rc = fsdevMountSdmc();
     }
 
-    switchu::FileLog::open("menu");
+    // Appended to across menu restarts, not rotated on each one: the menu
+    // starts again every time a game is closed, and rotating there threw away
+    // the morning to keep the afternoon. The explicit "rotate logs" action
+    // still rotates, which is what it is for.
+    switchu::FileLog::open("menu", switchu::FileLog::MENU_ROTATE_BYTES);
     DebugLog::openFileLog();
     DebugLog::log("[menu] __appInit complete (sd mount: 0x%X)", rc);
 

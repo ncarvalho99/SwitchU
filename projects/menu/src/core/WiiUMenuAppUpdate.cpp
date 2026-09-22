@@ -9,6 +9,7 @@
 
 #include "themeshop/ThemeHttp.hpp"
 #include "themeshop/ZipReader.hpp"
+#include <switchu/sd_commit.hpp>
 #include "core/DebugLog.hpp"
 
 #include <nxui/core/I18n.hpp>
@@ -30,6 +31,9 @@ namespace {
 constexpr const char* kUpdateDir = "sdmc:/config/SwitchU/update";
 constexpr const char* kUpdateArchive = "sdmc:/config/SwitchU/update/update.zip";
 constexpr const char* kReadyMarker = "sdmc:/config/SwitchU/update/ready";
+// Written once the daemon inside the archive is already on the card, which is
+// what lets the boot that applies the rest skip its own restart.
+constexpr const char* kDaemonMarker = "sdmc:/config/SwitchU/update/daemon";
 // The archive lays out atmosphere/ and switch/ exactly as they sit on the card,
 // so the card root is the extraction target.
 constexpr const char* kCardRoot = "sdmc:/";
@@ -333,13 +337,46 @@ void WiiUMenuApp::startUpdateDownload(const update::UpdateClient::Release& relea
                 std::lock_guard<std::mutex> lock(shared->mutex);
                 shared->extracting = true;
             }
-            // Written last, once the archive is whole and inspected: the daemon
+            // Written once the archive is whole and inspected: the daemon
             // treats this marker as the only sign that an update is ready.
+            std::remove(kDaemonMarker);
             if (std::FILE* marker = std::fopen(kReadyMarker, "wb")) {
                 std::fputs("ready", marker);
                 std::fclose(marker);
             } else {
                 throw std::runtime_error("could not mark the update as ready");
+            }
+
+            // And now the one file in the payload that can be replaced from
+            // here: the daemon. Nothing holds it open -- Atmosphère read it at
+            // boot and closed it -- and the extractor swaps every file in by
+            // renaming a .part over it, so an interrupted write leaves the
+            // running daemon untouched.
+            //
+            // This is what makes one restart enough. The daemon is what applies
+            // an update, and it is inside the update: whichever copy of it the
+            // console loaded at boot is the copy that unpacks its replacement,
+            // so it can never be the new one. Putting it in place before the
+            // restart turns that around -- the console comes up on the new
+            // daemon, which then unpacks the menu half and goes straight into
+            // it. If any of this fails the marker is simply not written, and
+            // the daemon falls back to applying everything and restarting once
+            // more by itself.
+            themeshop::ZipExtractPolicy daemonOnly = policy;
+            daemonOnly.onlyRoots = {"atmosphere/"};
+            const auto daemonApply = themeshop::extractZipFile(
+                kUpdateArchive, kCardRoot, {}, daemonOnly);
+            if (daemonApply.success) {
+                switchu::commitSdCard("update daemon in place");
+                if (std::FILE* marker = std::fopen(kDaemonMarker, "wb")) {
+                    std::fputs(shared->release.version.c_str(), marker);
+                    std::fclose(marker);
+                    switchu::commitSdCard("update daemon marked");
+                }
+            } else {
+                DebugLog::log("[update] daemon half not applied (%s); the boot that "
+                              "applies the rest will restart once more",
+                              daemonApply.error.c_str());
             }
 
             std::lock_guard<std::mutex> lock(shared->mutex);
@@ -348,12 +385,14 @@ void WiiUMenuApp::startUpdateDownload(const update::UpdateClient::Release& relea
         } catch (const std::exception& error) {
             std::remove(kUpdateArchive);
             std::remove(kReadyMarker);
+            std::remove(kDaemonMarker);
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->error = error.what();
             shared->done = true;
         } catch (...) {
             std::remove(kUpdateArchive);
             std::remove(kReadyMarker);
+            std::remove(kDaemonMarker);
             std::lock_guard<std::mutex> lock(shared->mutex);
             shared->error = "unknown update failure";
             shared->done = true;
@@ -404,7 +443,7 @@ void WiiUMenuApp::syncUpdateDownload() {
         m_pendingUpdate = {};   // installed: there is nothing left to offer
     m_updateStatus = nxui::I18n::instance().tr(
         ok ? "dialog.update_done" : "dialog.update_failed",
-        ok ? "Update installed. Restart the console to run the new version."
+        ok ? "Update downloaded. Restart the console to apply it. The first boot may take around half a minute."
            : "The update could not be installed.");
     // Releases the tab's busy state and shows the outcome there as well, not
     // only in the dialog the player is about to dismiss.
@@ -422,7 +461,7 @@ void WiiUMenuApp::syncUpdateDownload() {
     m_dialog->show(
         i18n.tr("dialog.update_title", "Update available"),
         ok ? i18n.tr("dialog.update_done",
-                     "Update installed. Restart the console to run the new version.")
+                     "Update downloaded. Restart the console to apply it. The first boot may take around half a minute.")
            : i18n.tr("dialog.update_failed", "The update could not be installed."),
         {{i18n.tr("button.ok", "OK"), [this]() {}, true}},
         0, {});

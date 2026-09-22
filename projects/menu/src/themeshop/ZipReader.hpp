@@ -42,6 +42,10 @@ struct ZipExtractPolicy {
     bool allowExecutablePayload = false;
     // When non-empty, every entry must start with one of these.
     std::vector<std::string> requiredRoots;
+    // When non-empty, only entries starting with one of these are written.
+    // The others are still checked and then passed over, which is how one
+    // archive can be unpacked in two goes, by two different processes.
+    std::vector<std::string> onlyRoots;
 };
 
 // Runs every check extraction would run -- path safety, file types, the

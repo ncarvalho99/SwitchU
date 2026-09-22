@@ -14,15 +14,25 @@ public:
     static constexpr const char* LOG_EXTENSION = ".log";
     static constexpr size_t MAX_LOG_FILES = 5;
     static constexpr size_t MAX_ARCHIVED_LOGS = MAX_LOG_FILES - 1;
+    // What the menu passes to open(). Five files of this size are hours of a
+    // session rather than five of its restarts, and about 2.5 MB on the card.
+    static constexpr std::uintmax_t MENU_ROTATE_BYTES = 512u * 1024u;
 
-    static void open(const char* tag) {
+    // A log that rotates on every open holds as much history as the process
+    // has starts. That is right for the daemon, which starts once per boot,
+    // and wrong for the menu, which starts again every time a game is closed:
+    // pass a size here and the log is appended to until it reaches it.
+    static constexpr std::uintmax_t ROTATE_ON_EVERY_OPEN = 0;
+
+    static void open(const char* tag, std::uintmax_t rotateAboveBytes = ROTATE_ON_EVERY_OPEN) {
         auto& self = inst();
         std::lock_guard<std::mutex> lock(self.m_mutex);
 
         log_detail::ensure_log_dir(LOG_DIR);
         close_current_file(self);
 
-        const bool can_truncate = log_detail::rotate_current_log(LOG_DIR, tag, LOG_EXTENSION, MAX_ARCHIVED_LOGS);
+        const bool can_truncate = log_detail::rotate_current_log(
+            LOG_DIR, tag, LOG_EXTENSION, MAX_ARCHIVED_LOGS, rotateAboveBytes);
 
         char path[256];
         log_detail::build_current_log_path(path, sizeof(path), LOG_DIR, tag, LOG_EXTENSION);

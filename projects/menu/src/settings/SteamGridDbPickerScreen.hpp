@@ -95,6 +95,11 @@ private:
     bool m_loading = false;
     std::string m_message;
     float m_spinner = 0.f;
+    static constexpr int kBackdropCacheTarget = 1;
+    bool m_backdropCacheValid = false;
+    float m_cachedPreBlurRadius = 0.f;
+    int m_cachedBlurIterations = 0;
+
     std::function<void()> m_closedCb;
     std::function<void()> m_searchCb;
     std::function<void(const BrowseResult&, const Candidate&)> m_applyCb;

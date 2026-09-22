@@ -330,6 +330,14 @@ static ZipExtractResult walkArchive(const std::string& archivePath,
                 break;
             }
         }
+        if (!policy.onlyRoots.empty()) {
+            bool wanted = false;
+            for (const auto& root : policy.onlyRoots) {
+                if (relative.rfind(root, 0) == 0) { wanted = true; break; }
+            }
+            if (!wanted)
+                continue;   // somebody else's half of this archive
+        }
         if (!seenPaths.insert(relative).second) {
             result.error = "archive has duplicate file: " + relative;
             break;

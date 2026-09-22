@@ -63,12 +63,20 @@ inline void snapshot(const char* phase) {
         // accounting is what says whether the heap can be made smaller -- and
         // on a console whose System pool has ten megabytes free, this daemon's
         // twelve are worth arguing about.
+        //
+        // heap is what is allocated at this instant, and it read as zero in
+        // every sample a console ever sent back -- which says only that these
+        // moments are quiet ones, not that the eight megabytes are spare. peak
+        // is what settles it: newlib grows its heap with sbrk and never gives
+        // any of it back, so arena is the high-water mark of everything that
+        // came before, including the catalog rebuild and unpacking an update.
         const struct mallinfo info = mallinfo();
         at += std::snprintf(line + at, sizeof(line) - at,
-                            " daemon=%luKB/%luKB heap=%luKB",
+                            " daemon=%luKB/%luKB heap=%luKB peak=%luKB",
                             static_cast<unsigned long>(procUsed >> 10),
                             static_cast<unsigned long>(procTotal >> 10),
-                            static_cast<unsigned long>(info.uordblks >> 10));
+                            static_cast<unsigned long>(info.uordblks >> 10),
+                            static_cast<unsigned long>(info.arena >> 10));
     }
 
     switchu::FileLog::log("%s", line);

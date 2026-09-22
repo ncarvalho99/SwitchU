@@ -1,6 +1,7 @@
 #include "SteamGridDbPickerScreen.hpp"
 
 #include "themeshop/ThemeHttp.hpp"
+#include "settings/SettingsGlassTuning.hpp"
 
 #include <nxui/core/Input.hpp>
 #include <nxui/core/Renderer.hpp>
@@ -64,6 +65,7 @@ void SteamGridDbPickerScreen::showLoading(std::uint64_t titleId,
     m_selected = 0;
     m_loading = true;
     m_message = "Searching SteamGridDB...";
+    m_backdropCacheValid = false;
     m_active = true;
     setVisible(true);
 }
@@ -87,6 +89,7 @@ void SteamGridDbPickerScreen::setMessage(const std::string& message, bool loadin
 void SteamGridDbPickerScreen::hide() {
     if (!m_active) return;
     m_active = false;
+    m_backdropCacheValid = false;
     setVisible(false);
     for (auto& slot : m_slots)
         if (slot.state) slot.state->cancelled.store(true);
@@ -243,10 +246,66 @@ std::string SteamGridDbPickerScreen::kindLabel() const {
 
 void SteamGridDbPickerScreen::onRender(nxui::Renderer& renderer) {
     if (!m_active || !m_theme) return;
-    renderer.drawRect(rect(), nxui::Color(0.f, 0.f, 0.f, 0.62f));
+
+    // Translucent backdrop scrim matching default window style (Settings / Quick Settings / Dialogs)
+    nxui::Rect screen = {0.f, 0.f, (float)renderer.width(), (float)renderer.height()};
+    nxui::Color scrim = nxui::Color::lerp(m_theme->background, nxui::Color::black(),
+                                          m_theme->mode == nxui::ThemeMode::Dark ? 0.72f : 0.28f)
+        .withAlpha(m_theme->mode == nxui::ThemeMode::Dark ? 0.25f : 0.14f);
+    renderer.drawRect(screen, scrim);
+
     const nxui::Rect panel{70.f, 38.f, 1140.f, 644.f};
-    renderer.drawRoundedRect(panel, m_theme->panelBase.withAlpha(0.98f), 28.f);
-    renderer.drawRoundedRectOutline(panel, m_theme->panelBorder.withAlpha(0.45f), 28.f, 1.5f);
+    constexpr float kPanelRadius = 28.f;
+
+    const auto& tuning = settings::debug::settingsGlassTuning();
+    bool needsBackdropRefresh = !m_backdropCacheValid
+        || std::abs(m_cachedPreBlurRadius - tuning.preBlurRadius) > 0.001f
+        || m_cachedBlurIterations != tuning.blurIterations;
+
+    if (needsBackdropRefresh) {
+        renderer.captureToOffscreenSharp();
+        if (tuning.blurIterations > 0 && tuning.preBlurRadius > 0.001f) {
+            renderer.applyBlur(tuning.preBlurRadius, tuning.blurIterations);
+        }
+        renderer.copyOffscreen(nxui::GpuDevice::OFF_SHARP_A, kBackdropCacheTarget);
+        m_backdropCacheValid = true;
+        m_cachedPreBlurRadius = tuning.preBlurRadius;
+        m_cachedBlurIterations = tuning.blurIterations;
+    }
+
+    nxui::LiquidGlassSettings savedGlass = renderer.liquidGlassSettings();
+    auto& glass = renderer.liquidGlassSettings();
+    glass.refractionIntensity = std::clamp(tuning.refractionIntensity, 0.0f, 1.5f);
+    glass.blurIntensity = std::max(0.0f, tuning.shaderBlurIntensity);
+    glass.noiseIntensity = 0.0f;
+    glass.glowIntensity = std::max(0.0f, tuning.glowIntensity);
+    glass.saturation = std::max(0.0f, tuning.saturation);
+    glass.opacityMultiplier = 1.0f;
+    glass.roughness = std::max(0.0f, tuning.roughness);
+    glass.powerFactor = std::max(1.001f, tuning.powerFactor);
+
+    nxui::Color glassTint = m_theme->panelBase.withAlpha(m_theme->mode == nxui::ThemeMode::Dark
+        ? std::clamp(tuning.tintAlphaDark, 0.0f, 1.0f)
+        : std::clamp(tuning.tintAlphaLight, 0.0f, 1.0f));
+    nxui::Rect glassRect = panel.shrunk(std::max(0.0f, tuning.inset));
+    float glassRadius = std::max(12.0f, kPanelRadius - std::max(0.0f, tuning.inset) * 0.5f);
+
+    renderer.drawLiquidGlass(kBackdropCacheTarget,
+                             glassRect,
+                             glassRadius,
+                             glassTint,
+                             1.0f,
+                             std::clamp(tuning.shade, 0.0f, 1.0f));
+    renderer.drawRoundedRectOutline(glassRect,
+                                   m_theme->panelBorder.withAlpha(std::clamp(m_theme->panelBorder.a * 0.90f, 0.14f, 0.34f)),
+                                   glassRadius,
+                                   1.2f);
+    renderer.drawRoundedRectOutline(glassRect.shrunk(1.5f),
+                                   m_theme->panelHighlight.withAlpha(std::clamp(m_theme->panelHighlight.a * 0.90f, 0.04f, 0.10f)),
+                                   std::max(0.0f, glassRadius - 1.5f),
+                                   1.0f);
+    renderer.liquidGlassSettings() = savedGlass;
+
     if (m_font)
         renderer.drawText("SteamGridDB - " + kindLabel(), {108.f, 68.f}, m_font,
                           m_theme->textPrimary, 1.f);
@@ -279,19 +338,20 @@ void SteamGridDbPickerScreen::onRender(nxui::Renderer& renderer) {
                               210.f + (local / kColumns) * (cardH + gapY), cardW, cardH};
         m_visibleRects[(size_t)local] = card;
         if (index >= count) continue;
-        renderer.drawRoundedRect(card, m_theme->panelBorder.withAlpha(0.22f), 16.f);
+        renderer.drawRoundedRect(card, m_theme->panelBorder.withAlpha(0.20f), 16.f);
+        renderer.drawRoundedRectOutline(card, m_theme->panelBorder.withAlpha(0.35f), 16.f, 1.f);
         const auto& slot = m_slots[(size_t)index];
         if (slot.ready && slot.texture.valid()) {
             const nxui::Rect imageArea = card.shrunk(8.f);
-            renderer.drawTexture(&slot.texture, containRect(slot.texture, imageArea),
+            renderer.drawTextureRounded(&slot.texture, containRect(slot.texture, imageArea), 10.f,
                                  nxui::Color::white());
         } else {
             renderer.drawRoundedRect(card.shrunk(12.f),
-                                     m_theme->panelHighlight.withAlpha(0.10f), 12.f);
+                                     m_theme->panelHighlight.withAlpha(0.08f), 12.f);
         }
         if (index == m_selected)
-            renderer.drawRoundedRectOutline(card.expanded(4.f), m_theme->cursorNormal,
-                                            19.f, 4.f);
+            renderer.drawRoundedRectOutline(card.expanded(3.f), m_theme->cursorNormal,
+                                            18.f, 3.f);
     }
     if (m_smallFont && count > 0) {
         const int pages = (count + kPerPage - 1) / kPerPage;

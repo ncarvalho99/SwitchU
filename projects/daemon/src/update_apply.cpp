@@ -25,6 +25,10 @@ constexpr const char* kStagedArchive = "sdmc:/config/SwitchU/update/update.zip";
 // simply ignored here.
 constexpr const char* kReadyMarker   = "sdmc:/config/SwitchU/update/ready";
 constexpr const char* kAttemptFile   = "sdmc:/config/SwitchU/update/attempts";
+// Left by the menu when it managed to put the archive's daemon on the card
+// before the restart. Its presence means the daemon reading it is already the
+// one out of the archive, so this boot does not have to be redone.
+constexpr const char* kDaemonMarker  = "sdmc:/config/SwitchU/update/daemon";
 constexpr const char* kCardRoot      = "sdmc:/";
 // An update that cannot be applied must not delay every boot forever. After
 // this many tries the staging is cleared and the console starts normally.
@@ -58,17 +62,18 @@ void clearStaging() {
     std::remove(kReadyMarker);
     std::remove(kAttemptFile);
     std::remove(kStagedArchive);
+    std::remove(kDaemonMarker);
 }
 
 } // namespace
 
-void applyStagedUpdate() {
+bool applyStagedUpdate() {
     if (!exists(kReadyMarker))
-        return;
+        return false;
     if (!exists(kStagedArchive)) {
         switchu::FileLog::log("[update] marker without an archive; clearing");
         clearStaging();
-        return;
+        return false;
     }
 
     const int attempts = readAttempts() + 1;
@@ -76,7 +81,7 @@ void applyStagedUpdate() {
         switchu::FileLog::log("[update] giving up after %d attempts; booting as installed",
                               kMaxAttempts);
         clearStaging();
-        return;
+        return false;
     }
     // Recorded before the work starts, so a failure that never returns still
     // counts against the limit and cannot loop the console forever.
@@ -109,15 +114,26 @@ void applyStagedUpdate() {
 
     if (!result.success) {
         switchu::FileLog::log("[update] apply failed: %s", result.error.c_str());
-        return;   // staging stays; the next boot retries until the limit
+        return false;   // staging stays; the next boot retries until the limit
     }
 
     switchu::FileLog::log("[update] applied %d files, %llu bytes",
                           result.filesWritten, (unsigned long long)result.bytesWritten);
+
+    // Read before the staging is cleared, because clearing takes it with it.
+    const bool daemonAlreadyRunning = exists(kDaemonMarker);
+    if (daemonAlreadyRunning) {
+        switchu::FileLog::log("[update] daemon was already in place before this boot");
+    } else {
+        switchu::FileLog::log(
+            "[update] daemon replaced on the card; this one is the version it replaces");
+    }
+
     clearStaging();
     // Dropping the archive frees another 43 MB of clusters, which is its own
     // batch of metadata. It costs nothing to make it durable here.
     switchu::commitSdCard("update staging cleared");
+    return !daemonAlreadyRunning;
 }
 
 } // namespace switchu::daemon::update
