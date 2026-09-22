@@ -1,47 +1,43 @@
-# SwitchU 2.6.2
+# SwitchU 2.6.3
 
-Stability, ergonomics, and security update resolving user-reported issues with folder drag-and-drop icon textures, grid slot reachability, page deletion, single Joy-Con controls, and controller reordering, while introducing official client service authentication, automatic NTP clock sync, dynamic SteamGridDB artwork detection, and authentic Wii U Plaza branding.
+Targeted fix release addressing user-reported issues with game update title name resolution (Super Mario Bros. Wonder), WaraWara Plaza Mii avatar rendering and "no name" labels, and initial focus bounds on new game detected modal dialogs.
 
 ## English
 
-### Controllers & Input
-- **Sideways Joy-Con & 8-Player Support**: Configured standard 8-player input across all connected controllers so the Home menu responds to whichever controller is in the player's hands. Lone Joy-Cons are now set to horizontal hold orientation, enabling standard A/B/X/Y confirmation and navigation on a single Joy-Con (including left Joy-Con). Added state logging for connected controllers.
-- **Change Grip/Order Reassignment**: When launching the Change Grip/Order applet, current controller connections are no longer locked in (`enable_take_over_connection = 0`), allowing Player 1 to be reassigned to any controller rather than remaining stuck on the opening gamepad.
-- **Continuous D-Pad Page Flipping**: Holding D-pad Left or Right continuously now triggers automatic wrap-around page transitions (infinite page turn) while keeping focus on the game grid, while tapping one-by-one continues to navigate into the launcher sidebar menus as expected.
-- **Hold-to-Delete Page (ZL)**: Remapped page deletion from `X` to `ZL` with a matching hold animation featuring a minus (`-`) icon and filling circular progress arc, pairing naturally with `ZR` for page creation. When ZL is held on an empty page, the deletion animation runs directly on the current page without jumping back, while a quick tap on ZL continues to navigate to the previous page.
-- **Keyboard Erase Remap**: Swapped `B` to backspace/erase and `X` to cancel/close in the on-screen keyboard, matching standard Switch game keyboard conventions, with updated localizations across all 8 languages.
+### Title Name Resolution & Updates
+- **Super Mario Bros. Wonder Name Display**: Fixed an issue where Super Mario Bros. Wonder (and games with modern update title blocks) displayed raw numeric Title IDs (`010015100B514000`) instead of the game's actual title name.
+- **Enhanced NACP Decompression**: Upgraded `decompressNacpTitles` in the control cache to handle modern Deflate-compressed NACP title formats across variable buffer sizes and multiple windowBits modes (raw Deflate, zlib headers, auto-detect), verifying UTF-8 name validity.
+- **Expanded Language Mapping**: Extended system language table to 18 entries, ensuring Brazilian Portuguese (`SetLanguage_PTBR = 17`) and other localized variants correctly resolve preferred language strings.
+- **Built-in Title ID Fallback**: Added robust title resolution fallbacks for major first-party and popular Switch titles so that games with empty update NACP strings always display their authentic titles on the grid and in SteamGridDB searches.
+- **Cache Logging & Flushing**: Added explicit log flushing in the daemon control-cache worker to ensure all title discovery and metadata caching operations are written to disk.
 
-### Folder & Grid Improvements
-- **Drag-and-Drop Texture Isolation**: Fixed an issue where dragging an icon into an open folder temporarily replaced the dragged icon's image with the folder's first game icon. Independent textures and custom artwork are now preserved across folder boundaries.
-- **Unrestricted Grid Placement**: Fixed empty slot placement constraints when moving folders or icons. Edit-mode D-pad navigation now skips continuation cells, allowing smooth traversal across multi-cell widgets, and grid layout slots dynamically accommodate the full visible grid.
-- **Folder Move Persistence**: Fixed internal folder grid moves not persisting changes to disk.
+### WaraWara Plaza & Miis
+- **Restored Bundled Guest Avatars**: Fixed asset packaging in the toolchain to ensure all 16 bundled high-resolution guest Mii avatar textures (`guest_01.png` – `guest_16.png`) and `plaza_dialogues.json` are installed into `sdmc:/switch/SwitchU/`.
+- **Friendly Mii Names**: System Mii database records with default or empty names (`"no name"`, `"Mii"`, or blank) are now assigned distinct friendly guest names on the Plaza rather than showing `"no name"`.
+- **Database Mii Disambiguation**: Resolved duplicate name handling that previously discarded valid database Miis, allowing all available system Miis to be placed across community pedestals with assigned head textures and favorite shirt colors.
+- **Plaza Community Dialogues**: Restored authentic community game tips and Miiverse dialogue speech bubbles.
 
-### Title Identification & Network Services
-- **Game Update Name Recognition**: Resolved an issue where games with updates installed (such as Super Mario Bros. Wonder) fell back to displaying numeric Title IDs instead of localized names due to compressed NACP language title blocks.
-- **SteamGridDB Real Title Detection & Auto-Prompt**: Added an automatic check on boot, restart, or when a homebrew port is marked as a game that prompts users with a centered modal dialog displaying the resolved game name (instead of the title ID hex code) asking if they would like to download covers and artwork from SteamGridDB.
-- **Modal Dialog Liquid Glass & Dimming Scrim**: Enhanced `OverlayDialog` with a translucent backdrop dimming scrim and authentic liquid glass frosted blur matching the default SwitchU window style.
-- **Official Client Key Gate**: Embedded a compile-time authentication key (`X-SwitchU-Key`) in official SwitchU client builds, protecting project servers (`gallery.nclabs.dev`, `switchu-api.nclabs.dev`, `themes.nclabs.dev`) from unauthorized third-party forks.
-- **Automatic Internet Clock Sync**: Integrated background NTP synchronization on startup and network connection so the console time automatically stays accurate without requiring manual configuration.
-- **Wii U Plaza Icon**: Replaced the procedural top header icon with the authentic Wii U logo icon (`warawara_u.png`).
+### Modal Dialogs & Focus
+- **Button-Scoped Focus Rect**: Fixed `OverlayDialog` focus rect calculation so the focus target accurately matches the active button rather than inheriting the entire 1280x720 screen bounding box.
+- **Dialog Pre-Layout**: Added immediate layout calculation on dialog show so button coordinates are positioned prior to cursor animation, ensuring the selection cursor frames the primary action button ("Download" / "Baixar") on the very first frame.
+- **Global Cursor Suppression**: Suppressed the main menu global selection ring when modal dialogs, progress dialogs, or user selectors are active, eliminating unwanted screen-wide focus framing.
 
-## Português
+## Português (Brasil)
 
-### Controles e Entrada
-- **Joy-Con Individual na Horizontal e Suporte a 8 Jogadores**: Configurada a leitura padrão de até 8 jogadores para que o menu inicial responda a qualquer controle que esteja nas mãos do jogador. Joy-Cons avulsos agora são configurados automaticamente na orientação horizontal, habilitando os botões de ação A/B/X/Y mesmo no Joy-Con esquerdo sozinho. Adicionado registro de diagnóstico do estado dos controles.
-- **Reatribuição no Mudar a Ordem/Pegada**: Ao abrir o menu de Mudar a Ordem/Pegada dos controles, as conexões atuais não são mais fixadas (`enable_take_over_connection = 0`), permitindo que o Jogador 1 seja reatribuído a qualquer controle em vez de ficar preso no controle que abriu o aplicativo.
-- **Mudança Contínua de Páginas com D-Pad**: Segurar o D-Pad para a esquerda ou direita agora troca de página continuamente com giro infinito mantendo o foco na grade, enquanto toques únicos continuam navegando para a barra lateral.
-- **Segurar para Excluir Página (ZL)**: Remapeada a exclusão de páginas de `X` para `ZL` com animação de progresso circular e ícone de menos (`-`). Ao segurar ZL numa página vazia, a animação é exibida diretamente na página atual sem voltar antes; toques rápidos no ZL continuam voltando uma página.
-- **Remapeamento do Teclado Virtual**: Invertidos os botões `B` para apagar caractere e `X` para cancelar/fechar o teclado virtual, seguindo o padrão oficial do console, com textos localizados em todos os 8 idiomas.
+### Resolução de Nomes e Atualizações
+- **Exibição do Nome de Super Mario Bros. Wonder**: Corrigida a exibição do Title ID numérico (`010015100B514000`) no lugar do nome oficial do jogo ao instalar atualizações.
+- **Descompressão Aprimorada de NACP**: Suporte aprimorado no `control_cache` para descompressão de blocos de títulos NACP modernos em formato Deflate em múltiplos modos, validando nomes em UTF-8.
+- **Mapeamento Completo de Idiomas**: Tabela de idiomas expandida para 18 entradas, garantindo resolução correta para Português Brasileiro (`SetLanguage_PTBR = 17`) e demais variações regionais.
+- **Resolução de Títulos Conhecidos**: Adicionada tabela de mapeamento para grandes títulos da Nintendo, garantindo que atualizações com NACP sem strings de idiomas continuem exibindo seus nomes corretos na grade e no SteamGridDB.
+- **Gravação em Disco no Daemon**: Adicionada gravação forçada (`flush`) no worker de cache de controle do daemon para persistência imediata dos registros de metadados no cartão SD.
 
-### Pastas e Grade
-- **Isolamento de Texturas no Arrastar e Soltar**: Corrigida a substituição temporária do ícone de um jogo arrastado pelo primeiro ícone de uma pasta aberta.
-- **Posicionamento sem Bloqueios na Grade**: Corrigidos os limites de movimentação de pastas e ícones sobre espaços vazios adjacentes a widgets de múltiplas células.
-- **Persistência de Movimentação em Pastas**: Corrigido o salvamento em disco de reorganizações de ícones dentro de pastas.
+### WaraWara Plaza e Miis
+- **Avatares de Convidados Restaurados**: Corrigido o instalador da toolchain para incluir os 16 avatares de convidados em alta resolução (`guest_01.png` – `guest_16.png`) e `plaza_dialogues.json` na pasta `sdmc:/switch/SwitchU/`.
+- **Nomes Amigáveis para Miis**: Miis do banco de dados do sistema que possuíam nomes padrão ou vazios (`"no name"`, `"Mii"`) agora recebem nomes variados e amigáveis na praça.
+- **Desambiguação de Miis do Banco**: Corrigido o descarte de Miis com nomes duplicados, permitindo que todos os Miis cadastrados no console apareçam na praça com texturas faciais e camisetas coloridas variadas.
+- **Diálogos do Miiverse**: Restaurados os balões de fala com dicas autênticas de jogos e postagens do Miiverse na praça.
 
-### Reconhecimento de Títulos e Serviços de Rede
-- **Nomes de Jogos Atualizados**: Corrigida a exibição de códigos numéricos em vez dos nomes localizados em jogos com atualizações instaladas (como Super Mario Bros. Wonder) através da descompressão zlib de blocos NACP.
-- **Detecção Real de Jogos e Aviso do SteamGridDB**: Diálogo de download do SteamGridDB agora exibe o nome real do jogo e abre automaticamente ao marcar um port como jogo.
-- **Vidro Líquido e Desfoque nos Diálogos**: Janelas modais agora contam com escurecimento translúcido e desfoque idênticos às demais telas do SwitchU.
-- **Chave de Autenticação do Cliente Oficial**: Compilação oficial agora injeta chave de acesso (`X-SwitchU-Key`) aos serviços `nclabs.dev`.
-- **Sincronização Automática de Relógio via Internet**: Ajuste de hora via NTP em segundo plano na inicialização e ao conectar à internet.
-- **Ícone do Wii U na WaraWara Plaza**: Adicionado o logotipo autêntico do Wii U (`warawara_u.png`) no topo da tela.
+### Janelas Modais e Foco
+- **Retângulo de Foco nos Botões**: Corrigido o `focusRect` do `OverlayDialog` para corresponder exatamente ao botão selecionado em vez de cobrir a tela inteira de 1280x720.
+- **Pré-Layout da Janela Modal**: Adicionado cálculo de layout imediato ao exibir a janela para que as coordenadas dos botões estejam prontas antes de posicionar o cursor, selecionando diretamente o botão principal ("Baixar" / "Download") no primeiro quadro.
+- **Ocultação do Cursor Global**: O anel de seleção do menu principal agora é ocultado enquanto caixas de diálogo, telas de progresso ou seletor de usuários estiverem ativos.
