@@ -144,6 +144,14 @@ bool fetchDaemonCatalog(std::vector<PendingApp>& out, bool prefetchIcons) {
                     a.iconData = switchu::control_cache::readIcon(ent.titleId);
             }
         }
+        if (isTitleIdFallback(a.title, ent.titleId)) {
+            const char* known = switchu::control_cache::getKnownTitleName(ent.titleId);
+            if (known) {
+                a.title = known;
+                if (a.englishTitle.empty() || isTitleIdFallback(a.englishTitle, ent.titleId))
+                    a.englishTitle = known;
+            }
+        }
         if (a.englishTitle.empty()) a.englishTitle = a.title;
 
         if (!switchu::control_cache::isValidUtf8(a.title.c_str(), a.title.size() + 1)) {
@@ -284,8 +292,13 @@ void AppListLoader::fetchApps(std::vector<PendingApp>& output, bool prefetchIcon
             // A cached entry can carry no name: the control data had none to
             // give. The id stands in for it here rather than in the cache file,
             // so the real name is still picked up once it can be read.
-            a.title   = meta.name[0] != '\0' ? meta.name : tidBuf;
-            a.englishTitle = meta.english_name;
+            std::string resolvedName = meta.name[0] != '\0' ? meta.name : "";
+            if (resolvedName.empty()) {
+                const char* known = switchu::control_cache::getKnownTitleName(tid);
+                resolvedName = known ? known : tidBuf;
+            }
+            a.title   = resolvedName;
+            a.englishTitle = !meta.english_name[0] ? a.title : meta.english_name;
             a.titleId = tid;
             a.viewFlags = vf;
             a.startupUserKnown = true;

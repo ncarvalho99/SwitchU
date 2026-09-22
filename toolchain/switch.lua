@@ -162,7 +162,7 @@ rule("switch")
                 local assetsdir   = path.join(installdir, "switch", assets_name)
                 -- "notes" carries the installed version's release notes, so the
                 -- Update tab can say what changed before any network call.
-                for _, sub in ipairs({"fonts", "sounds", "icons", "i18n", "shaders", "espeak-ng-data", "themes", "notes"}) do
+                for _, sub in ipairs({"fonts", "sounds", "icons", "i18n", "shaders", "espeak-ng-data", "themes", "notes", "avatars", "data"}) do
                     local src = path.join(romfs, sub)
                     if sub == "espeak-ng-data" then
                         local generated = path.join(os.projectdir(), "build/espeak-ng-native/espeak-ng-data")

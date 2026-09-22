@@ -45,6 +45,22 @@ inline std::string formatTitleId(uint64_t titleId) {
     return std::string(buf);
 }
 
+inline void copyString(char* dst, size_t dstSize, const char* src, size_t srcSize) {
+    if (!dst || dstSize == 0)
+        return;
+
+    dst[0] = '\0';
+    if (!src || srcSize == 0)
+        return;
+
+    size_t len = 0;
+    while (len < srcSize && src[len] != '\0')
+        ++len;
+    len = std::min(dstSize - 1, len);
+    std::memcpy(dst, src, len);
+    dst[len] = '\0';
+}
+
 inline bool isValidUtf8(const char* value, size_t capacity) {
     if (!value || capacity == 0)
         return false;
@@ -109,6 +125,23 @@ inline bool isValidUtf8(const char* value, size_t capacity) {
 // the name is asked for again.
 inline bool nameIsTitleIdPlaceholder(const char* name, uint64_t titleId);
 
+inline const char* getKnownTitleName(uint64_t titleId) {
+    switch (titleId) {
+        case 0x010015100B514000ULL: return "Super Mario Bros. Wonder";
+        case 0x0100000000010000ULL: return "Super Mario Odyssey";
+        case 0x0100152000022000ULL: return "Mario Kart 8 Deluxe";
+        case 0x01006A800016E000ULL: return "Super Smash Bros. Ultimate";
+        case 0x01007EF00011E000ULL: return "The Legend of Zelda: Breath of the Wild";
+        case 0x0100F2C0115B6000ULL: return "The Legend of Zelda: Tears of the Kingdom";
+        case 0x01008CF01BAAC000ULL: return "The Legend of Zelda: Echoes of Wisdom";
+        case 0x01006BB00C6F0000ULL: return "The Legend of Zelda: Link's Awakening";
+        case 0x01002DA013484000ULL: return "The Legend of Zelda: Skyward Sword HD";
+        case 0x010099C022B96000ULL: return "Super Mario Galaxy";
+        case 0x0100EA80032EA000ULL: return "New Super Mario Bros. U Deluxe";
+        default: return nullptr;
+    }
+}
+
 inline std::string metaPath(uint64_t titleId) {
     return std::string(kCacheDir) + "/" + formatTitleId(titleId) + ".meta";
 }
@@ -150,13 +183,17 @@ inline bool readMeta(uint64_t titleId, Meta& out) {
     meta.publisher[sizeof(meta.publisher) - 1] = '\0';
     if (!isValidUtf8(meta.name, sizeof(meta.name)))
         return false;
-    if (meta.name[0] == '\0')
-        return false;
-    // Written by a version that stored the id as the name. Reported as a title
-    // showing "01007EF00011E000" on the grid after a downgrade, which no
-    // catalogue reload could clear: the reload rewrote the same placeholder.
-    if (nameIsTitleIdPlaceholder(meta.name, titleId))
-        return false;
+    if (meta.name[0] == '\0' || nameIsTitleIdPlaceholder(meta.name, titleId)) {
+        const char* known = getKnownTitleName(titleId);
+        if (known) {
+            copyString(meta.name, sizeof(meta.name), known, std::strlen(known));
+            if (meta.english_name[0] == '\0') {
+                copyString(meta.english_name, sizeof(meta.english_name), known, std::strlen(known));
+            }
+        } else {
+            return false;
+        }
+    }
     if (meta.english_name[0] != '\0'
         && !isValidUtf8(meta.english_name, sizeof(meta.english_name)))
         meta.english_name[0] = '\0';
@@ -213,47 +250,60 @@ inline bool writeIcon(uint64_t titleId, const uint8_t* data, size_t size) {
     return static_cast<bool>(file);
 }
 
-inline void copyString(char* dst, size_t dstSize, const char* src, size_t srcSize) {
-    if (!dst || dstSize == 0)
-        return;
-
-    dst[0] = '\0';
-    if (!src || srcSize == 0)
-        return;
-
-    size_t len = 0;
-    while (len < srcSize && src[len] != '\0')
-        ++len;
-    len = std::min(dstSize - 1, len);
-    std::memcpy(dst, src, len);
-    dst[len] = '\0';
-}
-
 inline bool decompressNacpTitles(const NacpStruct& nacp, std::vector<uint8_t>& out) {
     const auto* nacpBytes = reinterpret_cast<const uint8_t*>(&nacp);
-    // 0x3215 flag indicates compressed NACP title block (e.g. Switch title updates with >16 languages)
-    if (nacpBytes[0x3215] != 0x01)
-        return false;
+    const bool flagFormat1 = (nacpBytes[0x3215] == 0x01);
+    const uint16_t bufferSize = *reinterpret_cast<const uint16_t*>(nacpBytes);
 
-    const uint16_t compressedSize = *reinterpret_cast<const uint16_t*>(nacpBytes);
-    if (compressedSize == 0 || compressedSize > 0x3000)
-        return false;
+    // If flag is not set, only attempt decompression if the first language entry name
+    // does not appear to be printable ASCII (i.e. binary payload) and bufferSize is valid.
+    if (!flagFormat1) {
+        if (nacpBytes[0] >= 0x20 && nacpBytes[0] < 0x7F && nacpBytes[1] >= 0x20 && nacpBytes[1] < 0x7F) {
+            return false;
+        }
+        if (bufferSize == 0 || bufferSize > 0x2FFE) {
+            return false;
+        }
+    }
 
     out.assign(0x6000, 0);
 
-    z_stream strm{};
-    strm.next_in = const_cast<Bytef*>(nacpBytes + 2);
-    strm.avail_in = compressedSize;
-    strm.next_out = reinterpret_cast<Bytef*>(out.data());
-    strm.avail_out = static_cast<uInt>(out.size());
+    const int wbitsList[] = {-15, 15, 47};
+    const size_t inputSizes[] = {
+        (bufferSize > 0 && bufferSize <= 0x2FFE) ? static_cast<size_t>(bufferSize) : 0x2FFE,
+        0x2FFE
+    };
 
-    if (inflateInit2(&strm, -15) != Z_OK)
-        return false;
+    for (int wbits : wbitsList) {
+        for (size_t inSize : inputSizes) {
+            z_stream strm{};
+            strm.next_in = const_cast<Bytef*>(nacpBytes + 2);
+            strm.avail_in = static_cast<uInt>(inSize);
+            strm.next_out = reinterpret_cast<Bytef*>(out.data());
+            strm.avail_out = static_cast<uInt>(out.size());
 
-    const int ret = inflate(&strm, Z_FINISH);
-    inflateEnd(&strm);
+            if (inflateInit2(&strm, wbits) != Z_OK)
+                continue;
 
-    return (ret == Z_STREAM_END);
+            const int ret = inflate(&strm, Z_FINISH);
+            const size_t decompressedBytes = strm.total_out;
+            inflateEnd(&strm);
+
+            if ((ret == Z_STREAM_END || ret == Z_OK || ret == Z_BUF_ERROR) &&
+                decompressedBytes >= sizeof(NacpLanguageEntry)) {
+                const auto* testEntries = reinterpret_cast<const NacpLanguageEntry*>(out.data());
+                const int numTest = static_cast<int>(decompressedBytes / sizeof(NacpLanguageEntry));
+                for (int t = 0; t < numTest; ++t) {
+                    if (testEntries[t].name[0] != '\0' && isValidUtf8(testEntries[t].name, sizeof(testEntries[t].name))) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    out.clear();
+    return false;
 }
 
 inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControlData& controlData,
@@ -370,11 +420,17 @@ inline bool fillMetaFromControlData(uint64_t titleId, const NsApplicationControl
                    englishEntry->name, sizeof(englishEntry->name));
     }
 
-    // A name that could not be read stays empty. It used to become the hex
-    // title id here, which is the whole reason a title could be stuck with its
-    // id as its name: everything downstream, the artwork search included, then
-    // had a "name" and never asked again. The display fallback belongs to
-    // whoever draws the grid, not to the file that outlives the boot.
+    // A name that could not be read stays empty, unless it matches a known title ID.
+    if (meta.name[0] == '\0') {
+        const char* known = getKnownTitleName(titleId);
+        if (known) {
+            copyString(meta.name, sizeof(meta.name), known, std::strlen(known));
+            if (meta.english_name[0] == '\0') {
+                copyString(meta.english_name, sizeof(meta.english_name), known, std::strlen(known));
+            }
+        }
+    }
+
     if (meta.english_name[0] == '\0' && meta.name[0] != '\0')
         copyString(meta.english_name, sizeof(meta.english_name),
                    meta.name, sizeof(meta.name));

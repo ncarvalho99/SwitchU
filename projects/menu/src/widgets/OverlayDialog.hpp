@@ -98,6 +98,7 @@ public:
 
     void update(float dt) override;
     void render(nxui::Renderer& ren) override;
+    nxui::Rect focusRect() const override;
 
 private:
     void buildWidgetTree();

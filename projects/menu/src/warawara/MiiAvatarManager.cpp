@@ -242,7 +242,15 @@ void MiiAvatarManager::loadSystemMiiDatabase(nxui::GpuDevice& /*gpu*/, nxui::Ren
             for (s32 i = 0; i < outCount; ++i) {
                 const auto& ci = charInfos[i];
                 std::string nick = utf16ToUtf8(ci.mii_name, 11);
-                if (nick.empty()) nick = "Mii";
+                static const char* kFriendlyNames[] = {
+                    "Alex", "Sam", "Charlie", "Jordan", "Taylor", "Morgan",
+                    "Casey", "Riley", "MarioFan", "Avery", "Sensei", "Quinn",
+                    "Kai", "Skyler", "Dakota", "Rowan", "Nico", "Robin"
+                };
+                if (nick.empty() || nick == "no name" || nick == "Mii" || nick == "???") {
+                    nick = kFriendlyNames[(static_cast<size_t>(ci.mii_color) + static_cast<size_t>(i)) %
+                                          (sizeof(kFriendlyNames) / sizeof(kFriendlyNames[0]))];
+                }
 
                 // Check if an avatar with this nickname is already loaded
                 bool duplicate = false;
@@ -250,6 +258,23 @@ void MiiAvatarManager::loadSystemMiiDatabase(nxui::GpuDevice& /*gpu*/, nxui::Ren
                     if (a.nickname == nick) {
                         duplicate = true;
                         break;
+                    }
+                }
+                if (duplicate) {
+                    // Try another friendly name to prevent dropping valid database Miis
+                    for (const char* candidateName : kFriendlyNames) {
+                        bool nameTaken = false;
+                        for (const auto& a : m_avatars) {
+                            if (a.nickname == candidateName) {
+                                nameTaken = true;
+                                break;
+                            }
+                        }
+                        if (!nameTaken) {
+                            nick = candidateName;
+                            duplicate = false;
+                            break;
+                        }
                     }
                 }
                 if (duplicate) continue;

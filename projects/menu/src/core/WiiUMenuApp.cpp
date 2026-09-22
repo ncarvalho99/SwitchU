@@ -5911,6 +5911,7 @@ void WiiUMenuApp::checkNewGameSteamGridDbPrompt() {
         }}
     });
     focusManager().setFocus(m_dialog.get());
+    if (m_cursor) m_cursor->setVisible(false);
 }
 
 void WiiUMenuApp::promptSteamGridDbForGame(std::uint64_t titleId, const std::string& title) {
@@ -5945,6 +5946,7 @@ void WiiUMenuApp::promptSteamGridDbForGame(std::uint64_t titleId, const std::str
         }}
     });
     focusManager().setFocus(m_dialog.get());
+    if (m_cursor) m_cursor->setVisible(false);
 }
 
 std::string WiiUMenuApp::resolveAppTitle(std::uint64_t titleId, const std::string& currentTitle) {
@@ -5962,6 +5964,10 @@ std::string WiiUMenuApp::resolveAppTitle(std::uint64_t titleId, const std::strin
     const bool isFallback = title.empty() || title == tidBuf;
 
     if (isFallback && titleId != 0) {
+        const char* known = switchu::control_cache::getKnownTitleName(titleId);
+        if (known) {
+            return std::string(known);
+        }
         // 1. Try reading metadata from control cache
         switchu::control_cache::Meta meta{};
         if (switchu::control_cache::readMeta(titleId, meta) && meta.name[0] != '\0') {

@@ -507,6 +507,7 @@ void OverlayDialog::show(const std::string& title,
     m_cachedBlurIterations = -1;
 
     buildWidgetTree();
+    layout(panelRect());
 
     m_overlayAlpha.setImmediate(0.f);
     m_panelScale.setImmediate(0.92f);
@@ -1468,4 +1469,18 @@ void OverlayDialog::render(nxui::Renderer& ren) {
     }
 
     m_cursor.render(ren);
+}
+
+nxui::Rect OverlayDialog::focusRect() const {
+    if (m_mode == DialogMode::Buttons && m_selected >= 0 &&
+        m_selected < (int)m_btnWidgets.size() && m_btnWidgets[m_selected]) {
+        return scaledRect(m_btnWidgets[m_selected]->rect(), m_panelScale.value());
+    }
+    if (m_mode == DialogMode::DateTime) {
+        return dateTimeFieldRect(m_dateTimeField);
+    }
+    if (m_mode == DialogMode::UserSelect && m_selected >= 0 && m_selected < userSlotCount()) {
+        return userAvatarRect(m_selected);
+    }
+    return panelRect();
 }

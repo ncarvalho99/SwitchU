@@ -1678,8 +1678,11 @@ void WiiUMenuApp::updateCursor() {
     }
     if ((m_contextMenu && m_contextMenu->isActive()) ||
         (m_textEntry && m_textEntry->isActive()) ||
-        (m_quickSettings && m_quickSettings->isActive())) {
-        // The keyboard and quick settings are focusable widgets that draw their
+        (m_quickSettings && m_quickSettings->isActive()) ||
+        (m_dialog && m_dialog->isActive()) ||
+        (m_progressDialog && m_progressDialog->isActive()) ||
+        (m_userSelect && m_userSelect->isActive())) {
+        // The dialogs, keyboard, quick settings, and overlays draw their
         // own internal selection. Hide the global cursor so it doesn't frame the panel.
         if (m_cursor) m_cursor->setVisible(false);
         return;
@@ -1688,11 +1691,10 @@ void WiiUMenuApp::updateCursor() {
         if (m_cursor) m_cursor->setVisible(false); // it would sit at the landing spot
         return;
     }
-    if (m_navigator.route() != switchu::navigation::Route::Home ||
-        (m_dialog && m_dialog->isActive()) ||
-        (m_progressDialog && m_progressDialog->isActive()) ||
-        (m_userSelect && m_userSelect->isActive()))
+    if (m_navigator.route() != switchu::navigation::Route::Home) {
+        if (m_cursor) m_cursor->setVisible(false);
         return;
+    }
 
     auto* cur = focusManager().current();
     if (cur) {
