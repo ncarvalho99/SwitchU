@@ -793,12 +793,11 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_launchAnim && m_launchAnim->isPlaying()) return nullptr;
     if (m_folderCaptureRequested) return nullptr;
     if (m_progressDialog && m_progressDialog->isActive()) return m_progressDialog.get();
-    if (m_contextMenu && m_contextMenu->isActive()) return m_contextMenu.get();
-    // The search-title keyboard can be opened from the still-visible "Mark as
-    // game port" dialog. It must take precedence over that parent, otherwise
-    // focusRoot hands d-pad dispatch back to the dialog despite the keyboard
-    // being visibly on top and explicitly focused by requestTextEntry().
+    // The on-screen keyboard is a modal overlay that can be opened from dialogs or
+    // context menus. It must take precedence over context menus and dialogs so it
+    // receives all button and direction inputs while active.
     if (m_textEntry && m_textEntry->isActive()) return m_textEntry.get();
+    if (m_contextMenu && m_contextMenu->isActive()) return m_contextMenu.get();
     if (m_platformPicker && m_platformPicker->isActive()) return m_platformPicker.get();
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) return m_steamGridDbPicker.get();

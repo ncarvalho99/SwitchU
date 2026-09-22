@@ -267,7 +267,8 @@ private:
     // instead of waiting for a return value.
     void requestTextEntry(const std::string& title, const std::string& guide,
                           const std::string& initial, int maxLength, bool password,
-                          std::function<void(const std::string&)> onAccept);
+                          std::function<void(const std::string&)> onAccept,
+                          std::function<void()> onCancel = nullptr);
     void createTextEntry();
     std::string defaultFolderName() const;
     void editSteamGridDbApiKey();

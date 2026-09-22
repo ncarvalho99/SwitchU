@@ -351,6 +351,53 @@ bool prepareArtwork(SteamGridDbManager::ArtworkKind kind, const std::string& pat
     return true;
 }
 
+std::string expandQueryAlias(const std::string& query) {
+    const std::string norm = normalized(query);
+    static const std::unordered_map<std::string, std::string> kAliases = {
+        {"gtav", "Grand Theft Auto V"},
+        {"gta5", "Grand Theft Auto V"},
+        {"gtaiv", "Grand Theft Auto IV"},
+        {"gta4", "Grand Theft Auto IV"},
+        {"gtasa", "Grand Theft Auto: San Andreas"},
+        {"gtavc", "Grand Theft Auto: Vice City"},
+        {"gtaiii", "Grand Theft Auto III"},
+        {"gta3", "Grand Theft Auto III"},
+        {"gta", "Grand Theft Auto"},
+        {"botw", "The Legend of Zelda: Breath of the Wild"},
+        {"totk", "The Legend of Zelda: Tears of the Kingdom"},
+        {"smb", "Super Mario Bros."},
+        {"smw", "Super Mario World"},
+        {"sm64", "Super Mario 64"},
+        {"smo", "Super Mario Odyssey"},
+        {"mk8", "Mario Kart 8"},
+        {"mk8d", "Mario Kart 8 Deluxe"},
+        {"gow", "God of War"},
+        {"rdr2", "Red Dead Redemption 2"},
+        {"rdr", "Red Dead Redemption"},
+        {"re4", "Resident Evil 4"},
+        {"re2", "Resident Evil 2"},
+        {"re3", "Resident Evil 3"},
+        {"re", "Resident Evil"},
+        {"mgs", "Metal Gear Solid"},
+        {"mgs3", "Metal Gear Solid 3"},
+        {"ffvii", "Final Fantasy VII"},
+        {"ff7", "Final Fantasy VII"},
+        {"ffx", "Final Fantasy X"},
+        {"ff10", "Final Fantasy X"},
+        {"ff", "Final Fantasy"},
+        {"pkmn", "Pokemon"},
+        {"zelda", "The Legend of Zelda"},
+        {"tf2", "Team Fortress 2"},
+        {"csgo", "Counter-Strike: Global Offensive"},
+        {"cs2", "Counter-Strike 2"},
+        {"acnh", "Animal Crossing: New Horizons"},
+        {"ssbu", "Super Smash Bros. Ultimate"}
+    };
+    auto it = kAliases.find(norm);
+    if (it != kAliases.end()) return it->second;
+    return {};
+}
+
 } // namespace
 
 SteamGridDbManager::~SteamGridDbManager() {
@@ -372,29 +419,113 @@ SteamGridDbManager::BrowseResult SteamGridDbManager::browse(
 
     const Backend backend = makeBackend(apiKey);
     try {
-        const auto games = searchGames(backend, result.query);
-        std::string closest;
-        bool ambiguous = false;
-        const auto* game = chooseGame(games, result.query, result.matchScore,
-                                      closest, ambiguous);
-        if (!game)
-            throw std::runtime_error("No sufficiently close game match for '" + result.query + "'");
-        result.gameId = game->at("id").get<long long>();
-        result.gameName = game->value("name", result.query);
-
-        const auto images = listArtwork(backend, result.gameId, kind);
-        const auto ranked = rankedImages(images, kind == ArtworkKind::Hero);
-        constexpr std::size_t kMaxCandidates = 18;
-        for (std::size_t i = 0; i < ranked.size() && i < kMaxCandidates; ++i) {
-            Candidate candidate;
-            candidate.id = ranked[i]->value("id", 0LL);
-            candidate.url = ranked[i]->value("url", std::string());
-            candidate.thumbnailUrl = ranked[i]->value("thumb", candidate.url);
-            candidate.width = ranked[i]->value("width", 0);
-            candidate.height = ranked[i]->value("height", 0);
-            if (!candidate.url.empty()) result.candidates.push_back(std::move(candidate));
+        std::vector<std::string> searchQueries;
+        const std::string alias = expandQueryAlias(result.query);
+        if (!alias.empty() && alias != result.query) {
+            searchQueries.push_back(alias);
         }
-        if (result.candidates.empty()) throw std::runtime_error("No artwork available");
+        searchQueries.push_back(result.query);
+
+        nlohmann::json allGames = nlohmann::json::array();
+        std::set<long long> seenGameIds;
+        for (const auto& q : searchQueries) {
+            try {
+                const auto games = searchGames(backend, q);
+                if (games.is_array()) {
+                    for (const auto& g : games) {
+                        if (!g.is_object() || !g.contains("id")) continue;
+                        long long gid = g.at("id").get<long long>();
+                        if (seenGameIds.insert(gid).second) {
+                            allGames.push_back(g);
+                        }
+                    }
+                }
+            } catch (...) {
+            }
+            if (!allGames.empty()) break;
+        }
+
+        if (allGames.empty()) {
+            throw std::runtime_error("No games found for '" + result.query + "'");
+        }
+
+        struct ScoredGame {
+            long long id = 0;
+            std::string name;
+            float score = 0.f;
+        };
+        std::vector<ScoredGame> scored;
+        const auto queryTokens = titleTokens(result.query);
+        const auto aliasTokens = !alias.empty() ? titleTokens(alias) : std::set<std::string>{};
+
+        for (const auto& g : allGames) {
+            if (!g.is_object() || !g.contains("id")) continue;
+            std::string gname = g.value("name", std::string());
+            long long gid = g.at("id").get<long long>();
+            float s = titleSimilarity(result.query, gname);
+            if (!alias.empty()) {
+                s = std::max(s, titleSimilarity(alias, gname));
+            }
+            const auto gTokens = titleTokens(gname);
+            if (!queryTokens.empty() && !gTokens.empty()) {
+                int matched = 0;
+                for (const auto& qt : queryTokens) {
+                    if (gTokens.count(qt)) ++matched;
+                }
+                if (matched == static_cast<int>(queryTokens.size())) {
+                    s = std::max(s, 0.82f);
+                }
+            }
+            if (!aliasTokens.empty() && !gTokens.empty()) {
+                int matched = 0;
+                for (const auto& at : aliasTokens) {
+                    if (gTokens.count(at)) ++matched;
+                }
+                if (matched == static_cast<int>(aliasTokens.size())) {
+                    s = std::max(s, 0.88f);
+                }
+            }
+            if (g.value("verified", false) && s < 1.f) {
+                s = std::min(1.f, s + 0.02f);
+            }
+            scored.push_back({gid, std::move(gname), s});
+        }
+
+        std::sort(scored.begin(), scored.end(), [](const ScoredGame& a, const ScoredGame& b) {
+            return a.score > b.score;
+        });
+
+        constexpr std::size_t kMaxCandidates = 18;
+        for (const auto& sg : scored) {
+            if (result.candidates.size() >= kMaxCandidates) break;
+            if (!result.candidates.empty() && sg.score < 0.35f) break;
+
+            try {
+                const auto images = listArtwork(backend, sg.id, kind);
+                const auto ranked = rankedImages(images, kind == ArtworkKind::Hero);
+                for (std::size_t i = 0; i < ranked.size() && result.candidates.size() < kMaxCandidates; ++i) {
+                    Candidate candidate;
+                    candidate.id = ranked[i]->value("id", 0LL);
+                    candidate.url = ranked[i]->value("url", std::string());
+                    candidate.thumbnailUrl = ranked[i]->value("thumb", candidate.url);
+                    candidate.width = ranked[i]->value("width", 0);
+                    candidate.height = ranked[i]->value("height", 0);
+                    if (!candidate.url.empty()) {
+                        result.candidates.push_back(std::move(candidate));
+                    }
+                }
+                if (result.gameId == 0) {
+                    result.gameId = sg.id;
+                    result.gameName = sg.name;
+                    result.matchScore = sg.score;
+                }
+            } catch (...) {
+            }
+        }
+
+        if (result.candidates.empty()) {
+            throw std::runtime_error("No artwork available for '" + result.query + "'");
+        }
         result.success = true;
     } catch (const std::exception& ex) {
         result.error = ex.what();
@@ -559,10 +690,20 @@ void SteamGridDbManager::selectNext(std::string apiKey, std::uint64_t titleId,
         std::string matchedName = metadata.value("steamGridDbName", std::string());
         float matchScore = metadata.value("matchScore", 0.f);
         if (gameId <= 0 || metadata.value("matcherVersion", 0) != kMatcherVersion) {
-            const auto games = searchGames(backend, title);
+            auto games = searchGames(backend, title);
             std::string closest;
             bool ambiguous = false;
             const auto* game = chooseGame(games, title, matchScore, closest, ambiguous);
+            if (!game) {
+                const std::string alias = expandQueryAlias(title);
+                if (!alias.empty() && alias != title) {
+                    try {
+                        games = searchGames(backend, alias);
+                        game = chooseGame(games, alias, matchScore, closest, ambiguous);
+                    } catch (...) {
+                    }
+                }
+            }
             if (!game) throw std::runtime_error("No sufficiently close game match");
             gameId = game->at("id").get<long long>();
             matchedName = game->value("name", title);
@@ -708,11 +849,21 @@ void SteamGridDbManager::scrape(std::string apiKey, std::vector<AppEntry> apps) 
 
         try {
             const std::string& searchTitle = app.steamGridDbTitle();
-            const auto games = searchGames(backend, searchTitle);
+            auto games = searchGames(backend, searchTitle);
             float matchScore = 0.f;
             std::string closest;
             bool ambiguous = false;
             const auto* game = chooseGame(games, searchTitle, matchScore, closest, ambiguous);
+            if (!game) {
+                const std::string alias = expandQueryAlias(searchTitle);
+                if (!alias.empty() && alias != searchTitle) {
+                    try {
+                        games = searchGames(backend, alias);
+                        game = chooseGame(games, alias, matchScore, closest, ambiguous);
+                    } catch (...) {
+                    }
+                }
+            }
             if (!game) {
                 DebugLog::log("[steamgriddb] display='%s' search='%s' rejected candidates=%d closest='%s' score=%.2f ambiguous=%d",
                               app.title.c_str(), searchTitle.c_str(),

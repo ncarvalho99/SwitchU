@@ -2675,7 +2675,10 @@ void WiiUMenuApp::createTextEntry() {
 void WiiUMenuApp::requestTextEntry(const std::string& title, const std::string& guide,
                                    const std::string& initial, int maxLength,
                                    bool password,
-                                   std::function<void(const std::string&)> onAccept) {
+                                   std::function<void(const std::string&)> onAccept,
+                                   std::function<void()> onCancel) {
+    if (m_contextMenu && m_contextMenu->isActive())
+        m_contextMenu->hide(false);
     createTextEntry();
     if (!m_textEntry)
         return;
@@ -2712,7 +2715,10 @@ void WiiUMenuApp::requestTextEntry(const std::string& title, const std::string& 
         DebugLog::log("[textentry] onAccept callback returned");
     });
 
-    m_textEntry->onCancel(restoreFocus);
+    m_textEntry->onCancel([restoreFocus, onCancel]() {
+        restoreFocus();
+        if (onCancel) onCancel();
+    });
 
     TextEntryScreen::Request request;
     request.title = title;
@@ -3913,6 +3919,7 @@ void WiiUMenuApp::showWidgetAssetMenu(int targetSlot, const nxui::Rect& anchor,
     std::vector<ContextMenu::Item> items;
     items.reserve(assets.size() + 1);
     items.push_back({"Search SteamGridDB...", [this, targetSlot, anchor, size]() {
+        if (m_contextMenu) m_contextMenu->hide(false);
         requestTextEntry("Search SteamGridDB", "Image Pin", "", 128, false,
                          [this, targetSlot, anchor, size](const std::string& query) {
             if (!query.empty())
@@ -3920,6 +3927,10 @@ void WiiUMenuApp::showWidgetAssetMenu(int targetSlot, const nxui::Rect& anchor,
             else
                 showWidgetAssetMenu(targetSlot, anchor,
                                     switchu::widgets::WidgetType::ImagePin, size);
+        },
+        [this, targetSlot, anchor, size]() {
+            showWidgetAssetMenu(targetSlot, anchor,
+                                switchu::widgets::WidgetType::ImagePin, size);
         });
     }});
     for (auto& [label, reference] : assets) {

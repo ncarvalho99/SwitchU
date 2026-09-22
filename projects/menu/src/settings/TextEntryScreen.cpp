@@ -190,7 +190,13 @@ void TextEntryScreen::setupActions() {
     addDirectionAction(nxui::FocusDirection::RIGHT, [this]() { moveSelection(1, 0); });
 
     addAction(static_cast<std::uint64_t>(nxui::Button::A), [this]() { pressSelected(); });
-    addAction(static_cast<std::uint64_t>(nxui::Button::B), [this]() { backspace(); });
+    addAction(static_cast<std::uint64_t>(nxui::Button::B), [this]() {
+        if (m_text.empty()) {
+            hide(false);
+        } else {
+            backspace();
+        }
+    });
     addAction(static_cast<std::uint64_t>(nxui::Button::X), [this]() { hide(false); });
     addAction(static_cast<std::uint64_t>(nxui::Button::Y), [this]() {
         m_shift = !m_shift;
