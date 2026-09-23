@@ -1545,7 +1545,16 @@ void WiiUMenuApp::createThemeShop() {
         DebugLog::log("[themeshop] Music downloaded, reloading BGM tracks...");
         reloadMusicTracks();
     });
+    m_themeShop->onPlayMusic([this](const std::string& path, const std::string& title) {
+        DebugLog::log("[themeshop] Playing track: %s (%s)", title.c_str(), path.c_str());
+        m_audio.stop();
+        m_audio.clearTracks();
+        m_audio.loadTrack(path, title);
+        m_audio.play();
+        syncMediaCenterState();
+    });
     m_themeShop->onClosed([this, clearCompletedThemeTransferState]() {
+        m_themeShop->resetMusicTabState();
         m_configSaveFuture = m_threadPool.submit([cfg = m_config]() {
             cfg.save();
         });

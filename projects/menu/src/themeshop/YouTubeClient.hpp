@@ -88,8 +88,10 @@ public:
     // Audio download
     bool downloadTrack(size_t trackIndex, StatusProgressCallback onProgress = nullptr, CompleteCallback onComplete = nullptr);
 
-    // Check SD card for existing files
+    // Check SD card for existing files & load installed library
+    void loadInstalledTracks();
     void refreshDownloadedStatus();
+    bool deleteTrack(size_t trackIndex);
 
     static std::string sanitizeFilename(const std::string& name);
     static std::string musicDirectory();

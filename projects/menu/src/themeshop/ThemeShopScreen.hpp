@@ -150,14 +150,18 @@ public:
     using ProgressUpdateCb = std::function<void(const std::string& message, float progress01)>;
     using ProgressHideCb = std::function<void()>;
 
+    using PlayMusicCb = std::function<void(const std::string& path, const std::string& title)>;
+
     void onRequestTextEntry(TextEntryRequestCb cb) { m_requestTextEntryCb = std::move(cb); }
     void onProgressShow(ProgressShowCb cb) { m_progressShowCb = std::move(cb); }
     void onProgressUpdate(ProgressUpdateCb cb) { m_progressUpdateCb = std::move(cb); }
     void onProgressHide(ProgressHideCb cb) { m_progressHideCb = std::move(cb); }
     void onMusicDownloaded(VoidCb cb) { m_musicDownloadedCb = std::move(cb); }
+    void onPlayMusic(PlayMusicCb cb) { m_playMusicCb = std::move(cb); }
     bool isMusicTab() const;
     void pollMusicDownloads();
     void searchYouTube(const std::string& query);
+    void resetMusicTabState();
     YouTubeClient& youTubeClient() { return m_youTubeClient; }
     const YouTubeClient::TrackItem* selectedMusicTrack() const;
 
@@ -402,6 +406,7 @@ private:
     ProgressUpdateCb m_progressUpdateCb;
     ProgressHideCb m_progressHideCb;
     VoidCb m_musicDownloadedCb;
+    PlayMusicCb m_playMusicCb;
     int m_lastCustomTabIndex = -1;
     std::string m_lastPreviewPrimeKey;
     float m_previewTrimTimer = 0.f;

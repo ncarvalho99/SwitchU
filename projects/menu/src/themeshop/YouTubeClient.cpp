@@ -66,7 +66,9 @@ std::string formatBytes(std::uint64_t bytes) {
 
 } // namespace
 
-YouTubeClient::YouTubeClient() = default;
+YouTubeClient::YouTubeClient() {
+    loadInstalledTracks();
+}
 
 YouTubeClient::~YouTubeClient() {
     cancelSearch();
@@ -152,6 +154,12 @@ void YouTubeClient::search(const std::string& query, SearchCallback cb) {
     }
 
     m_lastQuery = query;
+    if (query.empty()) {
+        loadInstalledTracks();
+        if (cb) cb(true, "");
+        return;
+    }
+
     m_isSearching.store(true, std::memory_order_release);
     m_cancelRequested.store(false, std::memory_order_release);
 
@@ -409,6 +417,77 @@ std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const st
     }
 
     throw std::runtime_error("Could not resolve audio stream URL for video");
+}
+
+void YouTubeClient::loadInstalledTracks() {
+    std::string musicDir = musicDirectory();
+    std::vector<TrackItem> items;
+    std::error_code ec;
+    if (std::filesystem::is_directory(musicDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(musicDir, ec)) {
+            if (ec) {
+                ec.clear();
+                continue;
+            }
+            if (!entry.is_regular_file(ec))
+                continue;
+
+            std::error_code szEc;
+            auto sz = entry.file_size(szEc);
+            if (!szEc && sz < 1024)
+                continue;
+
+            std::string ext = entry.path().extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+            if (ext == ".mp3" || ext == ".ogg" || ext == ".wav") {
+                TrackItem track;
+                track.id = "local:" + entry.path().filename().string();
+                track.title = entry.path().stem().string();
+                track.author = "SD: /music";
+                track.duration = formatBytes(sz);
+                track.isDownloaded = true;
+                track.localFilePath = entry.path().string();
+                track.statusText = "✓ Instalado";
+                items.push_back(std::move(track));
+            }
+        }
+    }
+
+    std::sort(items.begin(), items.end(), [](const TrackItem& a, const TrackItem& b) {
+        return a.title < b.title;
+    });
+
+    std::lock_guard<std::mutex> lk(m_tracksMutex);
+    m_tracks = std::move(items);
+}
+
+bool YouTubeClient::deleteTrack(size_t trackIndex) {
+    std::string pathToDelete;
+    {
+        std::lock_guard<std::mutex> lk(m_tracksMutex);
+        if (trackIndex >= m_tracks.size())
+            return false;
+        pathToDelete = m_tracks[trackIndex].localFilePath;
+        if (pathToDelete.empty()) {
+            std::string cleanName = sanitizeFilename(m_tracks[trackIndex].title);
+            pathToDelete = musicDirectory() + "/" + cleanName + ".mp3";
+        }
+    }
+
+    if (!pathToDelete.empty()) {
+        std::error_code ec;
+        std::filesystem::remove(pathToDelete, ec);
+        DebugLog::log("[youtube] Deleted track file: %s (ec=%d)", pathToDelete.c_str(), ec.value());
+    }
+
+    if (m_lastQuery.empty()) {
+        loadInstalledTracks();
+    } else {
+        refreshDownloadedStatus();
+    }
+    return true;
 }
 
 void YouTubeClient::refreshDownloadedStatus() {

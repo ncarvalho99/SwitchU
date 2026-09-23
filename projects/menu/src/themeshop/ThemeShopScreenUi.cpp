@@ -902,8 +902,12 @@ ThemeShopScreen::installedEntryForCatalogue(const std::string& catalogueId) cons
 }
 
 int ThemeShopScreen::detailButtonCount() const {
-    if (isMusicTab())
-        return selectedMusicTrack() ? 1 : 0;
+    if (isMusicTab()) {
+        const auto* track = selectedMusicTrack();
+        if (!track)
+            return 0;
+        return track->isDownloaded ? 2 : 1;
+    }
 
     if (isCommunityTab())
         return selectedCommunityThemeEntry() ? 2 : 0;
@@ -921,13 +925,35 @@ void ThemeShopScreen::activateDetailButton(int buttonIndex) {
         const auto* track = selectedMusicTrack();
         if (!track)
             return;
+        int trackIdx = currentSelectedIndex();
+        if (trackIdx < 0)
+            return;
+
+        if (track->isDownloaded) {
+            if (buttonIndex == 0) {
+                // Play Track!
+                closeDetail();
+                if (m_playMusicCb) {
+                    m_playMusicCb(track->localFilePath, track->title);
+                }
+                requestToast(i18n.tr("themeshop.music.playing", "Playing: ") + track->title, 2.5f);
+                return;
+            } else if (buttonIndex == 1) {
+                // Delete Track!
+                closeDetail();
+                m_youTubeClient.deleteTrack(static_cast<size_t>(trackIdx));
+                requestToast(i18n.tr("themeshop.music.deleted", "Track deleted from SD card."), 2.5f);
+                if (m_musicDownloadedCb) {
+                    m_musicDownloadedCb();
+                }
+                return;
+            }
+        }
+
         if (track->isDownloading) {
             requestToast(i18n.tr("themeshop.music.download_busy", "Download already in progress."), 2.5f);
             return;
         }
-        int trackIdx = currentSelectedIndex();
-        if (trackIdx < 0)
-            return;
 
         closeDetail();
         std::string dlgTitle = i18n.tr("themeshop.music.download_title", "Downloading Music");
@@ -1905,8 +1931,13 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     // PoloNX. O cabecalho dizia "comunidade" nas duas.
     std::string title, subtitle;
     if (isMusicTab()) {
-        title = i18n.tr("themeshop.music.title", "Music & Soundtracks");
-        subtitle = i18n.tr("themeshop.music.subtitle", "Search YouTube and download custom BGM to SD card.");
+        if (!m_youtubeSearchQuery.empty()) {
+            title = i18n.tr("themeshop.music.results_title", "YouTube Search Results");
+            subtitle = i18n.tr("themeshop.music.results_subtitle", "Online songs found for: ") + "'" + m_youtubeSearchQuery + "'";
+        } else {
+            title = i18n.tr("themeshop.music.installed_title", "Installed Music Library");
+            subtitle = i18n.tr("themeshop.music.installed_subtitle", "Your local songs saved in sdmc:/config/SwitchU/music/");
+        }
     } else if (isAnimatedTab()) {
         title = i18n.tr("themeshop.animated.title", "Animated Themes");
         subtitle = i18n.tr("themeshop.animated.subtitle", "Moving wallpapers, with sound when the theme brings it.");
@@ -2119,8 +2150,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                 emptyTitle = i18n.tr("themeshop.music.no_results", "No songs found for this search.");
                 emptySubtitle = i18n.tr("themeshop.music.no_results_hint", "Press Search (or X) to try different keywords.");
             } else {
-                emptyTitle = i18n.tr("themeshop.music.empty_title", "Search YouTube Music");
-                emptySubtitle = i18n.tr("themeshop.music.empty_hint", "Press Search (or X) to find custom BGM soundtracks.");
+                emptyTitle = i18n.tr("themeshop.music.empty_installed_title", "No Local Songs Found");
+                emptySubtitle = i18n.tr("themeshop.music.empty_installed_hint", "Press Search (or X) to find and download songs from YouTube.");
             }
         } else {
             bool searchActive = !m_searchQuery.empty();
@@ -2214,16 +2245,21 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                 } else {
                     sizeText = i18n.tr("themeshop.music.download", "Download");
                 }
-                previewTexture = m_youTubeClient.thumbnailTexture(track.id);
-                auto phase = m_youTubeClient.thumbnailPhase(track.id);
-                previewPhase = (phase == YouTubeClient::PreviewPhase::Ready) ? PreviewPhase::Ready :
-                               (phase == YouTubeClient::PreviewPhase::Downloaded || phase == YouTubeClient::PreviewPhase::Loading) ? PreviewPhase::Loading :
-                               PreviewPhase::Idle;
-                if (previewPhase == PreviewPhase::Idle) {
-                    m_youTubeClient.primeThumbnail(track.id, track.thumbnailUrl);
-                    previewPhase = PreviewPhase::Loading;
+                if (!track.thumbnailUrl.empty()) {
+                    previewTexture = m_youTubeClient.thumbnailTexture(track.id);
+                    auto phase = m_youTubeClient.thumbnailPhase(track.id);
+                    previewPhase = (phase == YouTubeClient::PreviewPhase::Ready) ? PreviewPhase::Ready :
+                                   (phase == YouTubeClient::PreviewPhase::Downloaded || phase == YouTubeClient::PreviewPhase::Loading) ? PreviewPhase::Loading :
+                                   PreviewPhase::Idle;
+                    if (previewPhase == PreviewPhase::Idle) {
+                        m_youTubeClient.primeThumbnail(track.id, track.thumbnailUrl);
+                        previewPhase = PreviewPhase::Loading;
+                    }
+                    previewRequested = true;
+                } else {
+                    previewRequested = false;
+                    previewPhase = PreviewPhase::Idle;
                 }
-                previewRequested = true;
             }
         } else if (isCommunityTab()) {
             const auto& entry = m_communityEntries[(size_t)globalIndex];
@@ -2418,21 +2454,28 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
             return;
         detailTitle = track->title;
         detailSubtitle = track->author.empty() ? "YouTube" : track->author;
-        detailInfoA = i18n.tr("themeshop.music.duration", "Duration: ") + track->duration;
-        detailInfoB = i18n.tr("themeshop.music.video_id", "Video ID: ") + track->id;
+        detailInfoA = track->isDownloaded ? (i18n.tr("themeshop.music.size", "Size: ") + track->duration)
+                                          : (i18n.tr("themeshop.music.duration", "Duration: ") + track->duration);
+        detailInfoB = track->isDownloaded ? i18n.tr("themeshop.music.status_downloaded", "Status: Saved in sdmc:/config/SwitchU/music/")
+                                          : (i18n.tr("themeshop.music.video_id", "Video ID: ") + track->id);
         detailInfoC = track->isDownloaded
-            ? i18n.tr("themeshop.music.status_downloaded", "Status: Saved in sdmc:/config/SwitchU/music/")
+            ? i18n.tr("themeshop.music.status_ready_play", "Status: Ready to play or delete")
             : i18n.tr("themeshop.music.status_ready", "Status: Ready to download (.mp3)");
-        detailPreviewTexture = m_youTubeClient.thumbnailTexture(track->id);
-        auto phase = m_youTubeClient.thumbnailPhase(track->id);
-        detailPreviewPhase = (phase == YouTubeClient::PreviewPhase::Ready) ? PreviewPhase::Ready :
-                             (phase == YouTubeClient::PreviewPhase::Downloaded || phase == YouTubeClient::PreviewPhase::Loading) ? PreviewPhase::Loading :
-                             PreviewPhase::Idle;
-        if (detailPreviewPhase == PreviewPhase::Idle) {
-            m_youTubeClient.primeThumbnail(track->id, track->thumbnailUrl);
-            detailPreviewPhase = PreviewPhase::Loading;
+        if (!track->thumbnailUrl.empty()) {
+            detailPreviewTexture = m_youTubeClient.thumbnailTexture(track->id);
+            auto phase = m_youTubeClient.thumbnailPhase(track->id);
+            detailPreviewPhase = (phase == YouTubeClient::PreviewPhase::Ready) ? PreviewPhase::Ready :
+                                 (phase == YouTubeClient::PreviewPhase::Downloaded || phase == YouTubeClient::PreviewPhase::Loading) ? PreviewPhase::Loading :
+                                 PreviewPhase::Idle;
+            if (detailPreviewPhase == PreviewPhase::Idle) {
+                m_youTubeClient.primeThumbnail(track->id, track->thumbnailUrl);
+                detailPreviewPhase = PreviewPhase::Loading;
+            }
+            detailPreviewRequested = true;
+        } else {
+            detailPreviewRequested = false;
+            detailPreviewPhase = PreviewPhase::Idle;
         }
-        detailPreviewRequested = true;
     } else if (isCommunityTab()) {
         const auto* entry = selectedCommunityThemeEntry();
         if (!entry)
@@ -2733,7 +2776,8 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         if (track && track->isDownloading) {
             buttonLabels.push_back(i18n.tr("themeshop.music.downloading", "Downloading..."));
         } else if (track && track->isDownloaded) {
-            buttonLabels.push_back(i18n.tr("themeshop.music.redownload", "Re-download Track"));
+            buttonLabels.push_back(i18n.tr("themeshop.music.play_track", "Play Track"));
+            buttonLabels.push_back(i18n.tr("themeshop.music.delete_track", "Delete Track"));
         } else {
             buttonLabels.push_back(i18n.tr("themeshop.music.download_action", "Download Track (.mp3)"));
         }

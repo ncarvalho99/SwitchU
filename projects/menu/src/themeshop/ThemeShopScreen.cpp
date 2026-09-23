@@ -1272,6 +1272,13 @@ void ThemeShopScreen::searchYouTube(const std::string& query) {
     });
 }
 
+void ThemeShopScreen::resetMusicTabState() {
+    m_youtubeSearchQuery.clear();
+    m_musicScrollRow = 0;
+    m_musicSelectedIndex = 0;
+    m_youTubeClient.loadInstalledTracks();
+}
+
 const YouTubeClient::TrackItem* ThemeShopScreen::selectedMusicTrack() const {
     if (!isMusicTab())
         return nullptr;
