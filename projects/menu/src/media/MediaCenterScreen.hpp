@@ -81,6 +81,10 @@ private:
     float m_marqueeWait = 0.0f;
     int   m_marqueeDir = 1;
 
+    float m_descMarqueeOffset = 0.0f;
+    float m_descMarqueeWait = 0.0f;
+    int   m_descMarqueeDir = 1;
+
     // Callbacks
     std::function<void()> m_onPlayPauseCb;
     std::function<void()> m_onNextTrackCb;

@@ -4,10 +4,64 @@
 #include <fmt/format.h>
 #include <algorithm>
 #include <cmath>
+#ifdef SWITCHU_MENU
+#include <switch.h>
+#endif
 
 namespace media {
 
 namespace {
+
+float getHardwareVolume() {
+#ifdef SWITCHU_MENU
+    static bool s_audctlInited = false;
+    if (!s_audctlInited) {
+        if (R_SUCCEEDED(audctlInitialize())) {
+            s_audctlInited = true;
+        }
+    }
+    if (s_audctlInited) {
+        float masterVol = 0.0f;
+        if (R_SUCCEEDED(audctlGetSystemOutputMasterVolume(&masterVol))) {
+            return std::clamp(masterVol, 0.0f, 1.0f);
+        }
+        AudioTarget target = AudioTarget_Speaker;
+        if (R_SUCCEEDED(audctlGetDefaultTarget(&target))) {
+            s32 vol = 0, vmin = 0, vmax = 100;
+            if (R_SUCCEEDED(audctlGetTargetVolume(&vol, target)) &&
+                R_SUCCEEDED(audctlGetTargetVolumeMin(&vmin)) &&
+                R_SUCCEEDED(audctlGetTargetVolumeMax(&vmax)) && vmax > vmin) {
+                return std::clamp(static_cast<float>(vol - vmin) / static_cast<float>(vmax - vmin), 0.0f, 1.0f);
+            }
+        }
+    }
+#endif
+    return -1.0f;
+}
+
+void setHardwareVolume(float vol) {
+#ifdef SWITCHU_MENU
+    static bool s_audctlInited = false;
+    if (!s_audctlInited) {
+        if (R_SUCCEEDED(audctlInitialize())) {
+            s_audctlInited = true;
+        }
+    }
+    if (s_audctlInited) {
+        float clamped = std::clamp(vol, 0.0f, 1.0f);
+        audctlSetSystemOutputMasterVolume(clamped);
+        AudioTarget target = AudioTarget_Speaker;
+        if (R_SUCCEEDED(audctlGetDefaultTarget(&target))) {
+            s32 vmin = 0, vmax = 100;
+            if (R_SUCCEEDED(audctlGetTargetVolumeMin(&vmin)) &&
+                R_SUCCEEDED(audctlGetTargetVolumeMax(&vmax)) && vmax > vmin) {
+                s32 tvol = vmin + static_cast<s32>(clamped * (vmax - vmin) + 0.5f);
+                audctlSetTargetVolume(target, tvol);
+            }
+        }
+    }
+#endif
+}
 
 std::string truncateText(nxui::Font* font, const std::string& text, float scale, float maxW) {
     if (!font || text.empty() || maxW <= 4.f) return text;
@@ -90,6 +144,9 @@ void MediaCenterScreen::show() {
     m_marqueeOffset = 0.0f;
     m_marqueeWait = 1.5f;
     m_marqueeDir = 1;
+    m_descMarqueeOffset = 0.0f;
+    m_descMarqueeWait = 1.5f;
+    m_descMarqueeDir = 1;
 }
 
 void MediaCenterScreen::hide() {
@@ -126,10 +183,16 @@ void MediaCenterScreen::onUpdate(float dt) {
         m_fadeAnim = std::min(1.0f, m_fadeAnim + dt * 6.0f);
     }
 
+    // Dynamic hardware master volume sync
+    float hwVol = getHardwareVolume();
+    if (hwVol >= 0.0f) {
+        m_volume = hwVol;
+    }
+
     // Ping-pong marquee update for long titles
     if (m_font && !m_currentTitle.empty()) {
-        const float maxW = 790.0f;
-        const float textW = m_font->measure(m_currentTitle).x * 0.95f;
+        const float maxW = 760.0f;
+        const float textW = m_font->measure(m_currentTitle).x * 0.94f;
         if (textW > maxW) {
             const float maxOffset = textW - maxW;
             if (m_marqueeWait > 0.0f) {
@@ -148,6 +211,32 @@ void MediaCenterScreen::onUpdate(float dt) {
             }
         } else {
             m_marqueeOffset = 0.0f;
+        }
+    }
+
+    // Ping-pong marquee update for mode description
+    if (m_smallFont) {
+        std::string desc = getAudioModeDesc();
+        const float maxW = 350.0f;
+        const float textW = m_smallFont->measure(desc).x * 0.70f;
+        if (textW > maxW) {
+            const float maxOffset = textW - maxW;
+            if (m_descMarqueeWait > 0.0f) {
+                m_descMarqueeWait -= dt;
+            } else {
+                m_descMarqueeOffset += m_descMarqueeDir * dt * 38.0f;
+                if (m_descMarqueeOffset >= maxOffset) {
+                    m_descMarqueeOffset = maxOffset;
+                    m_descMarqueeDir = -1;
+                    m_descMarqueeWait = 2.0f;
+                } else if (m_descMarqueeOffset <= 0.0f) {
+                    m_descMarqueeOffset = 0.0f;
+                    m_descMarqueeDir = 1;
+                    m_descMarqueeWait = 2.0f;
+                }
+            }
+        } else {
+            m_descMarqueeOffset = 0.0f;
         }
     }
 }
@@ -182,12 +271,18 @@ void MediaCenterScreen::cycleAudioMode(int dir) {
     int idx = (it != kModes.end()) ? static_cast<int>(std::distance(kModes.begin(), it)) : 0;
     idx = (idx + dir + static_cast<int>(kModes.size())) % static_cast<int>(kModes.size());
     m_audioMode = kModes[idx];
+    m_descMarqueeOffset = 0.0f;
+    m_descMarqueeWait = 1.5f;
+    m_descMarqueeDir = 1;
     if (m_onAudioModeChangeCb) m_onAudioModeChangeCb(m_audioMode);
 }
 
 void MediaCenterScreen::adjustVolume(float delta) {
-    m_volume = std::clamp(m_volume + delta, 0.0f, 1.0f);
-    if (m_onVolumeChangeCb) m_onVolumeChangeCb(m_volume);
+    float curVol = (m_volume >= 0.0f) ? m_volume : 0.5f;
+    float newVol = std::clamp(curVol + delta, 0.0f, 1.0f);
+    m_volume = newVol;
+    setHardwareVolume(newVol);
+    if (m_onVolumeChangeCb) m_onVolumeChangeCb(newVol);
 }
 
 void MediaCenterScreen::onRender(nxui::Renderer& ren) {
@@ -283,18 +378,16 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
             ? i18n.tr("media.no_track", "Nenhuma música em reprodução")
             : m_currentTitle;
 
-        // Push scissor or clip to avoid overflowing banner
-        const float clipX = bannerRect.x + 62.0f;
-        const float clipW = 760.0f;
-        std::string fittedTitle = truncateText(m_font, displayTitle, 0.94f, clipW);
+        const nxui::Rect titleClipRect{bannerRect.x + 62.0f, bannerRect.y + 8.0f, 760.0f, 32.0f};
+        ren.pushClipRect(titleClipRect);
         if (m_marqueeOffset > 0.0f) {
-            // Draw shifted by marquee
-            ren.drawText(displayTitle, {clipX - m_marqueeOffset, bannerRect.y + 12.0f},
+            ren.drawText(displayTitle, {titleClipRect.x - m_marqueeOffset, bannerRect.y + 12.0f},
                          m_font, nxui::Color(1.0f, 1.0f, 1.0f, alpha), 0.94f);
         } else {
-            ren.drawText(fittedTitle, {clipX, bannerRect.y + 12.0f},
+            ren.drawText(displayTitle, {titleClipRect.x, bannerRect.y + 12.0f},
                          m_font, nxui::Color(1.0f, 1.0f, 1.0f, alpha), 0.94f);
         }
+        ren.popClipRect();
     }
 
     if (m_smallFont) {
@@ -415,10 +508,22 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         ren.drawText(modeTitle, {modeRect.x + (modeRect.width - mtw) * 0.5f, modeRect.y + 6.0f},
                      m_smallFont, modeFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha),
                      0.84f);
-        std::string desc = truncateText(m_smallFont, getAudioModeDesc(), 0.70f, 350.0f);
-        float dtw = m_smallFont->measure(desc).x * 0.70f;
-        ren.drawText(desc, {modeRect.x + (modeRect.width - dtw) * 0.5f, modeRect.y + 26.0f},
-                     m_smallFont, nxui::Color(0.65f, 0.80f, 0.95f, 0.85f * alpha), 0.70f);
+
+        std::string desc = getAudioModeDesc();
+        const nxui::Rect descClipRect{modeRect.x + 30.0f, modeRect.y + 24.0f, modeRect.width - 60.0f, 20.0f};
+        ren.pushClipRect(descClipRect);
+        if (m_descMarqueeOffset > 0.0f) {
+            ren.drawText(desc, {descClipRect.x - m_descMarqueeOffset, modeRect.y + 26.0f},
+                         m_smallFont, nxui::Color(0.65f, 0.80f, 0.95f, 0.85f * alpha), 0.70f);
+        } else {
+            float dtw = m_smallFont->measure(desc).x * 0.70f;
+            float startX = (dtw < descClipRect.width)
+                ? modeRect.x + (modeRect.width - dtw) * 0.5f
+                : descClipRect.x;
+            ren.drawText(desc, {startX, modeRect.y + 26.0f},
+                         m_smallFont, nxui::Color(0.65f, 0.80f, 0.95f, 0.85f * alpha), 0.70f);
+        }
+        ren.popClipRect();
     }
 
     // Volume Down / Up Buttons (Col 1 & 2)
