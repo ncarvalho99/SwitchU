@@ -1717,6 +1717,7 @@ void WiiUMenuApp::handleSystemAction(SysAction a) {
 #if 0 // Replaced by the dynamic-layout-aware 1.2 implementation.
 void WiiUMenuApp::updateCursor() {
     if ((m_themeShop && m_themeShop->isActive()) ||
+        (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) ||
         (m_gameGallery && m_gameGallery->isActive()) ||
         (m_gameMods && m_gameMods->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||

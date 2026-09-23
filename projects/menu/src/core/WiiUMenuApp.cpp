@@ -5335,30 +5335,37 @@ void WiiUMenuApp::buildGrid() {
     if (m_userAvatarBar)
         m_topHud->addChild(m_userAvatarBar);
 
-    auto topCenterCluster = std::make_shared<nxui::Box>(nxui::Axis::ROW);
-    topCenterCluster->setTag("topCenterCluster");
-    topCenterCluster->setWireframeEnabled(false);
-    topCenterCluster->setAlignItems(nxui::AlignItems::CENTER);
-    topCenterCluster->setMarginTop(18.f);
+    m_topCenterCluster = std::make_shared<nxui::Box>(nxui::Axis::ROW);
+    m_topCenterCluster->setTag("topCenterCluster");
+    m_topCenterCluster->setWireframeEnabled(false);
+    m_topCenterCluster->setAlignItems(nxui::AlignItems::CENTER);
+    m_topCenterCluster->setMarginTop(18.f);
+    m_topCenterCluster->setShrink(0.f);
+    m_topCenterCluster->setGap(12.f);
+    m_topCenterCluster->setSize(120.f, 48.f);
 
     m_screenSwapButton = std::make_shared<warawara::PlazaScreenSwapButton>();
+    m_screenSwapButton->setSize(54.f, 48.f);
     m_screenSwapButton->setMarginTop(0.f);
+    m_screenSwapButton->setShrink(0.f);
     m_screenSwapButton->onActivate([this]() {
         m_audio.playSfx(Sfx::Activate);
         toggleWaraWaraPlaza();
     });
-    topCenterCluster->addChild(m_screenSwapButton);
+    m_topCenterCluster->addChild(m_screenSwapButton);
 
     m_mediaCenterButton = std::make_shared<widgets::MediaCenterButton>();
+    m_mediaCenterButton->setSize(54.f, 48.f);
     m_mediaCenterButton->setMarginTop(0.f);
-    m_mediaCenterButton->setMarginLeft(12.f);
+    m_mediaCenterButton->setShrink(0.f);
     m_mediaCenterButton->onActivate([this]() {
         m_audio.playSfx(Sfx::Activate);
         toggleMediaCenter();
     });
-    topCenterCluster->addChild(m_mediaCenterButton);
+    m_topCenterCluster->addChild(m_mediaCenterButton);
 
-    m_topHud->addChild(topCenterCluster);
+    m_topCenterCluster->layout();
+    m_topHud->addChild(m_topCenterCluster);
 
     m_topHud->addChild(m_battery);
     m_topHud->layout();

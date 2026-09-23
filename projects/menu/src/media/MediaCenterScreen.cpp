@@ -23,6 +23,50 @@ std::string truncateText(nxui::Font* font, const std::string& text, float scale,
     return kEllipsis;
 }
 
+void drawPrevIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawRoundedRect({c.x - 9.f * scale, c.y - 7.f * scale, 2.5f * scale, 14.f * scale}, col, 1.f * scale);
+    ren.drawTriangle({c.x - 7.f * scale, c.y}, {c.x - 1.f * scale, c.y - 6.5f * scale}, {c.x - 1.f * scale, c.y + 6.5f * scale}, col);
+    ren.drawTriangle({c.x - 1.f * scale, c.y}, {c.x + 5.f * scale, c.y - 6.5f * scale}, {c.x + 5.f * scale, c.y + 6.5f * scale}, col);
+}
+
+void drawPlayIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawTriangle({c.x - 4.5f * scale, c.y - 7.5f * scale}, {c.x + 7.5f * scale, c.y}, {c.x - 4.5f * scale, c.y + 7.5f * scale}, col);
+}
+
+void drawPauseIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawRoundedRect({c.x - 5.5f * scale, c.y - 7.5f * scale, 3.2f * scale, 15.f * scale}, col, 1.2f * scale);
+    ren.drawRoundedRect({c.x + 2.0f * scale, c.y - 7.5f * scale, 3.2f * scale, 15.f * scale}, col, 1.2f * scale);
+}
+
+void drawNextIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawTriangle({c.x - 5.f * scale, c.y - 6.5f * scale}, {c.x + 1.f * scale, c.y}, {c.x - 5.f * scale, c.y + 6.5f * scale}, col);
+    ren.drawTriangle({c.x + 1.f * scale, c.y - 6.5f * scale}, {c.x + 7.f * scale, c.y}, {c.x + 1.f * scale, c.y + 6.5f * scale}, col);
+    ren.drawRoundedRect({c.x + 7.f * scale, c.y - 7.f * scale, 2.5f * scale, 14.f * scale}, col, 1.f * scale);
+}
+
+void drawShuffleIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawLine({c.x - 8.f * scale, c.y - 4.f * scale}, {c.x - 2.f * scale, c.y - 4.f * scale}, col, 2.0f * scale);
+    ren.drawLine({c.x - 2.f * scale, c.y - 4.f * scale}, {c.x + 2.f * scale, c.y + 4.f * scale}, col, 2.0f * scale);
+    ren.drawLine({c.x + 2.f * scale, c.y + 4.f * scale}, {c.x + 7.f * scale, c.y + 4.f * scale}, col, 2.0f * scale);
+    ren.drawTriangle({c.x + 7.f * scale, c.y + 4.f * scale}, {c.x + 4.f * scale, c.y + 1.f * scale}, {c.x + 4.f * scale, c.y + 7.f * scale}, col);
+
+    ren.drawLine({c.x - 8.f * scale, c.y + 4.f * scale}, {c.x - 2.f * scale, c.y + 4.f * scale}, col, 2.0f * scale);
+    ren.drawLine({c.x - 2.f * scale, c.y + 4.f * scale}, {c.x + 2.f * scale, c.y - 4.f * scale}, col, 2.0f * scale);
+    ren.drawLine({c.x + 2.f * scale, c.y - 4.f * scale}, {c.x + 7.f * scale, c.y - 4.f * scale}, col, 2.0f * scale);
+    ren.drawTriangle({c.x + 7.f * scale, c.y - 4.f * scale}, {c.x + 4.f * scale, c.y - 7.f * scale}, {c.x + 4.f * scale, c.y - 1.f * scale}, col);
+}
+
+void drawSpeakerIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawRect({c.x - 7.f * scale, c.y - 3.5f * scale, 3.5f * scale, 7.f * scale}, col);
+    ren.drawTriangle({c.x - 3.5f * scale, c.y - 3.5f * scale}, {c.x + 2.f * scale, c.y - 7.f * scale}, {c.x + 2.f * scale, c.y + 7.f * scale}, col);
+    ren.drawTriangle({c.x - 3.5f * scale, c.y - 3.5f * scale}, {c.x + 2.f * scale, c.y + 7.f * scale}, {c.x - 3.5f * scale, c.y + 3.5f * scale}, col);
+}
+
+void drawRefreshIcon(nxui::Renderer& ren, nxui::Vec2 c, const nxui::Color& col, float scale = 1.0f) {
+    ren.drawRoundedRectOutline({c.x - 7.f * scale, c.y - 7.f * scale, 14.f * scale, 14.f * scale}, col, 7.f * scale, 2.0f * scale);
+    ren.drawTriangle({c.x + 7.f * scale, c.y - 2.f * scale}, {c.x + 3.f * scale, c.y - 7.f * scale}, {c.x + 9.f * scale, c.y - 8.f * scale}, col);
+}
+
 } // namespace
 
 MediaCenterScreen::MediaCenterScreen() {
@@ -204,8 +248,11 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         const nxui::Rect closePill{940.0f, 90.0f, 125.0f, 32.0f};
         ren.drawRoundedRect(closePill, nxui::Color(0.08f, 0.14f, 0.24f, 0.45f * alpha), 12.0f);
         ren.drawRoundedRectOutline(closePill, nxui::Color(1.0f, 1.0f, 1.0f, 0.25f * alpha), 12.0f, 1.0f);
-        ren.drawText(i18n.tr("button.close_hint", "(B) Fechar"), {closePill.x + 14.0f, closePill.y + 6.0f},
-                     m_smallFont, nxui::Color(0.85f, 0.90f, 0.95f, alpha), 0.82f);
+        // B button badge
+        ren.drawCircle({closePill.x + 18.0f, closePill.y + 16.0f}, 9.0f, nxui::Color(0.85f, 0.25f, 0.25f, 0.85f * alpha));
+        ren.drawText("B", {closePill.x + 14.5f, closePill.y + 8.5f}, m_smallFont, nxui::Color::white().withAlpha(alpha), 0.72f);
+        ren.drawText(i18n.tr("button.close", "Fechar"), {closePill.x + 36.0f, closePill.y + 7.5f},
+                     m_smallFont, nxui::Color(0.90f, 0.94f, 0.98f, alpha), 0.82f);
     }
 
     // 4. Now Playing Card
@@ -213,9 +260,21 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
     ren.drawRoundedRect(bannerRect, nxui::Color(0.04f, 0.08f, 0.15f, 0.60f * alpha), 16.0f);
     ren.drawRoundedRectOutline(bannerRect, nxui::Color(0.30f, 0.60f, 0.90f, 0.35f * alpha), 16.0f, 1.0f);
 
-    // Now Playing Icon
-    ren.drawCircle({bannerRect.x + 28.0f, bannerRect.y + 37.0f}, 12.0f,
-                   m_playing ? nxui::Color(0.15f, 0.70f, 0.95f, 0.85f * alpha) : nxui::Color(0.5f, 0.5f, 0.5f, 0.5f * alpha));
+    // Now Playing Graphic: Concentric Vinyl Record + Dancing Equalizer Bars
+    const float discX = bannerRect.x + 32.0f;
+    const float discY = bannerRect.y + 37.0f;
+    ren.drawCircle({discX, discY}, 18.0f, nxui::Color(0.07f, 0.11f, 0.18f, alpha));
+    ren.drawCircle({discX, discY}, 15.0f, nxui::Color(0.12f, 0.18f, 0.28f, 0.8f * alpha));
+    ren.drawCircle({discX, discY}, 11.0f, nxui::Color(0.07f, 0.11f, 0.18f, alpha));
+
+    // Animated dancing equalizer bars
+    for (int b = 0; b < 4; ++b) {
+        float phase = b * 1.25f;
+        float h = m_playing ? (5.0f + 11.0f * (0.5f + 0.5f * std::sin(m_animTimer * 8.0f + phase))) : 4.0f;
+        float bx = discX - 8.5f + b * 5.2f;
+        float by = discY - h * 0.5f;
+        ren.drawRoundedRect({bx, by, 3.2f, h}, m_playing ? accentCyan : nxui::Color(0.40f, 0.50f, 0.65f, 0.6f * alpha), 1.2f);
+    }
 
     // Now Playing Title & Status Subtitle
     if (m_font) {
@@ -224,8 +283,8 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
             : m_currentTitle;
 
         // Push scissor or clip to avoid overflowing banner
-        const float clipX = bannerRect.x + 55.0f;
-        const float clipW = 770.0f;
+        const float clipX = bannerRect.x + 62.0f;
+        const float clipW = 760.0f;
         std::string fittedTitle = truncateText(m_font, displayTitle, 0.94f, clipW);
         if (m_marqueeOffset > 0.0f) {
             // Draw shifted by marquee
@@ -247,13 +306,13 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         } else {
             statusStr = i18n.tr("media.status_stopped", "Parado");
         }
-        ren.drawText(statusStr, {bannerRect.x + 55.0f, bannerRect.y + 44.0f},
+        ren.drawText(statusStr, {bannerRect.x + 62.0f, bannerRect.y + 44.0f},
                      m_smallFont, nxui::Color(0.40f, 0.85f, 1.0f, 0.90f * alpha), 0.78f);
     }
 
     // 5. Row 0: Transport Buttons Bar
     const float transY = 222.0f;
-    const float transH = 44.0f;
+    const float transH = 46.0f;
     const float transW = 200.0f;
     const float transGap = 16.0f;
 
@@ -262,10 +321,10 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         bool active = false;
     };
     std::vector<ButtonDef> transButtons = {
-        { i18n.tr("media.btn_prev", "|<< Anterior"), false },
-        { m_playing ? i18n.tr("media.btn_pause", "|| Pausar") : i18n.tr("media.btn_play", "> Tocar"), m_playing },
-        { i18n.tr("media.btn_next", "Próxima >>|"), false },
-        { m_shuffle ? i18n.tr("media.btn_shuffle_on", "Aleatório: SIM") : i18n.tr("media.btn_shuffle_off", "Aleatório: NÃO"), m_shuffle }
+        { i18n.tr("media.btn_prev", "Anterior"), false },
+        { m_playing ? i18n.tr("media.btn_pause", "Pausar") : i18n.tr("media.btn_play", "Tocar"), m_playing },
+        { i18n.tr("media.btn_next", "Próxima"), false },
+        { i18n.tr("media.btn_shuffle", "Aleatório"), m_shuffle }
     };
 
     for (int i = 0; i < 4; ++i) {
@@ -273,7 +332,7 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         const bool isFocused = (m_focusRow == 0 && m_focusCol == i);
 
         nxui::Color btnBg = isFocused
-            ? nxui::Color(0.16f, 0.40f, 0.70f, 0.50f * alpha)
+            ? nxui::Color(0.18f, 0.44f, 0.76f, 0.55f * alpha)
             : (transButtons[i].active
                 ? nxui::Color(0.10f, 0.35f, 0.55f, 0.42f * alpha)
                 : nxui::Color(0.06f, 0.12f, 0.22f, 0.36f * alpha));
@@ -282,38 +341,94 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         ren.drawRoundedRectOutline(btnRect, isFocused ? focusGold : nxui::Color(1.0f, 1.0f, 1.0f, 0.28f * alpha),
                                    14.0f, isFocused ? 2.0f : 1.0f);
 
-        if (m_smallFont) {
-            float textW = m_smallFont->measure(transButtons[i].label).x * 0.85f;
-            float textX = btnRect.x + (btnRect.width - textW) * 0.5f;
-            ren.drawText(transButtons[i].label, {textX, btnRect.y + 11.0f},
-                         m_smallFont, isFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha),
-                         0.85f);
+        const nxui::Color iconCol = isFocused
+            ? nxui::Color(1.0f, 0.95f, 0.65f, alpha)
+            : nxui::Color::white().withAlpha(alpha);
+
+        if (i == 3) {
+            // Shuffle button: Icon + Label + Badge (SIM/NÃO)
+            float textW = m_smallFont ? m_smallFont->measure(transButtons[i].label).x * 0.85f : 60.f;
+            float totalW = 20.f + 8.f + textW + 10.f + 34.f;
+            float curX = btnRect.x + (btnRect.width - totalW) * 0.5f;
+
+            drawShuffleIcon(ren, {curX + 10.f, btnRect.y + btnRect.height * 0.5f}, iconCol, 1.0f);
+            if (m_smallFont) {
+                ren.drawText(transButtons[i].label, {curX + 26.f, btnRect.y + 13.0f}, m_smallFont, iconCol, 0.85f);
+            }
+            // Badge SIM / NÃO
+            const nxui::Rect badgeRect{curX + 26.f + textW + 8.f, btnRect.y + 12.0f, 34.0f, 22.0f};
+            nxui::Color badgeBg = m_shuffle
+                ? nxui::Color(0.15f, 0.70f, 0.95f, 0.75f * alpha)
+                : nxui::Color(0.12f, 0.16f, 0.24f, 0.50f * alpha);
+            ren.drawRoundedRect(badgeRect, badgeBg, 6.0f);
+            if (m_smallFont) {
+                std::string badgeStr = m_shuffle ? i18n.tr("media.badge_on", "SIM") : i18n.tr("media.badge_off", "NÃO");
+                float bw = m_smallFont->measure(badgeStr).x * 0.70f;
+                ren.drawText(badgeStr, {badgeRect.x + (badgeRect.width - bw) * 0.5f, badgeRect.y + 4.5f},
+                             m_smallFont, nxui::Color::white().withAlpha(alpha), 0.70f);
+            }
+        } else {
+            // Prev / Play / Next: Icon + Label
+            float textW = m_smallFont ? m_smallFont->measure(transButtons[i].label).x * 0.86f : 50.f;
+            float totalW = 18.f + 8.f + textW;
+            float curX = btnRect.x + (btnRect.width - totalW) * 0.5f;
+            float iconCx = curX + 9.f;
+            float iconCy = btnRect.y + btnRect.height * 0.5f;
+
+            if (i == 0) {
+                drawPrevIcon(ren, {iconCx, iconCy}, iconCol, 1.0f);
+            } else if (i == 1) {
+                if (m_playing) drawPauseIcon(ren, {iconCx, iconCy}, iconCol, 1.0f);
+                else drawPlayIcon(ren, {iconCx, iconCy}, iconCol, 1.0f);
+            } else if (i == 2) {
+                drawNextIcon(ren, {iconCx, iconCy}, iconCol, 1.0f);
+            }
+
+            if (m_smallFont) {
+                ren.drawText(transButtons[i].label, {curX + 24.f, btnRect.y + 13.0f}, m_smallFont, iconCol, 0.86f);
+            }
         }
     }
 
     // 6. Row 1: Audio Settings & Source Preference Bar
-    const float setY = 278.0f;
+    const float setY = 280.0f;
     // Source Mode Pill (Col 0)
     const nxui::Rect modeRect{215.0f, setY, 410.0f, 48.0f};
     const bool modeFocused = (m_focusRow == 1 && m_focusCol == 0);
-    ren.drawRoundedRect(modeRect, modeFocused ? nxui::Color(0.16f, 0.40f, 0.70f, 0.50f * alpha) : nxui::Color(0.06f, 0.12f, 0.22f, 0.36f * alpha), 14.0f);
+    ren.drawRoundedRect(modeRect, modeFocused ? nxui::Color(0.18f, 0.44f, 0.76f, 0.55f * alpha) : nxui::Color(0.06f, 0.12f, 0.22f, 0.36f * alpha), 14.0f);
     ren.drawRoundedRectOutline(modeRect, modeFocused ? focusGold : nxui::Color(1.0f, 1.0f, 1.0f, 0.28f * alpha), 14.0f, modeFocused ? 2.0f : 1.0f);
 
+    // Left and right directional indicator arrows
+    ren.drawTriangle({modeRect.x + 16.f, modeRect.y + 24.f},
+                     {modeRect.x + 23.f, modeRect.y + 18.f},
+                     {modeRect.x + 23.f, modeRect.y + 30.f},
+                     modeFocused ? focusGold : nxui::Color(0.60f, 0.80f, 1.0f, 0.70f * alpha));
+    ren.drawTriangle({modeRect.x + 394.f, modeRect.y + 24.f},
+                     {modeRect.x + 387.f, modeRect.y + 18.f},
+                     {modeRect.x + 387.f, modeRect.y + 30.f},
+                     modeFocused ? focusGold : nxui::Color(0.60f, 0.80f, 1.0f, 0.70f * alpha));
+
     if (m_smallFont) {
-        std::string modeTitle = fmt::format("< {} >", getAudioModeLabel());
-        ren.drawText(modeTitle, {modeRect.x + 14.0f, modeRect.y + 6.0f},
+        std::string modeTitle = getAudioModeLabel();
+        float mtw = m_smallFont->measure(modeTitle).x * 0.84f;
+        ren.drawText(modeTitle, {modeRect.x + (modeRect.width - mtw) * 0.5f, modeRect.y + 6.0f},
                      m_smallFont, modeFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha),
                      0.84f);
-        ren.drawText(truncateText(m_smallFont, getAudioModeDesc(), 0.70f, 380.0f), {modeRect.x + 14.0f, modeRect.y + 26.0f},
+        std::string desc = truncateText(m_smallFont, getAudioModeDesc(), 0.70f, 350.0f);
+        float dtw = m_smallFont->measure(desc).x * 0.70f;
+        ren.drawText(desc, {modeRect.x + (modeRect.width - dtw) * 0.5f, modeRect.y + 26.0f},
                      m_smallFont, nxui::Color(0.65f, 0.80f, 0.95f, 0.85f * alpha), 0.70f);
     }
 
     // Volume Down / Up Buttons (Col 1 & 2)
-    const nxui::Rect volDownRect{640.0f, setY + 4.0f, 42.0f, 40.0f};
+    const nxui::Rect volDownRect{640.0f, setY + 4.0f, 44.0f, 40.0f};
     const bool volDownFocused = (m_focusRow == 1 && m_focusCol == 1);
     ren.drawRoundedRect(volDownRect, volDownFocused ? nxui::Color(0.20f, 0.45f, 0.75f, 0.55f * alpha) : nxui::Color(0.08f, 0.14f, 0.24f, 0.40f * alpha), 12.0f);
     ren.drawRoundedRectOutline(volDownRect, volDownFocused ? focusGold : nxui::Color(1.0f, 1.0f, 1.0f, 0.25f * alpha), 12.0f, volDownFocused ? 2.0f : 1.0f);
-    if (m_font) ren.drawText("-", {volDownRect.x + 14.0f, volDownRect.y + 6.0f}, m_font, nxui::Color::white().withAlpha(alpha), 0.9f);
+
+    const nxui::Color volDownCol = volDownFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha);
+    drawSpeakerIcon(ren, {volDownRect.x + 15.f, volDownRect.y + 20.f}, volDownCol, 0.85f);
+    ren.drawRoundedRect({volDownRect.x + 23.f, volDownRect.y + 19.f, 8.f, 2.5f}, volDownCol, 1.f);
 
     // Volume text
     if (m_smallFont) {
@@ -321,23 +436,29 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
         ren.drawText(volStr, {694.0f, setY + 16.0f}, m_smallFont, nxui::Color::white().withAlpha(alpha), 0.84f);
     }
 
-    const nxui::Rect volUpRect{742.0f, setY + 4.0f, 42.0f, 40.0f};
+    const nxui::Rect volUpRect{742.0f, setY + 4.0f, 44.0f, 40.0f};
     const bool volUpFocused = (m_focusRow == 1 && m_focusCol == 2);
     ren.drawRoundedRect(volUpRect, volUpFocused ? nxui::Color(0.20f, 0.45f, 0.75f, 0.55f * alpha) : nxui::Color(0.08f, 0.14f, 0.24f, 0.40f * alpha), 12.0f);
     ren.drawRoundedRectOutline(volUpRect, volUpFocused ? focusGold : nxui::Color(1.0f, 1.0f, 1.0f, 0.25f * alpha), 12.0f, volUpFocused ? 2.0f : 1.0f);
-    if (m_font) ren.drawText("+", {volUpRect.x + 12.0f, volUpRect.y + 6.0f}, m_font, nxui::Color::white().withAlpha(alpha), 0.9f);
+
+    const nxui::Color volUpCol = volUpFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha);
+    drawSpeakerIcon(ren, {volUpRect.x + 14.f, volUpRect.y + 20.f}, volUpCol, 0.85f);
+    ren.drawRoundedRect({volUpRect.x + 22.f, volUpRect.y + 19.f, 8.f, 2.5f}, volUpCol, 1.f);
+    ren.drawRoundedRect({volUpRect.x + 24.75f, volUpRect.y + 16.25f, 2.5f, 8.f}, volUpCol, 1.f);
 
     // Rescan Folder Button (Col 3)
     const nxui::Rect rescanRect{800.0f, setY + 4.0f, 265.0f, 40.0f};
     const bool rescanFocused = (m_focusRow == 1 && m_focusCol == 3);
     ren.drawRoundedRect(rescanRect, rescanFocused ? nxui::Color(0.20f, 0.45f, 0.75f, 0.55f * alpha) : nxui::Color(0.08f, 0.14f, 0.24f, 0.40f * alpha), 12.0f);
     ren.drawRoundedRectOutline(rescanRect, rescanFocused ? focusGold : nxui::Color(1.0f, 1.0f, 1.0f, 0.25f * alpha), 12.0f, rescanFocused ? 2.0f : 1.0f);
+
+    const nxui::Color rescanCol = rescanFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha);
+    drawRefreshIcon(ren, {rescanRect.x + 28.f, rescanRect.y + 20.f}, rescanCol, 0.90f);
+
     if (m_smallFont) {
         std::string rescanStr = i18n.tr("media.rescan", "Reescanear Pasta");
-        float rW = m_smallFont->measure(rescanStr).x * 0.82f;
-        ren.drawText(rescanStr, {rescanRect.x + (rescanRect.width - rW) * 0.5f, rescanRect.y + 10.0f},
-                     m_smallFont, rescanFocused ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color::white().withAlpha(alpha),
-                     0.82f);
+        ren.drawText(rescanStr, {rescanRect.x + 46.0f, rescanRect.y + 11.0f},
+                     m_smallFont, rescanCol, 0.84f);
     }
 
     // 7. Row 2: Playlist Section Header

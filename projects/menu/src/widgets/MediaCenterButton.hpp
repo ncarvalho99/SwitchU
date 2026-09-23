@@ -2,6 +2,7 @@
 
 #include <nxui/widgets/GlassWidget.hpp>
 #include <nxui/core/Renderer.hpp>
+#include <nxui/core/Texture.hpp>
 #include <nxui/core/Types.hpp>
 #include <nxui/core/Input.hpp>
 #include <functional>
@@ -45,6 +46,8 @@ private:
     bool m_focused = false;
     float m_animTime = 0.0f;
     std::function<void()> m_onActivateCb;
+    nxui::Texture m_iconTex;
+    bool m_iconLoaded = false;
 };
 
 } // namespace widgets

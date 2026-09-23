@@ -530,6 +530,7 @@ private:
     warawara::PlazaDialogueEngine         m_plazaDialogueEngine;
     warawara::AnimalesePlayer             m_animalesePlayer;
     std::shared_ptr<warawara::WaraWaraPlazaScreen>   m_plazaScreen;
+    std::shared_ptr<nxui::Box>                       m_topCenterCluster;
     std::shared_ptr<warawara::PlazaScreenSwapButton> m_screenSwapButton;
     std::shared_ptr<widgets::MediaCenterButton>      m_mediaCenterButton;
     std::shared_ptr<media::MediaCenterScreen>        m_mediaCenterScreen;

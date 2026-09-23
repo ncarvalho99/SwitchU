@@ -53,26 +53,37 @@ void MediaCenterButton::onRender(nxui::Renderer& ren) {
 
     ren.drawRoundedRectOutline(m_rect, borderCol, r, isFocused() ? 2.0f : 1.2f);
 
-    // Music Note Icon (♫)
+    if (!m_iconLoaded) {
+        m_iconLoaded = true;
+        static constexpr const char* kSdIcon = "sdmc:/switch/SwitchU/icons/media_center.png";
+        static constexpr const char* kRomfsIcon = "romfs:/icons/media_center.png";
+        if (!m_iconTex.loadFromFile(ren.gpu(), ren, kSdIcon, 128)) {
+            m_iconTex.loadFromFile(ren.gpu(), ren, kRomfsIcon, 128);
+        }
+    }
+
     const float cx = m_rect.x + m_rect.width * 0.5f;
     const float cy = m_rect.y + m_rect.height * 0.5f;
 
-    nxui::Color iconCol = m_playing
-        ? nxui::Color(0.35f, 0.85f, 1.0f, alpha)
-        : (isFocused() ? nxui::Color(1.0f, 0.95f, 0.60f, alpha) : nxui::Color(1.0f, 1.0f, 1.0f, 0.90f * alpha));
-
-    // Left notehead
-    ren.drawCircle({cx - 7.0f, cy + 4.0f}, 4.2f, iconCol);
-    // Right notehead
-    ren.drawCircle({cx + 6.5f, cy + 1.5f}, 4.2f, iconCol);
-
-    // Left stem
-    ren.drawRect({cx - 4.2f, cy - 9.0f, 2.4f, 13.0f}, iconCol);
-    // Right stem
-    ren.drawRect({cx + 9.3f, cy - 11.5f, 2.4f, 13.0f}, iconCol);
-
-    // Connecting beam
-    ren.drawRect({cx - 4.2f, cy - 11.5f, 15.9f, 3.8f}, iconCol);
+    if (m_iconTex.valid()) {
+        constexpr float iconW = 32.0f;
+        constexpr float iconH = 32.0f;
+        const nxui::Rect iconRect{cx - iconW * 0.5f, cy - iconH * 0.5f, iconW, iconH};
+        nxui::Color tint = m_playing
+            ? nxui::Color(0.40f, 0.85f, 1.0f, alpha)
+            : (isFocused() ? nxui::Color(1.0f, 0.95f, 0.65f, alpha) : nxui::Color(1.0f, 1.0f, 1.0f, 0.95f * alpha));
+        ren.drawTexture(&m_iconTex, iconRect, tint);
+    } else {
+        // Fallback procedural note
+        nxui::Color iconCol = m_playing
+            ? nxui::Color(0.35f, 0.85f, 1.0f, alpha)
+            : (isFocused() ? nxui::Color(1.0f, 0.95f, 0.60f, alpha) : nxui::Color(1.0f, 1.0f, 1.0f, 0.90f * alpha));
+        ren.drawCircle({cx - 7.0f, cy + 4.0f}, 4.2f, iconCol);
+        ren.drawCircle({cx + 6.5f, cy + 1.5f}, 4.2f, iconCol);
+        ren.drawRect({cx - 4.2f, cy - 9.0f, 2.4f, 13.0f}, iconCol);
+        ren.drawRect({cx + 9.3f, cy - 11.5f, 2.4f, 13.0f}, iconCol);
+        ren.drawRect({cx - 4.2f, cy - 11.5f, 15.9f, 3.8f}, iconCol);
+    }
 }
 
 bool MediaCenterButton::handleTouch(const nxui::Input& input) {
