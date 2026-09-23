@@ -171,8 +171,15 @@ protected:
 
         // A wrapped label's height depends on the width it gets, which is only
         // known here. Measured against the same width the row was sized with.
-        if (m_item.wrapLabel)
+        if (m_item.wrapLabel) {
             m_labelMeasure = m_label->measureWrappedText(leftRect.width);
+        } else {
+            std::string fitted = fitTextToWidth(font(), m_item.label, m_cachedLabelScale, leftRect.width);
+            if (m_label->text() != fitted) {
+                m_label->setText(fitted);
+            }
+            m_labelMeasure = m_label->measureText();
+        }
 
         if (m_cachedShowDesc)
             m_descMeasure = m_desc->measureWrappedText(leftRect.width);

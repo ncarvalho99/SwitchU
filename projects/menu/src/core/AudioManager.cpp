@@ -32,6 +32,7 @@ void AudioManager::shutdown() {
     Mix_CloseAudio();
     m_initialized = false;
     m_playing.store(false);
+    m_paused.store(false);
     m_trackFinished.store(false);
 
     if (m_activeMusic) {
@@ -87,6 +88,7 @@ void AudioManager::clearTracks() {
     m_current = -1;
     m_shufflePos = 0;
     m_playing.store(false);
+    m_paused.store(false);
     m_trackFinished.store(false);
 }
 
@@ -129,6 +131,7 @@ void AudioManager::playCurrentTrackLocked() {
         Mix_PlayMusic(m_activeMusic, 1);
     }
     m_playing.store(true);
+    m_paused.store(false);
     m_trackFinished.store(false);
 }
 
@@ -161,11 +164,46 @@ void AudioManager::playTrack(int index) {
     playCurrentTrackLocked();
 }
 
+void AudioManager::pause() {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (m_playing.load() && !m_paused.load()) {
+        Mix_PauseMusic();
+        m_paused.store(true);
+    }
+}
+
+void AudioManager::resume() {
+    std::lock_guard<std::mutex> lk(m_trackMutex);
+    if (m_paused.load()) {
+        Mix_ResumeMusic();
+        m_paused.store(false);
+        m_playing.store(true);
+    } else if (!m_playing.load()) {
+        if (!m_tracks.empty()) {
+            if (m_current < 0 || m_current >= static_cast<int>(m_tracks.size())) {
+                m_current = 0;
+            }
+            playCurrentTrackLocked();
+        }
+    }
+}
+
+void AudioManager::togglePlayPause() {
+    if (isPaused()) {
+        resume();
+    } else if (isPlaying()) {
+        pause();
+    } else {
+        play();
+    }
+}
+
 void AudioManager::stop() {
     std::lock_guard<std::mutex> lk(m_trackMutex);
     Mix_HookMusicFinished(nullptr);
     Mix_HaltMusic();
     m_playing.store(false);
+    m_paused.store(false);
     m_trackFinished.store(false);
 }
 

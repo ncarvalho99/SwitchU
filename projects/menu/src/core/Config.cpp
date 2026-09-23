@@ -59,6 +59,7 @@ bool AppConfig::load() {
     readJsonOpt(j, "musicEnabled", musicEnabled);
     readJsonOpt(j, "customBgmEnabled", customBgmEnabled);
     readJsonOpt(j, "customBgmShuffle", customBgmShuffle);
+    readJsonOpt(j, "audioSourcePreference", audioSourcePreference);
     readJsonOpt(j, "musicVolume", musicVolume);
     readJsonOpt(j, "sfxVolume", sfxVolume);
     readJsonOpt(j, "gridColumns", gridColumns);
@@ -194,6 +195,7 @@ bool AppConfig::save() const {
     j["musicEnabled"] = musicEnabled;
     j["customBgmEnabled"] = customBgmEnabled;
     j["customBgmShuffle"] = customBgmShuffle;
+    j["audioSourcePreference"] = audioSourcePreference;
     j["musicVolume"] = musicVolume;
     j["sfxVolume"] = sfxVolume;
     j["gridColumns"] = std::clamp(gridColumns, 3, 8);

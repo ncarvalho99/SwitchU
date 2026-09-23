@@ -48,6 +48,8 @@
 #include "warawara/AnimalesePlayer.hpp"
 #include "warawara/WaraWaraPlazaScreen.hpp"
 #include "warawara/PlazaScreenSwapButton.hpp"
+#include "widgets/MediaCenterButton.hpp"
+#include "media/MediaCenterScreen.hpp"
 #include "gallery/GameArtworkStore.hpp"
 #include "core/Config.hpp"
 #include "core/FolderStore.hpp"
@@ -411,6 +413,8 @@ private:
     void openWaraWaraPlaza();
     void closeWaraWaraPlaza();
     void toggleWaraWaraPlaza();
+    void toggleMediaCenter();
+    void syncMediaCenterState();
     void refreshPlazaCommunities();
     void reloadThemePresets();
     void refreshThemeShopState();
@@ -424,7 +428,6 @@ private:
     std::vector<std::string> scanAvailablePresets();
     std::vector<TrackInfo> scanCustomBgmTracks();
     void reloadMusicTracks();
-    void syncCustomBgmSettingsState();
     void loadMenuLayout();
     void saveMenuLayout();
     void quiesceWritersForPowerAction();
@@ -528,9 +531,12 @@ private:
     warawara::AnimalesePlayer             m_animalesePlayer;
     std::shared_ptr<warawara::WaraWaraPlazaScreen>   m_plazaScreen;
     std::shared_ptr<warawara::PlazaScreenSwapButton> m_screenSwapButton;
+    std::shared_ptr<widgets::MediaCenterButton>      m_mediaCenterButton;
+    std::shared_ptr<media::MediaCenterScreen>        m_mediaCenterScreen;
     int m_plazaIconPumpIndex = 0;
     nxui::Widget* m_activityLogReturnFocus = nullptr;
     nxui::Widget* m_plazaReturnFocus = nullptr;
+    nxui::Widget* m_mediaCenterReturnFocus = nullptr;
 
     nxui::Texture m_gameCardTex;
     nxui::Texture m_arrowTexLeft;

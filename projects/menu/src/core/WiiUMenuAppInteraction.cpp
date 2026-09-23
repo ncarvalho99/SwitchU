@@ -630,6 +630,7 @@ bool WiiUMenuApp::isCurrentFocusableWidget(nxui::Widget* w) const {
     // panel that had just closed.
     if (m_folderHeader && m_folderHeader.get() == w) return w->isFocusable();
     if (m_textEntry && m_textEntry.get() == w) return w->isFocusable();
+    if (m_mediaCenterScreen && m_mediaCenterScreen.get() == w) return w->isFocusable();
     if (m_steamGridDbPicker && m_steamGridDbPicker.get() == w) return w->isFocusable();
     if (m_platformPicker && m_platformPicker.get() == w) return w->isFocusable();
     if (m_gameGallery && m_gameGallery.get() == w) return w->isFocusable();
@@ -771,6 +772,8 @@ void WiiUMenuApp::closeActiveOverlays(bool preserveDialog) {
         closeWaraWaraPlaza();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
         m_steamGridDbPicker->hide();
+    if (m_mediaCenterScreen && m_mediaCenterScreen->isActive())
+        m_mediaCenterScreen->hide();
     if (m_platformPicker && m_platformPicker->isActive())
         m_platformPicker->hide();
     if (m_gameOptions && m_gameOptions->isActive())
@@ -801,6 +804,7 @@ nxui::Widget* WiiUMenuApp::focusRoot() {
     if (m_platformPicker && m_platformPicker->isActive()) return m_platformPicker.get();
     if (m_dialog && m_dialog->isActive()) return m_dialog.get();
     if (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) return m_steamGridDbPicker.get();
+    if (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) return m_mediaCenterScreen.get();
     if (m_controllerTest && m_controllerTest->isActive()) return m_controllerTest.get();
     if (m_folderOptions && m_folderOptions->isActive()) return m_folderOptions.get();
     if (m_gameOptions && m_gameOptions->isActive()) return m_gameOptions.get();
@@ -907,6 +911,7 @@ void WiiUMenuApp::handleSortShortcutRelease(float dt) {
         (m_gameCheats && m_gameCheats->isActive()) ||
         (m_gameDetails && m_gameDetails->isActive()) ||
         (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+        (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) ||
         (m_gameOptions && m_gameOptions->isActive()) ||
         (m_folderOptions && m_folderOptions->isActive()) ||
         (m_controllerTest && m_controllerTest->isActive()) ||
@@ -1276,6 +1281,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+        (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) ||
             (m_platformPicker && m_platformPicker->isActive()) ||
             (m_gameOptions && m_gameOptions->isActive()) ||
             (m_folderOptions && m_folderOptions->isActive()) ||
@@ -1300,6 +1306,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+        (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) ||
             (m_platformPicker && m_platformPicker->isActive()) ||
             (m_gameOptions && m_gameOptions->isActive()) ||
             (m_folderOptions && m_folderOptions->isActive()) ||
@@ -1370,6 +1377,7 @@ void WiiUMenuApp::wireGlobalActions() {
             (m_gameDetails && m_gameDetails->isActive()) ||
             (m_settings && m_settings->isActive()) ||
             (m_steamGridDbPicker && m_steamGridDbPicker->isActive()) ||
+        (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) ||
             (m_platformPicker && m_platformPicker->isActive()) ||
             (m_gameOptions && m_gameOptions->isActive()) ||
             (m_folderOptions && m_folderOptions->isActive()) ||

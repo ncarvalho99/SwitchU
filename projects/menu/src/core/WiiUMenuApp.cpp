@@ -1547,9 +1547,12 @@ void WiiUMenuApp::wireUserAvatarNavigation() {
     }
     if (m_screenSwapButton) {
         nxui::Widget* left = m_userAvatarButtons.empty() ? nullptr : m_userAvatarButtons.back().get();
-        nxui::Widget* right = (dynamicLine && !m_sidebar.rightButtons().empty())
-            ? m_sidebar.rightButtons().front().get()
-            : nullptr;
+        nxui::Widget* right = nullptr;
+        if (m_mediaCenterButton)
+            right = m_mediaCenterButton.get();
+        else if (dynamicLine && !m_sidebar.rightButtons().empty())
+            right = m_sidebar.rightButtons().front().get();
+
         m_screenSwapButton->setCustomNavigation(nxui::FocusDirection::LEFT, left);
         m_screenSwapButton->setCustomNavigation(nxui::FocusDirection::RIGHT, right);
         m_screenSwapButton->setCustomNavigation(nxui::FocusDirection::DOWN, nullptr);
@@ -1557,6 +1560,24 @@ void WiiUMenuApp::wireUserAvatarNavigation() {
         m_screenSwapButton->removeAction(static_cast<uint64_t>(nxui::Button::LStickD));
         m_screenSwapButton->removeAction(static_cast<uint64_t>(nxui::Button::RStickD));
         m_screenSwapButton->addDirectionAction(nxui::FocusDirection::DOWN, returnToGrid);
+    }
+    if (m_mediaCenterButton) {
+        nxui::Widget* left = nullptr;
+        if (m_screenSwapButton)
+            left = m_screenSwapButton.get();
+        else if (!m_userAvatarButtons.empty())
+            left = m_userAvatarButtons.back().get();
+
+        nxui::Widget* right = (dynamicLine && !m_sidebar.rightButtons().empty())
+            ? m_sidebar.rightButtons().front().get()
+            : nullptr;
+        m_mediaCenterButton->setCustomNavigation(nxui::FocusDirection::LEFT, left);
+        m_mediaCenterButton->setCustomNavigation(nxui::FocusDirection::RIGHT, right);
+        m_mediaCenterButton->setCustomNavigation(nxui::FocusDirection::DOWN, nullptr);
+        m_mediaCenterButton->removeAction(static_cast<uint64_t>(nxui::Button::DDown));
+        m_mediaCenterButton->removeAction(static_cast<uint64_t>(nxui::Button::LStickD));
+        m_mediaCenterButton->removeAction(static_cast<uint64_t>(nxui::Button::RStickD));
+        m_mediaCenterButton->addDirectionAction(nxui::FocusDirection::DOWN, returnToGrid);
     }
     if (dynamicLine && !m_userAvatarButtons.empty()) {
         if (m_grid)
@@ -5154,7 +5175,6 @@ void WiiUMenuApp::buildGrid() {
         m_audio.playSfx(Sfx::ModalShow);
         createSettings();
         if (m_settings) {
-            syncCustomBgmSettingsState();
             m_navigator.navigate(switchu::navigation::Route::Settings);
             if (m_themeShop && m_themeShop->isActive())
                 m_themeShop->hide();
@@ -5315,13 +5335,30 @@ void WiiUMenuApp::buildGrid() {
     if (m_userAvatarBar)
         m_topHud->addChild(m_userAvatarBar);
 
+    auto topCenterCluster = std::make_shared<nxui::Box>(nxui::Axis::ROW);
+    topCenterCluster->setTag("topCenterCluster");
+    topCenterCluster->setWireframeEnabled(false);
+    topCenterCluster->setAlignItems(nxui::AlignItems::CENTER);
+    topCenterCluster->setMarginTop(18.f);
+
     m_screenSwapButton = std::make_shared<warawara::PlazaScreenSwapButton>();
-    m_screenSwapButton->setMarginTop(18.f);
+    m_screenSwapButton->setMarginTop(0.f);
     m_screenSwapButton->onActivate([this]() {
         m_audio.playSfx(Sfx::Activate);
         toggleWaraWaraPlaza();
     });
-    m_topHud->addChild(m_screenSwapButton);
+    topCenterCluster->addChild(m_screenSwapButton);
+
+    m_mediaCenterButton = std::make_shared<widgets::MediaCenterButton>();
+    m_mediaCenterButton->setMarginTop(0.f);
+    m_mediaCenterButton->setMarginLeft(12.f);
+    m_mediaCenterButton->onActivate([this]() {
+        m_audio.playSfx(Sfx::Activate);
+        toggleMediaCenter();
+    });
+    topCenterCluster->addChild(m_mediaCenterButton);
+
+    m_topHud->addChild(topCenterCluster);
 
     m_topHud->addChild(m_battery);
     m_topHud->layout();
@@ -5386,6 +5423,59 @@ void WiiUMenuApp::buildGrid() {
                 applySteamGridDbCandidate(browse, candidate);
         });
     m_overlayLayer->addChild(m_steamGridDbPicker);
+
+    m_mediaCenterScreen = std::make_shared<media::MediaCenterScreen>();
+    m_mediaCenterScreen->setFont(&m_fontNormal);
+    m_mediaCenterScreen->setSmallFont(&m_fontSmall);
+    m_mediaCenterScreen->setTheme(&m_theme);
+    m_mediaCenterScreen->onPlayPause([this]() {
+        m_audio.togglePlayPause();
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onNextTrack([this]() {
+        m_audio.nextTrack();
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onPrevTrack([this]() {
+        m_audio.previousTrack();
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onShuffleToggle([this]() {
+        m_config.customBgmShuffle = !m_audio.isShuffle();
+        m_config.save();
+        m_audio.setShuffle(m_config.customBgmShuffle);
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onPlayTrack([this](int trackIdx) {
+        m_audio.playTrack(trackIdx);
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onAudioModeChange([this](const std::string& mode) {
+        m_config.audioSourcePreference = mode;
+        m_config.save();
+        reloadMusicTracks();
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onVolumeChange([this](float vol) {
+        m_config.musicVolume = vol;
+        m_config.save();
+        m_audio.setVolume(vol);
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onRescan([this]() {
+        m_customBgmTracks = scanCustomBgmTracks();
+        reloadMusicTracks();
+        syncMediaCenterState();
+    });
+    m_mediaCenterScreen->onClose([this]() {
+        if (m_mediaCenterReturnFocus) {
+            focusManager().setFocus(m_mediaCenterReturnFocus);
+            m_mediaCenterReturnFocus = nullptr;
+        } else if (m_mediaCenterButton) {
+            focusManager().setFocus(m_mediaCenterButton.get());
+        }
+    });
+    m_overlayLayer->addChild(m_mediaCenterScreen);
     m_platformPicker = std::make_shared<PlatformPickerScreen>(
         app().gpu(), app().renderer(), m_threadPool);
     m_platformPicker->setFont(&m_fontNormal);
@@ -5629,70 +5719,112 @@ void WiiUMenuApp::reloadMusicTracks() {
     m_audio.clearTracks();
     m_audio.setShuffle(m_config.customBgmShuffle);
 
-    // 1. Custom Soundtrack (User BGM Folder Support)
-    if (m_config.customBgmEnabled) {
-        m_customBgmTracks = scanCustomBgmTracks();
+    const std::string& pref = m_config.audioSourcePreference;
+    m_customBgmTracks = scanCustomBgmTracks();
+    bool loaded = false;
+
+    if (pref == "custom_only") {
         if (!m_customBgmTracks.empty()) {
-            for (const auto& track : m_customBgmTracks) {
+            for (const auto& track : m_customBgmTracks)
                 m_audio.loadTrack(track.path, track.title);
+            loaded = true;
+            DebugLog::log("[audio] Custom Only: Loaded %zu custom track(s)", m_customBgmTracks.size());
+        }
+    } else if (pref == "theme_first") {
+        if (!m_themeMusicTracks.empty()) {
+            for (const auto& track : m_themeMusicTracks)
+                m_audio.loadTrack(track);
+            loaded = true;
+            DebugLog::log("[audio] Theme First: Loaded %zu theme track(s)", m_themeMusicTracks.size());
+        } else if (!m_customBgmTracks.empty()) {
+            for (const auto& track : m_customBgmTracks)
+                m_audio.loadTrack(track.path, track.title);
+            loaded = true;
+            DebugLog::log("[audio] Theme First (fallback): Loaded %zu custom track(s)", m_customBgmTracks.size());
+        }
+    } else if (pref == "theme_only") {
+        if (!m_themeMusicTracks.empty()) {
+            for (const auto& track : m_themeMusicTracks)
+                m_audio.loadTrack(track);
+            loaded = true;
+            DebugLog::log("[audio] Theme Only: Loaded %zu theme track(s)", m_themeMusicTracks.size());
+        }
+    } else { // "custom_first" (default)
+        if (!m_customBgmTracks.empty()) {
+            for (const auto& track : m_customBgmTracks)
+                m_audio.loadTrack(track.path, track.title);
+            loaded = true;
+            DebugLog::log("[audio] Custom First: Loaded %zu custom track(s)", m_customBgmTracks.size());
+        } else if (!m_themeMusicTracks.empty()) {
+            for (const auto& track : m_themeMusicTracks)
+                m_audio.loadTrack(track);
+            loaded = true;
+            DebugLog::log("[audio] Custom First (fallback): Loaded %zu theme track(s)", m_themeMusicTracks.size());
+        }
+    }
+
+    // Fallback to Preset Music if nothing loaded and mode allows it
+    if (!loaded && pref != "custom_only") {
+        const std::string effectivePreset = resolveSoundPresetId(m_loadedSoundPreset.empty() ? m_config.soundPreset : m_loadedSoundPreset);
+        std::string musicBase = std::string(SD_ASSETS) + "/sounds/" + effectivePreset;
+        std::string musicDir = musicBase + "/music";
+        std::error_code ec;
+        if (std::filesystem::is_directory(musicDir, ec)) {
+            std::vector<std::string> tracks;
+            ec.clear();
+            for (const auto& entry : std::filesystem::directory_iterator(musicDir, ec)) {
+                if (ec)
+                    break;
+
+                std::string name = entry.path().filename().string();
+                if (name.size() > 4 && name.substr(name.size() - 4) == ".mp3")
+                    tracks.push_back(name);
             }
-            DebugLog::log("[audio] Loaded %zu custom music track(s) from %s",
-                          m_customBgmTracks.size(), kCustomMusicDir);
-            if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
-                m_audio.play();
-            }
-            return;
+            std::sort(tracks.begin(), tracks.end(), [](const std::string& left, const std::string& right) {
+                const bool leftIsHome = (left == "home.mp3");
+                const bool rightIsHome = (right == "home.mp3");
+                if (leftIsHome != rightIsHome)
+                    return leftIsHome;
+                return left < right;
+            });
+            for (const auto& t : tracks)
+                m_audio.loadTrack(musicDir + "/" + t);
+            DebugLog::log("[audio] Loaded %zu preset music tracks", tracks.size());
         } else {
-            DebugLog::log("[audio] Custom BGM enabled but no tracks found in %s; falling back",
-                          kCustomMusicDir);
+            DebugLog::log("[audio] No music directory for preset '%s'", effectivePreset.c_str());
         }
-    }
-
-    // 2. Theme Music (if theme declares its own soundtrack)
-    if (!m_themeMusicTracks.empty()) {
-        for (const auto& track : m_themeMusicTracks) {
-            m_audio.loadTrack(track);
-        }
-        DebugLog::log("[audio] %zu track(s) from the theme (preset music skipped)",
-                      m_themeMusicTracks.size());
-        if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
-            m_audio.play();
-        }
-        return;
-    }
-
-    // 3. Preset Music
-    const std::string effectivePreset = resolveSoundPresetId(m_loadedSoundPreset.empty() ? m_config.soundPreset : m_loadedSoundPreset);
-    std::string musicBase = std::string(SD_ASSETS) + "/sounds/" + effectivePreset;
-    std::string musicDir = musicBase + "/music";
-    std::error_code ec;
-    if (std::filesystem::is_directory(musicDir, ec)) {
-        std::vector<std::string> tracks;
-        ec.clear();
-        for (const auto& entry : std::filesystem::directory_iterator(musicDir, ec)) {
-            if (ec)
-                break;
-
-            std::string name = entry.path().filename().string();
-            if (name.size() > 4 && name.substr(name.size() - 4) == ".mp3")
-                tracks.push_back(name);
-        }
-        std::sort(tracks.begin(), tracks.end(), [](const std::string& left, const std::string& right) {
-            const bool leftIsHome = (left == "home.mp3");
-            const bool rightIsHome = (right == "home.mp3");
-            if (leftIsHome != rightIsHome)
-                return leftIsHome;
-            return left < right;
-        });
-        for (const auto& t : tracks)
-            m_audio.loadTrack(musicDir + "/" + t);
-        DebugLog::log("[audio] Loaded %zu music tracks", tracks.size());
-    } else {
-        DebugLog::log("[audio] No music directory for preset '%s'", effectivePreset.c_str());
     }
 
     if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
         m_audio.play();
+    }
+}
+
+void WiiUMenuApp::toggleMediaCenter() {
+    if (!m_mediaCenterScreen) return;
+    if (m_mediaCenterScreen->isActive()) {
+        m_mediaCenterScreen->hide();
+    } else {
+        m_mediaCenterReturnFocus = focusManager().current();
+        m_customBgmTracks = scanCustomBgmTracks();
+        syncMediaCenterState();
+        m_mediaCenterScreen->show();
+        focusManager().setFocus(m_mediaCenterScreen.get());
+    }
+}
+
+void WiiUMenuApp::syncMediaCenterState() {
+    if (!m_mediaCenterScreen) return;
+    const bool isPl = m_audio.isPlaying();
+    const bool isPa = m_audio.isPaused();
+    m_mediaCenterScreen->setPlaybackState(isPl && !isPa, isPa, m_audio.isShuffle(),
+                                         m_audio.currentTrackIndex(),
+                                         m_audio.currentTrackTitle(),
+                                         m_customBgmTracks,
+                                         m_config.musicVolume,
+                                         m_config.audioSourcePreference);
+    if (m_mediaCenterButton) {
+        m_mediaCenterButton->setPlaying(isPl && !isPa);
     }
 }
 
@@ -6163,6 +6295,14 @@ void WiiUMenuApp::onUpdate(float dt) {
     logControllerState(dt);
     m_animalesePlayer.update(dt);
     m_audio.update();
+
+    const bool isAudioPlaying = m_audio.isPlaying() && !m_audio.isPaused();
+    if (m_mediaCenterButton && m_mediaCenterButton->isPlaying() != isAudioPlaying) {
+        m_mediaCenterButton->setPlaying(isAudioPlaying);
+    }
+    if (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) {
+        syncMediaCenterState();
+    }
 
     // Retire and upload widget-owned textures before the next frame begins.
     syncWidgetPageAssets();
@@ -6891,6 +7031,10 @@ void WiiUMenuApp::onUpdate(float dt) {
         m_plazaScreen->handleInput(app().input(), dt);
     }
 
+    if (!lockScreenUp && m_mediaCenterScreen && m_mediaCenterScreen->isActive()) {
+        m_mediaCenterScreen->handleInput(app().input(), dt);
+    }
+
 #ifdef SWITCHU_MENU
     // ZL and ZR are plain actions, so they fired once per press while the d-pad
     // already repeated through Application's navigation hold. Holding either one
@@ -7045,6 +7189,12 @@ void WiiUMenuApp::onUpdate(float dt) {
 
     if (!debugTouchBlocked && !lockScreenUp && m_screenSwapButton)
         m_screenSwapButton->handleTouch(app().input());
+
+    if (!debugTouchBlocked && !lockScreenUp && m_mediaCenterButton)
+        m_mediaCenterButton->handleTouch(app().input());
+
+    if (!debugTouchBlocked && !lockScreenUp && m_mediaCenterScreen && m_mediaCenterScreen->isActive())
+        m_mediaCenterScreen->handleTouch(app().input());
 
     if (!debugTouchBlocked && !lockScreenUp && m_plazaScreen && m_plazaScreen->isActive())
         m_plazaScreen->handleTouch(app().input());
@@ -7203,6 +7353,16 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
     if (m_userSelect && m_userSelect->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
+        addVoiceControls();
+        return hints;
+    }
+
+    if (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) {
+        add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
+        add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
+        add(buttonGlyph(nxui::Button::X), i18n.tr("media.hint_play_pause", "Play/Pause"));
+        add(buttonGlyph(nxui::Button::Y), i18n.tr("media.hint_rescan", "Rescan"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
         addVoiceControls();
         return hints;

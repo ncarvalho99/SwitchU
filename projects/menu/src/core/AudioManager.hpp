@@ -38,6 +38,10 @@ public:
     void clearTracks();
     void play();
     void playTrack(int index);
+    void pause();
+    void resume();
+    bool isPaused() const { return m_paused.load(); }
+    void togglePlayPause();
     void stop();
     /// Silence music and active sound effects without unloading audio assets.
     void stopAll();
@@ -86,6 +90,7 @@ private:
     float m_volume  = 0.5f;
     float m_musicFade = 1.f;
     std::atomic<bool> m_playing{false};
+    std::atomic<bool> m_paused{false};
     std::atomic<bool> m_trackFinished{false};
     bool  m_initialized = false;
     Mix_Music* m_activeMusic = nullptr;

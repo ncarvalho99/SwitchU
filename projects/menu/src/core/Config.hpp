@@ -11,6 +11,7 @@ struct AppConfig {
     bool  musicEnabled = true;
     bool  customBgmEnabled = false;
     bool  customBgmShuffle = true;
+    std::string audioSourcePreference = "custom_first";
     // Levels asked for after people used the menu on real hardware: the music
     // sits under the game audio rather than competing with it, and the effects
     // stay audible above it. Both were louder before and were turned down by
