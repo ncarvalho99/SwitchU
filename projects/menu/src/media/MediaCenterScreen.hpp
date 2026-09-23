@@ -50,6 +50,7 @@ protected:
 private:
     bool m_active = false;
     bool m_backdropCacheValid = false;
+    bool m_ignoreInitialA = true;
     float m_fadeAnim = 0.0f;
     float m_animTimer = 0.0f;
 

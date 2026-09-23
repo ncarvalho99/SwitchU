@@ -83,6 +83,7 @@ MediaCenterScreen::MediaCenterScreen() {
 void MediaCenterScreen::show() {
     m_active = true;
     m_backdropCacheValid = false;
+    m_ignoreInitialA = true;
     m_fadeAnim = 0.0f;
     m_focusRow = 0;
     m_focusCol = 1; // Play/Pause
@@ -567,6 +568,24 @@ void MediaCenterScreen::handleInput(const nxui::Input& input, float dt) {
         return;
     }
 
+    // Shoulder buttons L / R
+    if (input.isDown(nxui::Button::L)) {
+        if (m_focusRow == 1 && m_focusCol == 0) {
+            cycleAudioMode(-1);
+        } else {
+            if (m_onPrevTrackCb) m_onPrevTrackCb();
+        }
+        return;
+    }
+    if (input.isDown(nxui::Button::R)) {
+        if (m_focusRow == 1 && m_focusCol == 0) {
+            cycleAudioMode(1);
+        } else {
+            if (m_onNextTrackCb) m_onNextTrackCb();
+        }
+        return;
+    }
+
     // Vertical navigation
     if (input.isDown(nxui::Button::DUp) || input.isDown(nxui::Button::LStickU)) {
         if (m_focusRow == 2) {
@@ -583,7 +602,7 @@ void MediaCenterScreen::handleInput(const nxui::Input& input, float dt) {
     } else if (input.isDown(nxui::Button::DDown) || input.isDown(nxui::Button::LStickD)) {
         if (m_focusRow == 0) {
             m_focusRow = 1;
-            m_focusCol = 0;
+            m_focusCol = std::clamp(m_focusCol, 0, 3);
         } else if (m_focusRow == 1) {
             if (!m_tracks.empty()) {
                 m_focusRow = 2;
@@ -600,11 +619,7 @@ void MediaCenterScreen::handleInput(const nxui::Input& input, float dt) {
         if (m_focusRow == 0) {
             m_focusCol = (m_focusCol - 1 + 4) % 4;
         } else if (m_focusRow == 1) {
-            if (m_focusCol == 0) {
-                cycleAudioMode(-1);
-            } else {
-                m_focusCol = std::max(0, m_focusCol - 1);
-            }
+            m_focusCol = std::max(0, m_focusCol - 1);
         } else if (m_focusRow == 2) {
             // Page up
             m_focusedTrack = std::max(0, m_focusedTrack - 5);
@@ -613,19 +628,22 @@ void MediaCenterScreen::handleInput(const nxui::Input& input, float dt) {
         if (m_focusRow == 0) {
             m_focusCol = (m_focusCol + 1) % 4;
         } else if (m_focusRow == 1) {
-            if (m_focusCol == 0) {
-                cycleAudioMode(1);
-            } else {
-                m_focusCol = std::min(3, m_focusCol + 1);
-            }
+            m_focusCol = std::min(3, m_focusCol + 1);
         } else if (m_focusRow == 2) {
             // Page down
             m_focusedTrack = std::min(std::max(0, static_cast<int>(m_tracks.size()) - 1), m_focusedTrack + 5);
         }
     }
 
+    // Release latch for opening A button
+    if (m_ignoreInitialA) {
+        if (!input.isHeld(nxui::Button::A) && !input.isDown(nxui::Button::A)) {
+            m_ignoreInitialA = false;
+        }
+    }
+
     // Action A
-    if (input.isDown(nxui::Button::A)) {
+    if (input.isDown(nxui::Button::A) && !m_ignoreInitialA) {
         if (m_focusRow == 0) {
             switch (m_focusCol) {
                 case 0: if (m_onPrevTrackCb) m_onPrevTrackCb(); break;
