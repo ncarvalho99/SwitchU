@@ -1,5 +1,6 @@
 #include "MediaCenterScreen.hpp"
 #include "settings/SettingsGlassTuning.hpp"
+#include "core/DebugLog.hpp"
 #include <nxui/core/I18n.hpp>
 #include <fmt/format.h>
 #include <algorithm>
@@ -15,24 +16,38 @@ namespace {
 float getHardwareVolume() {
 #ifdef SWITCHU_MENU
     static bool s_audctlInited = false;
-    if (!s_audctlInited) {
-        if (R_SUCCEEDED(audctlInitialize())) {
+    static bool s_audctlFailed = false;
+    if (!s_audctlInited && !s_audctlFailed) {
+        Result rc = audctlInitialize();
+        if (R_SUCCEEDED(rc)) {
             s_audctlInited = true;
+            DebugLog::log("[media-vol] audctlInitialize succeeded");
+        } else {
+            s_audctlFailed = true;
+            DebugLog::log("[media-vol] audctlInitialize failed: 0x%08X", rc);
         }
     }
     if (s_audctlInited) {
+        AudioTarget target = AudioTarget_Invalid;
+        if (R_FAILED(audctlGetActiveOutputTarget(&target)) || target == AudioTarget_Invalid) {
+            audctlGetDefaultTarget(&target);
+        }
+        if (target == AudioTarget_Invalid) {
+            target = AudioTarget_Speaker;
+        }
+
+        s32 vol = 0, vmin = 0, vmax = 0;
+        Result rcV = audctlGetTargetVolume(&vol, target);
+        Result rcMin = audctlGetTargetVolumeMin(&vmin);
+        Result rcMax = audctlGetTargetVolumeMax(&vmax);
+        if (R_SUCCEEDED(rcV) && R_SUCCEEDED(rcMin) && R_SUCCEEDED(rcMax) && vmax > vmin) {
+            return std::clamp(static_cast<float>(vol - vmin) / static_cast<float>(vmax - vmin), 0.0f, 1.0f);
+        }
+
+        // Secondary fallback to system master volume
         float masterVol = 0.0f;
         if (R_SUCCEEDED(audctlGetSystemOutputMasterVolume(&masterVol))) {
             return std::clamp(masterVol, 0.0f, 1.0f);
-        }
-        AudioTarget target = AudioTarget_Speaker;
-        if (R_SUCCEEDED(audctlGetDefaultTarget(&target))) {
-            s32 vol = 0, vmin = 0, vmax = 100;
-            if (R_SUCCEEDED(audctlGetTargetVolume(&vol, target)) &&
-                R_SUCCEEDED(audctlGetTargetVolumeMin(&vmin)) &&
-                R_SUCCEEDED(audctlGetTargetVolumeMax(&vmax)) && vmax > vmin) {
-                return std::clamp(static_cast<float>(vol - vmin) / static_cast<float>(vmax - vmin), 0.0f, 1.0f);
-            }
         }
     }
 #endif
@@ -42,23 +57,33 @@ float getHardwareVolume() {
 void setHardwareVolume(float vol) {
 #ifdef SWITCHU_MENU
     static bool s_audctlInited = false;
-    if (!s_audctlInited) {
+    static bool s_audctlFailed = false;
+    if (!s_audctlInited && !s_audctlFailed) {
         if (R_SUCCEEDED(audctlInitialize())) {
             s_audctlInited = true;
+        } else {
+            s_audctlFailed = true;
         }
     }
     if (s_audctlInited) {
         float clamped = std::clamp(vol, 0.0f, 1.0f);
-        audctlSetSystemOutputMasterVolume(clamped);
-        AudioTarget target = AudioTarget_Speaker;
-        if (R_SUCCEEDED(audctlGetDefaultTarget(&target))) {
-            s32 vmin = 0, vmax = 100;
-            if (R_SUCCEEDED(audctlGetTargetVolumeMin(&vmin)) &&
-                R_SUCCEEDED(audctlGetTargetVolumeMax(&vmax)) && vmax > vmin) {
-                s32 tvol = vmin + static_cast<s32>(clamped * (vmax - vmin) + 0.5f);
-                audctlSetTargetVolume(target, tvol);
-            }
+        AudioTarget target = AudioTarget_Invalid;
+        if (R_FAILED(audctlGetActiveOutputTarget(&target)) || target == AudioTarget_Invalid) {
+            audctlGetDefaultTarget(&target);
         }
+        if (target == AudioTarget_Invalid) {
+            target = AudioTarget_Speaker;
+        }
+
+        s32 vmin = 0, vmax = 0;
+        if (R_SUCCEEDED(audctlGetTargetVolumeMin(&vmin)) &&
+            R_SUCCEEDED(audctlGetTargetVolumeMax(&vmax)) && vmax > vmin) {
+            s32 tvol = vmin + static_cast<s32>(clamped * (vmax - vmin) + 0.5f);
+            audctlSetTargetVolume(target, tvol);
+            DebugLog::log("[media-vol] setTargetVolume target=%d vol=%d (min=%d max=%d norm=%.2f)",
+                          static_cast<int>(target), tvol, vmin, vmax, clamped);
+        }
+        audctlSetSystemOutputMasterVolume(1.0f);
     }
 #endif
 }
@@ -169,7 +194,12 @@ void MediaCenterScreen::setPlaybackState(bool playing, bool paused, bool shuffle
         m_marqueeDir = 1;
     }
     m_tracks = tracks;
-    m_volume = volume;
+    float hw = getHardwareVolume();
+    if (hw >= 0.0f) {
+        m_volume = hw;
+    } else {
+        m_volume = volume;
+    }
     m_audioMode = audioMode;
     if (m_focusedTrack >= static_cast<int>(m_tracks.size())) {
         m_focusedTrack = std::max(0, static_cast<int>(m_tracks.size()) - 1);
@@ -217,7 +247,7 @@ void MediaCenterScreen::onUpdate(float dt) {
     // Ping-pong marquee update for mode description
     if (m_smallFont) {
         std::string desc = getAudioModeDesc();
-        const float maxW = 350.0f;
+        const float maxW = 320.0f;
         const float textW = m_smallFont->measure(desc).x * 0.70f;
         if (textW > maxW) {
             const float maxOffset = textW - maxW;
