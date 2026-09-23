@@ -5699,8 +5699,10 @@ std::vector<TrackInfo> WiiUMenuApp::scanCustomBgmTracks() {
     }
 
     for (const auto& entry : std::filesystem::directory_iterator(kCustomMusicDir, ec)) {
-        if (ec)
-            break;
+        if (ec) {
+            ec.clear();
+            continue;
+        }
         if (!entry.is_regular_file(ec))
             continue;
 
@@ -7110,78 +7112,99 @@ void WiiUMenuApp::onUpdate(float dt) {
 
     bool dialogActiveNow = (m_dialog && m_dialog->isActive());
     const bool platformPickerActive = m_platformPicker && m_platformPicker->isActive();
-    if (!debugTouchBlocked && !lockScreenUp && dialogActiveNow && !platformPickerActive)
-        m_dialog->handleTouch(app().input());
+    const bool textEntryActive = (m_textEntry && m_textEntry->isActive());
+    const bool progressDialogActive = (m_progressDialog && m_progressDialog->isActive());
 
-    if (!debugTouchBlocked && !lockScreenUp && m_themeShop && m_themeShop->isActive())
-        m_themeShop->handleTouch(app().input());
-
-    // L e R viram a página do catálogo de temas. Roteado daqui porque é onde a
-    // entrada está: a loja é um widget e não alcança o Input por conta própria.
-    if (!lockScreenUp && m_themeShop && m_themeShop->isActive()
-        && !(m_dialog && m_dialog->isActive())) {
-        const int delta = app().input().isDown(nxui::Button::L) ? -1
-                        : app().input().isDown(nxui::Button::R) ? 1 : 0;
-        if (delta != 0 && m_themeShop->stepCataloguePage(delta))
-            m_audio.playSfx(Sfx::Navigate);
-    }
-
-    if (!debugTouchBlocked && !lockScreenUp && m_gameGallery && m_gameGallery->isActive())
-        m_gameGallery->handleTouch(app().input());
-
-    if (!debugTouchBlocked && !lockScreenUp && m_gameMods && m_gameMods->isActive())
-        m_gameMods->handleTouch(app().input());
-
-    if (!debugTouchBlocked && !lockScreenUp && m_gameCheats && m_gameCheats->isActive())
-        m_gameCheats->handleTouch(app().input());
-
-    if (!debugTouchBlocked && !lockScreenUp && !(m_gameMods && m_gameMods->isActive())
-        && !(m_gameCheats && m_gameCheats->isActive())
-        && m_gameDetails && m_gameDetails->isActive())
-        m_gameDetails->handleTouch(app().input());
-
-    // The settings overlay stays active behind the controller test so it can be
-    // returned to, but it must not keep taking touches while the test owns the
-    // screen: the test routes raw touch input and the panel underneath is not
-    // reachable.
-    if (!debugTouchBlocked && !lockScreenUp && m_settings && m_settings->isActive()
-        && !(m_controllerTest && m_controllerTest->isActive()))
-        m_settings->handleTouch(app().input());
-
-    if (!debugTouchBlocked && m_gameOptions && m_gameOptions->isActive()
-        && !(m_steamGridDbPicker && m_steamGridDbPicker->isActive())
-        && !(m_platformPicker && m_platformPicker->isActive()))
-        m_gameOptions->handleTouch(app().input());
-
-    if (!debugTouchBlocked && m_steamGridDbPicker && m_steamGridDbPicker->isActive())
-        m_steamGridDbPicker->handleTouch(app().input());
-
-    if (!debugTouchBlocked && !lockScreenUp && m_platformPicker && m_platformPicker->isActive())
-        m_platformPicker->handleTouch(app().input());
-
-    if (!debugTouchBlocked && m_folderOptions && m_folderOptions->isActive())
-        m_folderOptions->handleTouch(app().input());
-
-    if (!debugTouchBlocked && m_controllerTest && m_controllerTest->isActive())
-        m_controllerTest->handleTouch(app().input());
-
-    // The context menu owns folder and widget creation and is the topmost thing
-    // on screen while it is up, so it takes touch before anything under it.
-    if (!debugTouchBlocked && !lockScreenUp && m_contextMenu && m_contextMenu->isActive())
-        m_contextMenu->handleTouch(app().input());
-
-    if (!debugTouchBlocked && m_textEntry && m_textEntry->isActive())
+    if (!debugTouchBlocked && textEntryActive) {
         m_textEntry->handleTouch(app().input());
+    } else if (!debugTouchBlocked && !progressDialogActive) {
+        if (!lockScreenUp && dialogActiveNow && !platformPickerActive)
+            m_dialog->handleTouch(app().input());
 
-    if (!debugTouchBlocked && !lockScreenUp && m_openFolderId != 0 && m_folderHeader
-        && m_folderHeader->isVisible() && app().input().touchDown()
-        && !(m_textEntry && m_textEntry->isActive())
-        && !(m_dialog && m_dialog->isActive())
-        && !(m_contextMenu && m_contextMenu->isActive())
-        && !(m_folderOptions && m_folderOptions->isActive())
-        && m_folderHeader->rect().contains(app().input().touchX(),
-                                           app().input().touchY())) {
-        renameFolder(m_openFolderId);
+        if (!lockScreenUp && !dialogActiveNow && m_themeShop && m_themeShop->isActive())
+            m_themeShop->handleTouch(app().input());
+
+        // L e R viram a página do catálogo de temas. Roteado daqui porque é onde a
+        // entrada está: a loja é um widget e não alcança o Input por conta própria.
+        if (!lockScreenUp && m_themeShop && m_themeShop->isActive()
+            && !dialogActiveNow) {
+            const int delta = app().input().isDown(nxui::Button::L) ? -1
+                            : app().input().isDown(nxui::Button::R) ? 1 : 0;
+            if (delta != 0 && m_themeShop->stepCataloguePage(delta))
+                m_audio.playSfx(Sfx::Navigate);
+        }
+
+        if (!lockScreenUp && !dialogActiveNow && m_gameGallery && m_gameGallery->isActive())
+            m_gameGallery->handleTouch(app().input());
+
+        if (!lockScreenUp && !dialogActiveNow && m_gameMods && m_gameMods->isActive())
+            m_gameMods->handleTouch(app().input());
+
+        if (!lockScreenUp && !dialogActiveNow && m_gameCheats && m_gameCheats->isActive())
+            m_gameCheats->handleTouch(app().input());
+
+        if (!lockScreenUp && !dialogActiveNow && !(m_gameMods && m_gameMods->isActive())
+            && !(m_gameCheats && m_gameCheats->isActive())
+            && m_gameDetails && m_gameDetails->isActive())
+            m_gameDetails->handleTouch(app().input());
+
+        // The settings overlay stays active behind the controller test so it can be
+        // returned to, but it must not keep taking touches while the test owns the
+        // screen: the test routes raw touch input and the panel underneath is not
+        // reachable.
+        if (!lockScreenUp && !dialogActiveNow && m_settings && m_settings->isActive()
+            && !(m_controllerTest && m_controllerTest->isActive()))
+            m_settings->handleTouch(app().input());
+
+        if (m_gameOptions && m_gameOptions->isActive()
+            && !(m_steamGridDbPicker && m_steamGridDbPicker->isActive())
+            && !(m_platformPicker && m_platformPicker->isActive()))
+            m_gameOptions->handleTouch(app().input());
+
+        if (m_steamGridDbPicker && m_steamGridDbPicker->isActive())
+            m_steamGridDbPicker->handleTouch(app().input());
+
+        if (!lockScreenUp && m_platformPicker && m_platformPicker->isActive())
+            m_platformPicker->handleTouch(app().input());
+
+        if (m_folderOptions && m_folderOptions->isActive())
+            m_folderOptions->handleTouch(app().input());
+
+        if (m_controllerTest && m_controllerTest->isActive())
+            m_controllerTest->handleTouch(app().input());
+
+        // The context menu owns folder and widget creation and is the topmost thing
+        // on screen while it is up, so it takes touch before anything under it.
+        if (!lockScreenUp && m_contextMenu && m_contextMenu->isActive())
+            m_contextMenu->handleTouch(app().input());
+
+        if (!lockScreenUp && m_openFolderId != 0 && m_folderHeader
+            && m_folderHeader->isVisible() && app().input().touchDown()
+            && !dialogActiveNow
+            && !(m_contextMenu && m_contextMenu->isActive())
+            && !(m_folderOptions && m_folderOptions->isActive())
+            && m_folderHeader->rect().contains(app().input().touchX(),
+                                               app().input().touchY())) {
+            renameFolder(m_openFolderId);
+        }
+
+        if (!lockScreenUp && m_userSelect && m_userSelect->isActive())
+            m_userSelect->handleTouch(app().input());
+
+        if (!lockScreenUp && m_quickSettings && m_quickSettings->isActive())
+            m_quickSettings->handleTouch(app().input());
+
+        if (!lockScreenUp && m_screenSwapButton)
+            m_screenSwapButton->handleTouch(app().input());
+
+        if (!lockScreenUp && m_mediaCenterButton)
+            m_mediaCenterButton->handleTouch(app().input());
+
+        if (!lockScreenUp && m_mediaCenterScreen && m_mediaCenterScreen->isActive())
+            m_mediaCenterScreen->handleTouch(app().input());
+
+        if (!lockScreenUp && m_plazaScreen && m_plazaScreen->isActive())
+            m_plazaScreen->handleTouch(app().input());
     }
 
     if (m_dialogWasActive && !dialogActiveNow) {

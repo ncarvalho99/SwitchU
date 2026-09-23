@@ -80,20 +80,38 @@ std::string YouTubeClient::sanitizeFilename(const std::string& name) {
     std::string clean;
     clean.reserve(name.size());
     for (char c : name) {
-        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
-            c == '"' || c == '<' || c == '>' || c == '|' || c == '\n' || c == '\r' || c == '\t') {
-            clean.push_back('_');
-        } else if (static_cast<unsigned char>(c) >= 32) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if ((uc >= 'a' && uc <= 'z') ||
+            (uc >= 'A' && uc <= 'Z') ||
+            (uc >= '0' && uc <= '9') ||
+            uc == ' ' || uc == '-' || uc == '_' || uc == '.' ||
+            uc == '(' || uc == ')' || uc == '[' || uc == ']' ||
+            uc == '\'' || uc == ',') {
             clean.push_back(c);
+        } else if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+                   c == '"' || c == '<' || c == '>' || c == '|' || c == '\n' || c == '\r' || c == '\t') {
+            clean.push_back('_');
         }
     }
-    while (!clean.empty() && (clean.back() == ' ' || clean.back() == '.' || clean.back() == '_'))
-        clean.pop_back();
-    if (clean.empty())
-        clean = "track";
-    if (clean.size() > 80)
-        clean.resize(80);
-    return clean;
+    // Collapse multiple consecutive spaces and underscores
+    std::string result;
+    result.reserve(clean.size());
+    for (char c : clean) {
+        if (c == ' ' && !result.empty() && result.back() == ' ')
+            continue;
+        if (c == '_' && !result.empty() && result.back() == '_')
+            continue;
+        result.push_back(c);
+    }
+    while (!result.empty() && (result.back() == ' ' || result.back() == '.' || result.back() == '_'))
+        result.pop_back();
+    while (!result.empty() && (result.front() == ' ' || result.front() == '.' || result.front() == '_'))
+        result.erase(result.begin());
+    if (result.empty())
+        result = "track";
+    if (result.size() > 80)
+        result.resize(80);
+    return result;
 }
 
 std::vector<YouTubeClient::TrackItem> YouTubeClient::tracksSnapshot() const {
