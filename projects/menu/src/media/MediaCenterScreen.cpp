@@ -709,15 +709,6 @@ void MediaCenterScreen::handleInput(const nxui::Input& input, float dt) {
         return;
     }
 
-    if (input.isDown(nxui::Button::Minus)) {
-        if (m_focusRow == 2 && m_focusedTrack >= 0 && m_focusedTrack < (int)m_tracks.size()) {
-            if (m_onDeleteTrackCb) {
-                m_onDeleteTrackCb(m_focusedTrack);
-                return;
-            }
-        }
-    }
-
     // Quick Rescan shortcut with Y
     if (input.isDown(nxui::Button::Y)) {
         if (m_onRescanCb) m_onRescanCb();

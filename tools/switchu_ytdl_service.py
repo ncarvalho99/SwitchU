@@ -332,10 +332,13 @@ class YtdlRequestHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS, HEAD")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-SwitchU-Key")
         self._apply_security_headers()
         self.end_headers()
+
+    def do_HEAD(self):
+        self.do_GET()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -421,11 +424,23 @@ class YtdlRequestHandler(BaseHTTPRequestHandler):
                     return
 
                 if info.get("is_direct_mp3"):
-                    # Already converted to pure MP3 - redirect client directly
-                    self.send_response(302)
-                    self.send_header("Location", stream_url)
-                    self._apply_security_headers()
-                    self.end_headers()
+                    # Direct high-speed streaming through our backend server
+                    dl_req = urllib.request.Request(stream_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(dl_req, timeout=30) as dl_resp:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "audio/mpeg")
+                        content_len = dl_resp.headers.get("Content-Length")
+                        if content_len:
+                            self.send_header("Content-Length", content_len)
+                        safe_filename = clean_title(info.get("title", "audio")) + ".mp3"
+                        self.send_header("Content-Disposition", f'attachment; filename="{safe_filename}"')
+                        self._apply_security_headers()
+                        self.end_headers()
+                        while True:
+                            chunk = dl_resp.read(65536)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
                     return
 
                 # Stream live transcoded MP3 via ffmpeg

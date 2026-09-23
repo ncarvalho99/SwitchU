@@ -500,18 +500,35 @@ bool YouTubeClient::deleteTrack(size_t trackIndex) {
 }
 
 void YouTubeClient::refreshDownloadedStatus() {
-    std::vector<std::string> existingBasenames;
+    struct ExistingFile {
+        std::string normalized;
+        std::string fullPath;
+    };
+    std::vector<ExistingFile> existingFiles;
     std::error_code ec;
     std::string musicDir = musicDirectory();
     if (std::filesystem::is_directory(musicDir, ec)) {
         for (const auto& entry : std::filesystem::directory_iterator(musicDir, ec)) {
-            if (ec) break;
+            if (ec) {
+                ec.clear();
+                continue;
+            }
             if (!entry.is_regular_file(ec)) continue;
+            std::string filename = entry.path().filename().string();
+            if (filename.empty() || filename.front() == '.') continue;
+
+            std::error_code szEc;
+            auto sz = entry.file_size(szEc);
+            if (!szEc && sz < 1024) continue;
+
             std::string ext = entry.path().extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(),
                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             if (ext == ".mp3" || ext == ".ogg" || ext == ".wav") {
-                existingBasenames.push_back(normalizedComparison(entry.path().stem().string()));
+                existingFiles.push_back({
+                    normalizedComparison(entry.path().stem().string()),
+                    entry.path().string()
+                });
             }
         }
     }
@@ -520,15 +537,20 @@ void YouTubeClient::refreshDownloadedStatus() {
     for (auto& track : m_tracks) {
         std::string cleanNorm = normalizedComparison(sanitizeFilename(track.title));
         bool found = false;
-        for (const auto& existing : existingBasenames) {
-            if (existing == cleanNorm || existing.find(cleanNorm) != std::string::npos || cleanNorm.find(existing) != std::string::npos) {
+        std::string matchedPath;
+        for (const auto& existing : existingFiles) {
+            if (existing.normalized == cleanNorm ||
+                existing.normalized.find(cleanNorm) != std::string::npos ||
+                cleanNorm.find(existing.normalized) != std::string::npos) {
                 found = true;
+                matchedPath = existing.fullPath;
                 break;
             }
         }
         track.isDownloaded = found;
         if (found) {
-            track.statusText = "Downloaded";
+            track.localFilePath = matchedPath;
+            track.statusText = "✓ Instalado";
         }
     }
 }
@@ -578,16 +600,19 @@ bool YouTubeClient::downloadTrack(size_t trackIndex, StatusProgressCallback onPr
                 float p = 0.25f;
                 std::string statusMsg;
                 if (total > 0) {
-                    p = 0.25f + 0.75f * (static_cast<float>(dl) / static_cast<float>(total));
+                    float ratio = static_cast<float>(dl) / static_cast<float>(total);
+                    p = 0.25f + 0.75f * std::clamp(ratio, 0.0f, 1.0f);
                     statusMsg = "Baixando: " + formatBytes(dl) + " / " + formatBytes(total);
                 } else {
-                    p = -1.0f;
+                    float expected = 5.0f * 1024.0f * 1024.0f; // 5 MB typical MP3
+                    float ratio = std::min(0.95f, static_cast<float>(dl) / expected);
+                    p = 0.25f + 0.70f * ratio;
                     statusMsg = "Baixando: " + formatBytes(dl);
                 }
                 {
                     std::lock_guard<std::mutex> lk(m_tracksMutex);
                     if (trackIndex < m_tracks.size()) {
-                        m_tracks[trackIndex].downloadProgress = (p >= 0.f) ? p : 0.5f;
+                        m_tracks[trackIndex].downloadProgress = p;
                     }
                 }
                 if (onProgress) {

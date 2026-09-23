@@ -7052,6 +7052,7 @@ void WiiUMenuApp::onUpdate(float dt) {
         !(m_folderOptions && m_folderOptions->isActive()) &&
         !(m_controllerTest && m_controllerTest->isActive()) &&
         !(m_textEntry && m_textEntry->isActive()) &&
+        !(m_mediaCenterScreen && m_mediaCenterScreen->isActive()) &&
         !(m_userSelect && m_userSelect->isActive())) {
         toggleAppLayoutMode();
     }
@@ -7411,7 +7412,11 @@ std::vector<WiiUMenuApp::ActionHint> WiiUMenuApp::buildActionHints() {
     if (m_mediaCenterScreen && m_mediaCenterScreen->isActive()) {
         add(dpadGlyph(), i18n.tr("hint.navigate", "Navigate"));
         add(buttonGlyph(nxui::Button::A), i18n.tr("hint.select", "Select"));
-        add(buttonGlyph(nxui::Button::X), i18n.tr("media.hint_play_pause", "Play/Pause"));
+        if (m_mediaCenterScreen->isFocusedOnPlaylist()) {
+            add(buttonGlyph(nxui::Button::X), i18n.tr("media.hint_delete", "Delete Track"));
+        } else {
+            add(buttonGlyph(nxui::Button::X), i18n.tr("media.hint_play_pause", "Play/Pause"));
+        }
         add(buttonGlyph(nxui::Button::Y), i18n.tr("media.hint_rescan", "Rescan"));
         add(buttonGlyph(nxui::Button::B), i18n.tr("hint.back", "Back"));
         addVoiceControls();

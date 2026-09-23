@@ -40,6 +40,7 @@ public:
     void onRescan(std::function<void()> cb) { m_onRescanCb = std::move(cb); }
     void onDeleteTrack(std::function<void(int)> cb) { m_onDeleteTrackCb = std::move(cb); }
     void onClose(std::function<void()> cb) { m_onCloseCb = std::move(cb); }
+    bool isFocusedOnPlaylist() const { return m_focusRow == 2; }
 
     void handleInput(const nxui::Input& input, float dt);
     void handleTouch(const nxui::Input& input);

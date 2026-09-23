@@ -743,6 +743,7 @@
     "playing": "Playing",
     "play": "Play",
     "hint_play_pause": "Play/Pause",
+    "hint_delete": "Delete Track",
     "hint_rescan": "Rescan"
   },
   "button": {

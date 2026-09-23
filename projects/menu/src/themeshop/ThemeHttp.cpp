@@ -352,6 +352,7 @@ std::uint64_t getToFile(const std::string& url,
             curl_easy_setopt(request, CURLOPT_TIMEOUT, 0L);
             curl_easy_setopt(request, CURLOPT_LOW_SPEED_LIMIT, 1024L);
             curl_easy_setopt(request, CURLOPT_LOW_SPEED_TIME, 30L);
+            curl_easy_setopt(request, CURLOPT_BUFFERSIZE, 128 * 1024L);
             curl_easy_setopt(request, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
             curl_easy_setopt(request, CURLOPT_USERAGENT, agent.c_str());
             curl_easy_setopt(request, CURLOPT_WRITEFUNCTION, writeDownload);

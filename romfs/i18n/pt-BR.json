@@ -743,6 +743,7 @@
     "playing": "Tocando",
     "play": "Tocar",
     "hint_play_pause": "Tocar/Pausar",
+    "hint_delete": "Excluir Faixa",
     "hint_rescan": "Reescanear"
   },
   "button": {
