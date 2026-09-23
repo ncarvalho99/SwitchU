@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ThemeCatalogClient.hpp"
+#include "YouTubeClient.hpp"
 #include <unordered_set>
 #include "settings/TabbedOverlayScreen.hpp"
 
@@ -17,6 +18,7 @@ namespace themeshop::tabs {
 class InstalledTab;
 class CommunityTab;
 class AnimatedTab;
+class MusicTab;
 class OptionsTab;
 class UpdateTab;
 class UninstallTab;
@@ -140,6 +142,18 @@ public:
     // vira um preset com id "package:<id do catálogo>", e é essa a ligação
     // entre as duas listas.
     const ThemeShopEntry* installedEntryForCatalogue(const std::string& catalogueId) const;
+    using TextEntryRequestCb = std::function<void(const std::string& title,
+                                                   const std::string& guide,
+                                                   const std::string& initial,
+                                                   std::function<void(std::string)> onAccept)>;
+    void onRequestTextEntry(TextEntryRequestCb cb) { m_requestTextEntryCb = std::move(cb); }
+    void onMusicDownloaded(VoidCb cb) { m_musicDownloadedCb = std::move(cb); }
+    bool isMusicTab() const;
+    void pollMusicDownloads();
+    void searchYouTube(const std::string& query);
+    YouTubeClient& youTubeClient() { return m_youTubeClient; }
+    const YouTubeClient::TrackItem* selectedMusicTrack() const;
+
     const ThemeCatalogClient::Entry* selectedCommunityThemeEntry() const;
     const ThemeCatalogClient::Entry* findCommunityThemeEntry(const std::string& themeId) const;
     const std::string& communityCatalogUrl() const {
@@ -148,7 +162,7 @@ public:
 
 protected:
     void buildTabs() override;
-    bool usesCustomContentLayout() const override { return m_tabIndex < 3; }
+    bool usesCustomContentLayout() const override { return m_tabIndex <= 3; }
     bool consumeRenderDiagnosticsFrame() override;
     void drawCustomContent(nxui::Renderer& ren, const nxui::Rect& panel, const nxui::Rect& content, float opacity) override;
     void updateCustomContent(float dt) override;
@@ -170,6 +184,7 @@ private:
     friend class themeshop::tabs::InstalledTab;
     friend class themeshop::tabs::CommunityTab;
     friend class themeshop::tabs::AnimatedTab;
+    friend class themeshop::tabs::MusicTab;
     friend class themeshop::tabs::OptionsTab;
     friend class themeshop::tabs::UpdateTab;
     friend class themeshop::tabs::UninstallTab;
@@ -371,6 +386,12 @@ private:
     nxui::AnimatedFloat m_detailFullscreenAnim{0.f};
     int m_installedScrollRow = 0;
     int m_communityScrollRow = 0;
+    int m_musicScrollRow = 0;
+    int m_musicSelectedIndex = 0;
+    std::string m_youtubeSearchQuery;
+    YouTubeClient m_youTubeClient;
+    TextEntryRequestCb m_requestTextEntryCb;
+    VoidCb m_musicDownloadedCb;
     int m_lastCustomTabIndex = -1;
     std::string m_lastPreviewPrimeKey;
     float m_previewTrimTimer = 0.f;

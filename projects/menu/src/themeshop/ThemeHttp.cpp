@@ -181,7 +181,8 @@ size_t writeDownload(char* data, size_t size, size_t count, void* userData) {
 
 std::vector<std::uint8_t> performRequestBytes(const std::string& url,
                                               const std::list<std::string>& headers,
-                                              const themeshop::http::ProgressCallback& onProgress) {
+                                              const themeshop::http::ProgressCallback& onProgress,
+                                              const std::string& postBody = "") {
     CURL* request = curl_easy_init();
     if (!request)
         throw std::runtime_error("Could not create HTTP request");
@@ -196,6 +197,11 @@ std::vector<std::uint8_t> performRequestBytes(const std::string& url,
     curl_easy_setopt(request, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     const std::string agent = std::string("SwitchU/") + SWITCHU_VERSION;
     curl_easy_setopt(request, CURLOPT_USERAGENT, agent.c_str());
+    if (!postBody.empty()) {
+        curl_easy_setopt(request, CURLOPT_POST, 1L);
+        curl_easy_setopt(request, CURLOPT_POSTFIELDS, postBody.c_str());
+        curl_easy_setopt(request, CURLOPT_POSTFIELDSIZE, (long)postBody.size());
+    }
     curl_easy_setopt(request, CURLOPT_WRITEFUNCTION, appendResponse);
     curl_easy_setopt(request, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(request, CURLOPT_NOPROGRESS, 0L);
@@ -237,7 +243,8 @@ std::vector<std::uint8_t> performRequestBytes(const std::string& url,
 
 std::vector<std::uint8_t> performBytes(const std::string& url,
                                        const std::list<std::string>& headers,
-                                       const themeshop::http::ProgressCallback& onProgress = {}) {
+                                       const themeshop::http::ProgressCallback& onProgress = {},
+                                       const std::string& postBody = "") {
     std::lock_guard<std::mutex> lk(g_themeHttpMutex);
 
     std::string lastError = "Theme Shop HTTP request failed";
@@ -250,7 +257,7 @@ std::vector<std::uint8_t> performBytes(const std::string& url,
             }
 
             ensureInternetConnectionReady(url);
-            auto bytes = performRequestBytes(url, headers, onProgress);
+            auto bytes = performRequestBytes(url, headers, onProgress, postBody);
             if (attempt > 1) {
                 DebugLog::log("[themeshop] request recovered on retry %d: %s", attempt, url.c_str());
             }
@@ -397,6 +404,15 @@ std::uint64_t getToFile(const std::string& url,
 std::string getText(const std::string& url,
                     const std::list<std::string>& headers) {
     auto bytes = performBytes(url, headers);
+    return std::string(bytes.begin(), bytes.end());
+}
+
+std::string postJson(const std::string& url,
+                     const std::string& jsonBody,
+                     const std::list<std::string>& headers) {
+    std::list<std::string> allHeaders = headers;
+    allHeaders.push_back("Content-Type: application/json");
+    auto bytes = performBytes(url, allHeaders, {}, jsonBody);
     return std::string(bytes.begin(), bytes.end());
 }
 

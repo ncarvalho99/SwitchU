@@ -141,11 +141,13 @@ ThemeShopScreen::ThemeShopScreen()
 
 void ThemeShopScreen::setThreadPool(nxui::ThreadPool* pool) {
     m_threadPool = pool;
+    m_youTubeClient.setThreadPool(pool);
 }
 
 void ThemeShopScreen::setRenderContext(nxui::GpuDevice* gpu, nxui::Renderer* renderer) {
     m_gpu = gpu;
     m_renderer = renderer;
+    m_youTubeClient.setRenderContext(gpu, renderer);
 }
 
 bool ThemeShopScreen::consumeRenderDiagnosticsFrame() {
@@ -383,6 +385,26 @@ void ThemeShopScreen::applySearchFilter() {
 
 bool ThemeShopScreen::promptSearchQuery() {
     auto& i18n = nxui::I18n::instance();
+
+    if (m_requestTextEntryCb) {
+        std::string title = isMusicTab()
+            ? i18n.tr("themeshop.music.search_title", "Search YouTube Music")
+            : i18n.tr("themeshop.search.title", "Search Themes");
+        std::string guide = isMusicTab()
+            ? i18n.tr("themeshop.music.search_guide", "Type a song or artist name...")
+            : i18n.tr("themeshop.search.guide", "Search themes");
+        std::string initial = isMusicTab() ? m_youtubeSearchQuery : m_searchQuery;
+
+        m_requestTextEntryCb(title, guide, initial, [this](std::string query) {
+            if (isMusicTab()) {
+                searchYouTube(query);
+            } else {
+                m_searchQuery = query;
+                applySearchFilter();
+            }
+        });
+        return true;
+    }
 
 #ifdef SWITCHU_MENU
     // Same constraint as WiiUMenuApp::runSystemKeyboard: this menu is a library
@@ -1233,4 +1255,28 @@ void ThemeShopScreen::syncCommunityCatalog(const ThemeCatalogClient::Snapshot& s
 
     if (!hasId(m_communitySelectedId))
         m_communitySelectedId = m_communityEntries.front().id;
+}
+
+void ThemeShopScreen::pollMusicDownloads() {
+    m_youTubeClient.updateThumbnailTextures();
+}
+
+void ThemeShopScreen::searchYouTube(const std::string& query) {
+    m_youtubeSearchQuery = query;
+    m_musicScrollRow = 0;
+    m_musicSelectedIndex = 0;
+    m_youTubeClient.search(query, [this](bool ok, const std::string& err) {
+        if (!ok) {
+            DebugLog::log("[themeshop] YouTube search error: %s", err.c_str());
+        }
+    });
+}
+
+const YouTubeClient::TrackItem* ThemeShopScreen::selectedMusicTrack() const {
+    if (!isMusicTab())
+        return nullptr;
+    int idx = currentSelectedIndex();
+    if (idx < 0)
+        return nullptr;
+    return m_youTubeClient.trackAt(static_cast<size_t>(idx));
 }

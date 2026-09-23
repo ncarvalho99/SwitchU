@@ -628,6 +628,10 @@ bool ThemeShopScreen::isAnimatedTab() const {
     return m_tabIndex == 1;
 }
 
+bool ThemeShopScreen::isMusicTab() const {
+    return m_tabIndex == 3;
+}
+
 bool ThemeShopScreen::stepCataloguePage(int delta) {
     if (!usesCustomContentLayout() || m_detailOpen || !isFullyVisible())
         return false;
@@ -745,10 +749,18 @@ std::string ThemeShopScreen::communityCatalogueTotals() const {
 }
 
 int ThemeShopScreen::currentEntryCount() const {
+    if (isMusicTab())
+        return (int)m_youTubeClient.trackCount();
     return isCommunityTab() ? (int)m_communityEntries.size() : (int)m_themeShopEntries.size();
 }
 
 int ThemeShopScreen::currentSelectedIndex() const {
+    if (isMusicTab()) {
+        int count = (int)m_youTubeClient.trackCount();
+        if (count <= 0) return -1;
+        return std::clamp(m_musicSelectedIndex, 0, count - 1);
+    }
+
     if (isCommunityTab()) {
         for (int i = 0; i < (int)m_communityEntries.size(); ++i) {
             if (m_communityEntries[i].id == m_communitySelectedId)
@@ -770,7 +782,9 @@ void ThemeShopScreen::setCurrentSelectedIndex(int idx) {
         return;
 
     idx = std::clamp(idx, 0, count - 1);
-    if (isCommunityTab())
+    if (isMusicTab())
+        m_musicSelectedIndex = idx;
+    else if (isCommunityTab())
         m_communitySelectedId = m_communityEntries[(size_t)idx].id;
     else
         m_themeShopSelectedId = m_themeShopEntries[(size_t)idx].id;
@@ -785,7 +799,7 @@ int ThemeShopScreen::currentPage() const {
     int count = currentEntryCount();
     if (count <= 0)
         return 0;
-    int scrollRow = isCommunityTab() ? m_communityScrollRow : m_installedScrollRow;
+    int scrollRow = isMusicTab() ? m_musicScrollRow : (isCommunityTab() ? m_communityScrollRow : m_installedScrollRow);
     return std::clamp(scrollRow / kVisibleRows, 0, pageCount() - 1);
 }
 
@@ -808,6 +822,8 @@ void ThemeShopScreen::stepPage(int delta) {
 }
 
 int& ThemeShopScreen::currentScrollRowRef() {
+    if (isMusicTab())
+        return m_musicScrollRow;
     return isCommunityTab() ? m_communityScrollRow : m_installedScrollRow;
 }
 
@@ -886,6 +902,9 @@ ThemeShopScreen::installedEntryForCatalogue(const std::string& catalogueId) cons
 }
 
 int ThemeShopScreen::detailButtonCount() const {
+    if (isMusicTab())
+        return selectedMusicTrack() ? 1 : 0;
+
     if (isCommunityTab())
         return selectedCommunityThemeEntry() ? 2 : 0;
 
@@ -897,6 +916,35 @@ int ThemeShopScreen::detailButtonCount() const {
 
 void ThemeShopScreen::activateDetailButton(int buttonIndex) {
     auto& i18n = nxui::I18n::instance();
+
+    if (isMusicTab()) {
+        const auto* track = selectedMusicTrack();
+        if (!track)
+            return;
+        if (track->isDownloading) {
+            requestToast(i18n.tr("themeshop.music.download_busy", "Download already in progress."), 2.5f);
+            return;
+        }
+        int trackIdx = currentSelectedIndex();
+        if (trackIdx < 0)
+            return;
+
+        closeDetail();
+        requestToast(i18n.tr("themeshop.music.download_started", "Downloading track to SD card..."), 2.0f);
+        m_youTubeClient.downloadTrack(static_cast<size_t>(trackIdx), nullptr,
+            [this](bool ok, const std::string& /*path*/, const std::string& err) {
+                auto& i18nInner = nxui::I18n::instance();
+                if (ok) {
+                    requestToast(i18nInner.tr("themeshop.music.download_success", "Track downloaded successfully!"), 3.0f);
+                    if (m_musicDownloadedCb) {
+                        m_musicDownloadedCb();
+                    }
+                } else {
+                    requestToast(i18nInner.tr("themeshop.music.download_error", "Download failed: ") + err, 3.5f);
+                }
+            });
+        return;
+    }
 
     if (isCommunityTab()) {
         const auto* entry = selectedCommunityThemeEntry();
@@ -985,6 +1033,11 @@ void ThemeShopScreen::updateCustomContent(float dt) {
     // The installed grid asks for its covers from inside the frame; the worker
     // that reads and decodes one answers here, on the thread allowed to upload.
     syncFinishedInstalledPreviewLoads();
+
+    if (isMusicTab()) {
+        m_youTubeClient.updateThumbnailTextures();
+        m_youTubeClient.trimThumbnailCache();
+    }
 
     int headerButtonCount = isCommunityTab() ? 2 : 1;
     m_headerButtonIndex = std::clamp(m_headerButtonIndex, 0, std::max(0, headerButtonCount - 1));
@@ -1178,7 +1231,12 @@ void ThemeShopScreen::currentAccessibilityParts(std::string& context,
     if (m_detailOpen) {
         std::string themeName;
         std::string author;
-        if (isCommunityTab()) {
+        if (isMusicTab()) {
+            if (const auto* track = selectedMusicTrack()) {
+                themeName = track->title;
+                author = track->author;
+            }
+        } else if (isCommunityTab()) {
             if (const auto* entry = selectedCommunityThemeEntry()) {
                 themeName = entry->name;
                 author = entry->author;
@@ -1231,7 +1289,12 @@ void ThemeShopScreen::currentAccessibilityParts(std::string& context,
 
     std::string themeName;
     std::string detail;
-    if (isCommunityTab()) {
+    if (isMusicTab()) {
+        if (const auto* track = selectedMusicTrack()) {
+            themeName = track->title;
+            detail = track->author + (track->isDownloaded ? ", Downloaded" : "");
+        }
+    } else if (isCommunityTab()) {
         if (const auto* entry = selectedCommunityThemeEntry()) {
             themeName = entry->name;
             detail = entry->author;
@@ -1826,7 +1889,10 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     // uma traz os temas animados deste projeto e a outra os estaticos do
     // PoloNX. O cabecalho dizia "comunidade" nas duas.
     std::string title, subtitle;
-    if (isAnimatedTab()) {
+    if (isMusicTab()) {
+        title = i18n.tr("themeshop.music.title", "Music & Soundtracks");
+        subtitle = i18n.tr("themeshop.music.subtitle", "Search YouTube and download custom BGM to SD card.");
+    } else if (isAnimatedTab()) {
         title = i18n.tr("themeshop.animated.title", "Animated Themes");
         subtitle = i18n.tr("themeshop.animated.subtitle", "Moving wallpapers, with sound when the theme brings it.");
     } else if (isCommunityTab()) {
@@ -1848,7 +1914,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     // in this line the next time the console reads the index -- there is no
     // number to keep in step by hand. The search filter is deliberately not
     // applied: this answers "what is there", not "what am I looking at".
-    {
+    if (!isMusicTab()) {
         const std::string totals = isCommunityTab() ? communityCatalogueTotals()
                                                     : installedThemeTotals();
         if (!totals.empty()) {
@@ -1857,9 +1923,9 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         }
     }
 
-    std::string searchLabel = m_searchQuery.empty()
-        ? i18n.tr("themeshop.search.button", "Search")
-        : m_searchQuery;
+    std::string searchLabel = isMusicTab()
+        ? (!m_youtubeSearchQuery.empty() ? m_youtubeSearchQuery : i18n.tr("themeshop.music.search_button", "Search YouTube"))
+        : (!m_searchQuery.empty() ? m_searchQuery : i18n.tr("themeshop.search.button", "Search"));
     bool searchSelected = !m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header
         && (!isCommunityTab() || m_headerButtonIndex == 1);
     drawActionButtonChip(ren,
@@ -1870,11 +1936,13 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                          m_theme->textPrimary,
                          contentOpacity,
                          searchSelected ? 1.f : 0.f,
-                         searchSelected ? 1.f : (m_searchQuery.empty() ? 0.f : 0.72f),
+                         searchSelected ? 1.f : (m_searchQuery.empty() && m_youtubeSearchQuery.empty() ? 0.f : 0.72f),
                          0.78f);
 
     std::string counterText;
-    if (count > 0) {
+    if (isMusicTab() && m_youTubeClient.isSearching()) {
+        counterText = i18n.tr("themeshop.music.searching", "Searching");
+    } else if (count > 0) {
         int selected = std::max(0, currentSelectedIndex()) + 1;
         counterText = std::to_string(selected) + " / " + std::to_string(count);
     } else if (isCommunityTab() && m_communityTransferState.isRunning()) {
@@ -2027,17 +2095,31 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         };
         ren.drawRoundedRect(emptyBox, m_theme->panelBase.withAlpha(0.16f * contentOpacity), 20.f);
         ren.drawRoundedRectOutline(emptyBox, m_theme->panelBorder.withAlpha(0.24f * contentOpacity), 20.f, 1.2f);
-        bool searchActive = !m_searchQuery.empty();
-        std::string emptyTitle = searchActive
-            ? i18n.tr("themeshop.search.no_results", "No themes match this search.")
-            : (isCommunityTab()
-                ? i18n.tr("themeshop.community.catalog_empty", "No published themes are listed in the catalog.")
-                : i18n.tr("themeshop.installed.empty", "No installed themes found."));
-        std::string emptySubtitle = searchActive
-            ? i18n.tr("themeshop.search.no_results_hint", "Press X or use Search to change or clear the filter.")
-            : (isCommunityTab() && m_communityTransferState.hasFailed()
-                ? i18n.tr("themeshop.community.catalog_failed", "The catalog could not be fetched. Use Refresh to try again.")
-                : i18n.tr("themeshop.community.empty_hint", "Add themes to the repository and they will appear here."));
+        std::string emptyTitle, emptySubtitle;
+        if (isMusicTab()) {
+            if (m_youTubeClient.isSearching()) {
+                emptyTitle = i18n.tr("themeshop.music.searching_title", "Searching YouTube...");
+                emptySubtitle = i18n.tr("themeshop.music.searching_hint", "Connecting to YouTube and fetching soundtracks...");
+            } else if (!m_youtubeSearchQuery.empty()) {
+                emptyTitle = i18n.tr("themeshop.music.no_results", "No songs found for this search.");
+                emptySubtitle = i18n.tr("themeshop.music.no_results_hint", "Press Search (or X) to try different keywords.");
+            } else {
+                emptyTitle = i18n.tr("themeshop.music.empty_title", "Search YouTube Music");
+                emptySubtitle = i18n.tr("themeshop.music.empty_hint", "Press Search (or X) to find custom BGM soundtracks.");
+            }
+        } else {
+            bool searchActive = !m_searchQuery.empty();
+            emptyTitle = searchActive
+                ? i18n.tr("themeshop.search.no_results", "No themes match this search.")
+                : (isCommunityTab()
+                    ? i18n.tr("themeshop.community.catalog_empty", "No published themes are listed in the catalog.")
+                    : i18n.tr("themeshop.installed.empty", "No installed themes found."));
+            emptySubtitle = searchActive
+                ? i18n.tr("themeshop.search.no_results_hint", "Press X or use Search to change or clear the filter.")
+                : (isCommunityTab() && m_communityTransferState.hasFailed()
+                    ? i18n.tr("themeshop.community.catalog_failed", "The catalog could not be fetched. Use Refresh to try again.")
+                    : i18n.tr("themeshop.community.empty_hint", "Add themes to the repository and they will appear here."));
+        }
 
         nxui::Vec2 titleSize = measureTextCached(m_font, emptyTitle);
         ren.drawText(emptyTitle,
@@ -2051,6 +2133,14 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                      m_smallFont,
                      m_theme->textSecondary.withAlpha(0.90f * contentOpacity),
                      0.76f);
+        if (isMusicTab() && m_youTubeClient.isSearching()) {
+            drawSpinner(ren,
+                        {emptyBox.x + emptyBox.width * 0.5f, emptyBox.y + 135.f},
+                        10.f,
+                        m_uiTime,
+                        m_theme->cursorNormal,
+                        contentOpacity);
+        }
         if (!m_detailOpen && m_focusArea == FocusArea::Content && m_contentFocusArea == ContentFocusArea::Header) {
             auto headerButtons = headerButtonRects(layout, isCommunityTab());
             if (!headerButtons.empty()) {
@@ -2094,7 +2184,33 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         int sheetCols = 0, sheetRows = 0;
         float sheetFps = 10.f;
 
-        if (isCommunityTab()) {
+        if (isMusicTab()) {
+            YouTubeClient::TrackItem track;
+            if (m_youTubeClient.getTrack(static_cast<size_t>(globalIndex), track)) {
+                titleText = track.title;
+                subtitleText = track.author.empty() ? "YouTube" : track.author;
+                versionText = track.duration;
+                if (track.isDownloading) {
+                    int pct = static_cast<int>(track.downloadProgress * 100.f);
+                    sizeText = std::to_string(pct) + "%";
+                } else if (track.isDownloaded) {
+                    sizeText = "✓ " + i18n.tr("themeshop.music.downloaded", "Downloaded");
+                    installedHere = true;
+                } else {
+                    sizeText = i18n.tr("themeshop.music.download", "Download");
+                }
+                previewTexture = m_youTubeClient.thumbnailTexture(track.id);
+                auto phase = m_youTubeClient.thumbnailPhase(track.id);
+                previewPhase = (phase == YouTubeClient::PreviewPhase::Ready) ? PreviewPhase::Ready :
+                               (phase == YouTubeClient::PreviewPhase::Downloaded || phase == YouTubeClient::PreviewPhase::Loading) ? PreviewPhase::Loading :
+                               PreviewPhase::Idle;
+                if (previewPhase == PreviewPhase::Idle) {
+                    m_youTubeClient.primeThumbnail(track.id, track.thumbnailUrl);
+                    previewPhase = PreviewPhase::Loading;
+                }
+                previewRequested = true;
+            }
+        } else if (isCommunityTab()) {
             const auto& entry = m_communityEntries[(size_t)globalIndex];
             titleText = entry.name;
             subtitleText = entry.author.empty() ? i18n.tr("themeshop.community.author_unknown", "Unknown") : entry.author;
@@ -2281,7 +2397,28 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     int detailScreenshotTotal = 0;
     DetailPreviewControls previewControls = detailPreviewControls(preview);
 
-    if (isCommunityTab()) {
+    if (isMusicTab()) {
+        const auto* track = selectedMusicTrack();
+        if (!track)
+            return;
+        detailTitle = track->title;
+        detailSubtitle = track->author.empty() ? "YouTube" : track->author;
+        detailInfoA = i18n.tr("themeshop.music.duration", "Duration: ") + track->duration;
+        detailInfoB = i18n.tr("themeshop.music.video_id", "Video ID: ") + track->id;
+        detailInfoC = track->isDownloaded
+            ? i18n.tr("themeshop.music.status_downloaded", "Status: Saved in sdmc:/config/SwitchU/music/")
+            : i18n.tr("themeshop.music.status_ready", "Status: Ready to download (.mp3)");
+        detailPreviewTexture = m_youTubeClient.thumbnailTexture(track->id);
+        auto phase = m_youTubeClient.thumbnailPhase(track->id);
+        detailPreviewPhase = (phase == YouTubeClient::PreviewPhase::Ready) ? PreviewPhase::Ready :
+                             (phase == YouTubeClient::PreviewPhase::Downloaded || phase == YouTubeClient::PreviewPhase::Loading) ? PreviewPhase::Loading :
+                             PreviewPhase::Idle;
+        if (detailPreviewPhase == PreviewPhase::Idle) {
+            m_youTubeClient.primeThumbnail(track->id, track->thumbnailUrl);
+            detailPreviewPhase = PreviewPhase::Loading;
+        }
+        detailPreviewRequested = true;
+    } else if (isCommunityTab()) {
         const auto* entry = selectedCommunityThemeEntry();
         if (!entry)
             return;
@@ -2576,7 +2713,16 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     }
 
     std::vector<std::string> buttonLabels;
-    if (isCommunityTab()) {
+    if (isMusicTab()) {
+        const auto* track = selectedMusicTrack();
+        if (track && track->isDownloading) {
+            buttonLabels.push_back(i18n.tr("themeshop.music.downloading", "Downloading..."));
+        } else if (track && track->isDownloaded) {
+            buttonLabels.push_back(i18n.tr("themeshop.music.redownload", "Re-download Track"));
+        } else {
+            buttonLabels.push_back(i18n.tr("themeshop.music.download_action", "Download Track (.mp3)"));
+        }
+    } else if (isCommunityTab()) {
         const auto* catalogueEntry = selectedCommunityThemeEntry();
         const bool alreadyInstalled =
             catalogueEntry && installedEntryForCatalogue(catalogueEntry->id) != nullptr;

@@ -13,6 +13,8 @@ void ThemeShopScreen::buildTabs() {
     m_tabs.push_back(themeshop::tabs::AnimatedTab::build(*this));
     DebugLog::log("[themeshop]   CommunityTab...");
     m_tabs.push_back(themeshop::tabs::CommunityTab::build(*this));
+    DebugLog::log("[themeshop]   MusicTab...");
+    m_tabs.push_back(themeshop::tabs::MusicTab::build(*this));
     DebugLog::log("[themeshop]   OptionsTab...");
     m_tabs.push_back(themeshop::tabs::OptionsTab::build(*this));
     DebugLog::log("[themeshop]   UpdateTab...");
