@@ -146,7 +146,14 @@ public:
                                                    const std::string& guide,
                                                    const std::string& initial,
                                                    std::function<void(std::string)> onAccept)>;
+    using ProgressShowCb = std::function<void(const std::string& title, const std::string& message, float progress01)>;
+    using ProgressUpdateCb = std::function<void(const std::string& message, float progress01)>;
+    using ProgressHideCb = std::function<void()>;
+
     void onRequestTextEntry(TextEntryRequestCb cb) { m_requestTextEntryCb = std::move(cb); }
+    void onProgressShow(ProgressShowCb cb) { m_progressShowCb = std::move(cb); }
+    void onProgressUpdate(ProgressUpdateCb cb) { m_progressUpdateCb = std::move(cb); }
+    void onProgressHide(ProgressHideCb cb) { m_progressHideCb = std::move(cb); }
     void onMusicDownloaded(VoidCb cb) { m_musicDownloadedCb = std::move(cb); }
     bool isMusicTab() const;
     void pollMusicDownloads();
@@ -391,6 +398,9 @@ private:
     std::string m_youtubeSearchQuery;
     YouTubeClient m_youTubeClient;
     TextEntryRequestCb m_requestTextEntryCb;
+    ProgressShowCb m_progressShowCb;
+    ProgressUpdateCb m_progressUpdateCb;
+    ProgressHideCb m_progressHideCb;
     VoidCb m_musicDownloadedCb;
     int m_lastCustomTabIndex = -1;
     std::string m_lastPreviewPrimeKey;

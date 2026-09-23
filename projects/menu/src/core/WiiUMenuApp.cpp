@@ -5704,6 +5704,11 @@ std::vector<TrackInfo> WiiUMenuApp::scanCustomBgmTracks() {
         if (!entry.is_regular_file(ec))
             continue;
 
+        std::error_code szEc;
+        auto sz = entry.file_size(szEc);
+        if (!szEc && sz < 1024)
+            continue;
+
         std::string ext = entry.path().extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

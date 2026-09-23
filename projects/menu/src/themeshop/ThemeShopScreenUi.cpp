@@ -930,19 +930,34 @@ void ThemeShopScreen::activateDetailButton(int buttonIndex) {
             return;
 
         closeDetail();
-        requestToast(i18n.tr("themeshop.music.download_started", "Downloading track to SD card..."), 2.0f);
-        m_youTubeClient.downloadTrack(static_cast<size_t>(trackIdx), nullptr,
-            [this](bool ok, const std::string& /*path*/, const std::string& err) {
-                auto& i18nInner = nxui::I18n::instance();
-                if (ok) {
-                    requestToast(i18nInner.tr("themeshop.music.download_success", "Track downloaded successfully!"), 3.0f);
-                    if (m_musicDownloadedCb) {
-                        m_musicDownloadedCb();
-                    }
-                } else {
-                    requestToast(i18nInner.tr("themeshop.music.download_error", "Download failed: ") + err, 3.5f);
+        std::string dlgTitle = i18n.tr("themeshop.music.download_title", "Downloading Music");
+        std::string initialMsg = i18n.tr("themeshop.music.download_prep", "Preparing MP3 stream...");
+        if (m_progressShowCb) {
+            m_progressShowCb(dlgTitle, initialMsg, 0.05f);
+        }
+
+        auto onProgress = [this](const std::string& msg, float p) {
+            if (m_progressUpdateCb) {
+                m_progressUpdateCb(msg, p);
+            }
+        };
+
+        auto onComplete = [this](bool ok, const std::string& /*path*/, const std::string& err) {
+            auto& i18nInner = nxui::I18n::instance();
+            if (m_progressHideCb) {
+                m_progressHideCb();
+            }
+            if (ok) {
+                requestToast(i18nInner.tr("themeshop.music.download_success", "Track downloaded successfully!"), 3.0f);
+                if (m_musicDownloadedCb) {
+                    m_musicDownloadedCb();
                 }
-            });
+            } else {
+                requestToast(i18nInner.tr("themeshop.music.download_error", "Download failed: ") + err, 4.0f);
+            }
+        };
+
+        m_youTubeClient.downloadTrack(static_cast<size_t>(trackIdx), onProgress, onComplete);
         return;
     }
 

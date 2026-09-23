@@ -823,6 +823,8 @@
       "downloading": "Baixando...",
       "redownload": "Baixar Novamente",
       "download_action": "Baixar Música (.mp3)",
+      "download_title": "Baixando Música",
+      "download_prep": "Preparando MP3...",
       "download_started": "Baixando música para o cartão SD...",
       "download_success": "Música baixada com sucesso!",
       "download_error": "Falha no download: ",

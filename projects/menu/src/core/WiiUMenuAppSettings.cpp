@@ -1524,6 +1524,23 @@ void WiiUMenuApp::createThemeShop() {
                                            std::function<void(std::string)> onAccept) {
         requestTextEntry(title, guide, initial, 64, false, std::move(onAccept), nullptr);
     });
+    m_themeShop->onProgressShow([this](const std::string& title, const std::string& message, float p) {
+        if (!m_progressDialog) return;
+        raiseOverlay(m_progressDialog);
+        m_progressDialog->setTheme(&m_theme);
+        m_progressDialog->show(title, message, p);
+        focusManager().setFocus(m_progressDialog.get());
+    });
+    m_themeShop->onProgressUpdate([this](const std::string& message, float p) {
+        if (m_progressDialog && m_progressDialog->isActive()) {
+            m_progressDialog->updateState(message, p);
+        }
+    });
+    m_themeShop->onProgressHide([this]() {
+        if (m_progressDialog && m_progressDialog->isActive()) {
+            m_progressDialog->hide();
+        }
+    });
     m_themeShop->onMusicDownloaded([this]() {
         DebugLog::log("[themeshop] Music downloaded, reloading BGM tracks...");
         reloadMusicTracks();

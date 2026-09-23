@@ -53,7 +53,7 @@ public:
     };
 
     using SearchCallback = std::function<void(bool success, const std::string& error)>;
-    using ProgressCallback = std::function<void(float progress, std::uint64_t downloaded, std::uint64_t total)>;
+    using StatusProgressCallback = std::function<void(const std::string& statusMessage, float progress01)>;
     using CompleteCallback = std::function<void(bool success, const std::string& path, const std::string& error)>;
 
     YouTubeClient();
@@ -86,7 +86,7 @@ public:
     void trimThumbnailCache(size_t maxItems = 24);
 
     // Audio download
-    bool downloadTrack(size_t trackIndex, ProgressCallback onProgress = nullptr, CompleteCallback onComplete = nullptr);
+    bool downloadTrack(size_t trackIndex, StatusProgressCallback onProgress = nullptr, CompleteCallback onComplete = nullptr);
 
     // Check SD card for existing files
     void refreshDownloadedStatus();
@@ -97,7 +97,7 @@ public:
 private:
     std::vector<TrackItem> searchBackend(const std::string& query);
     std::vector<TrackItem> searchInnerTube(const std::string& query);
-    std::string resolveStreamUrl(const std::string& videoId, const std::string& title);
+    std::string resolveStreamUrl(const std::string& videoId, const std::string& title, StatusProgressCallback onProgress = nullptr);
 
     nxui::ThreadPool* m_pool = nullptr;
     nxui::GpuDevice* m_gpu = nullptr;

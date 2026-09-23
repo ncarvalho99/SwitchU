@@ -45,6 +45,25 @@ std::string normalizedComparison(const std::string& s) {
     return out;
 }
 
+std::string formatBytes(std::uint64_t bytes) {
+    if (bytes == 0)
+        return "0 B";
+    constexpr std::uint64_t kKiB = 1024;
+    constexpr std::uint64_t kMiB = 1024 * 1024;
+    constexpr std::uint64_t kGiB = 1024 * 1024 * 1024;
+    char buffer[32];
+    if (bytes >= kGiB) {
+        std::snprintf(buffer, sizeof(buffer), "%.1f GB", static_cast<double>(bytes) / kGiB);
+    } else if (bytes >= kMiB) {
+        std::snprintf(buffer, sizeof(buffer), "%.1f MB", static_cast<double>(bytes) / kMiB);
+    } else if (bytes >= kKiB) {
+        std::snprintf(buffer, sizeof(buffer), "%.0f KB", static_cast<double>(bytes) / kKiB);
+    } else {
+        std::snprintf(buffer, sizeof(buffer), "%llu B", static_cast<unsigned long long>(bytes));
+    }
+    return buffer;
+}
+
 } // namespace
 
 YouTubeClient::YouTubeClient() = default;
@@ -273,9 +292,10 @@ std::vector<YouTubeClient::TrackItem> YouTubeClient::searchInnerTube(const std::
     return items;
 }
 
-std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const std::string& /*title*/) {
+std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const std::string& /*title*/, StatusProgressCallback onProgress) {
     // 1. Try custom backend service first (if configured)
     if (!m_backendUrl.empty()) {
+        if (onProgress) onProgress("Conectando ao servidor...", 0.05f);
         try {
             DebugLog::log("[youtube] Trying custom backend %s for %s...", m_backendUrl.c_str(), videoId.c_str());
             std::string url = m_backendUrl + "/api/stream?id=" + videoId;
@@ -304,6 +324,7 @@ std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const st
 
     // 2. Direct cloud MP3 converter engine (loader.to)
     try {
+        if (onProgress) onProgress("Iniciando conversão MP3...", 0.10f);
         DebugLog::log("[youtube] Trying cloud MP3 converter for %s...", videoId.c_str());
         std::string initUrl = "https://loader.to/ajax/download.php?button=1&start=1&end=1&format=mp3&url=https://www.youtube.com/watch?v=" + videoId;
         std::string initResp = themeshop::http::getText(initUrl);
@@ -314,6 +335,10 @@ std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const st
                 for (int attempt = 0; attempt < 15; ++attempt) {
                     if (m_cancelRequested.load(std::memory_order_acquire))
                         break;
+                    float convProgress = 0.10f + 0.15f * (static_cast<float>(attempt + 1) / 15.0f);
+                    std::string statusMsg = "Convertendo áudio... (" + std::to_string(attempt + 1) + "s)";
+                    if (onProgress) onProgress(statusMsg, convProgress);
+
                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                     std::string progResp = themeshop::http::getText(progressUrl);
                     if (progResp.empty())
@@ -323,6 +348,7 @@ std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const st
                     std::string dlUrl = progJson.value("download_url", "");
                     if (success == 1 && !dlUrl.empty()) {
                         DebugLog::log("[youtube] Cloud MP3 converter ready: %s", dlUrl.c_str());
+                        if (onProgress) onProgress("Download pronto! Iniciando transferência...", 0.25f);
                         return dlUrl;
                     }
                 }
@@ -342,6 +368,7 @@ std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const st
         if (m_cancelRequested.load(std::memory_order_acquire))
             break;
         try {
+            if (onProgress) onProgress("Buscando stream direto alternativo...", 0.20f);
             DebugLog::log("[youtube] Trying Invidious instance %s for %s...", instance.c_str(), videoId.c_str());
             std::string vidUrl = instance + "/api/v1/videos/" + videoId;
             std::string vidResp = themeshop::http::getText(vidUrl);
@@ -400,7 +427,7 @@ void YouTubeClient::refreshDownloadedStatus() {
     }
 }
 
-bool YouTubeClient::downloadTrack(size_t trackIndex, ProgressCallback onProgress, CompleteCallback onComplete) {
+bool YouTubeClient::downloadTrack(size_t trackIndex, StatusProgressCallback onProgress, CompleteCallback onComplete) {
     if (m_isDownloading.exchange(true)) {
         if (onComplete) onComplete(false, "", "Another download is already in progress");
         return false;
@@ -426,39 +453,66 @@ bool YouTubeClient::downloadTrack(size_t trackIndex, ProgressCallback onProgress
         std::filesystem::create_directories(musicDir, ec);
 
         std::string destPath = musicDir + "/" + cleanName + ".mp3";
+        std::string tempPath = musicDir + "/." + track.id + "_download.tmp";
+
+        // Remove any previous temporary artifact
+        std::filesystem::remove(tempPath, ec);
+        ec.clear();
+
         DebugLog::log("[youtube] Starting download for '%s' to '%s'", track.title.c_str(), destPath.c_str());
 
         bool success = false;
         std::string errorMsg;
 
         try {
-            std::string streamUrl = resolveStreamUrl(track.id, track.title);
+            std::string streamUrl = resolveStreamUrl(track.id, track.title, onProgress);
             DebugLog::log("[youtube] Resolved stream URL: %s", streamUrl.c_str());
 
             auto progressCb = [this, trackIndex, onProgress](std::uint64_t dl, std::uint64_t total) {
-                float p = (total > 0) ? static_cast<float>(dl) / static_cast<float>(total) : 0.0f;
+                float p = 0.25f;
+                std::string statusMsg;
+                if (total > 0) {
+                    p = 0.25f + 0.75f * (static_cast<float>(dl) / static_cast<float>(total));
+                    statusMsg = "Baixando: " + formatBytes(dl) + " / " + formatBytes(total);
+                } else {
+                    p = -1.0f;
+                    statusMsg = "Baixando: " + formatBytes(dl);
+                }
                 {
                     std::lock_guard<std::mutex> lk(m_tracksMutex);
                     if (trackIndex < m_tracks.size()) {
-                        m_tracks[trackIndex].downloadProgress = p;
+                        m_tracks[trackIndex].downloadProgress = (p >= 0.f) ? p : 0.5f;
                     }
                 }
                 if (onProgress) {
-                    onProgress(p, dl, total);
+                    onProgress(statusMsg, p);
                 }
             };
 
-            std::uint64_t written = themeshop::http::getToFile(streamUrl, destPath, progressCb);
+            std::uint64_t written = themeshop::http::getToFile(streamUrl, tempPath, progressCb);
             DebugLog::log("[youtube] Download finished: %llu bytes written to %s",
-                          static_cast<unsigned long long>(written), destPath.c_str());
-            success = (written > 0);
+                          static_cast<unsigned long long>(written), tempPath.c_str());
+            if (written > 1024) {
+                std::filesystem::remove(destPath, ec);
+                ec.clear();
+                std::filesystem::rename(tempPath, destPath, ec);
+                if (ec) {
+                    std::filesystem::copy_file(tempPath, destPath, std::filesystem::copy_options::overwrite_existing, ec);
+                    std::filesystem::remove(tempPath, ec);
+                }
+                success = true;
+                if (onProgress) onProgress("Download concluído com sucesso!", 1.0f);
+            } else {
+                std::filesystem::remove(tempPath, ec);
+                errorMsg = "Arquivo baixado corrompido ou incompleto (tamanho < 1KB)";
+            }
         } catch (const std::exception& ex) {
             errorMsg = ex.what();
             DebugLog::log("[youtube] Download failed: %s", ex.what());
-            std::remove(destPath.c_str());
+            std::filesystem::remove(tempPath, ec);
         } catch (...) {
-            errorMsg = "Unknown download failure";
-            std::remove(destPath.c_str());
+            errorMsg = "Erro desconhecido durante o download";
+            std::filesystem::remove(tempPath, ec);
         }
 
         {

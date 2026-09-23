@@ -823,6 +823,8 @@
       "downloading": "Downloading...",
       "redownload": "Re-download Track",
       "download_action": "Download Track (.mp3)",
+      "download_title": "Downloading Music",
+      "download_prep": "Preparing MP3 stream...",
       "download_started": "Downloading track to SD card...",
       "download_success": "Track downloaded successfully!",
       "download_error": "Download failed: ",
