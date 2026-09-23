@@ -738,6 +738,7 @@
     },
     "rescan": "Reescanear Pasta",
     "tracklist_count": "Lista de Faixas ({} faixas)",
+    "tracklist_hint": "A: Tocar  •  X: Excluir",
     "empty_folder": "Nenhuma faixa de áudio encontrada em sdmc:/config/SwitchU/music/\nAdicione arquivos .mp3, .ogg ou .wav no cartão SD.",
     "playing": "Tocando",
     "play": "Tocar",

@@ -602,6 +602,12 @@ void MediaCenterScreen::onRender(nxui::Renderer& ren) {
     if (m_smallFont) {
         std::string tracklistHeader = fmt::format(fmt::runtime(i18n.tr("media.tracklist_count", "Lista de Faixas ({} faixas)")), m_tracks.size());
         ren.drawText(tracklistHeader, {218.0f, listHeaderY}, m_smallFont, nxui::Color(0.70f, 0.85f, 1.0f, alpha), 0.85f);
+
+        if (!m_tracks.empty()) {
+            std::string tracklistHint = i18n.tr("media.tracklist_hint", "A: Tocar  •  X: Excluir");
+            float hintW = m_smallFont->measure(tracklistHint).x * 0.76f;
+            ren.drawText(tracklistHint, {1065.0f - hintW, listHeaderY + 1.0f}, m_smallFont, nxui::Color(0.65f, 0.75f, 0.88f, 0.80f * alpha), 0.76f);
+        }
     }
 
     // 8. Playlist Scroll View
@@ -691,10 +697,25 @@ void MediaCenterScreen::handleInput(const nxui::Input& input, float dt) {
         return;
     }
 
-    // Quick Play/Pause shortcut with X
+    // Delete track shortcut with X (when in playlist) or Play/Pause (when in Row 0/1)
     if (input.isDown(nxui::Button::X)) {
+        if (m_focusRow == 2 && m_focusedTrack >= 0 && m_focusedTrack < (int)m_tracks.size()) {
+            if (m_onDeleteTrackCb) {
+                m_onDeleteTrackCb(m_focusedTrack);
+                return;
+            }
+        }
         if (m_onPlayPauseCb) m_onPlayPauseCb();
         return;
+    }
+
+    if (input.isDown(nxui::Button::Minus)) {
+        if (m_focusRow == 2 && m_focusedTrack >= 0 && m_focusedTrack < (int)m_tracks.size()) {
+            if (m_onDeleteTrackCb) {
+                m_onDeleteTrackCb(m_focusedTrack);
+                return;
+            }
+        }
     }
 
     // Quick Rescan shortcut with Y

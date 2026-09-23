@@ -38,6 +38,7 @@ public:
     void onAudioModeChange(std::function<void(const std::string&)> cb) { m_onAudioModeChangeCb = std::move(cb); }
     void onVolumeChange(std::function<void(float)> cb) { m_onVolumeChangeCb = std::move(cb); }
     void onRescan(std::function<void()> cb) { m_onRescanCb = std::move(cb); }
+    void onDeleteTrack(std::function<void(int)> cb) { m_onDeleteTrackCb = std::move(cb); }
     void onClose(std::function<void()> cb) { m_onCloseCb = std::move(cb); }
 
     void handleInput(const nxui::Input& input, float dt);
@@ -94,6 +95,7 @@ private:
     std::function<void(const std::string&)> m_onAudioModeChangeCb;
     std::function<void(float)> m_onVolumeChangeCb;
     std::function<void()> m_onRescanCb;
+    std::function<void(int)> m_onDeleteTrackCb;
     std::function<void()> m_onCloseCb;
 
     void cycleAudioMode(int dir);

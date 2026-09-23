@@ -5474,6 +5474,20 @@ void WiiUMenuApp::buildGrid() {
         reloadMusicTracks();
         syncMediaCenterState();
     });
+    m_mediaCenterScreen->onDeleteTrack([this](int trackIdx) {
+        if (trackIdx < 0 || trackIdx >= static_cast<int>(m_customBgmTracks.size()))
+            return;
+        std::string pathToDelete = m_customBgmTracks[trackIdx].path;
+        std::string titleToDelete = m_customBgmTracks[trackIdx].title;
+        std::error_code ec;
+        std::filesystem::remove(pathToDelete, ec);
+        std::string thumbPath = pathToDelete.substr(0, pathToDelete.find_last_of('.')) + ".jpg";
+        std::filesystem::remove(thumbPath, ec);
+        DebugLog::log("[media] Deleted track: %s (%s)", titleToDelete.c_str(), pathToDelete.c_str());
+
+        reloadMusicTracks();
+        syncMediaCenterState();
+    });
     m_mediaCenterScreen->onClose([this]() {
         if (m_mediaCenterReturnFocus) {
             focusManager().setFocus(m_mediaCenterReturnFocus);
@@ -5812,6 +5826,7 @@ void WiiUMenuApp::reloadMusicTracks() {
     if (m_config.musicEnabled && !m_lockScreen.isLocked() && m_audioStarted) {
         m_audio.play();
     }
+    syncMediaCenterState();
 }
 
 void WiiUMenuApp::toggleMediaCenter() {

@@ -738,6 +738,7 @@
     },
     "rescan": "Rescan Folder",
     "tracklist_count": "Track List ({} tracks)",
+    "tracklist_hint": "A: Play  •  X: Delete",
     "empty_folder": "No audio tracks found in sdmc:/config/SwitchU/music/\nAdd .mp3, .ogg, or .wav files to your SD card.",
     "playing": "Playing",
     "play": "Play",

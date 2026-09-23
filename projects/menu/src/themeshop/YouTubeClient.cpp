@@ -450,6 +450,13 @@ void YouTubeClient::loadInstalledTracks() {
                 track.isDownloaded = true;
                 track.localFilePath = entry.path().string();
                 track.statusText = "✓ Instalado";
+
+                std::string thumbPath = entry.path().string().substr(0, entry.path().string().find_last_of('.')) + ".jpg";
+                std::error_code thumbEc;
+                if (std::filesystem::exists(thumbPath, thumbEc)) {
+                    track.thumbnailUrl = "file://" + thumbPath;
+                }
+
                 items.push_back(std::move(track));
             }
         }
@@ -479,6 +486,8 @@ bool YouTubeClient::deleteTrack(size_t trackIndex) {
     if (!pathToDelete.empty()) {
         std::error_code ec;
         std::filesystem::remove(pathToDelete, ec);
+        std::string thumbPath = pathToDelete.substr(0, pathToDelete.find_last_of('.')) + ".jpg";
+        std::filesystem::remove(thumbPath, ec);
         DebugLog::log("[youtube] Deleted track file: %s (ec=%d)", pathToDelete.c_str(), ec.value());
     }
 
@@ -597,6 +606,35 @@ bool YouTubeClient::downloadTrack(size_t trackIndex, StatusProgressCallback onPr
                     std::filesystem::copy_file(tempPath, destPath, std::filesystem::copy_options::overwrite_existing, ec);
                     std::filesystem::remove(tempPath, ec);
                 }
+
+                // Download video thumbnail to disk alongside the audio track
+                if (!track.thumbnailUrl.empty() && track.thumbnailUrl.rfind("file://", 0) != 0) {
+                    std::string thumbDestPath = musicDir + "/" + cleanName + ".jpg";
+                    try {
+                        std::vector<std::uint8_t> thumbBytes;
+                        {
+                            std::lock_guard<std::mutex> lk(m_thumbMutex);
+                            auto it = m_thumbnailCache.find(track.id);
+                            if (it != m_thumbnailCache.end() && it->second) {
+                                std::lock_guard<std::mutex> innerLk(it->second->mutex);
+                                thumbBytes = it->second->bytes;
+                            }
+                        }
+                        if (thumbBytes.empty()) {
+                            thumbBytes = themeshop::http::getBytes(track.thumbnailUrl);
+                        }
+                        if (!thumbBytes.empty()) {
+                            std::ofstream out(thumbDestPath, std::ios::binary);
+                            if (out) {
+                                out.write(reinterpret_cast<const char*>(thumbBytes.data()), thumbBytes.size());
+                                DebugLog::log("[youtube] Saved thumbnail: %s (%zu bytes)", thumbDestPath.c_str(), thumbBytes.size());
+                            }
+                        }
+                    } catch (const std::exception& thEx) {
+                        DebugLog::log("[youtube] Failed to save thumbnail: %s", thEx.what());
+                    }
+                }
+
                 success = true;
                 if (onProgress) onProgress("Download concluído com sucesso!", 1.0f);
             } else {
@@ -689,7 +727,20 @@ void YouTubeClient::primeThumbnail(const std::string& videoId, const std::string
 
     auto fetchTask = [state, videoId, thumbnailUrl]() {
         try {
-            auto bytes = themeshop::http::getBytes(thumbnailUrl);
+            std::vector<std::uint8_t> bytes;
+            if (thumbnailUrl.rfind("file://", 0) == 0) {
+                std::string filePath = thumbnailUrl.substr(7);
+                std::ifstream f(filePath, std::ios::binary | std::ios::ate);
+                if (f) {
+                    auto size = f.tellg();
+                    f.seekg(0, std::ios::beg);
+                    bytes.resize(size);
+                    f.read(reinterpret_cast<char*>(bytes.data()), size);
+                }
+            } else {
+                bytes = themeshop::http::getBytes(thumbnailUrl);
+            }
+
             std::lock_guard<std::mutex> innerLk(state->mutex);
             if (!bytes.empty()) {
                 state->bytes = std::move(bytes);
