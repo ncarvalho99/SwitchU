@@ -102,7 +102,7 @@ private:
     nxui::ThreadPool* m_pool = nullptr;
     nxui::GpuDevice* m_gpu = nullptr;
     nxui::Renderer* m_renderer = nullptr;
-    std::string m_backendUrl = "https://switchu-api.nclabs.dev/v1/ytdl";
+    std::string m_backendUrl = "https://ytdl.nclabs.dev";
     std::string m_lastQuery;
     std::atomic<bool> m_isSearching{false};
     std::atomic<bool> m_cancelRequested{false};

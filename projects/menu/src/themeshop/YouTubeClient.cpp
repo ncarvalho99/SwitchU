@@ -11,9 +11,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <system_error>
+#include <thread>
 
 namespace {
 
@@ -121,14 +123,16 @@ void YouTubeClient::search(const std::string& query, SearchCallback cb) {
         std::vector<TrackItem> items;
         std::string err;
 
-        // 1. Try backend service first
-        try {
-            items = searchBackend(query);
-            DebugLog::log("[youtube] Backend returned %zu results", items.size());
-        } catch (const std::exception& ex) {
-            DebugLog::log("[youtube] Backend search failed: %s, falling back to InnerTube", ex.what());
-        } catch (...) {
-            DebugLog::log("[youtube] Backend search failed with unknown exception");
+        // 1. Try backend service first (only if configured)
+        if (!m_backendUrl.empty()) {
+            try {
+                items = searchBackend(query);
+                DebugLog::log("[youtube] Backend returned %zu results", items.size());
+            } catch (const std::exception& ex) {
+                DebugLog::log("[youtube] Backend search failed: %s, falling back to InnerTube", ex.what());
+            } catch (...) {
+                DebugLog::log("[youtube] Backend search failed with unknown exception");
+            }
         }
 
         // 2. Fall back to direct YouTube InnerTube search if backend returned nothing
@@ -270,24 +274,96 @@ std::vector<YouTubeClient::TrackItem> YouTubeClient::searchInnerTube(const std::
 }
 
 std::string YouTubeClient::resolveStreamUrl(const std::string& videoId, const std::string& /*title*/) {
-    // 1. Ask backend /api/stream?id=...
+    // 1. Try custom backend service first (if configured)
+    if (!m_backendUrl.empty()) {
+        try {
+            DebugLog::log("[youtube] Trying custom backend %s for %s...", m_backendUrl.c_str(), videoId.c_str());
+            std::string url = m_backendUrl + "/api/stream?id=" + videoId;
+            std::string resp = themeshop::http::getText(url);
+            if (!resp.empty()) {
+                auto root = nlohmann::json::parse(resp);
+                if (root.value("status", "") == "ok" && root.contains("stream_url")) {
+                    std::string streamUrl = root.value("stream_url", "");
+                    if (!streamUrl.empty())
+                        return streamUrl;
+                }
+            }
+        } catch (const std::exception& ex) {
+            DebugLog::log("[youtube] custom backend /api/stream failed: %s", ex.what());
+        }
+
+        // Try /api/download endpoint on custom backend
+        try {
+            std::string dlCheckUrl = m_backendUrl + "/api/download?id=" + videoId;
+            std::string checkResp = themeshop::http::getText(m_backendUrl + "/api/health");
+            if (!checkResp.empty()) {
+                return dlCheckUrl;
+            }
+        } catch (...) {}
+    }
+
+    // 2. Direct cloud MP3 converter engine (loader.to)
     try {
-        std::string url = m_backendUrl + "/api/stream?id=" + videoId;
-        std::string resp = themeshop::http::getText(url);
-        if (!resp.empty()) {
-            auto root = nlohmann::json::parse(resp);
-            if (root.value("status", "") == "ok" && root.contains("stream_url")) {
-                std::string streamUrl = root.value("stream_url", "");
-                if (!streamUrl.empty())
-                    return streamUrl;
+        DebugLog::log("[youtube] Trying cloud MP3 converter for %s...", videoId.c_str());
+        std::string initUrl = "https://loader.to/ajax/download.php?button=1&start=1&end=1&format=mp3&url=https://www.youtube.com/watch?v=" + videoId;
+        std::string initResp = themeshop::http::getText(initUrl);
+        if (!initResp.empty()) {
+            auto initJson = nlohmann::json::parse(initResp);
+            std::string progressUrl = initJson.value("progress_url", "");
+            if (!progressUrl.empty()) {
+                for (int attempt = 0; attempt < 15; ++attempt) {
+                    if (m_cancelRequested.load(std::memory_order_acquire))
+                        break;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                    std::string progResp = themeshop::http::getText(progressUrl);
+                    if (progResp.empty())
+                        continue;
+                    auto progJson = nlohmann::json::parse(progResp);
+                    int success = progJson.value("success", 0);
+                    std::string dlUrl = progJson.value("download_url", "");
+                    if (success == 1 && !dlUrl.empty()) {
+                        DebugLog::log("[youtube] Cloud MP3 converter ready: %s", dlUrl.c_str());
+                        return dlUrl;
+                    }
+                }
             }
         }
     } catch (const std::exception& ex) {
-        DebugLog::log("[youtube] resolveStreamUrl backend query failed: %s", ex.what());
+        DebugLog::log("[youtube] Cloud MP3 converter failed: %s", ex.what());
     }
 
-    // 2. Direct download endpoint on backend which redirects
-    return m_backendUrl + "/api/download?id=" + videoId;
+    // 3. Fallback to public Invidious instances
+    static const std::vector<std::string> s_invidiousInstances = {
+        "https://invidious.f5.si",
+        "https://inv.nadeko.net",
+        "https://invidious.nerdvpn.de"
+    };
+    for (const auto& instance : s_invidiousInstances) {
+        if (m_cancelRequested.load(std::memory_order_acquire))
+            break;
+        try {
+            DebugLog::log("[youtube] Trying Invidious instance %s for %s...", instance.c_str(), videoId.c_str());
+            std::string vidUrl = instance + "/api/v1/videos/" + videoId;
+            std::string vidResp = themeshop::http::getText(vidUrl);
+            if (!vidResp.empty()) {
+                auto vidJson = nlohmann::json::parse(vidResp);
+                if (vidJson.contains("adaptiveFormats") && vidJson["adaptiveFormats"].is_array()) {
+                    for (const auto& fmt : vidJson["adaptiveFormats"]) {
+                        std::string type = fmt.value("type", "");
+                        std::string u = fmt.value("url", "");
+                        if (!u.empty() && type.find("audio/") != std::string::npos) {
+                            DebugLog::log("[youtube] Found audio stream on %s: %s", instance.c_str(), u.c_str());
+                            return u;
+                        }
+                    }
+                }
+            }
+        } catch (const std::exception& ex) {
+            DebugLog::log("[youtube] Invidious %s failed: %s", instance.c_str(), ex.what());
+        }
+    }
+
+    throw std::runtime_error("Could not resolve audio stream URL for video");
 }
 
 void YouTubeClient::refreshDownloadedStatus() {

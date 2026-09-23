@@ -39,6 +39,7 @@ struct AppConfig {
     int   accessibilitySpeechRate = 190;
     bool  steamGridDbEnabled = true;
     std::string steamGridDbApiKey;
+    std::string ytdlBackendUrl;
     std::vector<uint64_t> steamGridDbKnownTitles;
 
     // Softens the wallpaper and the shapes drifting over it.

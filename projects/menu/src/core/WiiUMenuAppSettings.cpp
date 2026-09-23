@@ -1229,6 +1229,7 @@ void WiiUMenuApp::createThemeShop() {
     m_themeShop->setTheme(&m_theme);
     m_themeShop->setThreadPool(&m_threadPool);
     m_themeShop->setRenderContext(&app().gpu(), &app().renderer());
+    m_themeShop->youTubeClient().setBackendUrl(m_config.ytdlBackendUrl);
     m_themeShop->setMusicState(m_audio.isPlaying(), m_audio.volume(), m_audio.sfxVolume());
     m_themeShop->setGridLayoutState(m_config.gridColumns, m_config.gridRows);
     m_themeShop->setDynamicPagesState(m_config.dynamicPages);

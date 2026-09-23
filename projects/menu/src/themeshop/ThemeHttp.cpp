@@ -48,7 +48,8 @@ bool isOfficialHost(const std::string& url) {
 
     return (host == "gallery.nclabs.dev" ||
             host == "switchu-api.nclabs.dev" ||
-            host == "themes.nclabs.dev");
+            host == "themes.nclabs.dev" ||
+            host == "ytdl.nclabs.dev");
 }
 
 bool runtimeInitializedLocked() {
