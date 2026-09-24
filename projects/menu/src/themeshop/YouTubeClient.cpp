@@ -596,18 +596,35 @@ bool YouTubeClient::downloadTrack(size_t trackIndex, StatusProgressCallback onPr
             std::string streamUrl = resolveStreamUrl(track.id, track.title, onProgress);
             DebugLog::log("[youtube] Resolved stream URL: %s", streamUrl.c_str());
 
-            auto progressCb = [this, trackIndex, onProgress](std::uint64_t dl, std::uint64_t total) {
+            std::uint64_t expectedBytes = 5ULL * 1024ULL * 1024ULL;
+            int durSec = 0;
+            size_t colon = track.duration.find(':');
+            if (colon != std::string::npos) {
+                size_t secondColon = track.duration.find(':', colon + 1);
+                if (secondColon != std::string::npos) {
+                    durSec = std::atoi(track.duration.substr(0, colon).c_str()) * 3600
+                           + std::atoi(track.duration.substr(colon + 1, secondColon - colon - 1).c_str()) * 60
+                           + std::atoi(track.duration.substr(secondColon + 1).c_str());
+                } else {
+                    durSec = std::atoi(track.duration.substr(0, colon).c_str()) * 60
+                           + std::atoi(track.duration.substr(colon + 1).c_str());
+                }
+            }
+            if (durSec > 0) {
+                expectedBytes = static_cast<std::uint64_t>(durSec) * 24000ULL;
+            }
+
+            auto progressCb = [this, trackIndex, onProgress, expectedBytes](std::uint64_t dl, std::uint64_t total) {
                 float p = 0.25f;
                 std::string statusMsg;
                 if (total > 0) {
                     float ratio = static_cast<float>(dl) / static_cast<float>(total);
-                    p = 0.25f + 0.75f * std::clamp(ratio, 0.0f, 1.0f);
+                    p = 0.25f + 0.74f * std::clamp(ratio, 0.0f, 1.0f);
                     statusMsg = "Baixando: " + formatBytes(dl) + " / " + formatBytes(total);
                 } else {
-                    float expected = 5.0f * 1024.0f * 1024.0f; // 5 MB typical MP3
-                    float ratio = std::min(0.95f, static_cast<float>(dl) / expected);
-                    p = 0.25f + 0.70f * ratio;
-                    statusMsg = "Baixando: " + formatBytes(dl);
+                    float ratio = std::clamp(static_cast<float>(dl) / static_cast<float>(expectedBytes), 0.0f, 0.98f);
+                    p = 0.25f + 0.74f * ratio;
+                    statusMsg = "Baixando: " + formatBytes(dl) + " / ~" + formatBytes(expectedBytes);
                 }
                 {
                     std::lock_guard<std::mutex> lk(m_tracksMutex);
@@ -661,7 +678,8 @@ bool YouTubeClient::downloadTrack(size_t trackIndex, StatusProgressCallback onPr
                 }
 
                 success = true;
-                if (onProgress) onProgress("Download concluído com sucesso!", 1.0f);
+                if (onProgress) onProgress("Download concluído! (100%)", 1.0f);
+                std::this_thread::sleep_for(std::chrono::milliseconds(450));
             } else {
                 std::filesystem::remove(tempPath, ec);
                 errorMsg = "Arquivo baixado corrompido ou incompleto (tamanho < 1KB)";

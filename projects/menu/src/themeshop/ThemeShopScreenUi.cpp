@@ -616,6 +616,31 @@ std::string formatBytes(std::uint64_t bytes) {
     return buffer;
 }
 
+std::string estimateDownloadSize(const std::string& durationStr) {
+    if (durationStr.empty() || durationStr == "0:00")
+        return "~4.5 MB";
+    int seconds = 0;
+    size_t firstColon = durationStr.find(':');
+    if (firstColon != std::string::npos) {
+        size_t secondColon = durationStr.find(':', firstColon + 1);
+        if (secondColon != std::string::npos) {
+            int h = std::atoi(durationStr.substr(0, firstColon).c_str());
+            int m = std::atoi(durationStr.substr(firstColon + 1, secondColon - firstColon - 1).c_str());
+            int s = std::atoi(durationStr.substr(secondColon + 1).c_str());
+            seconds = h * 3600 + m * 60 + s;
+        } else {
+            int m = std::atoi(durationStr.substr(0, firstColon).c_str());
+            int s = std::atoi(durationStr.substr(firstColon + 1).c_str());
+            seconds = m * 60 + s;
+        }
+    }
+    if (seconds <= 0)
+        return "~4.5 MB";
+
+    std::uint64_t bytes = static_cast<std::uint64_t>(seconds) * 24000ULL;
+    return "~" + formatBytes(bytes);
+}
+
 } // namespace
 
 // Both catalogue tabs render the same way and read the same list; what tells
@@ -746,6 +771,39 @@ std::string ThemeShopScreen::communityCatalogueTotals() const {
     if (onCard > 0)
         line += " - " + formatBytes(onCard) + " " + i18n.tr("themeshop.catalog.on_card", "on the SD card");
     return line;
+}
+
+std::string ThemeShopScreen::installedMusicTotals() const {
+    auto& i18n = nxui::I18n::instance();
+    std::string musicDir = YouTubeClient::musicDirectory();
+    std::error_code ec;
+    int songCount = 0;
+    std::uint64_t totalBytes = 0;
+    if (std::filesystem::is_directory(musicDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(musicDir, ec)) {
+            if (ec) { ec.clear(); continue; }
+            if (!entry.is_regular_file(ec)) continue;
+            std::string filename = entry.path().filename().string();
+            if (filename.empty() || filename.front() == '.') continue;
+            std::string ext = entry.path().extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (ext == ".mp3" || ext == ".ogg" || ext == ".wav") {
+                ++songCount;
+                std::error_code szEc;
+                totalBytes += entry.file_size(szEc);
+            }
+        }
+    }
+
+    if (songCount == 0)
+        return {};
+
+    std::string countStr = std::to_string(songCount) + " "
+        + (songCount == 1 ? i18n.tr("themeshop.music.song_one", "song")
+                          : i18n.tr("themeshop.music.song_many", "songs"));
+    return countStr + " - " + formatBytes(totalBytes) + " "
+        + i18n.tr("themeshop.catalog.on_card", "on the SD card");
 }
 
 int ThemeShopScreen::currentEntryCount() const {
@@ -968,16 +1026,27 @@ void ThemeShopScreen::activateDetailButton(int buttonIndex) {
             }
         };
 
-        auto onComplete = [this](bool ok, const std::string& /*path*/, const std::string& err) {
+        std::string songTitle = track->title;
+        auto onComplete = [this, songTitle](bool ok, const std::string& path, const std::string& err) {
             auto& i18nInner = nxui::I18n::instance();
             if (m_progressHideCb) {
                 m_progressHideCb();
             }
             if (ok) {
-                requestToast(i18nInner.tr("themeshop.music.download_success", "Track downloaded successfully!"), 3.0f);
                 if (m_musicDownloadedCb) {
                     m_musicDownloadedCb();
                 }
+                std::string compTitle = i18nInner.tr("themeshop.music.finished_title", "Download Finished!");
+                std::string compMsg = "'" + songTitle + "'\n\n"
+                    + i18nInner.tr("themeshop.music.finished_msg", "was successfully downloaded to your music library!\n\nWould you like to play it now?");
+                std::vector<DialogButtonDef> btns;
+                btns.push_back({i18nInner.tr("themeshop.music.play_now", "Play Now"), [this, path, songTitle]() {
+                    if (m_playMusicCb) {
+                        m_playMusicCb(path, songTitle);
+                    }
+                }});
+                btns.push_back({i18nInner.tr("button.ok", "OK"), [this]() {}});
+                requestDialog(compTitle, compMsg, std::move(btns));
             } else {
                 requestToast(i18nInner.tr("themeshop.music.download_error", "Download failed: ") + err, 4.0f);
             }
@@ -1960,9 +2029,17 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
     // in this line the next time the console reads the index -- there is no
     // number to keep in step by hand. The search filter is deliberately not
     // applied: this answers "what is there", not "what am I looking at".
-    if (!isMusicTab()) {
-        const std::string totals = isCommunityTab() ? communityCatalogueTotals()
-                                                    : installedThemeTotals();
+    {
+        std::string totals;
+        if (isMusicTab()) {
+            if (m_youtubeSearchQuery.empty()) {
+                totals = installedMusicTotals();
+            }
+        } else if (isCommunityTab()) {
+            totals = communityCatalogueTotals();
+        } else {
+            totals = installedThemeTotals();
+        }
         if (!totals.empty()) {
             ren.drawText(totals, {layout.header.x, layout.header.y + 60.f}, m_smallFont,
                          m_theme->textSecondary.withAlpha(0.70f * contentOpacity), 0.68f);
@@ -2243,7 +2320,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
                     sizeText = "✓ " + i18n.tr("themeshop.music.downloaded", "Downloaded");
                     installedHere = true;
                 } else {
-                    sizeText = i18n.tr("themeshop.music.download", "Download");
+                    sizeText = estimateDownloadSize(track.duration);
                 }
                 if (!track.thumbnailUrl.empty()) {
                     previewTexture = m_youTubeClient.thumbnailTexture(track.id);
@@ -2455,7 +2532,7 @@ void ThemeShopScreen::drawCustomContent(nxui::Renderer& ren, const nxui::Rect&, 
         detailTitle = track->title;
         detailSubtitle = track->author.empty() ? "YouTube" : track->author;
         detailInfoA = track->isDownloaded ? (i18n.tr("themeshop.music.size", "Size: ") + track->duration)
-                                          : (i18n.tr("themeshop.music.duration", "Duration: ") + track->duration);
+                                          : (i18n.tr("themeshop.music.duration", "Duration: ") + track->duration + "  •  " + i18n.tr("themeshop.music.est_size", "Est. Size: ") + estimateDownloadSize(track->duration));
         detailInfoB = track->isDownloaded ? i18n.tr("themeshop.music.status_downloaded", "Status: Saved in sdmc:/config/SwitchU/music/")
                                           : (i18n.tr("themeshop.music.video_id", "Video ID: ") + track->id);
         detailInfoC = track->isDownloaded

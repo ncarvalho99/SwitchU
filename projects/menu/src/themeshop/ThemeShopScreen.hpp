@@ -260,6 +260,7 @@ private:
     // O mesmo resumo para o que já está no console: quantos temas e quanto do
     // cartão eles ocupam.
     std::string installedThemeTotals() const;
+    std::string installedMusicTotals() const;
     // O que um tema instalado ocupa, ou 0 enquanto a medição não voltou.
     std::uint64_t installedThemeBytes(const std::string& installPath) const;
     // Põe na fila a medição dos temas que ainda não têm tamanho. Percorrer a
