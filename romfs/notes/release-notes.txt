@@ -1,37 +1,24 @@
 
-Title Name Resolution & Updates
-- Super Mario Bros. Wonder Name Display: Fixed an issue where Super Mario Bros. Wonder (and games with modern update title blocks) displayed raw numeric Title IDs (010015100B514000) instead of the game's actual title name.
-- Enhanced NACP Decompression: Upgraded decompressNacpTitles in the control cache to handle modern Deflate-compressed NACP title formats across variable buffer sizes and multiple windowBits modes (raw Deflate, zlib headers, auto-detect), verifying UTF-8 name validity.
-- Expanded Language Mapping: Extended system language table to 18 entries, ensuring Brazilian Portuguese (SetLanguage_PTBR = 17) and other localized variants correctly resolve preferred language strings.
-- Built-in Title ID Fallback: Added robust title resolution fallbacks for major first-party and popular Switch titles so that games with empty update NACP strings always display their authentic titles on the grid and in SteamGridDB searches.
-- Cache Logging & Flushing: Added explicit log flushing in the daemon control-cache worker to ensure all title discovery and metadata caching operations are written to disk.
+YouTube Music Store & In-Console Downloader (BGM Shop)
+- New Music Tab in ThemeShop: Added dedicated "Music (YouTube)" tab alongside Theme tabs.
+- Installed Music Library View: Displays all local custom soundtracks installed on sdmc:/config/SwitchU/music/, showing track names, file sizes, and total storage space in the header.
+- Direct YouTube Search: Press Search (or X) to search YouTube for any video, soundtrack, or artist, rendering authentic 16:9 video thumbnails and duration badges in a clean 2x2 card grid.
+- Pre-Download Size Estimation: Accurately calculates estimated SD card storage before downloading based on duration and 192kbps stereo MP3 encoding.
+- True 0% – 100% Progress Bar: Displays a real-time progress dialog during audio conversion and transfer with downloaded MB counter, smoothly reaching 100% on completion.
+- Automatic Thumbnail Downloads: Video thumbnails are automatically saved alongside the audio as <Title>.jpg, displaying authentic artwork for your downloaded tracks in the shop and multimedia center.
+- Download Complete Modal Popup: When a download finishes, an interactive dialog confirms the installation and offers immediate playback with [Play Now] or [OK].
+- In-Shop Track Deletion: Delete downloaded songs directly from the detail sheet ([Delete Track]) with immediate SD cleanup and playlist synchronization.
+- Clean ASCII Filename Sanitizer: Automatically cleans non-ASCII symbols, emojis, and musical note characters to safe FAT32 filenames, preventing filesystem errors on Nintendo Switch.
 
-WaraWara Plaza & Miis
-- Restored Bundled Guest Avatars: Fixed asset packaging in the toolchain to ensure all 16 bundled high-resolution guest Mii avatar textures (guest_01.png – guest_16.png) and plaza_dialogues.json are installed into sdmc:/switch/SwitchU/.
-- Friendly Mii Names: System Mii database records with default or empty names ("no name", "Mii", or blank) are now assigned distinct friendly guest names on the Plaza rather than showing "no name".
-- Database Mii Disambiguation: Resolved duplicate name handling that previously discarded valid database Miis, allowing all available system Miis to be placed across community pedestals with assigned head textures and favorite shirt colors.
-- Plaza Community Dialogues: Restored authentic community game tips and Miiverse dialogue speech bubbles.
+Multimedia Center (Central Multimídia)
+- HUD Quick Launcher: Opened via top HUD button (media_center.png) with pulsing active playback glow or shoulder shortcuts.
+- Live Visualizer & Vinyl Graphic: Real-time animated 4-band audio equalizer visualizer bars over a spinning vinyl record graphic.
+- Hardware Master Volume Sync: Direct integration with Horizon OS audctl, dynamically synchronizing on-screen volume with the console's physical Volume +/- buttons in real time.
+- Playlist Quick Delete: When browsing the playlist in Row 2, press X to instantly delete the track from SD card with real-time list updating and contextual legend (A: Play • X: Delete).
+- Minus Button Isolation: Pressing - (Minus) inside the Multimedia Center is strictly isolated, preventing background layout toggling.
+- Marquee Text Scrolling: Automatic ping-pong scrolling for long song titles and audio mode descriptions.
+- Audio Precedence Modes: Cycle between Custom SD First, Theme Music First, Custom SD Only, and Theme & Preset Only.
 
-Modal Dialogs & Focus
-- Button-Scoped Focus Rect: Fixed OverlayDialog focus rect calculation so the focus target accurately matches the active button rather than inheriting the entire 1280x720 screen bounding box.
-- Dialog Pre-Layout: Added immediate layout calculation on dialog show so button coordinates are positioned prior to cursor animation, ensuring the selection cursor frames the primary action button ("Download" / "Baixar") on the very first frame.
-- Global Cursor Suppression: Suppressed the main menu global selection ring when modal dialogs, progress dialogs, or user selectors are active, eliminating unwanted screen-wide focus framing.
---pt-BR--
-
-Resolução de Nomes e Atualizações
-- Exibição do Nome de Super Mario Bros. Wonder: Corrigida a exibição do Title ID numérico (010015100B514000) no lugar do nome oficial do jogo ao instalar atualizações.
-- Descompressão Aprimorada de NACP: Suporte aprimorado no control_cache para descompressão de blocos de títulos NACP modernos em formato Deflate em múltiplos modos, validando nomes em UTF-8.
-- Mapeamento Completo de Idiomas: Tabela de idiomas expandida para 18 entradas, garantindo resolução correta para Português Brasileiro (SetLanguage_PTBR = 17) e demais variações regionais.
-- Resolução de Títulos Conhecidos: Adicionada tabela de mapeamento para grandes títulos da Nintendo, garantindo que atualizações com NACP sem strings de idiomas continuem exibindo seus nomes corretos na grade e no SteamGridDB.
-- Gravação em Disco no Daemon: Adicionada gravação forçada (flush) no worker de cache de controle do daemon para persistência imediata dos registros de metadados no cartão SD.
-
-WaraWara Plaza e Miis
-- Avatares de Convidados Restaurados: Corrigido o instalador da toolchain para incluir os 16 avatares de convidados em alta resolução (guest_01.png – guest_16.png) e plaza_dialogues.json na pasta sdmc:/switch/SwitchU/.
-- Nomes Amigáveis para Miis: Miis do banco de dados do sistema que possuíam nomes padrão ou vazios ("no name", "Mii") agora recebem nomes variados e amigáveis na praça.
-- Desambiguação de Miis do Banco: Corrigido o descarte de Miis com nomes duplicados, permitindo que todos os Miis cadastrados no console apareçam na praça com texturas faciais e camisetas coloridas variadas.
-- Diálogos do Miiverse: Restaurados os balões de fala com dicas autênticas de jogos e postagens do Miiverse na praça.
-
-Janelas Modais e Foco
-- Retângulo de Foco nos Botões: Corrigido o focusRect do OverlayDialog para corresponder exatamente ao botão selecionado em vez de cobrir a tela inteira de 1280x720.
-- Pré-Layout da Janela Modal: Adicionado cálculo de layout imediato ao exibir a janela para que as coordenadas dos botões estejam prontas antes de posicionar o cursor, selecionando diretamente o botão principal ("Baixar" / "Download") no primeiro quadro.
-- Ocultação do Cursor Global: O anel de seleção do menu principal agora é ocultado enquanto caixas de diálogo, telas de progresso ou seletor de usuários estiverem ativos.
+Input Focus & Security
+- Touch Event Isolation: While the on-screen keyboard (TextEntryScreen) or modal dialogs are active, touch inputs are consumed exclusively by the active layer, completely preventing touches from leaking through to background tabs and buttons.
+- Backend Architecture & Hardening: Deployed hardened backend service (switchu-ytdl.service) with constant-time client key authentication (X-SwitchU-Key), strict regex input validation, SSRF domain whitelisting, concurrency limits, and live MP3 proxy streaming.
