@@ -81,6 +81,7 @@ public:
     void onGlassSharpnessChange(FloatCb cb)  { m_glassSharpnessCb = std::move(cb); }
     void onBackgroundSpeedChange(FloatCb cb) { m_backgroundSpeedCb = std::move(cb); }
     void onBackgroundBlurChange(FloatCb cb)  { m_backgroundBlurCb = std::move(cb); }
+    void onSteamGridDbOpacityChange(FloatCb cb) { m_steamGridDbOpacityCb = std::move(cb); }
     void onGridColumnsChange(IntCb cb)   { m_gridColumnsCb = std::move(cb); }
     void onGridRowsChange(IntCb cb)      { m_gridRowsCb = std::move(cb); }
     void onDynamicPagesChange(BoolCb cb) { m_dynamicPagesCb = std::move(cb); }
@@ -112,6 +113,9 @@ public:
     }
     void setDynamicPagesState(bool enabled) {
         m_dynamicPages = enabled;
+    }
+    void setSteamGridDbOpacity(float v) {
+        m_steamGridDbOpacity = std::clamp(v, 0.f, 1.f);
     }
 
     void setThreadPool(nxui::ThreadPool* pool);
@@ -315,6 +319,7 @@ private:
     FloatCb m_glassSharpnessCb;
     FloatCb m_backgroundSpeedCb;
     FloatCb m_backgroundBlurCb;
+    FloatCb m_steamGridDbOpacityCb;
     IntCb m_gridColumnsCb;
     IntCb m_gridRowsCb;
     BoolCb m_dynamicPagesCb;
@@ -350,6 +355,7 @@ private:
     float m_glassSharpness = 0.4f;
     float m_backgroundSpeed = 0.5f;
     float m_backgroundBlur = 0.f;
+    float m_steamGridDbOpacity = 0.50f;
     int m_gridColumns = 5;
     int m_gridRows = 3;
     bool m_dynamicPages = true;

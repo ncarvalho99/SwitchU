@@ -282,7 +282,8 @@ void SteamGridDbBackdrop::drawSet(nxui::Renderer& renderer,
     const nxui::Rect screen = rect();
 
     if (set.hasHero && set.hero.valid()) {
-        const float heroAlpha = m_layoutMode == AppLayoutMode::DynamicLine ? 0.56f : 0.16f;
+        const float maxHeroAlpha = m_layoutMode == AppLayoutMode::DynamicLine ? 0.85f : 0.40f;
+        const float heroAlpha = maxHeroAlpha * m_artworkOpacityScale;
         renderer.pushClipRect(screen);
         renderer.drawTexture(&set.hero, fillRect(set.hero, screen),
                              nxui::Color::white().withAlpha(alpha * heroAlpha));
@@ -301,8 +302,9 @@ void SteamGridDbBackdrop::drawSet(nxui::Renderer& renderer,
         // Visually center the logo in the open space between the profile strip
         // and the single-row carousel.
         const nxui::Rect logoArea{370.f, 149.f, 540.f, 150.f};
+        const float logoAlpha = std::clamp(m_artworkOpacityScale * 1.5f, 0.f, 0.96f);
         renderer.drawTexture(&set.logo, containRect(set.logo, logoArea),
-                             nxui::Color::white().withAlpha(0.96f * alpha));
+                             nxui::Color::white().withAlpha(logoAlpha * alpha));
     }
 }
 
