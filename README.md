@@ -1,20 +1,34 @@
 <div align="center">
-    <h1>SwitchU</h1>
+    <h1>⚠️ PROJECT MOVED TO OMNILAUNCH ⚠️</h1>
+    <p><b>SwitchU has evolved into OmniLaunch and has moved to a new repository.</b></p>
+    <p>Development on SwitchU is discontinued here. All future updates, releases, bug fixes, and new features are available at:</p>
+    <h2>👉 <a href="https://github.com/ncarvalho99/omnilauncher">https://github.com/ncarvalho99/omnilauncher</a> 👈</h2>
+</div>
+
+---
+
+<div align="center">
+    <h1>SwitchU (Legacy / Archived)</h1>
     <p>A Wii U-style custom home menu replacement for Nintendo Switch</p>
-    <p><i>Fork of <a href="https://github.com/PoloNX/SwitchU">PoloNX/SwitchU</a>, whose work this is built on.</i></p>
+    <p><i>Fork of <a href="https://github.com/PoloNX/SwitchU">PoloNX/SwitchU</a>, whose work this was built on.</i></p>
 </div>
 
 <p align="center">
-  <a rel="LICENSE" href="https://github.com/ncarvalho99/SwitchU/blob/master/LICENSE">
+  <a rel="LICENSE" href="https://github.com/ncarvalho99/omnilauncher/blob/master/LICENSE">
     <img src="https://img.shields.io/static/v1?label=license&message=GPLV3&labelColor=111111&color=0057da&style=for-the-badge" alt="License">
   </a>
-  <a rel="VERSION" href="https://github.com/ncarvalho99/SwitchU/releases/latest">
-    <img src="https://img.shields.io/github/v/release/ncarvalho99/SwitchU?labelColor=111111&color=06f&style=for-the-badge" alt="Version">
-  </a>
-  <a rel="BUILD" href="https://github.com/ncarvalho99/SwitchU/actions">
-      <img src="https://img.shields.io/github/actions/workflow/status/ncarvalho99/SwitchU/switch.yml?branch=master&labelColor=111111&color=06f&style=for-the-badge" alt="Build">
+  <a rel="MOVED" href="https://github.com/ncarvalho99/omnilauncher">
+    <img src="https://img.shields.io/static/v1?label=moved%20to&message=OmniLaunch&labelColor=111111&color=0057da&style=for-the-badge" alt="Moved to OmniLaunch">
   </a>
 </p>
+
+---
+
+> **Notice:** SwitchU is now officially succeeded by **OmniLaunch**.
+> 
+> OmniLaunch unifies the runtime architecture of SwitchU with sLaunch's presentation engines and brings 8 selectable layouts (including 3D Flow, Shelf, Deck, XMB, and Metro Live Tiles), hardware NVDEC video wallpaper acceleration, WaraWara Plaza, and automated SteamGridDB integration.
+> 
+> Please visit the new repository: **[ncarvalho99/omnilauncher](https://github.com/ncarvalho99/omnilauncher)**.
 
 ---
 
